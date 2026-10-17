@@ -747,6 +747,8 @@ struct App {
     conn: Option<ConnEditor>,
     /// The diagram editor window that is open: the diagram and the changes come back when it closes.
     editor_rx: Option<mpsc::Receiver<Result<Option<(Value, Value)>, String>>>,
+    /// "Tidy with AI" in the diagram editor: the request goes to the conversation once the editor's changes are saved.
+    tidy_request: Option<String>,
 }
 
 /// State of one conversation in which the assistant works in the background (meanwhile the window shows another conversation).
@@ -881,6 +883,7 @@ impl App {
             sessions,
             conn: None,
             editor_rx: None,
+            tidy_request: None,
             pending: Vec::new(),
             input: String::new(),
             status,
@@ -998,15 +1001,34 @@ impl App {
             Ok(None) => self.status = crate::i18n::tr("The diagram editor was closed without saving.").into(),
             Ok(Some((model, changes))) => {
                 let ops = diagram_editor::to_ops(&model, &changes);
-                if ops.is_empty() {
-                    self.status = crate::i18n::tr("Nothing has changed.").into();
-                } else if self.events.is_some() {
+                let tidy = (changes["tidy"] == true).then(|| {
+                    crate::i18n::fmt(
+                        "Tidy up the layout of diagram \"{0}\" (id {1}): arrange the elements so the diagram reads well, align them and route the relationships without crossings. Do not add, delete or rename elements or relationships.",
+                        &[model["diagram"]["name"].as_str().unwrap_or("").to_string(), model["diagram"]["id"].to_string()],
+                    )
+                });
+                if self.events.is_some() {
                     self.status = crate::i18n::tr("Claude is working in this conversation: save the diagram again when it has finished.").into();
+                } else if ops.is_empty() {
+                    match tidy {
+                        Some(request) => self.ask_in_conversation(ctx, request),
+                        None => self.status = crate::i18n::tr("Nothing has changed.").into(),
+                    }
                 } else {
+                    self.tidy_request = tidy;
                     self.start_editor_save(ctx, model, ops);
                 }
             }
         }
+    }
+
+    /// Sends a request to the assistant in the current conversation as the user's message (the text being typed stays).
+    fn ask_in_conversation(&mut self, ctx: &egui::Context, request: String) {
+        let draft = std::mem::replace(&mut self.input, request);
+        let pending = std::mem::take(&mut self.pending);
+        self.send(ctx);
+        self.input = draft;
+        self.pending = pending;
     }
 
     /// Saves the changes from the diagram editor through the ordinary write tool, in the worker thread of the
@@ -1460,6 +1482,14 @@ impl App {
                 Some(cfg) => crate::i18n::fmt("Model: {0}", &[(cfg.claude_model).to_string()]),
                 None => String::new(),
             };
+        }
+        if finished {
+            // The diagram editor's changes are saved: now the assistant tidies the diagram up.
+            if let Some(request) = self.tidy_request.take() {
+                if failure.is_none() {
+                    self.ask_in_conversation(ctx, request);
+                }
+            }
         }
         if let Some(error) = failure {
             // The error goes to the chat (not only to the status bar) so it cannot be missed.

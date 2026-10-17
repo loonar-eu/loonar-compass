@@ -629,6 +629,8 @@ document.getElementById('save').addEventListener('click', () => {
   send(c);
 });
 document.getElementById('cancel').addEventListener('click', () => send({ action: 'cancel' }));
+// Tidy with AI: the changes so far are saved, then the assistant arranges the diagram (also with no changes).
+document.getElementById('tidy').addEventListener('click', () => send({ ...changes(), tidy: true }));
 document.getElementById('title').textContent = data.diagram.name;
 graph.getPlugin('fit')?.fitCenter({ margin: 20 });
 if (graph.getView().scale > 1) graph.zoomActual();

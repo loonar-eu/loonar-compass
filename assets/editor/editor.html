@@ -267,6 +267,7 @@ main { flex: 1; display: flex; min-height: 0; }
   <span id="spacer"></span>
   <span id="status"></span>
   <button id="cancel"></button>
+  <button id="tidy"></button>
   <button id="save" class="primary"></button>
 </header>
 <main><div id="graph"></div><aside id="props"></aside></main>
@@ -296,6 +297,8 @@ main { flex: 1; display: flex; min-height: 0; }
   set('l-add', t.add); set('l-conn', t.connector); set('save', t.save); set('cancel', t.cancel); set('status', t.hint);
   document.querySelector('#delete .d-title').textContent = t.delete_title;
   set('b-insert', t.insert);
+  set('tidy', '✨ ' + t.tidy);
+  document.getElementById('tidy').title = t.tidy_hint;
   document.querySelector('#insert .i-title').textContent = t.insert_title;
   document.querySelector('#insert .i-search').placeholder = t.insert_search;
   document.querySelector('#insert .i-hint').textContent = t.insert_hint;

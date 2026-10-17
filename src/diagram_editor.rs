@@ -361,6 +361,8 @@ fn texts() -> Value {
         ("insert_hint", crate::i18n::tr("Its relationships with the elements of the diagram appear after saving.")),
         ("insert_none", crate::i18n::tr("No matching elements.")), ("insert_more", crate::i18n::tr("Showing the first {0}. Type more to narrow the list.")),
         ("close", crate::i18n::tr("Close")),
+        ("tidy", crate::i18n::tr("Tidy with AI")),
+        ("tidy_hint", crate::i18n::tr("Saves the changes, closes the editor and asks Claude in the conversation to tidy up the layout.")),
     ];
     if let Some(o) = out.as_object_mut() {
         o.extend(more.iter().map(|(k, v)| (k.to_string(), json!(v))));
