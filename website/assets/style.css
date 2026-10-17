@@ -453,7 +453,8 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 }
 
 /* ---------------------------------------------------------------- documentation (/docs/) */
-.hdr-docs { flex: none; font-weight: 600; font-size: .92rem; color: var(--ink); text-decoration: none; padding: 6px 10px; border-radius: 999px; }
+.hdr-docs { flex: none; font-weight: 600; font-size: .92rem; color: var(--ink); text-decoration: none; padding: 6px 10px; border-radius: 999px; display: inline-flex; align-items: center; }
+.hdr-docs .mark { display: none; width: 22px; height: 22px; }
 .hdr-docs:hover { background: var(--navy-50); color: var(--navy); }
 .docs-main { padding: 32px 0 80px; }
 .docs-grid { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 44px; align-items: start; }
@@ -501,5 +502,8 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 @media (max-width: 900px) {
   .docs-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
   .docs-side { position: static; max-height: none; }
-  .hdr-docs { display: none; }
+  /* Narrow screens: the book icon instead of the word, next to the GitHub icon. */
+  .hdr-docs { width: 36px; height: 36px; padding: 0; justify-content: center; border-radius: 50%; }
+  .hdr-docs span { display: none; }
+  .hdr-docs .mark { display: block; }
 }
