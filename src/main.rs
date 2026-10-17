@@ -16,6 +16,7 @@ mod i18n;
 mod markdown;
 mod docx;
 mod memory;
+mod miro;
 mod relang;
 mod render;
 mod xlsx;
@@ -589,6 +590,7 @@ struct Form {
     confluence_space: String,
     confluence_parent: String,
     confluence_token: String,
+    miro_token: String,
     ui_language: String,
 }
 
@@ -739,7 +741,7 @@ struct App {
     /// Conversations in which the assistant finished working in the background and the user has not looked at yet (conversation ids).
     unseen: std::collections::HashSet<String>,
     /// Result of the last save and test of each of the four settings groups.
-    group_status: [GroupStatus; 5],
+    group_status: [GroupStatus; 6],
     /// Channel through which settings tests (run in the background) return their result: group number and message.
     settings_tx: mpsc::Sender<(usize, Result<String, String>)>,
     settings_rx: mpsc::Receiver<(usize, Result<String, String>)>,
@@ -749,6 +751,8 @@ struct App {
     editor_rx: Option<mpsc::Receiver<Result<Option<(Value, Value)>, String>>>,
     /// "Tidy with AI" in the diagram editor: the request goes to the conversation once the editor's changes are saved.
     tidy_request: Option<String>,
+    /// The "Send to Miro" window, when open.
+    miro: Option<MiroDialog>,
 }
 
 /// State of one conversation in which the assistant works in the background (meanwhile the window shows another conversation).
@@ -884,6 +888,7 @@ impl App {
             conn: None,
             editor_rx: None,
             tidy_request: None,
+            miro: None,
             pending: Vec::new(),
             input: String::new(),
             status,
@@ -1019,6 +1024,243 @@ impl App {
                     self.start_editor_save(ctx, model, ops);
                 }
             }
+        }
+    }
+
+    /// Opens the "Send to Miro" window for a diagram of the current conversation's model.
+    fn open_miro(&mut self, ctx: &egui::Context, diagram_id: i64) {
+        if !secrets::exists(secrets::MIRO_TOKEN) {
+            self.status = crate::i18n::tr("Set up the connection to Miro first (Settings → 7. Miro).").into();
+            self.view = View::Settings;
+            return;
+        }
+        let Some(base) = self.cfg.clone() else { return };
+        let choice = self.session.model.clone().unwrap_or_else(|| ModelChoice::of(&base));
+        let cfg = match choice.apply(&base) {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                self.status = format!("{e:#}");
+                return;
+            }
+        };
+        let (tx, rx) = mpsc::channel();
+        let mut dialog = MiroDialog {
+            diagram: String::new(),
+            plan: None,
+            boards: vec![],
+            board: None,
+            query: String::new(),
+            items: vec![],
+            spot: None,
+            view: None,
+            busy: None,
+            progress: None,
+            error: None,
+            done: None,
+            tx: tx.clone(),
+            rx,
+        };
+        let wake = ctx.clone();
+        std::thread::spawn(move || {
+            let plan = diagram_editor::model(&cfg, diagram_id).map(|m| miro::plan(&m)).map_err(|e| format!("{e:#}"));
+            let _ = tx.send(MiroEvent::Plan(plan));
+            wake.request_repaint();
+        });
+        dialog.load_boards(ctx);
+        self.miro = Some(dialog);
+    }
+
+    /// The "Send to Miro" window: board, thumbnail with the frame's place, sending.
+    fn miro_window(&mut self, ctx: &egui::Context) {
+        let Some(d) = self.miro.as_mut() else { return };
+        let mut boards_loaded = false;
+        let mut sent: Option<String> = None;
+        while let Ok(event) = d.rx.try_recv() {
+            match event {
+                MiroEvent::Plan(Ok(plan)) => {
+                    d.diagram = plan.title.clone();
+                    d.plan = Some(plan);
+                    if d.view.is_none() && !d.items.is_empty() {
+                        d.place();
+                    }
+                }
+                MiroEvent::Plan(Err(e)) | MiroEvent::Boards(Err(e)) | MiroEvent::Items(Err(e)) => {
+                    d.error = Some(e);
+                    d.busy = None;
+                }
+                MiroEvent::Boards(Ok(list)) => {
+                    d.busy = None;
+                    d.boards = list;
+                    boards_loaded = true;
+                }
+                MiroEvent::Items(Ok(items)) => {
+                    d.busy = None;
+                    d.items = items;
+                    d.place();
+                }
+                MiroEvent::Progress(done, total) => d.progress = Some((done, total)),
+                MiroEvent::Sent(result) => {
+                    d.busy = None;
+                    d.progress = None;
+                    match result {
+                        Ok(link) => {
+                            d.done = Some(link.clone());
+                            sent = Some(link);
+                        }
+                        Err(e) => d.error = Some(e),
+                    }
+                }
+            }
+        }
+        if boards_loaded {
+            // The board used last time first, else the most recently changed one.
+            let last = self.cfg.as_ref().map(|c| c.miro_board.clone()).unwrap_or_default();
+            d.board = d.boards.iter().position(|b| b.id == last).or(if d.boards.is_empty() { None } else { Some(0) });
+            if d.board.is_some() {
+                d.load_items(ctx);
+            }
+        }
+        let mut open = true;
+        let mut send = false;
+        let mut reload_items = false;
+        let mut search = false;
+        egui::Window::new(crate::i18n::tr("Send to Miro"))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .frame(egui::Frame::window(&ctx.style()).fill(theme::SURFACE).inner_margin(egui::Margin::same(18.0)).rounding(10.0))
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .default_width(620.0)
+            .show(ctx, |ui| {
+                ui.label(egui::RichText::new(if d.diagram.is_empty() { crate::i18n::tr("Reading the diagram…").to_string() } else { crate::i18n::fmt("Diagram \"{0}\"", &[d.diagram.clone()]) }).strong());
+                ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("The diagram goes to the board as shapes and connectors in a frame with its name. Only from EA to Miro: changes on the board do not come back to the model.")).small().color(theme::MUTED)).wrap());
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    ui.label(crate::i18n::tr("Board"));
+                    let current = d.board.and_then(|i| d.boards.get(i)).map(|b| b.name.clone()).unwrap_or_else(|| "—".into());
+                    egui::ComboBox::from_id_salt("miro_board").width(300.0).selected_text(current).show_ui(ui, |ui| {
+                        for (i, b) in d.boards.iter().enumerate() {
+                            if ui.selectable_label(d.board == Some(i), &b.name).clicked() && d.board != Some(i) {
+                                d.board = Some(i);
+                                reload_items = true;
+                            }
+                        }
+                    });
+                    let field = ui.add(egui::TextEdit::singleline(&mut d.query).hint_text(crate::i18n::tr("Search boards")).desired_width(140.0));
+                    if field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                        search = true;
+                    }
+                });
+                ui.add_space(8.0);
+                // The thumbnail: what is on the board (grey), the frame of the diagram (blue, red when it covers something).
+                let (rect, response) = ui.allocate_exact_size(egui::vec2(580.0, 300.0), egui::Sense::drag());
+                let painter = ui.painter_at(rect);
+                painter.rect_filled(rect, 8.0, theme::BACKGROUND);
+                painter.rect_stroke(rect, 8.0, egui::Stroke::new(1.0, theme::BORDER));
+                if let (Some(view), Some(spot)) = (d.view, d.spot.as_mut()) {
+                    let scale = ((rect.width() - 20.0) as f64 / view.w).min((rect.height() - 20.0) as f64 / view.h);
+                    let ox = rect.left() as f64 + 10.0 + ((rect.width() as f64 - 20.0) - view.w * scale) / 2.0;
+                    let oy = rect.top() as f64 + 10.0 + ((rect.height() as f64 - 20.0) - view.h * scale) / 2.0;
+                    let to_screen = |r: &miro::Rect| {
+                        egui::Rect::from_min_size(
+                            egui::pos2((ox + (r.x - view.x) * scale) as f32, (oy + (r.y - view.y) * scale) as f32),
+                            egui::vec2((r.w * scale).max(1.0) as f32, (r.h * scale).max(1.0) as f32),
+                        )
+                    };
+                    for item in &d.items {
+                        let r = to_screen(&item.rect);
+                        if item.frame {
+                            painter.rect_stroke(r, 2.0, egui::Stroke::new(1.0, egui::Color32::from_gray(150)));
+                        } else {
+                            painter.rect_filled(r, 1.0, egui::Color32::from_gray(205));
+                        }
+                    }
+                    if response.dragged() {
+                        let delta = response.drag_delta();
+                        spot.x += delta.x as f64 / scale;
+                        spot.y += delta.y as f64 / scale;
+                    }
+                    let covers = d.items.iter().any(|i| spot.near(&i.rect, 0.0));
+                    let r = to_screen(spot);
+                    let color = if covers { theme::ERROR } else { theme::NAV };
+                    painter.rect_filled(r, 3.0, color.gamma_multiply(0.25));
+                    painter.rect_stroke(r, 3.0, egui::Stroke::new(2.0, color));
+                    painter.text(r.center(), egui::Align2::CENTER_CENTER, &d.diagram, egui::FontId::proportional(11.0), color);
+                    if covers {
+                        ui.label(egui::RichText::new(crate::i18n::tr("The frame covers something on the board: move it to a free place.")).small().color(theme::ERROR));
+                    } else {
+                        ui.label(egui::RichText::new(crate::i18n::tr("Drag the frame on the thumbnail to choose another place.")).small().color(theme::MUTED));
+                    }
+                    response.on_hover_cursor(egui::CursorIcon::Grab);
+                } else {
+                    painter.text(rect.center(), egui::Align2::CENTER_CENTER, d.busy.clone().unwrap_or_default(), egui::FontId::proportional(13.0), theme::MUTED);
+                }
+                if let Some((done, total)) = d.progress {
+                    ui.add(egui::ProgressBar::new(done as f32 / total.max(1) as f32).text(crate::i18n::fmt("Sending to Miro: {0} of {1}", &[done.to_string(), total.to_string()])));
+                }
+                if let Some(e) = &d.error {
+                    ui.add(egui::Label::new(egui::RichText::new(format!("✗ {e}")).small().color(theme::ERROR)).wrap());
+                }
+                if let Some(link) = &d.done {
+                    ui.label(egui::RichText::new(crate::i18n::tr("✓ The diagram is on the board.")).color(theme::SUCCESS));
+                    if !link.is_empty() {
+                        ui.hyperlink_to(crate::i18n::tr("Open the board in the browser"), link);
+                    }
+                }
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    let ready = d.plan.is_some() && d.spot.is_some() && d.busy.is_none() && d.done.is_none();
+                    if ui.add_enabled(ready, egui::Button::new(egui::RichText::new(crate::i18n::tr("Send to Miro")).color(egui::Color32::WHITE)).fill(theme::NAV)).clicked() {
+                        send = true;
+                    }
+                    if d.busy.is_some() {
+                        ui.add(egui::Spinner::new().size(14.0));
+                        ui.label(egui::RichText::new(d.busy.clone().unwrap_or_default()).small().color(theme::MUTED));
+                    }
+                });
+            });
+        if search {
+            d.error = None;
+            d.load_boards(ctx);
+        }
+        if reload_items {
+            d.error = None;
+            d.load_items(ctx);
+        }
+        if send {
+            if let (Some(plan), Some(spot), Some(board)) = (d.plan.clone(), d.spot, d.board.and_then(|i| d.boards.get(i))) {
+                let board = miro::Board { id: board.id.clone(), name: board.name.clone(), link: board.link.clone() };
+                let (tx, wake) = (d.tx.clone(), ctx.clone());
+                d.error = None;
+                d.busy = Some(crate::i18n::tr("Sending to Miro…").into());
+                let _ = config::save_properties(&self.props_path, &[("miro.board", board.id.clone())]);
+                if let Ok(cfg) = AppConfig::load(&self.props_path) {
+                    self.cfg = Some(cfg);
+                }
+                std::thread::spawn(move || {
+                    let progress_tx = tx.clone();
+                    let progress_wake = wake.clone();
+                    let progress = move |done: usize, total: usize| {
+                        let _ = progress_tx.send(MiroEvent::Progress(done, total));
+                        progress_wake.request_repaint();
+                    };
+                    let result = MiroDialog::token()
+                        .and_then(|t| miro::Client::new(&t).and_then(|c| c.send(&board, &plan, spot, &progress)).map_err(|e| format!("{e:#}")));
+                    let _ = tx.send(MiroEvent::Sent(result));
+                    wake.request_repaint();
+                });
+            }
+        }
+        // The result stays in the conversation as a message with the link.
+        let message = sent.map(|link| {
+            let board = d.board.and_then(|i| d.boards.get(i)).map(|b| b.name.clone()).unwrap_or_default();
+            crate::i18n::fmt("Diagram \"{0}\" sent to the Miro board \"{1}\": {2}", &[d.diagram.clone(), board, link])
+        });
+        if let Some(text) = message {
+            self.push_assistant(text, vec![]);
+        }
+        if !open {
+            self.miro = None;
         }
     }
 
@@ -1679,6 +1921,12 @@ impl App {
                     self.form.ea_password.clear();
                 }
             }
+            GROUP_MIRO => {
+                if !f.miro_token.is_empty() {
+                    secrets::set(secrets::MIRO_TOKEN, f.miro_token.trim())?;
+                    self.form.miro_token.clear();
+                }
+            }
             GROUP_CONFLUENCE => {
                 let url = f.confluence_url.trim().trim_end_matches('/').to_string();
                 if !url.is_empty() {
@@ -2153,6 +2401,18 @@ impl App {
                 row_hint(ui, crate::i18n::tr("Parent page ID"), &mut self.form.confluence_parent, crate::i18n::tr("optional, e.g. 123456789"));
             });
             self.group_footer(ui, &ctx2, GROUP_CONFLUENCE, crate::i18n::tr("Save and test Confluence connection"));
+        });
+        ui.add_space(12.0);
+        settings_group(ui, crate::i18n::tr("7. Miro"), inner_width * 2.0 + 44.0, |ui| {
+            ui.add(egui::Label::new(
+                egui::RichText::new(crate::i18n::tr("For sending diagrams from EA to a Miro board (\"Send to Miro\" under a diagram in the chat). In Miro: Settings of your profile → Your apps → Create new app, give it the boards:read and boards:write permissions, install it in your team and copy the access token here. The token is kept in Windows Credential Manager."))
+                .color(theme::MUTED),
+            ).wrap());
+            ui.add_space(6.0);
+            egui::Grid::new("settings_miro").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
+                row_secret(ui, crate::i18n::tr("Access token"), &mut self.form.miro_token, secrets::exists(secrets::MIRO_TOKEN));
+            });
+            self.group_footer(ui, &ctx2, GROUP_MIRO, crate::i18n::tr("Save and test Miro connection"));
         });
         ui.add_space(14.0);
         if self.cfg.is_some() && ui.button(crate::i18n::tr("Back to chat")).clicked() {
@@ -2675,6 +2935,84 @@ const GROUP_DB: usize = 1;
 const GROUP_EA: usize = 2;
 const GROUP_APPROVAL: usize = 3;
 const GROUP_CONFLUENCE: usize = 4;
+const GROUP_MIRO: usize = 5;
+
+/// "Send to Miro" window: the diagram, the board, and where on the board the frame goes (shown on a thumbnail
+/// of the board, where the user can move it).
+struct MiroDialog {
+    diagram: String,
+    plan: Option<miro::Plan>,
+    boards: Vec<miro::Board>,
+    board: Option<usize>,
+    query: String,
+    items: Vec<miro::Item>,
+    spot: Option<miro::Rect>,
+    /// The part of the board the thumbnail shows (fixed while the frame is moved, so the view does not jump).
+    view: Option<miro::Rect>,
+    busy: Option<String>,
+    progress: Option<(usize, usize)>,
+    error: Option<String>,
+    done: Option<String>,
+    tx: mpsc::Sender<MiroEvent>,
+    rx: mpsc::Receiver<MiroEvent>,
+}
+
+enum MiroEvent {
+    Plan(Result<miro::Plan, String>),
+    Boards(Result<Vec<miro::Board>, String>),
+    Items(Result<Vec<miro::Item>, String>),
+    Progress(usize, usize),
+    Sent(Result<String, String>),
+}
+
+impl MiroDialog {
+    fn token() -> Result<String, String> {
+        secrets::get(secrets::MIRO_TOKEN).map_err(|_| crate::i18n::tr("no Miro access token in the settings").to_string())
+    }
+
+    fn load_boards(&mut self, ctx: &egui::Context) {
+        let (tx, wake, query) = (self.tx.clone(), ctx.clone(), self.query.clone());
+        self.busy = Some(crate::i18n::tr("Reading the boards…").into());
+        std::thread::spawn(move || {
+            let result = Self::token().and_then(|t| miro::Client::new(&t).and_then(|c| c.boards(&query)).map_err(|e| format!("{e:#}")));
+            let _ = tx.send(MiroEvent::Boards(result));
+            wake.request_repaint();
+        });
+    }
+
+    fn load_items(&mut self, ctx: &egui::Context) {
+        let Some(board) = self.board.and_then(|i| self.boards.get(i)) else { return };
+        let (tx, wake, id) = (self.tx.clone(), ctx.clone(), board.id.clone());
+        self.items.clear();
+        self.spot = None;
+        self.view = None;
+        self.busy = Some(crate::i18n::tr("Reading what is on the board…").into());
+        std::thread::spawn(move || {
+            let result = Self::token().and_then(|t| miro::Client::new(&t).and_then(|c| c.items(&id)).map_err(|e| format!("{e:#}")));
+            let _ = tx.send(MiroEvent::Items(result));
+            wake.request_repaint();
+        });
+    }
+
+    /// The free spot for the frame, and the part of the board the thumbnail shows: everything on the board and
+    /// room around the frame to move it.
+    fn place(&mut self) {
+        let Some(plan) = &self.plan else { return };
+        let spot = miro::free_spot(&self.items, plan.width, plan.height);
+        let mut left = spot.x - spot.w;
+        let mut top = spot.y - spot.h;
+        let mut right = spot.right() + spot.w;
+        let mut bottom = spot.bottom() + spot.h;
+        for i in &self.items {
+            left = left.min(i.rect.x);
+            top = top.min(i.rect.y);
+            right = right.max(i.rect.right());
+            bottom = bottom.max(i.rect.bottom());
+        }
+        self.spot = Some(spot);
+        self.view = Some(miro::Rect { x: left, y: top, w: right - left, h: bottom - top });
+    }
+}
 
 /// Fields of the window with the model of the current conversation. Passwords are typed only for a connection that
 /// differs from the settings, and are saved in Credential Manager.
@@ -2826,6 +3164,11 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
             Ok(crate::i18n::fmt("Saved. The key works: model {0} replied.", &[(response["model"].as_str().unwrap_or(config::CLAUDE_MODEL)).to_string()]))
         }
         GROUP_DB => check_model(cfg).map(|message| crate::i18n::fmt("Saved. {0}", &[message])),
+        GROUP_MIRO => {
+            let token = secrets::get(secrets::MIRO_TOKEN).context(crate::i18n::tr("no Miro access token in the settings"))?;
+            let boards = miro::Client::new(&token)?.check()?;
+            Ok(crate::i18n::fmt("Saved. Connected to Miro: boards available: {0}.", &[boards.to_string()]))
+        }
         GROUP_CONFLUENCE => {
             if cfg.confluence_url.trim().is_empty() {
                 return Ok(crate::i18n::tr("Saved. Without a Confluence address, pages are prepared for you to paste into the source editor.").into());
@@ -3810,6 +4153,7 @@ impl eframe::App for App {
                 // Conversation header: the title, the model of the conversation and, while the assistant is working, a "working" badge.
                 let mut open_conn = false;
                 self.conn_window(ctx);
+                self.miro_window(ctx);
                 egui::TopBottomPanel::top("chat_header")
                     .show_separator_line(false)
                     .frame(egui::Frame::none().fill(theme::BACKGROUND).inner_margin(egui::Margin::symmetric(22.0, 12.0)))
@@ -4073,6 +4417,7 @@ impl eframe::App for App {
                 let attachments_dir = self.cfg.as_ref().map(|c| c.attachments_dir.clone());
                 let mut save_request: Option<String> = None;
                 let mut edit_request: Option<i64> = None;
+                let mut miro_request: Option<i64> = None;
                 let mut open_request: Option<String> = None;
                 // Confluence page: copying the code to the clipboard and the images folder.
                 let mut copy_page_request: Option<String> = None;
@@ -4230,6 +4575,9 @@ impl eframe::App for App {
                                                     if ui.add_enabled(self.editor_rx.is_none(), egui::Button::new(crate::i18n::tr("Edit diagram"))).clicked() {
                                                         edit_request = Some(id);
                                                     }
+                                                    if ui.add_enabled(self.miro.is_none(), egui::Button::new(crate::i18n::tr("Send to Miro"))).clicked() {
+                                                        miro_request = Some(id);
+                                                    }
                                                 }
                                                 ui.label(egui::RichText::new(history::display_name(a)).small().color(theme::MUTED));
                                             });
@@ -4367,6 +4715,9 @@ impl eframe::App for App {
                 }
                 if let Some(id) = edit_request {
                     self.open_diagram_editor(ctx, id);
+                }
+                if let Some(id) = miro_request {
+                    self.open_miro(ctx, id);
                 }
                 self.poll_diagram_editor(ctx);
 

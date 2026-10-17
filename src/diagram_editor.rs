@@ -198,9 +198,13 @@ pub fn model(cfg: &AppConfig, diagram_id: i64) -> Result<Value> {
     let mut connectors = Vec::new();
     for r in query_rows(cfg, &format!(
         "select connector_id, connector_type, stereotype, name, start_object_id, end_object_id, subtype, \
-         direction, notes, sourcecard, sourcerole, destcard, destrole, ea_guid \
+         direction, notes, sourcecard, sourcerole, destcard, destrole, ea_guid, seqno, ptstarty, pdata1, pdata4, diagramid \
          from t_connector where {both_ends}"
     ))? {
+        // Messages of a sequence diagram belong to that diagram only (the same lifelines can be on several).
+        if r[1] == "Sequence" && int(&r[18]) != 0 && int(&r[18]) != diagram_id {
+            continue;
+        }
         let id = int(&r[0]);
         if hidden.contains(&id) {
             continue;
@@ -216,6 +220,8 @@ pub fn model(cfg: &AppConfig, diagram_id: i64) -> Result<Value> {
                 "direction": r[7], "notes": r[8], "source_multiplicity": r[9], "source_role": r[10],
                 "target_multiplicity": r[11], "target_role": r[12], "guid": r[13],
                 "line_style": link_styles.get(&id).copied().unwrap_or(""),
+                // Sequence messages: number, position from the top (0 = not laid out yet), kind, reply.
+                "seq": int(&r[14]), "y": int(&r[15]).abs(), "sort": r[16], "return": r[17] == "1",
             },
             "tags": connector_tags.remove(&id).unwrap_or_default(),
         }));

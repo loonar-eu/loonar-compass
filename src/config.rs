@@ -144,6 +144,8 @@ pub struct AppConfig {
     pub confluence_user: String,
     pub confluence_space: String,
     pub confluence_parent: String,
+    /// The Miro board the last diagram went to (its id): offered first next time.
+    pub miro_board: String,
     /// Registry of the pages published by the assistant (for refreshing).
     pub confluence_pages_file: PathBuf,
 }
@@ -275,6 +277,7 @@ impl AppConfig {
             confluence_user: get_or("confluence.user", ""),
             confluence_space: get_or("confluence.space", ""),
             confluence_parent: get_or("confluence.parent", ""),
+            miro_board: get_or("miro.board", ""),
             confluence_pages_file: renamed(&base_dir, "confluence_strony.json", "confluence_pages.json"),
             base_dir,
         })
@@ -359,8 +362,9 @@ pub mod secrets {
     pub const EA_PASSWORD: &str = "ea_password";
     pub const DB_PASSWORD: &str = "db_password";
     pub const CONFLUENCE_TOKEN: &str = "confluence_token";
+    pub const MIRO_TOKEN: &str = "miro_token";
     /// Every secret the application stores (removed together on uninstall).
-    pub const ALL: [&str; 4] = [CLAUDE_API_KEY, EA_PASSWORD, DB_PASSWORD, CONFLUENCE_TOKEN];
+    pub const ALL: [&str; 5] = [CLAUDE_API_KEY, EA_PASSWORD, DB_PASSWORD, CONFLUENCE_TOKEN, MIRO_TOKEN];
 
     pub fn get(name: &str) -> Result<String> {
         if let Ok(value) = keyring::Entry::new(SERVICE, name).and_then(|e| e.get_password()) {

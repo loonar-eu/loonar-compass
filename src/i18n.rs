@@ -169,6 +169,7 @@ mod tests {
             include_str!("ea_ui.rs"),
             include_str!("history.rs"),
             include_str!("memory.rs"),
+            include_str!("miro.rs"),
             include_str!("render.rs"),
             include_str!("report.rs"),
             include_str!("templates.rs"),
