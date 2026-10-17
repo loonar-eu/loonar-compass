@@ -124,8 +124,9 @@ document.addEventListener('keydown', (ev) => {
     const selected = graph.getSelectionCells().filter((c) => meta.get(c.id));
     if (!selected.length) return;
     // What was added in this editor is simply removed; existing model objects ask: from this diagram or from the model.
-    const added = selected.filter((c) => meta.get(c.id).isNew);
-    const existing = selected.filter((c) => !meta.get(c.id).isNew);
+    const fresh = (c) => meta.get(c.id).isNew || meta.get(c.id).placed;
+    const added = selected.filter(fresh);
+    const existing = selected.filter((c) => !fresh(c));
     if (added.length) graph.removeCells(added, true);
     if (existing.length) askDelete(existing);
     ev.preventDefault();
@@ -406,6 +407,70 @@ document.body.append(el('datalist', { id: 'multiplicities' }, MULTIPLICITIES.map
 graph.getSelectionModel().addListener(InternalEvent.CHANGE, () => { if (!graph.isEditing()) render(); });
 render();
 
+// --- free spot for a new element: near the middle of the view, not over other elements -----------------------------
+
+function freeSpot(w, h) {
+  const s = graph.getView().scale;
+  const tr = graph.getView().translate;
+  const cx = Math.round((container.scrollLeft + container.clientWidth / 2) / s - tr.x - w / 2);
+  const cy = Math.round((container.scrollTop + container.clientHeight / 2) / s - tr.y - h / 2);
+  const boxes = Object.values(graph.getDataModel().cells).filter((c) => c.isVertex() && c.geometry).map((c) => c.geometry);
+  const free = (x, y) => boxes.every((g) => x + w + 20 <= g.x || g.x + g.width + 20 <= x || y + h + 20 <= g.y || g.y + g.height + 20 <= y);
+  // Rings around the middle, on the 10 px grid.
+  for (let r = 0; r <= 1200; r += 30) {
+    for (let a = 0; a < 360; a += r ? Math.max(8, 900 / r) : 360) {
+      const x = Math.round((cx + r * Math.cos((a * Math.PI) / 180)) / 10) * 10;
+      const y = Math.round((cy + r * Math.sin((a * Math.PI) / 180)) / 10) * 10;
+      if (x >= 0 && y >= 0 && free(x, y)) return [x, y];
+    }
+  }
+  return [Math.max(0, cx), Math.max(0, cy)];
+}
+
+// --- existing elements of the model put on the diagram ------------------------------------------------------------
+
+const SIZES = { Actor: [40, 80], UseCase: [150, 70], Event: [30, 30], Decision: [40, 40], Note: [160, 60], Activity: [110, 60], Action: [110, 50] };
+const insertBox = document.getElementById('insert');
+const insertList = insertBox.querySelector('.i-list');
+const insertInput = insertBox.querySelector('input');
+const placedIds = () => new Set([...meta.values()].filter((m) => m.kind === 'element').map((m) => m.ea.id));
+function showCandidates() {
+  const q = insertInput.value.trim().toLowerCase();
+  const taken = placedIds();
+  const hits = data.candidates.filter((c) => !taken.has(c.id) && (!q || `${c.name} ${c.type} ${c.stereotype} ${c.package}`.toLowerCase().includes(q)));
+  // Names that start with the text first, then names that contain it, then the rest (type, package).
+  const rank = (c) => { const n = c.name.toLowerCase(); return !q ? 0 : n.startsWith(q) ? 0 : n.includes(q) ? 1 : 2; };
+  hits.sort((a, b) => rank(a) - rank(b));
+  insertList.replaceChildren();
+  for (const c of hits.slice(0, 200)) {
+    const kind = c.stereotype ? `${c.type} «${String(c.stereotype).replace(/^.*::/, '')}»` : c.type;
+    insertList.append(el('button', { class: 'i-row', onclick: () => placeExisting(c) }, el('b', {}, c.name), el('span', {}, `${kind} · ${c.package || ''}`)));
+  }
+  if (!hits.length) insertList.append(el('p', { class: 'hint' }, t.insert_none));
+  else if (hits.length > 200) insertList.append(el('p', { class: 'hint' }, t.insert_more.replace('{0}', '200')));
+}
+function placeExisting(c) {
+  const [w, h] = SIZES[c.type] || (c.stereotype && /Event$/.test(c.stereotype) ? [30, 30] : [160, 80]);
+  const [x, y] = freeSpot(w, h);
+  const ea = { ...c, attributes: [], operations: [], attribute_list: [], operation_list: [], props: {}, tags: [], placed: true };
+  let v;
+  graph.batchUpdate(() => {
+    v = graph.insertVertex({ parent, id: `p${c.id}`, value: c.name, position: [x, y], size: [w, h], style: vertexStyle(ea) });
+    meta.set(v.id, { kind: 'element', ea, isNew: false, placed: true });
+  });
+  graph.setSelectionCell(v);
+  insertBox.hidden = true;
+}
+document.getElementById('b-insert').addEventListener('click', () => {
+  insertBox.hidden = false;
+  insertInput.value = '';
+  showCandidates();
+  insertInput.focus();
+});
+insertInput.addEventListener('input', showCandidates);
+insertBox.querySelector('.i-close').addEventListener('click', () => { insertBox.hidden = true; });
+insertBox.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') insertBox.hidden = true; });
+
 // --- toolbox and new connectors ----------------------------------------------------------------------------------
 
 let counter = 0;
@@ -415,14 +480,11 @@ for (const tool of data.toolbox) {
   b.textContent = tool.label;
   b.title = t.add_hint;
   b.addEventListener('click', () => {
-    const s = graph.getView().scale;
-    const tr = graph.getView().translate;
-    const x = Math.round((container.scrollLeft + container.clientWidth / 2) / s - tr.x - tool.width / 2);
-    const y = Math.round((container.scrollTop + container.clientHeight / 2) / s - tr.y - tool.height / 2);
+    const [x, y] = freeSpot(tool.width, tool.height);
     const ea = { type: tool.type, stereotype: tool.stereotype || '', attributes: [], operations: [], props: {}, tags: [], attribute_list: [], operation_list: [] };
     let v;
     graph.batchUpdate(() => {
-      v = graph.insertVertex({ parent, id: `n${++counter}`, value: tool.name, position: [x + counter * 10, y + counter * 10], size: [tool.width, tool.height], style: vertexStyle(ea) });
+      v = graph.insertVertex({ parent, id: `n${++counter}`, value: tool.name, position: [x, y], size: [tool.width, tool.height], style: vertexStyle(ea) });
       meta.set(v.id, { kind: 'element', ea, isNew: true });
     });
     graph.setSelectionCell(v);
@@ -471,7 +533,7 @@ const round = (n) => Math.round(n);
 function changes() {
   const out = {
     action: 'save', moved: [], renamed: [], routed: [], created: [], connected: [], removed: [], hidden: [], deleted: [], deleted_connectors: [],
-    updated: [], updated_connectors: [], colors: [], line_styles: [],
+    updated: [], updated_connectors: [], colors: [], line_styles: [], placed: [],
   };
   // Existing objects that are no longer on the diagram: what the user chose for them (elements removed with them
   // take their connectors off this diagram without any separate operation).
@@ -492,6 +554,10 @@ function changes() {
       const box = { left: round(g.x), top: round(g.y), width: round(g.width), height: round(g.height) };
       if (m.isNew) {
         out.created.push({ key: cell.id, name: String(cell.value || ''), type: m.ea.type, stereotype: m.ea.stereotype, ...box });
+        continue;
+      }
+      if (m.placed) {
+        out.placed.push({ id: m.ea.id, ...box });
         continue;
       }
       const o = original.get(cell.id);
@@ -558,7 +624,7 @@ document.getElementById('save').addEventListener('click', () => {
   const c = changes();
   const count = c.moved.length + c.renamed.length + c.routed.length + c.created.length + c.connected.length
     + c.removed.length + c.hidden.length + c.deleted.length + c.deleted_connectors.length
-    + c.updated.length + c.updated_connectors.length + c.colors.length + c.line_styles.length + c.members.length;
+    + c.updated.length + c.updated_connectors.length + c.colors.length + c.line_styles.length + c.members.length + c.placed.length;
   if (!count) { document.getElementById('status').textContent = t.nothing; return; }
   send(c);
 });

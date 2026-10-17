@@ -13,6 +13,9 @@ use serde_json::{json, Value};
 const HTML: &str = include_str!("../assets/editor/editor.html");
 const EDITOR_JS: &str = include_str!("../assets/editor/editor.js");
 
+/// At most this many elements of the model are offered for putting on the diagram.
+const MAX_CANDIDATES: usize = 20000;
+
 /// BPMN element stereotypes: a diagram with them gets the BPMN toolbox.
 const BPMN_STEREOTYPES: &[&str] = &["StartEvent", "EndEvent", "IntermediateEvent", "Activity", "Gateway", "Pool", "Lane"];
 
@@ -219,9 +222,22 @@ pub fn model(cfg: &AppConfig, diagram_id: i64) -> Result<Value> {
     }
 
     let (toolbox, connector_types) = toolbox(&d[2], bpmn);
+    // Elements of the model that can be put on the diagram (those of the diagram's package first).
+    let package_id = int(&d[3]);
+    let candidates: Vec<Value> = query_rows(cfg, &format!(
+        "select o.object_id, o.name, o.object_type, o.stereotype, p.name from t_object o left join t_package p on p.package_id = o.package_id \
+         where o.object_type not in ('Package', 'Text', 'Boundary', 'ProvidedInterface', 'RequiredInterface', 'Port', 'ActionPin', 'ExpansionNode') \
+         and o.name is not null and o.name <> '' and o.object_id not in {on_diagram} \
+         order by case when o.package_id = {package_id} then 0 else 1 end, o.name"
+    ))?
+    .into_iter()
+    .take(MAX_CANDIDATES)
+    .map(|r| json!({ "id": int(&r[0]), "name": r[1], "type": r[2], "stereotype": r[3], "package": r[4] }))
+    .collect();
     let statuses: Vec<String> = query_rows(cfg, "select status from t_statustypes order by status").unwrap_or_default().into_iter().map(|r| r[0].clone()).collect();
     Ok(json!({
         "statuses": statuses,
+        "candidates": candidates,
         "diagram": { "id": diagram_id, "name": d[1], "type": d[2], "package": int(&d[3]), "bpmn": bpmn },
         "elements": elements,
         "connectors": connectors,
@@ -340,6 +356,11 @@ fn texts() -> Value {
         ("add_attribute", crate::i18n::tr("+ Attribute")), ("add_operation", crate::i18n::tr("+ Operation")),
         ("new_attribute", crate::i18n::tr("newAttribute")), ("new_operation", crate::i18n::tr("newOperation")),
         ("remove_member", crate::i18n::tr("Delete from the model")),
+        ("insert", crate::i18n::tr("From the model…")), ("insert_title", crate::i18n::tr("Put an element of the model on the diagram")),
+        ("insert_search", crate::i18n::tr("Search by name, type or package")),
+        ("insert_hint", crate::i18n::tr("Its relationships with the elements of the diagram appear after saving.")),
+        ("insert_none", crate::i18n::tr("No matching elements.")), ("insert_more", crate::i18n::tr("Showing the first {0}. Type more to narrow the list.")),
+        ("close", crate::i18n::tr("Close")),
     ];
     if let Some(o) = out.as_object_mut() {
         o.extend(more.iter().map(|(k, v)| (k.to_string(), json!(v))));
@@ -373,6 +394,10 @@ pub fn to_ops(model: &Value, changes: &Value) -> Vec<Value> {
             }
         }
         ops.push(op);
+    }
+    // Existing elements of the model put on this diagram.
+    for c in list("placed") {
+        ops.push(json!({ "op": "place", "diagram": diagram, "element": c["id"], "left": c["left"], "top": c["top"], "width": c["width"], "height": c["height"] }));
     }
     for c in list("moved") {
         ops.push(json!({ "op": "set_bounds", "diagram": diagram, "element": c["id"], "left": c["left"], "top": c["top"], "width": c["width"], "height": c["height"] }));

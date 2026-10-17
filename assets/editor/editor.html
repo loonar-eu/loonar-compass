@@ -184,7 +184,10 @@ button:hover { background: #EAF2F7; }
 button.primary { background: #0E4A6B; color: #FFFFFF; border-color: #0E4A6B; }
 button.primary:hover { background: #0B3B56; }
 #spacer { flex: 1; }
-#status { font-size: 12px; color: #55667A; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#status { font-size: 12px; color: #55667A; min-width: 0; flex: 0 1 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+header button, header .label { white-space: nowrap; }
+header .group { flex: none; }
+#spacer { min-width: 8px; }
 header { flex-wrap: nowrap; }
 header h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px; }
 #graph { flex: 1; position: relative; overflow: auto; background: #FFFFFF; background-image: radial-gradient(#DFE7EE 1px, transparent 1px); background-size: 10px 10px; }
@@ -224,6 +227,14 @@ main { flex: 1; display: flex; min-height: 0; }
 #props .addm { margin-top: 4px; font-size: 12px; padding: 4px 10px; }
 #props .color { display: flex; gap: 8px; align-items: center; }
 #props .color input { width: 44px; height: 28px; padding: 0; border: 1px solid #C9D5DF; border-radius: 6px; }
+#insert { position: fixed; inset: 0; background: rgba(15, 30, 42, .35); display: grid; place-items: center; z-index: 10; }
+#insert[hidden] { display: none; }
+.i-box { width: min(640px, 94vw); max-height: 80vh; }
+.i-search { font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid #C9D5DF; border-radius: 8px; }
+.i-list { overflow: auto; display: flex; flex-direction: column; gap: 4px; min-height: 120px; max-height: 52vh; }
+.i-row { display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 2px; padding: 7px 10px; }
+.i-row span { font-size: 12px; color: #55667A; }
+.hint { color: #55667A; font-size: 12px; margin: 0; }
 #delete { position: fixed; inset: 0; background: rgba(15, 30, 42, .35); display: grid; place-items: center; z-index: 10; }
 #delete[hidden] { display: none; }
 .d-box { background: #FFFFFF; border-radius: 14px; padding: 20px 22px; width: min(520px, 92vw); box-shadow: 0 24px 60px rgba(8, 44, 65, .25); display: flex; flex-direction: column; gap: 10px; }
@@ -239,7 +250,7 @@ main { flex: 1; display: flex; min-height: 0; }
 <body>
 <header>
   <h1 id="title"></h1>
-  <div class="group"><span class="label" id="l-add"></span><span id="toolbox"></span></div>
+  <div class="group"><span class="label" id="l-add"></span><span id="toolbox"></span><button id="b-insert"></button></div>
   <div class="group"><span class="label" id="l-conn"></span><select id="conntype"></select></div>
   <div class="group">
     <button data-action="align-left" id="b-al">⇤</button>
@@ -259,6 +270,15 @@ main { flex: 1; display: flex; min-height: 0; }
   <button id="save" class="primary"></button>
 </header>
 <main><div id="graph"></div><aside id="props"></aside></main>
+<div id="insert" hidden>
+  <div class="d-box i-box">
+    <h2 class="d-title i-title"></h2>
+    <input type="search" class="i-search">
+    <p class="hint i-hint"></p>
+    <div class="i-list"></div>
+    <button class="i-close d-cancel"></button>
+  </div>
+</div>
 <div id="delete" hidden>
   <div class="d-box">
     <h2 class="d-title"></h2>
@@ -275,6 +295,11 @@ main { flex: 1; display: flex; min-height: 0; }
   var set = function (id, text) { document.getElementById(id).textContent = text; };
   set('l-add', t.add); set('l-conn', t.connector); set('save', t.save); set('cancel', t.cancel); set('status', t.hint);
   document.querySelector('#delete .d-title').textContent = t.delete_title;
+  set('b-insert', t.insert);
+  document.querySelector('#insert .i-title').textContent = t.insert_title;
+  document.querySelector('#insert .i-search').placeholder = t.insert_search;
+  document.querySelector('#insert .i-hint').textContent = t.insert_hint;
+  document.querySelector('#insert .i-close').textContent = t.close;
   document.querySelector('#delete .d-cancel').textContent = t.cancel_delete;
   var tips = { 'b-al': t.align_left, 'b-ac': t.align_center, 'b-at': t.align_top, 'b-am': t.align_middle, 'b-ss': t.same_size, 'b-fit': t.fit };
   for (var id in tips) document.getElementById(id).title = tips[id];

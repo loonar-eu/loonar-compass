@@ -906,3 +906,10 @@ newAttribute ‖ nowyAtrybut ‖ neuesAttribut ‖ nouvelAttribut
 newOperation ‖ nowaOperacja ‖ neueOperation ‖ nouvelleOperation
 operation ‖ operacja ‖ Operation ‖ opération
 operations DELETED ‖ operacje USUNIĘTE ‖ Operationen GELÖSCHT ‖ opérations SUPPRIMÉES
+Close ‖ Zamknij ‖ Schließen ‖ Fermer
+From the model… ‖ Z modelu… ‖ Aus dem Modell… ‖ Depuis le modèle…
+Its relationships with the elements of the diagram appear after saving. ‖ Jego relacje z elementami diagramu pojawią się po zapisie. ‖ Seine Beziehungen zu den Elementen des Diagramms erscheinen nach dem Speichern. ‖ Ses relations avec les éléments du diagramme apparaîtront après l'enregistrement.
+No matching elements. ‖ Brak pasujących elementów. ‖ Keine passenden Elemente. ‖ Aucun élément correspondant.
+Put an element of the model on the diagram ‖ Wstaw element z modelu na diagram ‖ Ein Element des Modells in das Diagramm einfügen ‖ Placer un élément du modèle dans le diagramme
+Search by name, type or package ‖ Szukaj po nazwie, typie lub pakiecie ‖ Nach Name, Typ oder Paket suchen ‖ Rechercher par nom, type ou paquetage
+Showing the first {0}. Type more to narrow the list. ‖ Pokazano pierwsze {0}. Wpisz więcej, żeby zawęzić listę. ‖ Die ersten {0} werden angezeigt. Geben Sie mehr ein, um die Liste einzugrenzen. ‖ Les {0} premiers sont affichés. Tapez davantage pour affiner la liste.
