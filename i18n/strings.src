@@ -767,3 +767,54 @@ This conversation will use the model {0} ‖ Ta rozmowa użyje modelu {0} ‖ Di
 as in the settings ‖ jak w ustawieniach ‖ wie in den Einstellungen ‖ comme dans les paramètres
 {0}\nClick to see or change the model of this conversation. ‖ {0}\nKliknij, aby zobaczyć albo zmienić model tej rozmowy. ‖ {0}\nKlicken Sie, um das Modell dieser Unterhaltung anzuzeigen oder zu ändern. ‖ {0}\nCliquez pour voir ou modifier le modèle de cette conversation.
 Only for the model {0} ‖ Tylko dla modelu {0} ‖ Nur für das Modell {0} ‖ Uniquement pour le modèle {0}
+Action ‖ Akcja ‖ Aktion ‖ Action
+Actor ‖ Aktor ‖ Akteur ‖ Acteur
+Add: ‖ Dodaj: ‖ Hinzufügen: ‖ Ajouter :
+Adds the element in the middle of the view ‖ Dodaje element na środku widoku ‖ Fügt das Element in der Mitte der Ansicht ein ‖ Ajoute l'élément au milieu de la vue
+Aggregation ‖ Agregacja ‖ Aggregation ‖ Agrégation
+Align centers ‖ Wyrównaj środki w poziomie ‖ Horizontal zentrieren ‖ Centrer horizontalement
+Align left ‖ Wyrównaj do lewej ‖ Links ausrichten ‖ Aligner à gauche
+Align middles ‖ Wyrównaj środki w pionie ‖ Vertikal zentrieren ‖ Centrer verticalement
+Align tops ‖ Wyrównaj do góry ‖ Oben ausrichten ‖ Aligner en haut
+Association ‖ Asocjacja ‖ Assoziation ‖ Association
+Class ‖ Klasa ‖ Klasse ‖ Classe
+Component ‖ Komponent ‖ Komponente ‖ Composant
+Connector: ‖ Połączenie: ‖ Verbindung: ‖ Connecteur :
+Control flow ‖ Przepływ sterowania ‖ Kontrollfluss ‖ Flux de contrôle
+Decision ‖ Decyzja ‖ Entscheidung ‖ Décision
+Dependency ‖ Zależność ‖ Abhängigkeit ‖ Dépendance
+Drag from an element to another to connect them. Double-click to rename. ‖ Przeciągnij od jednego elementu do drugiego, żeby je połączyć. Kliknij dwukrotnie, żeby zmienić nazwę. ‖ Ziehen Sie von einem Element zu einem anderen, um sie zu verbinden. Doppelklick zum Umbenennen. ‖ Faites glisser d'un élément à un autre pour les relier. Double-cliquez pour renommer.
+End event ‖ Zdarzenie końcowe ‖ Endereignis ‖ Événement de fin
+Fit to window ‖ Dopasuj do okna ‖ An Fenster anpassen ‖ Ajuster à la fenêtre
+Gateway ‖ Bramka ‖ Gateway ‖ Passerelle
+Generalization ‖ Generalizacja ‖ Generalisierung ‖ Généralisation
+Interface ‖ Interfejs ‖ Schnittstelle ‖ Interface
+New action ‖ Nowa akcja ‖ Neue Aktion ‖ Nouvelle action
+New actor ‖ Nowy aktor ‖ Neuer Akteur ‖ Nouvel acteur
+New class ‖ Nowa klasa ‖ Neue Klasse ‖ Nouvelle classe
+New component ‖ Nowy komponent ‖ Neue Komponente ‖ Nouveau composant
+New interface ‖ Nowy interfejs ‖ Neue Schnittstelle ‖ Nouvelle interface
+New task ‖ Nowe zadanie ‖ Neue Aufgabe ‖ Nouvelle tâche
+New use case ‖ Nowy przypadek użycia ‖ Neuer Anwendungsfall ‖ Nouveau cas d'utilisation
+Note ‖ Notatka ‖ Notiz ‖ Note
+Nothing has changed. ‖ Nic się nie zmieniło. ‖ Es hat sich nichts geändert. ‖ Rien n'a changé.
+Realization ‖ Realizacja ‖ Realisierung ‖ Réalisation
+Same size as the first selected ‖ Ten sam rozmiar co pierwszy zaznaczony ‖ Gleiche Größe wie das zuerst ausgewählte ‖ Même taille que le premier sélectionné
+Save to EA ‖ Zapisz do EA ‖ In EA speichern ‖ Enregistrer dans EA
+Sequence flow ‖ Przepływ sekwencji ‖ Sequenzfluss ‖ Flux de séquence
+Start event ‖ Zdarzenie startowe ‖ Startereignis ‖ Événement de début
+Task ‖ Zadanie ‖ Aufgabe ‖ Tâche
+Use case ‖ Przypadek użycia ‖ Anwendungsfall ‖ Cas d'utilisation
+WebView2 (Microsoft Edge) is needed for the diagram editor ‖ Edytor diagramów potrzebuje WebView2 (Microsoft Edge) ‖ Der Diagrammeditor benötigt WebView2 (Microsoft Edge) ‖ L'éditeur de diagrammes a besoin de WebView2 (Microsoft Edge)
+application path ‖ ścieżka aplikacji ‖ Pfad der Anwendung ‖ chemin de l'application
+opening the editor window ‖ otwieranie okna edytora ‖ Öffnen des Editorfensters ‖ ouverture de la fenêtre de l'éditeur
+reading the diagram ‖ odczyt diagramu ‖ Lesen des Diagramms ‖ lecture du diagramme
+saving the changes ‖ zapis zmian ‖ Speichern der Änderungen ‖ enregistrement des modifications
+the diagram editor closed with an error ‖ edytor diagramów zamknął się z błędem ‖ der Diagrammeditor wurde mit einem Fehler beendet ‖ l'éditeur de diagrammes s'est fermé avec une erreur
+Changes from the diagram editor saved in EA (diagram "{0}"):\n{1} ‖ Zmiany z edytora diagramu zapisane w EA (diagram „{0}”):\n{1} ‖ Änderungen aus dem Diagrammeditor in EA gespeichert (Diagramm „{0}“):\n{1} ‖ Modifications de l'éditeur de diagrammes enregistrées dans EA (diagramme « {0} ») :\n{1}
+Claude is working in this conversation: save the diagram again when it has finished. ‖ Claude pracuje w tej rozmowie: zapisz diagram ponownie, gdy skończy. ‖ Claude arbeitet in dieser Unterhaltung: Speichern Sie das Diagramm erneut, wenn Claude fertig ist. ‖ Claude travaille dans cette conversation : enregistrez à nouveau le diagramme quand il aura terminé.
+Edit diagram ‖ Edytuj diagram ‖ Diagramm bearbeiten ‖ Modifier le diagramme
+Saving the changes from the diagram editor: {0} ‖ Zapis zmian z edytora diagramu: {0} ‖ Speichern der Änderungen aus dem Diagrammeditor: {0} ‖ Enregistrement des modifications de l'éditeur de diagrammes : {0}
+Saving the changes from the diagram editor… ‖ Zapisywanie zmian z edytora diagramu… ‖ Änderungen aus dem Diagrammeditor werden gespeichert… ‖ Enregistrement des modifications de l'éditeur de diagrammes…
+The diagram editor is open. Save to EA there, or close it. ‖ Edytor diagramu jest otwarty. Zapisz w nim do EA albo go zamknij. ‖ Der Diagrammeditor ist geöffnet. Speichern Sie dort in EA oder schließen Sie ihn. ‖ L'éditeur de diagrammes est ouvert. Enregistrez dans EA depuis l'éditeur ou fermez-le.
+The diagram editor was closed without saving. ‖ Edytor diagramu zamknięto bez zapisu. ‖ Der Diagrammeditor wurde ohne Speichern geschlossen. ‖ L'éditeur de diagrammes a été fermé sans enregistrer.

@@ -788,6 +788,8 @@ fn ea_show_diagram(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
     if size == 0 {
         bail!("{}", crate::i18n::fmt("EA did not save an image of diagram \"{0}\" (the diagram may be empty)", &[name.clone()]));
     }
+    // Which diagram the image shows: the chat offers "Edit diagram" for it.
+    let _ = std::fs::write(ctx.cfg.attachments_dir.join(format!("{stored}.diagram")), id.to_string());
     Ok(ToolOutput {
         text: format!("Diagram \"{name}\" (id {id}) is in the attached image. The user sees the same image in the chat and can save it to disk."),
         images: vec![stored],

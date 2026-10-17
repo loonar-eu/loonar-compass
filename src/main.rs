@@ -504,6 +504,20 @@ fn main() -> eframe::Result {
             config::user_data_dir().join("app.properties")
         }
     };
+    // The diagram editor window of the main application (its own process, so its event loop does not meet egui's).
+    let early: Vec<String> = std::env::args().collect();
+    if let Some(i) = early.iter().position(|a| a == "--diagram-window") {
+        if let (Some(input), Some(output)) = (early.get(i + 1), early.get(i + 2)) {
+            if let Ok(text) = std::fs::read_to_string(&props_path) {
+                i18n::set(i18n::Lang::parse(config::parse_properties(&text).get("ui.language").map(String::as_str).unwrap_or("pl")));
+            }
+            let result = diagram_editor::window_from_files(Path::new(input), Path::new(output));
+            if let Err(e) = &result {
+                window::show_error(config::APP_NAME, &format!("{e:#}"));
+            }
+            std::process::exit(if result.is_ok() { 0 } else { 1 });
+        }
+    }
     // Diagram editor in its own process: `--edit-diagram <id>` (the result goes to %TEMP%\loonar-diagram-editor.log).
     let args: Vec<String> = std::env::args().collect();
     if let Some(id) = args.iter().position(|a| a == "--edit-diagram").and_then(|i| args.get(i + 1)).and_then(|v| v.parse::<i64>().ok()) {
@@ -731,6 +745,8 @@ struct App {
     settings_rx: mpsc::Receiver<(usize, Result<String, String>)>,
     /// Window with the model of the current conversation (opened from the header or the new-conversation card).
     conn: Option<ConnEditor>,
+    /// The diagram editor window that is open: the diagram and the changes come back when it closes.
+    editor_rx: Option<mpsc::Receiver<Result<Option<(Value, Value)>, String>>>,
 }
 
 /// State of one conversation in which the assistant works in the background (meanwhile the window shows another conversation).
@@ -864,6 +880,7 @@ impl App {
             session: Session::new(),
             sessions,
             conn: None,
+            editor_rx: None,
             pending: Vec::new(),
             input: String::new(),
             status,
@@ -948,6 +965,109 @@ impl App {
                 self.session = last.clone();
             }
         }
+    }
+
+    /// Opens the diagram editor window for a diagram of the current conversation's model (in the background:
+    /// the main window keeps working while the editor is open).
+    fn open_diagram_editor(&mut self, ctx: &egui::Context, diagram_id: i64) {
+        let Some(base) = self.cfg.clone() else { return };
+        let choice = self.session.model.clone().unwrap_or_else(|| ModelChoice::of(&base));
+        let cfg = match choice.apply(&base) {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                self.status = format!("{e:#}");
+                return;
+            }
+        };
+        let (tx, rx) = mpsc::channel();
+        let wake = ctx.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(diagram_editor::edit_in_window(&cfg, diagram_id).map_err(|e| format!("{e:#}")));
+            wake.request_repaint();
+        });
+        self.editor_rx = Some(rx);
+        self.status = crate::i18n::tr("The diagram editor is open. Save to EA there, or close it.").into();
+    }
+
+    /// The editor window has closed: its changes are saved in EA like the assistant's changes (approval, audit log).
+    fn poll_diagram_editor(&mut self, ctx: &egui::Context) {
+        let Some(result) = self.editor_rx.as_ref().and_then(|rx| rx.try_recv().ok()) else { return };
+        self.editor_rx = None;
+        match result {
+            Err(e) => self.status = e,
+            Ok(None) => self.status = crate::i18n::tr("The diagram editor was closed without saving.").into(),
+            Ok(Some((model, changes))) => {
+                let ops = diagram_editor::to_ops(&model, &changes);
+                if ops.is_empty() {
+                    self.status = crate::i18n::tr("Nothing has changed.").into();
+                } else if self.events.is_some() {
+                    self.status = crate::i18n::tr("Claude is working in this conversation: save the diagram again when it has finished.").into();
+                } else {
+                    self.start_editor_save(ctx, model, ops);
+                }
+            }
+        }
+    }
+
+    /// Saves the changes from the diagram editor through the ordinary write tool, in the worker thread of the
+    /// conversation: the approval panel, the step list, the audit log and the refresh of the user's EA window work as for
+    /// the assistant's own changes. The result stays in the conversation as a message.
+    fn start_editor_save(&mut self, ctx: &egui::Context, model: Value, ops: Vec<Value>) {
+        let Some(base) = self.cfg.clone() else { return };
+        let choice = self.session.model.clone().unwrap_or_else(|| ModelChoice::of(&base));
+        let cfg = match choice.apply(&base) {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                self.status = format!("{e:#}");
+                return;
+            }
+        };
+        if self.session.model.is_none() {
+            self.session.model = Some(choice);
+        }
+        self.queued = 0;
+        self.consumed = 0;
+        let (events_tx, events_rx) = mpsc::channel::<WorkerEvent>();
+        let (outbox_tx, _inbox) = mpsc::channel::<Message>();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let wake = ctx.clone();
+        let diagram = model["diagram"]["name"].as_str().unwrap_or("").to_string();
+        std::thread::spawn(move || {
+            let emit = |event: WorkerEvent| {
+                let _ = events_tx.send(event);
+                wake.request_repaint();
+            };
+            let approval_tx = events_tx.clone();
+            let approval_wake = wake.clone();
+            let ask = Box::new(move |summary: String| {
+                let (reply_tx, reply_rx) = mpsc::channel();
+                if approval_tx.send(WorkerEvent::Approval(ApprovalRequest { summary, reply: reply_tx })).is_err() {
+                    return false;
+                }
+                approval_wake.request_repaint();
+                reply_rx.recv().unwrap_or(false)
+            });
+            let approver = tools::Approver::new(cfg.approval_mode, ask);
+            let summary = ea::describe(&ops);
+            emit(WorkerEvent::StepStart(crate::i18n::fmt("Saving the changes from the diagram editor: {0}", &[summary.replace('\n', ", ")])));
+            let result = tools::run("ea_write", &json!({ "ops": ops }), &tools::ToolContext { cfg: &cfg, approver: &approver });
+            match result {
+                Ok(_) => {
+                    emit(WorkerEvent::StepEnd { ok: true, detail: crate::i18n::tr("saved in the EA model").into() });
+                    emit(WorkerEvent::Text(crate::i18n::fmt("Changes from the diagram editor saved in EA (diagram \"{0}\"):\n{1}", &[diagram, summary])));
+                    emit(WorkerEvent::Done);
+                }
+                Err(e) => {
+                    emit(WorkerEvent::StepEnd { ok: false, detail: format!("{e:#}") });
+                    emit(WorkerEvent::Failed(format!("{e:#}")));
+                }
+            }
+        });
+        self.events = Some(events_rx);
+        self.outbox = Some(outbox_tx);
+        self.cancel = cancel;
+        self.status = crate::i18n::tr("Saving the changes from the diagram editor…").into();
+        self.steps.clear();
     }
 
     /// Sets the model of the current conversation; a conversation with messages is saved at once.
@@ -3922,6 +4042,7 @@ impl eframe::App for App {
 
                 let attachments_dir = self.cfg.as_ref().map(|c| c.attachments_dir.clone());
                 let mut save_request: Option<String> = None;
+                let mut edit_request: Option<i64> = None;
                 let mut open_request: Option<String> = None;
                 // Confluence page: copying the code to the clipboard and the images folder.
                 let mut copy_page_request: Option<String> = None;
@@ -4070,6 +4191,16 @@ impl eframe::App for App {
                                                 if ui.button(crate::i18n::tr("Open full size")).clicked() {
                                                     open_request = Some(a.clone());
                                                 }
+                                                // Diagram images from EA: the diagram can be edited in the editor window.
+                                                let diagram = attachments_dir
+                                                    .as_deref()
+                                                    .and_then(|d| std::fs::read_to_string(d.join(format!("{a}.diagram"))).ok())
+                                                    .and_then(|t| t.trim().parse::<i64>().ok());
+                                                if let Some(id) = diagram {
+                                                    if ui.add_enabled(self.editor_rx.is_none(), egui::Button::new(crate::i18n::tr("Edit diagram"))).clicked() {
+                                                        edit_request = Some(id);
+                                                    }
+                                                }
                                                 ui.label(egui::RichText::new(history::display_name(a)).small().color(theme::MUTED));
                                             });
                                         }
@@ -4204,6 +4335,10 @@ impl eframe::App for App {
                 if open_conn_empty {
                     self.open_conn_editor();
                 }
+                if let Some(id) = edit_request {
+                    self.open_diagram_editor(ctx, id);
+                }
+                self.poll_diagram_editor(ctx);
 
                 // Saving and previewing an image: after the panel is drawn, because the file dialog blocks drawing.
                 if let Some(dir) = attachments_dir.as_deref() {

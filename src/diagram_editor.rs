@@ -112,39 +112,38 @@ fn toolbox(diagram_type: &str, bpmn: bool) -> (Value, Value) {
         json!({ "label": label, "name": name, "type": kind, "stereotype": stereotype, "width": w, "height": h })
     };
     let conn = |label: &str, kind: &str, stereotype: &str| json!({ "label": label, "type": kind, "stereotype": stereotype });
-    let tr = crate::i18n::tr;
     if bpmn || diagram_type.starts_with("BPMN") {
         return (
             json!([
-                tool(tr("Task"), tr("New task"), "Activity", "BPMN2.0::Activity", 110, 60),
-                tool(tr("Start event"), "", "Event", "BPMN2.0::StartEvent", 30, 30),
-                tool(tr("End event"), "", "Event", "BPMN2.0::EndEvent", 30, 30),
-                tool(tr("Gateway"), "", "Decision", "BPMN2.0::Gateway", 40, 40),
+                tool(crate::i18n::tr("Task"), crate::i18n::tr("New task"), "Activity", "BPMN2.0::Activity", 110, 60),
+                tool(crate::i18n::tr("Start event"), "", "Event", "BPMN2.0::StartEvent", 30, 30),
+                tool(crate::i18n::tr("End event"), "", "Event", "BPMN2.0::EndEvent", 30, 30),
+                tool(crate::i18n::tr("Gateway"), "", "Decision", "BPMN2.0::Gateway", 40, 40),
             ]),
-            json!([conn(tr("Sequence flow"), "ControlFlow", "BPMN2.0::SequenceFlow")]),
+            json!([conn(crate::i18n::tr("Sequence flow"), "ControlFlow", "BPMN2.0::SequenceFlow")]),
         );
     }
     match diagram_type {
         "Use Case" => (
-            json!([tool(tr("Actor"), tr("New actor"), "Actor", "", 40, 80), tool(tr("Use case"), tr("New use case"), "UseCase", "", 150, 70), tool(tr("Note"), "", "Note", "", 160, 60)]),
-            json!([conn(tr("Association"), "Association", ""), conn("«include»", "Dependency", "include"), conn("«extend»", "Dependency", "extend")]),
+            json!([tool(crate::i18n::tr("Actor"), crate::i18n::tr("New actor"), "Actor", "", 40, 80), tool(crate::i18n::tr("Use case"), crate::i18n::tr("New use case"), "UseCase", "", 150, 70), tool(crate::i18n::tr("Note"), "", "Note", "", 160, 60)]),
+            json!([conn(crate::i18n::tr("Association"), "Association", ""), conn("«include»", "Dependency", "include"), conn("«extend»", "Dependency", "extend")]),
         ),
         "Activity" => (
-            json!([tool(tr("Action"), tr("New action"), "Action", "", 110, 50), tool(tr("Decision"), "", "Decision", "", 40, 40), tool(tr("Note"), "", "Note", "", 160, 60)]),
-            json!([conn(tr("Control flow"), "ControlFlow", "")]),
+            json!([tool(crate::i18n::tr("Action"), crate::i18n::tr("New action"), "Action", "", 110, 50), tool(crate::i18n::tr("Decision"), "", "Decision", "", 40, 40), tool(crate::i18n::tr("Note"), "", "Note", "", 160, 60)]),
+            json!([conn(crate::i18n::tr("Control flow"), "ControlFlow", "")]),
         ),
         "Component" => (
-            json!([tool(tr("Component"), tr("New component"), "Component", "", 160, 80), tool(tr("Interface"), tr("New interface"), "Interface", "", 160, 80), tool(tr("Note"), "", "Note", "", 160, 60)]),
-            json!([conn(tr("Dependency"), "Dependency", ""), conn(tr("Realization"), "Realisation", ""), conn(tr("Association"), "Association", "")]),
+            json!([tool(crate::i18n::tr("Component"), crate::i18n::tr("New component"), "Component", "", 160, 80), tool(crate::i18n::tr("Interface"), crate::i18n::tr("New interface"), "Interface", "", 160, 80), tool(crate::i18n::tr("Note"), "", "Note", "", 160, 60)]),
+            json!([conn(crate::i18n::tr("Dependency"), "Dependency", ""), conn(crate::i18n::tr("Realization"), "Realisation", ""), conn(crate::i18n::tr("Association"), "Association", "")]),
         ),
         _ => (
-            json!([tool(tr("Class"), tr("New class"), "Class", "", 160, 90), tool(tr("Interface"), tr("New interface"), "Interface", "", 160, 80), tool(tr("Note"), "", "Note", "", 160, 60)]),
+            json!([tool(crate::i18n::tr("Class"), crate::i18n::tr("New class"), "Class", "", 160, 90), tool(crate::i18n::tr("Interface"), crate::i18n::tr("New interface"), "Interface", "", 160, 80), tool(crate::i18n::tr("Note"), "", "Note", "", 160, 60)]),
             json!([
-                conn(tr("Association"), "Association", ""),
-                conn(tr("Generalization"), "Generalization", ""),
-                conn(tr("Aggregation"), "Aggregation", ""),
-                conn(tr("Dependency"), "Dependency", ""),
-                conn(tr("Realization"), "Realisation", ""),
+                conn(crate::i18n::tr("Association"), "Association", ""),
+                conn(crate::i18n::tr("Generalization"), "Generalization", ""),
+                conn(crate::i18n::tr("Aggregation"), "Aggregation", ""),
+                conn(crate::i18n::tr("Dependency"), "Dependency", ""),
+                conn(crate::i18n::tr("Realization"), "Realisation", ""),
             ]),
         ),
     }
@@ -152,13 +151,12 @@ fn toolbox(diagram_type: &str, bpmn: bool) -> (Value, Value) {
 
 /// Interface texts of the editor window in the current language.
 fn texts() -> Value {
-    let tr = crate::i18n::tr;
     json!({
-        "add": tr("Add:"), "connector": tr("Connector:"), "save": tr("Save to EA"), "cancel": tr("Cancel"),
-        "hint": tr("Drag from an element to another to connect them. Double-click to rename."),
-        "nothing": tr("Nothing has changed."), "add_hint": tr("Adds the element in the middle of the view"),
-        "align_left": tr("Align left"), "align_center": tr("Align centers"), "align_top": tr("Align tops"),
-        "align_middle": tr("Align middles"), "same_size": tr("Same size as the first selected"), "fit": tr("Fit to window"),
+        "add": crate::i18n::tr("Add:"), "connector": crate::i18n::tr("Connector:"), "save": crate::i18n::tr("Save to EA"), "cancel": crate::i18n::tr("Cancel"),
+        "hint": crate::i18n::tr("Drag from an element to another to connect them. Double-click to rename."),
+        "nothing": crate::i18n::tr("Nothing has changed."), "add_hint": crate::i18n::tr("Adds the element in the middle of the view"),
+        "align_left": crate::i18n::tr("Align left"), "align_center": crate::i18n::tr("Align centers"), "align_top": crate::i18n::tr("Align tops"),
+        "align_middle": crate::i18n::tr("Align middles"), "same_size": crate::i18n::tr("Same size as the first selected"), "fit": crate::i18n::tr("Fit to window"),
     })
 }
 
@@ -242,6 +240,35 @@ pub fn run(model: &Value) -> Result<Option<Value>> {
     });
     let changes = result.borrow_mut().take();
     Ok(changes)
+}
+
+/// `--diagram-window <input> <output>`: the editor window of the main application. Reads the diagram from the input
+/// file and writes the changes to the output file (nothing when the user closes the window without saving).
+pub fn window_from_files(input: &std::path::Path, output: &std::path::Path) -> Result<()> {
+    let model: Value = serde_json::from_str(&std::fs::read_to_string(input).context(crate::i18n::tr("reading the diagram"))?)?;
+    let _ = std::fs::remove_file(output);
+    if let Some(changes) = run(&model)? {
+        std::fs::write(output, serde_json::to_string(&changes)?).context(crate::i18n::tr("saving the changes"))?;
+    }
+    Ok(())
+}
+
+/// Opens the editor window for a diagram in a separate process of this application and waits until it closes.
+/// Returns the diagram and the changes, or None when the window was closed without saving.
+pub fn edit_in_window(cfg: &AppConfig, diagram_id: i64) -> Result<Option<(Value, Value)>> {
+    let model = model(cfg, diagram_id)?;
+    let dir = std::env::temp_dir().join(format!("loonar-editor-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir_all(&dir)?;
+    let (input, output) = (dir.join("diagram.json"), dir.join("changes.json"));
+    std::fs::write(&input, serde_json::to_string(&model)?)?;
+    let exe = std::env::current_exe().context(crate::i18n::tr("application path"))?;
+    let status = std::process::Command::new(exe).arg("--diagram-window").arg(&input).arg(&output).status().context(crate::i18n::tr("opening the editor window"))?;
+    let changes = std::fs::read_to_string(&output).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok());
+    let _ = std::fs::remove_dir_all(&dir);
+    if !status.success() && changes.is_none() {
+        bail!("{}", crate::i18n::tr("the diagram editor closed with an error"));
+    }
+    Ok(changes.map(|c| (model, c)))
 }
 
 /// `--edit-diagram <id>`: opens the diagram from the model in the settings, and saves the changes through EA.
