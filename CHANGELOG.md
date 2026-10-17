@@ -2,6 +2,16 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
+## Wersja 0.4 (2026-10-17)
+
+Modele w plikach:
+
+- Model może być teraz plikiem projektu Enterprise Architect .qea albo .qeax: Ustawienia → „2. Model” → „Plik EA (.qea, .qeax)” i ścieżka do pliku. Nie trzeba serwera bazy, konta ani hasła.
+- Asystent czyta plik bezpośrednio i tylko do odczytu. Zmiany zapisuje EA: przez Twoje okno EA, gdy masz w nim otwarty ten plik (drugie EA nigdy nie otwiera tego samego pliku), a w przeciwnym razie przez EA w tle.
+- Zabezpieczenia użytkowników w pliku są opcjonalne: bez nich konto i hasło EA zostają puste. Plik z włączonymi zabezpieczeniami działa jak model w bazie, z kontem EA.
+- Instalator ma ten sam wybór na stronie konfiguracji.
+- Asystent pisze zapytania w dialekcie SQL miejsca, w którym jest model (SQLite dla plików, PostgreSQL dla baz).
+
 ## Wersja 0.3 (2026-10-17)
 
 Nowa nazwa i publikacja:
@@ -196,9 +206,9 @@ Instalacja:
 
 ### Warunki konieczne
 
-- Model EA musi być w bazie PostgreSQL. Modele w plikach (.qea, .eap i podobne) oraz w innych bazach nie są obsługiwane.
-- Model musi mieć włączone zabezpieczenia użytkowników (Enable Security, tryb „Require User Lock to Edit”).
-- W modelu musi istnieć konto użytkownika dla asystenta (dowolna nazwa), z hasłem i uprawnieniami do edycji.
+- Model EA jest plikiem projektu .qea albo .qeax albo jest w bazie PostgreSQL. Starsze formaty plików (.eap, .eapx, .feap) i inne bazy nie są obsługiwane; plik .eap/.eapx EA przenosi do .qea transferem projektu.
+- Model w bazie musi mieć włączone zabezpieczenia użytkowników (Enable Security, tryb „Require User Lock to Edit”) i konto użytkownika dla asystenta (dowolna nazwa), z hasłem i uprawnieniami do edycji.
+- W pliku modelu zabezpieczenia użytkowników są opcjonalne; gdy są włączone, plik też potrzebuje takiego konta.
 
 ### Znane ograniczenia
 

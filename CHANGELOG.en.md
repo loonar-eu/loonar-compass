@@ -2,6 +2,16 @@
 
 All notable changes to Loonar Compass (named Loonar EA Assistant until version 0.3).
 
+## Version 0.4 (2026-10-17)
+
+Models in files:
+
+- The model can now be an Enterprise Architect project file .qea or .qeax: Settings → "2. Model" → "EA file (.qea, .qeax)" and the path to the file. No database server, account or password is needed.
+- The assistant reads the file directly and only for reading. Changes are saved by EA: through your EA window when you have the file open there (so a second EA never opens the same file), otherwise by EA in the background.
+- User security in a file is optional: without it, the EA account and password stay empty. A file with security enabled works like a database model, with an EA account.
+- The installer offers the same choice on the configuration page.
+- The assistant writes its queries in the SQL of the model's storage (SQLite for files, PostgreSQL for databases).
+
 ## Version 0.3 (2026-10-17)
 
 New name and public release:
@@ -196,9 +206,9 @@ Installation:
 
 ### Prerequisites
 
-- The EA model must be in a PostgreSQL database. Models in files (.qea, .eap and similar) and in other databases are not supported.
-- The model must have user security enabled (Enable Security, "Require User Lock to Edit" mode).
-- The model must contain a user account for the assistant (any name), with a password and edit permissions.
+- The EA model is a project file .qea or .qeax, or is in a PostgreSQL database. Older file formats (.eap, .eapx, .feap) and other databases are not supported; EA can convert an .eap/.eapx file to .qea with a project transfer.
+- A model in a database must have user security enabled (Enable Security, "Require User Lock to Edit" mode) and a user account for the assistant (any name), with a password and edit permissions.
+- In a model file, user security is optional; with security enabled, the file needs such an account too.
 
 ### Known limitations
 

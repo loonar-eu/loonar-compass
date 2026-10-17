@@ -2,6 +2,16 @@
 
 Toutes les modifications importantes de l'application Loonar Compass (nommée Loonar EA Assistant jusqu'à la version 0.3).
 
+## Version 0.4 (2026-10-17)
+
+Modèles dans des fichiers :
+
+- Le modèle peut désormais être un fichier de projet Enterprise Architect .qea ou .qeax : Paramètres → « 2. Modèle » → « Fichier EA (.qea, .qeax) » et le chemin du fichier. Aucun serveur de base de données, compte ni mot de passe n'est nécessaire.
+- L'assistant lit le fichier directement et en lecture seule. Les modifications sont enregistrées par EA : via votre fenêtre EA si le fichier y est ouvert (un second EA n'ouvre jamais le même fichier), sinon par EA en arrière-plan.
+- La sécurité utilisateur est facultative dans un fichier : sans elle, le compte et le mot de passe EA restent vides. Un fichier avec la sécurité activée fonctionne comme un modèle en base, avec un compte EA.
+- Le programme d'installation propose le même choix sur la page de configuration.
+- L'assistant écrit ses requêtes dans le SQL du support du modèle (SQLite pour les fichiers, PostgreSQL pour les bases).
+
 ## Version 0.3 (2026-10-17)
 
 Nouveau nom et publication :
@@ -196,9 +206,9 @@ Installation :
 
 ### Prérequis
 
-- Le modèle EA doit se trouver dans une base PostgreSQL. Les modèles sous forme de fichier (.qea, .eap et similaires) et dans d'autres bases ne sont pas pris en charge.
-- La sécurité utilisateur doit être activée dans le modèle (Enable Security, mode « Require User Lock to Edit »).
-- Le modèle doit contenir un compte utilisateur pour l'assistant (nom quelconque), avec un mot de passe et des droits de modification.
+- Le modèle EA est un fichier de projet .qea ou .qeax, ou se trouve dans une base PostgreSQL. Les anciens formats de fichier (.eap, .eapx, .feap) et les autres bases ne sont pas pris en charge ; EA convertit un fichier .eap/.eapx en .qea par un transfert de projet.
+- Un modèle dans une base doit avoir la sécurité utilisateur activée (Enable Security, mode « Require User Lock to Edit ») et contenir un compte utilisateur pour l'assistant (nom quelconque), avec un mot de passe et des droits de modification.
+- Dans un fichier de modèle, la sécurité utilisateur est facultative ; si elle est activée, le fichier a lui aussi besoin d'un tel compte.
 
 ### Limitations connues
 

@@ -12,7 +12,7 @@
 ---
 
 Loonar Compass is a Windows desktop application that connects to an Enterprise Architect model
-stored in PostgreSQL and lets you work with it through a chat. It uses Anthropic's Claude API with
+(a .qea/.qeax project file or a PostgreSQL repository) and lets you work with it through a chat. It uses Anthropic's Claude API with
 your own API key.
 
 - **Ask about the model** – which elements realise a requirement, what changed, where an operation
@@ -43,8 +43,8 @@ shown on the download page.
 
 - Windows 10 or 11 (64-bit)
 - Sparx Enterprise Architect with a licence, installed on the same computer
-- An EA model in a PostgreSQL repository, with model security enabled and an EA user account for
-  the assistant
+- An EA model in a project file (.qea or .qeax), or in a PostgreSQL repository with model security
+  enabled and an EA user account for the assistant
 - A Claude API key ([Anthropic Console](https://console.anthropic.com)); API usage is billed by
   Anthropic to your account
 - Optional: Confluence (Cloud or Data Center) for publishing pages, a Windows mail program for bug
@@ -110,7 +110,7 @@ certificate) at **[suppi.pl/loonar](https://suppi.pl/loonar)**.
 Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and
 Anthropic are trademarks of Anthropic, PBC. Atlassian, Confluence and Jira are trademarks of
 Atlassian. Microsoft, Windows, Word and Excel are trademarks of the Microsoft group of companies.
-PostgreSQL is a trademark of the PostgreSQL Community Association of Canada. Loonar Compass is an
+PostgreSQL is a registered trademark of the PostgreSQL Community Association. Loonar Compass is an
 independent product of Loonar Mariusz Głowacki and is not affiliated with, endorsed or sponsored by
 these companies.
 

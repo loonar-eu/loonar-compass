@@ -55,11 +55,11 @@ T["en"] = dict(
  hero_alt="Illustration of the Loonar Compass window: a request to draw an online shop order process as BPMN, the list of steps and the assistant's answer.",
  f_h="What it does", f_sub="One conversation instead of dozens of dialogs — from a quick question to a complete, consistently styled diagram.",
  features=[
-  ("Ask your model","Questions in natural language: what is in a package, which elements realise a requirement, what has changed. The assistant queries the model repository in PostgreSQL (read-only) and names objects by name, package and GUID."),
+  ("Ask your model","Questions in natural language: what is in a package, which elements realise a requirement, what has changed. The assistant queries the model — a PostgreSQL repository or a .qea/.qeax file — read-only, and names objects by name, package and GUID."),
   ("Create and change","Packages, elements, diagrams and connectors; class attributes and operations with parameters; keywords, colours, position and size. Move, rename, delete — or copy a whole package with its contents."),
   ("BPMN the way EA expects it","Proper BPMN 2.0 types with stereotypes and tags: tasks, events, gateways, flows, collapsed and embedded subprocesses. Drawn from a BPMN file, a photo, a sketch or just a description."),
   ("Diagrams that read well","Legends with automatic colouring, line styles and connector routing along a path you give, connectors hidden on one diagram only, navigation cells that link to other diagrams."),
-  ("Written by EA itself","Changes go through EA’s own automation interface (COM) under an EA user account, so model security, permissions and locks apply. Before a bigger restructuring the assistant is instructed to take a baseline first."),
+  ("Written by EA itself","Changes go through EA’s own automation interface (COM) — when the model uses security, under an EA user account, so its permissions and locks apply. Before a bigger restructuring the assistant is instructed to take a baseline first."),
   ("You approve every change","Three approval modes: ask, plan and auto. Every save, failed ones included, lands in the Audit log with time, account and result — and exports to Excel."),
   ("Impact analysis","Follow relationships from an element up to six levels deep, with paths and the diagrams affected. See where a service operation is used on sequence and activity diagrams — and which operations are used nowhere."),
   ("Works with your open EA","Knows which diagram is open and what is selected, opens diagrams, highlights elements in the Project Browser and refreshes whatever it changed — no F5 needed."),
@@ -72,7 +72,7 @@ T["en"] = dict(
  steps=[
   ("You ask","Type a question or a task; attach a PDF, a screenshot, a sketch or a BPMN file."),
   ("Claude plans","The Claude model decides what to look up and what to change. You follow every step live in the chat."),
-  ("It reads and writes the model","Reads straight from the PostgreSQL repository (read-only); writes only through Enterprise Architect via COM."),
+  ("It reads and writes the model","Reads straight from the PostgreSQL repository or the .qea/.qeax file (read-only); writes only through Enterprise Architect via COM."),
   ("You approve","See the planned changes, then approve or reject. Saved changes are logged and show up in your EA window."),
  ],
  s_h="A look inside", s_sub="The interface with example content from a fictional online shop.",
@@ -81,24 +81,24 @@ T["en"] = dict(
  sec=[
   ("Runs locally","A desktop application for Windows, installed for your user account. Settings, conversation history, memory and the Audit log are stored in your user profile."),
   ("Secrets stay in Windows","The Claude API key, the EA account password, the database password and the Confluence token are kept in Windows Credential Manager — never in plain text in the settings file."),
-  ("Encrypted connections","The Claude API and Confluence are used only over HTTPS. The connection to PostgreSQL can be encrypted with TLS — preferred, required, or required with the server certificate checked against the Windows certificate store."),
-  ("Writes only through EA","The database session is read-only. Every change is made by Enterprise Architect under the EA account you set up — with that account’s permissions and locks. Content of attachments, documents and the model is treated as data, not as instructions."),
-  ("What is sent to Anthropic","To answer, Claude receives the conversation, your attachments, remembered notes, templates in use, the results of the assistant’s queries and the diagram images it shows — not the whole database. Check your organisation’s rules before using it on company models."),
+  ("Encrypted connections","The Claude API and Confluence are used only over HTTPS. The connection to PostgreSQL can be encrypted with TLS — preferred, required, or required with the server certificate checked against the Windows certificate store. A model file (.qea, .qeax) needs no database connection: the assistant reads it directly, read-only."),
+  ("Writes only through EA","The database session is read-only, and a model file is opened read-only. Every change is made by Enterprise Architect — when the model uses security, under the EA account you set up, with that account’s permissions and locks. Content of attachments, documents and the model is treated as data, not as instructions."),
+  ("What is sent to Anthropic","To answer, Claude receives the conversation, your attachments, remembered notes, templates in use, the results of the assistant’s queries and the diagram images it shows — not the whole model. Check your organisation’s rules before using it on company models."),
   ("Your own API key","The app uses your Claude API key from the Anthropic Console. The app itself is free; Anthropic bills Claude usage to the account the key belongs to."),
  ],
  r_h="Requirements", r_need="Required", r_opt="Optional",
  req=[
   "Windows 10 or 11 (64-bit)",
-  "Sparx Enterprise Architect with a licence — the assistant starts EA in the background, which uses a licence seat while it runs",
-  "An EA model in a PostgreSQL database with security enabled (“Require User Lock to Edit”)",
-  "An EA user account for the assistant with edit rights, plus access to the database (server, port, name, account)",
+  "Sparx Enterprise Architect with a licence — to save changes, the assistant starts EA in the background (it uses a licence seat while it runs) or, for a model file you have open, uses your EA window",
+  "An EA model: a .qea or .qeax project file, or a PostgreSQL database with security enabled (“Require User Lock to Edit”)",
+  "For a database model: access to the database (server, port, name, account) and an EA user account for the assistant with edit rights; a model file needs only its path (and the account only if security is enabled)",
   "A Claude API key from the Anthropic Console and an internet connection",
  ],
  opt=[
   "Confluence (Data Center or Cloud) — to publish pages directly",
   "A default mail program in Windows — for bug reports and release news",
  ],
- r_note="Models stored in files (.qea, .eap) or in other databases are not supported.",
+ r_note="Older file formats (.eap, .eapx, .feap) and other databases are not supported; EA converts an .eap/.eapx file to .qea with a project transfer (Settings → Model → Transfer → Full Project Transfer).",
  faq_h="FAQ", faq_sub="Straight answers about cost, requirements, safety and privacy.",
  faq=[
   ("Is it really free? Can I use it at work?",
@@ -110,11 +110,11 @@ T["en"] = dict(
   ("Which operating systems does it run on?",
    '<p>Windows 10 and Windows 11, 64-bit. It is a native Windows desktop application and works together with Enterprise Architect installed on the same computer.</p>'),
   ("Which Enterprise Architect setups are supported?",
-   '<ul><li>Enterprise Architect installed on the same computer, with a valid licence. The assistant starts it in the background, where it takes one licence seat; it closes again after 10 minutes without work and when you close the application.</li>'
-   '<li>The model in a PostgreSQL database that your computer can reach (server, port, database name, account). Models in files (.qea, .qeax, .eap, .eapx, .feap) and repositories in other databases are not supported.</li>'
-   '<li>User security enabled in the model (Settings → Security → Enable Security), in “Require User Lock to Edit” mode.</li>'
-   '<li>An EA user account for the assistant, with a password and edit rights — ideally a separate one, so that its changes and locks are easy to tell from yours.</li></ul>'
-   '<p>The application does not check for a particular EA version or edition. What matters is that your Enterprise Architect can open this repository with security enabled.</p>'),
+   '<ul><li>Enterprise Architect installed on the same computer, with a valid licence. To save changes, the assistant starts it in the background, where it takes one licence seat; it closes again after 10 minutes without work and when you close the application. If the model file is open in your EA window, the changes go through that window instead — a second EA never opens the same file.</li>'
+   '<li>The model as an EA project file .qea or .qeax — in Settings, “2. Model” → “EA file (.qea, .qeax)” and its path in “Model file”, with no database server, account or password — or in a PostgreSQL database that your computer can reach (server, port, database name, account). A .qea file is meant for one person, .qeax for a small team sharing the file (Sparx recommends it for fewer than 5 users). Older file formats (.eap, .eapx, .feap) and repositories in other databases are not supported; Enterprise Architect converts an .eap/.eapx file to .qea with a project transfer (Settings → Model → Transfer → Full Project Transfer).</li>'
+   '<li>For a model in a database: user security enabled (Settings → Security → Enable Security), in “Require User Lock to Edit” mode. In a model file, security is optional; without it, the assistant needs no EA account.</li>'
+   '<li>With security enabled: an EA user account for the assistant, with a password and edit rights — ideally a separate one, so that its changes and locks are easy to tell from yours.</li></ul>'
+   '<p>The application does not check for a particular EA version or edition. What matters is that your Enterprise Architect can open this model: the file, or the database repository with security enabled.</p>'),
   ("Do I need administrator rights to install it?",
    '<p>No. By default (“Just for me”) the installer installs Loonar Compass for your user account only, in <code>%LOCALAPPDATA%\\Programs\\Loonar Compass</code>, and needs no administrator rights. If you choose “For all users of this computer” instead (in C:\\Program Files\\Loonar Compass), the installer asks for administrator rights.</p>'
    '<p>The application itself always runs as a normal user, and every user has their own settings and conversations. If someone else approves an installation for all users with an administrator account, enter your configuration later in the application (Settings), not in the installer — otherwise it ends up in the administrator’s profile.</p>'),
@@ -127,13 +127,13 @@ T["en"] = dict(
   ("Can the assistant damage my model?",
    '<p>It saves only what you allow, and only in the way Enterprise Architect allows:</p>'
    '<ul><li><strong>Approval modes:</strong> ask — you approve every save; plan — one approval per answer; auto — no questions, for test models. Publishing to Confluence always needs your approval, and the request says explicitly when an existing page will be replaced.</li>'
-   '<li><strong>Writes only through EA:</strong> the database is read in a read-only session; every change is made by Enterprise Architect under the assistant’s EA account, with that account’s permissions and locks. Objects locked by other users are left alone.</li>'
+   '<li><strong>Writes only through EA:</strong> the database is read in a read-only session, a model file read-only; every change is made by Enterprise Architect — with security enabled, under the assistant’s EA account, with that account’s permissions and locks. Objects locked by other users are left alone.</li>'
    '<li><strong>Instructions only from you:</strong> the assistant is instructed to treat the content of attachments, documents and the model as data, not as instructions to follow.</li>'
    '<li><strong>Audit log:</strong> every save, failed ones included, is recorded with time, account and result, and can be exported to Excel.</li>'
    '<li><strong>Baselines:</strong> before deleting or substantially restructuring an existing package, the assistant is instructed to save a baseline of it first; you restore it in EA (Manage Baselines → Compare/Restore).</li></ul>'
-   '<p>Still, deleting is permanent and AI can make mistakes — the application reminds you of this, so review the proposed changes before you approve them. For important models use ask mode and keep database backups — the application comes without warranty.</p>'),
+   '<p>Still, deleting is permanent and AI can make mistakes — the application reminds you of this, so review the proposed changes before you approve them. For important models use ask mode and keep backups of the database or the model file — the application comes without warranty.</p>'),
   ("What data leaves my computer, and where does it go?",
-   '<p>To answer, the assistant sends only what it needs to Anthropic’s Claude API (api.anthropic.com): your messages and attachments, remembered notes, the templates in use, and what it has read from the model in that conversation — the results of its database queries (names and descriptions of packages, elements, diagrams) and images of the diagrams it showed. Not the whole database. After a language change, memory and templates are also sent for translation.</p>'
+   '<p>To answer, the assistant sends only what it needs to Anthropic’s Claude API (api.anthropic.com): your messages and attachments, remembered notes, the templates in use, and what it has read from the model in that conversation — the results of its queries to the model (names and descriptions of packages, elements, diagrams) and images of the diagrams it showed. Not the whole model. After a language change, memory and templates are also sent for translation.</p>'
    '<p>Beyond that, data goes only where you send it: published pages to your Confluence; bug reports and newsletter sign-ups are e-mails you check and send yourself from your mail program. The application sends nothing to Loonar on its own. Before using it on company models, check your organisation’s rules and the data terms of your Anthropic account.</p>'),
   ("Where are my settings, conversations and passwords stored?",
    '<p>On your computer, in your Windows user profile — every user of the computer has their own:</p>'
@@ -143,10 +143,11 @@ T["en"] = dict(
   ("Is the communication encrypted?",
    '<p>Yes, wherever the application connects by itself:</p>'
    '<ul><li><strong>Claude API and Confluence:</strong> only over HTTPS. A Confluence address starting with <code>http://</code> is accepted only for a server on the same computer (localhost).</li>'
-   '<li><strong>Model database (PostgreSQL):</strong> TLS, set with “Connection encryption” on the “2. Model database (PostgreSQL)” card in Settings: “Preferred” (default) — TLS whenever the server offers it, otherwise an unencrypted connection; “Required” — TLS or no connection; “Required, certificate verified” — TLS, and the server’s certificate and name are checked against the Windows certificate store, including your company’s certificates. “Preferred” and “Required” do not check the certificate. After “Save and test connection”, the application tells you whether the connection is encrypted. In app.properties the setting is <code>db.sslmode</code> = <code>prefer</code>, <code>require</code> or <code>verify-full</code>.</li></ul>'
+   '<li><strong>Model database (PostgreSQL):</strong> TLS, set with “Connection encryption” on the “2. Model” card in Settings (option “PostgreSQL database”): “Preferred” (default) — TLS whenever the server offers it, otherwise an unencrypted connection; “Required” — TLS or no connection; “Required, certificate verified” — TLS, and the server’s certificate and name are checked against the Windows certificate store, including your company’s certificates. “Preferred” and “Required” do not check the certificate. After “Save and test connection”, the application tells you whether the connection is encrypted. In app.properties the setting is <code>db.sslmode</code> = <code>prefer</code>, <code>require</code> or <code>verify-full</code>.</li>'
+   '<li><strong>Model file (.qea, .qeax):</strong> no database connection — the assistant reads the file directly, read-only.</li></ul>'
    '<p>Tip for database administrators: with <code>hostssl</code> entries in pg_hba.conf, the server accepts only TLS connections from all clients. Enterprise Architect’s own connection to the database follows EA’s settings, not the application’s.</p>'),
   ("Does it work behind a corporate proxy or firewall?",
-   '<p>Allow these connections: HTTPS (port 443) to api.anthropic.com, your PostgreSQL server (port 5432 by default; a direct connection, not through the proxy) and, if you publish pages, your Confluence.</p>'
+   '<p>Allow these connections: HTTPS (port 443) to api.anthropic.com, for a database model your PostgreSQL server (port 5432 by default; a direct connection, not through the proxy) and, if you publish pages, your Confluence.</p>'
    '<p>For HTTPS, the application uses the proxy set in the Windows Internet settings (system proxy). You can also set the <code>HTTPS_PROXY</code> or <code>ALL_PROXY</code> environment variable, e.g. <code>http://proxy.example.com:8080</code> (exceptions in <code>NO_PROXY</code>); it takes precedence over the system proxy. Restart the application after a change. For basic authentication, the user name and password can be part of the address in that variable; automatic detection and configuration scripts (WPAD, PAC) and proxy sign-in with your Windows account (NTLM, Kerberos) are not supported.</p>'
    '<p>HTTPS certificates are also checked against the Windows certificate store, so a company root certificate used for traffic inspection is accepted once it is installed in Windows.</p>'),
   ("Which languages are available?",
@@ -238,11 +239,11 @@ T["pl"] = dict(
  hero_alt="Ilustracja okna Loonar Compass: prośba o narysowanie procesu zamówienia w sklepie internetowym w BPMN, lista kroków i odpowiedź asystenta.",
  f_h="Co potrafi", f_sub="Jedna rozmowa zamiast dziesiątek okien dialogowych — od szybkiego pytania po kompletny, spójnie sformatowany diagram.",
  features=[
-  ("Pytaj o model","Pytania zwykłym językiem: co jest w pakiecie, które elementy realizują wymaganie, co się zmieniło. Asystent odpytuje repozytorium modelu w PostgreSQL (tylko do odczytu) i wskazuje obiekty po nazwie, pakiecie i GUID."),
+  ("Pytaj o model","Pytania zwykłym językiem: co jest w pakiecie, które elementy realizują wymaganie, co się zmieniło. Asystent odpytuje model — repozytorium w PostgreSQL albo plik .qea/.qeax — tylko do odczytu i wskazuje obiekty po nazwie, pakiecie i GUID."),
   ("Twórz i zmieniaj","Pakiety, elementy, diagramy i połączenia; atrybuty i operacje klas z parametrami; słowa kluczowe, kolory, położenie i rozmiar. Przenoszenie, zmiana nazwy, usuwanie — i kopiowanie całego pakietu z zawartością."),
   ("BPMN tak, jak oczekuje EA","Poprawne typy BPMN 2.0 ze stereotypami i tagami: zadania, zdarzenia, bramki, przepływy, podprocesy zwinięte i osadzone. Z pliku BPMN, ze zdjęcia, ze szkicu albo z samego opisu."),
   ("Czytelne diagramy","Legendy z automatycznym kolorowaniem, style linii i prowadzenie połączeń po zadanej trasie, ukrywanie połączeń tylko na jednym diagramie, kafelki nawigacyjne do innych diagramów."),
-  ("Zapisuje sam EA","Zmiany idą przez interfejs automatyzacji EA (COM) na koncie użytkownika modelu, więc obowiązują zabezpieczenia, uprawnienia i blokady. Przed większą przebudową asystent ma polecenie zrobić baseline pakietu."),
+  ("Zapisuje sam EA","Zmiany idą przez interfejs automatyzacji EA (COM) — w modelu z zabezpieczeniami na koncie użytkownika modelu, więc obowiązują jego uprawnienia i blokady. Przed większą przebudową asystent ma polecenie zrobić baseline pakietu."),
   ("Każdą zmianę zatwierdzasz","Trzy tryby zatwierdzania: ask, plan i auto. Każdy zapis, także nieudany, trafia do dziennika zmian z czasem, kontem i wynikiem — z eksportem do Excela."),
   ("Analiza wpływu","Od elementu wzdłuż relacji do sześciu poziomów w głąb, ze ścieżkami i diagramami, na których leżą dotknięte elementy. Gdzie używana jest operacja usługi na diagramach sekwencji i aktywności — i które operacje nie są używane nigdzie."),
   ("Współpracuje z otwartym EA","Wie, który diagram masz otwarty i co jest zaznaczone, otwiera diagramy, podświetla elementy w przeglądarce projektu i sam odświeża to, co zmienił — bez F5."),
@@ -255,7 +256,7 @@ T["pl"] = dict(
  steps=[
   ("Pytasz","Wpisujesz pytanie albo zadanie, dołączasz PDF, zrzut ekranu, szkic lub plik BPMN."),
   ("Claude planuje","Model Claude decyduje, co sprawdzić i co zmienić. Każdy krok widzisz na bieżąco w czacie."),
-  ("Czyta i zapisuje model","Czyta wprost z repozytorium PostgreSQL (tylko do odczytu), a zapisuje wyłącznie przez Enterprise Architect (COM)."),
+  ("Czyta i zapisuje model","Czyta wprost z repozytorium PostgreSQL albo z pliku .qea/.qeax (tylko do odczytu), a zapisuje wyłącznie przez Enterprise Architect (COM)."),
   ("Zatwierdzasz","Widzisz planowane zmiany i je zatwierdzasz albo odrzucasz. Zapis trafia do dziennika zmian i od razu do Twojego okna EA."),
  ],
  s_h="Zajrzyj do środka", s_sub="Interfejs z przykładową treścią — fikcyjny sklep internetowy.",
@@ -264,24 +265,24 @@ T["pl"] = dict(
  sec=[
   ("Działa lokalnie","Aplikacja desktopowa dla Windows, instalowana na Twoim koncie użytkownika. Ustawienia, historia rozmów, pamięć i dziennik zmian są w Twoim profilu użytkownika."),
   ("Sekrety zostają w Windows","Klucz API Claude, hasło konta EA, hasło do bazy i token Confluence są w Menedżerze poświadczeń Windows — nigdy zwykłym tekstem w pliku ustawień."),
-  ("Szyfrowane połączenia","Z Claude API i Confluence aplikacja łączy się wyłącznie przez HTTPS. Połączenie z PostgreSQL może być szyfrowane TLS — preferowane, wymagane albo wymagane z weryfikacją certyfikatu serwera w magazynie certyfikatów Windows."),
-  ("Zapis tylko przez EA","Sesja bazy jest tylko do odczytu. Każdą zmianę wykonuje Enterprise Architect na skonfigurowanym koncie EA — z jego uprawnieniami i blokadami. Treść załączników, dokumentów i modelu asystent ma traktować jako dane, a nie polecenia."),
-  ("Co trafia do Anthropic","Żeby odpowiedzieć, Claude dostaje treść rozmowy, załączniki, zapamiętane ustalenia, użyte szablony, wyniki zapytań asystenta do bazy i pokazane obrazki diagramów — nie całą bazę. Przed użyciem na modelu firmowym sprawdź zasady swojej organizacji."),
+  ("Szyfrowane połączenia","Z Claude API i Confluence aplikacja łączy się wyłącznie przez HTTPS. Połączenie z PostgreSQL może być szyfrowane TLS — preferowane, wymagane albo wymagane z weryfikacją certyfikatu serwera w magazynie certyfikatów Windows. Plik modelu (.qea, .qeax) nie wymaga połączenia z bazą: asystent czyta go bezpośrednio, tylko do odczytu."),
+  ("Zapis tylko przez EA","Sesja bazy jest tylko do odczytu, a plik modelu asystent otwiera tylko do odczytu. Każdą zmianę wykonuje Enterprise Architect — w modelu z zabezpieczeniami na skonfigurowanym koncie EA, z jego uprawnieniami i blokadami. Treść załączników, dokumentów i modelu asystent ma traktować jako dane, a nie polecenia."),
+  ("Co trafia do Anthropic","Żeby odpowiedzieć, Claude dostaje treść rozmowy, załączniki, zapamiętane ustalenia, użyte szablony, wyniki zapytań asystenta do modelu i pokazane obrazki diagramów — nie cały model. Przed użyciem na modelu firmowym sprawdź zasady swojej organizacji."),
   ("Twój własny klucz API","Aplikacja korzysta z Twojego klucza API Claude z konsoli Anthropic. Sama aplikacja jest bezpłatna; za użycie Claude Anthropic rozlicza konto, do którego należy klucz."),
  ],
  r_h="Wymagania", r_need="Niezbędne", r_opt="Opcjonalnie",
  req=[
   "Windows 10 lub 11 (64-bitowy)",
-  "Sparx Enterprise Architect z licencją — asystent uruchamia EA w tle i na czas pracy zajmuje ono jedno stanowisko licencji",
-  "Model EA w bazie PostgreSQL z włączonymi zabezpieczeniami (tryb „Require User Lock to Edit”)",
-  "Konto użytkownika modelu EA dla asystenta z prawem edycji oraz dostęp do bazy (serwer, port, nazwa, konto)",
+  "Sparx Enterprise Architect z licencją — do zapisu zmian asystent uruchamia EA w tle (na czas pracy zajmuje ono jedno stanowisko licencji), a przy pliku modelu otwartym w Twoim EA korzysta z Twojego okna",
+  "Model EA w pliku projektu .qea lub .qeax albo w bazie PostgreSQL z włączonymi zabezpieczeniami (tryb „Require User Lock to Edit”)",
+  "Dla modelu w bazie: dostęp do bazy (serwer, port, nazwa, konto) i konto użytkownika modelu EA dla asystenta z prawem edycji; dla pliku modelu wystarczy ścieżka (konto tylko przy włączonych zabezpieczeniach)",
   "Klucz API Claude z konsoli Anthropic i połączenie z Internetem",
  ],
  opt=[
   "Confluence (Data Center lub Cloud) — do publikowania stron",
   "Domyślny program pocztowy w Windows — do zgłaszania błędów i informacji o nowych wydaniach",
  ],
- r_note="Modele w plikach (.qea, .eap) i w innych bazach danych nie są obsługiwane.",
+ r_note="Starsze formaty plików (.eap, .eapx, .feap) i inne bazy danych nie są obsługiwane; plik .eap/.eapx EA przeniesie do .qea przez transfer projektu (Settings → Model → Transfer → Full Project Transfer).",
  faq_h="Najczęstsze pytania", faq_sub="Krótko i konkretnie o kosztach, wymaganiach, bezpieczeństwie i prywatności.",
  faq=[
   ("Czy to naprawdę za darmo? Mogę używać aplikacji w pracy?",
@@ -293,11 +294,11 @@ T["pl"] = dict(
   ("Na jakich systemach działa?",
    '<p>Na Windows 10 i Windows 11 w wersji 64-bitowej. To natywna aplikacja desktopowa dla Windows, która współpracuje z Enterprise Architect zainstalowanym na tym samym komputerze.</p>'),
   ("Jakie konfiguracje Enterprise Architect są obsługiwane?",
-   '<ul><li>Enterprise Architect zainstalowany na tym samym komputerze, z ważną licencją. Asystent uruchamia go w tle i na ten czas EA zajmuje jedno miejsce w licencji; zamyka się po 10 minutach bez pracy i przy zamknięciu aplikacji.</li>'
-   '<li>Model w bazie PostgreSQL dostępnej z Twojego komputera (serwer, port, nazwa bazy, konto). Modele w plikach (.qea, .qeax, .eap, .eapx, .feap) i repozytoria w innych bazach nie są obsługiwane.</li>'
-   '<li>Włączone zabezpieczenia użytkowników w modelu (Settings → Security → Enable Security) w trybie „Require User Lock to Edit”.</li>'
-   '<li>Konto użytkownika EA dla asystenta, z hasłem i prawem edycji — najlepiej osobne, żeby jego zmiany i blokady łatwo było odróżnić od Twoich.</li></ul>'
-   '<p>Aplikacja nie sprawdza wersji ani edycji EA. Liczy się to, czy Twój Enterprise Architect otwiera to repozytorium z włączonymi zabezpieczeniami.</p>'),
+   '<ul><li>Enterprise Architect zainstalowany na tym samym komputerze, z ważną licencją. Do zapisu zmian asystent uruchamia go w tle i na ten czas EA zajmuje jedno miejsce w licencji; zamyka się po 10 minutach bez pracy i przy zamknięciu aplikacji. Jeśli plik modelu masz otwarty w swoim EA, zmiany idą przez Twoje okno — drugi EA nigdy nie otwiera tego samego pliku.</li>'
+   '<li>Model w pliku projektu EA .qea lub .qeax — w Ustawieniach „2. Model” → „Plik EA (.qea, .qeax)” i ścieżka w polu „Plik modelu”, bez serwera bazy, konta i hasła — albo w bazie PostgreSQL dostępnej z Twojego komputera (serwer, port, nazwa bazy, konto). Plik .qea jest dla jednej osoby, .qeax dla małego zespołu, który współdzieli plik (Sparx zaleca go dla mniej niż 5 użytkowników). Starsze formaty plików (.eap, .eapx, .feap) i repozytoria w innych bazach nie są obsługiwane; plik .eap/.eapx Enterprise Architect przeniesie do .qea przez transfer projektu (Settings → Model → Transfer → Full Project Transfer).</li>'
+   '<li>Dla modelu w bazie: włączone zabezpieczenia użytkowników (Settings → Security → Enable Security) w trybie „Require User Lock to Edit”. W pliku modelu zabezpieczenia są opcjonalne — bez nich asystent nie potrzebuje konta EA.</li>'
+   '<li>Przy włączonych zabezpieczeniach: konto użytkownika EA dla asystenta, z hasłem i prawem edycji — najlepiej osobne, żeby jego zmiany i blokady łatwo było odróżnić od Twoich.</li></ul>'
+   '<p>Aplikacja nie sprawdza wersji ani edycji EA. Liczy się to, czy Twój Enterprise Architect otwiera ten model: plik albo repozytorium w bazie z włączonymi zabezpieczeniami.</p>'),
   ("Czy do instalacji potrzebne są uprawnienia administratora?",
    '<p>Nie. Domyślnie („Tylko dla mnie”) instalator instaluje Loonar Compass tylko dla Twojego konta użytkownika, w folderze <code>%LOCALAPPDATA%\\Programs\\Loonar Compass</code>, i nie potrzebuje uprawnień administratora. Jeśli zamiast tego wybierzesz „Dla wszystkich użytkowników tego komputera” (w C:\\Program Files\\Loonar Compass), instalator poprosi o uprawnienia administratora.</p>'
    '<p>Sama aplikacja zawsze działa na zwykłym koncie, a każdy użytkownik ma własne ustawienia i rozmowy. Jeśli instalację dla wszystkich użytkowników zatwierdza ktoś inny, z konta administratora, konfigurację podaj później w aplikacji (Ustawienia), a nie w instalatorze — inaczej trafi do profilu administratora.</p>'),
@@ -310,13 +311,13 @@ T["pl"] = dict(
   ("Czy asystent może zepsuć mi model?",
    '<p>Zapisuje tylko to, na co pozwolisz, i tylko tak, jak pozwala Enterprise Architect:</p>'
    '<ul><li><strong>Tryby zatwierdzania:</strong> ask — zatwierdzasz każdy zapis; plan — jedno zatwierdzenie na odpowiedź; auto — bez pytania, do modeli testowych. Publikacja w Confluence zawsze wymaga zatwierdzenia, a prośba wyraźnie mówi, kiedy istniejąca strona zostanie zastąpiona.</li>'
-   '<li><strong>Zapis tylko przez EA:</strong> bazę asystent czyta w sesji tylko do odczytu, a każdą zmianę wykonuje Enterprise Architect na koncie EA asystenta — z jego uprawnieniami i blokadami. Obiektów zablokowanych przez innych użytkowników nie zmieni.</li>'
+   '<li><strong>Zapis tylko przez EA:</strong> bazę asystent czyta w sesji tylko do odczytu, a plik modelu tylko do odczytu; każdą zmianę wykonuje Enterprise Architect — w modelu z zabezpieczeniami na koncie EA asystenta, z jego uprawnieniami i blokadami. Obiektów zablokowanych przez innych użytkowników nie zmieni.</li>'
    '<li><strong>Polecenia tylko od Ciebie:</strong> treść załączników, dokumentów i modelu asystent ma traktować jako dane, a nie jako polecenia do wykonania.</li>'
    '<li><strong>Dziennik zmian:</strong> każdy zapis, także nieudany, trafia do dziennika z czasem, kontem i wynikiem; dziennik wyeksportujesz do Excela.</li>'
    '<li><strong>Baseline:</strong> przed usunięciem albo większą przebudową istniejącego pakietu asystent ma polecenie najpierw zapisać jego baseline; przywracasz go w EA (Manage Baselines → Compare/Restore).</li></ul>'
-   '<p>Mimo to usuwanie jest nieodwracalne, a AI może się mylić — aplikacja o tym przypomina, więc przed zatwierdzeniem przejrzyj proponowane zmiany. Przy ważnych modelach używaj trybu ask i rób kopie zapasowe bazy — aplikacja jest dostarczana bez gwarancji.</p>'),
+   '<p>Mimo to usuwanie jest nieodwracalne, a AI może się mylić — aplikacja o tym przypomina, więc przed zatwierdzeniem przejrzyj proponowane zmiany. Przy ważnych modelach używaj trybu ask i rób kopie zapasowe bazy albo pliku modelu — aplikacja jest dostarczana bez gwarancji.</p>'),
   ("Jakie dane opuszczają mój komputer i dokąd trafiają?",
-   '<p>Żeby odpowiedzieć, asystent wysyła do API Claude w Anthropic (api.anthropic.com) tylko to, czego potrzebuje: Twoje wiadomości i załączniki, zapamiętane ustalenia, użyte szablony oraz to, co w danej rozmowie odczytał z modelu — wyniki zapytań do bazy (nazwy i opisy pakietów, elementów, diagramów) i obrazki pokazanych diagramów. Nie całą bazę. Po zmianie języka do tłumaczenia trafiają też pamięć i szablony.</p>'
+   '<p>Żeby odpowiedzieć, asystent wysyła do API Claude w Anthropic (api.anthropic.com) tylko to, czego potrzebuje: Twoje wiadomości i załączniki, zapamiętane ustalenia, użyte szablony oraz to, co w danej rozmowie odczytał z modelu — wyniki zapytań do modelu (nazwy i opisy pakietów, elementów, diagramów) i obrazki pokazanych diagramów. Nie cały model. Po zmianie języka do tłumaczenia trafiają też pamięć i szablony.</p>'
    '<p>Poza tym dane idą tylko tam, dokąd sam je wyślesz: publikowane strony do Twojego Confluence, a zgłoszenia błędów i zapis na newsletter to e-maile, które sprawdzasz i wysyłasz ze swojego programu pocztowego. Aplikacja sama niczego nie wysyła do Loonar. Przed użyciem na modelu firmowym sprawdź zasady swojej organizacji i warunki przetwarzania danych na Twoim koncie Anthropic.</p>'),
   ("Gdzie są przechowywane ustawienia, rozmowy i hasła?",
    '<p>Na Twoim komputerze, w profilu użytkownika Windows — każdy użytkownik komputera ma własne:</p>'
@@ -326,10 +327,11 @@ T["pl"] = dict(
   ("Czy komunikacja jest szyfrowana?",
    '<p>Tak, wszędzie tam, gdzie aplikacja łączy się sama:</p>'
    '<ul><li><strong>Claude API i Confluence:</strong> wyłącznie przez HTTPS. Adres Confluence zaczynający się od <code>http://</code> jest akceptowany tylko dla serwera na tym samym komputerze (localhost).</li>'
-   '<li><strong>Baza modelu (PostgreSQL):</strong> TLS, ustawiany polem „Szyfrowanie połączenia” na karcie „2. Baza modelu (PostgreSQL)” w Ustawieniach: „Preferowane” (domyślnie) — TLS, gdy serwer go oferuje, w przeciwnym razie połączenie bez szyfrowania; „Wymagane” — TLS albo brak połączenia; „Wymagane, z weryfikacją certyfikatu” — TLS, a certyfikat i nazwa serwera są sprawdzane w magazynie certyfikatów Windows, także z certyfikatami firmowymi. „Preferowane” i „Wymagane” nie sprawdzają certyfikatu. Po „Zapisz i sprawdź połączenie” aplikacja informuje, czy połączenie jest szyfrowane. W app.properties to ustawienie <code>db.sslmode</code> = <code>prefer</code>, <code>require</code> albo <code>verify-full</code>.</li></ul>'
+   '<li><strong>Baza modelu (PostgreSQL):</strong> TLS, ustawiany polem „Szyfrowanie połączenia” na karcie „2. Model” w Ustawieniach (opcja „Baza PostgreSQL”): „Preferowane” (domyślnie) — TLS, gdy serwer go oferuje, w przeciwnym razie połączenie bez szyfrowania; „Wymagane” — TLS albo brak połączenia; „Wymagane, z weryfikacją certyfikatu” — TLS, a certyfikat i nazwa serwera są sprawdzane w magazynie certyfikatów Windows, także z certyfikatami firmowymi. „Preferowane” i „Wymagane” nie sprawdzają certyfikatu. Po „Zapisz i sprawdź połączenie” aplikacja informuje, czy połączenie jest szyfrowane. W app.properties to ustawienie <code>db.sslmode</code> = <code>prefer</code>, <code>require</code> albo <code>verify-full</code>.</li>'
+   '<li><strong>Plik modelu (.qea, .qeax):</strong> bez połączenia z bazą — asystent czyta plik bezpośrednio, tylko do odczytu.</li></ul>'
    '<p>Wskazówka dla administratorów bazy: dzięki wpisom <code>hostssl</code> w pliku pg_hba.conf serwer przyjmuje od wszystkich klientów wyłącznie połączenia TLS. Własne połączenie Enterprise Architect z bazą działa według ustawień EA, nie aplikacji.</p>'),
   ("Czy działa za firmowym proxy albo zaporą?",
-   '<p>Potrzebne są połączenia: HTTPS (port 443) do api.anthropic.com, do Twojego serwera PostgreSQL (domyślnie port 5432; połączenie bezpośrednie, nie przez proxy) i — jeśli publikujesz strony — do Twojego Confluence.</p>'
+   '<p>Potrzebne są połączenia: HTTPS (port 443) do api.anthropic.com, przy modelu w bazie do Twojego serwera PostgreSQL (domyślnie port 5432; połączenie bezpośrednie, nie przez proxy) i — jeśli publikujesz strony — do Twojego Confluence.</p>'
    '<p>Dla HTTPS aplikacja korzysta z serwera proxy ustawionego w opcjach internetowych Windows (proxy systemowe). Możesz też ustawić zmienną środowiskową <code>HTTPS_PROXY</code> albo <code>ALL_PROXY</code>, np. <code>http://proxy.example.com:8080</code> (wyjątki w <code>NO_PROXY</code>) — ma ona pierwszeństwo przed proxy systemowym. Po zmianie uruchom aplikację ponownie. Przy uwierzytelnianiu podstawowym (basic) login i hasło mogą być częścią adresu w tej zmiennej; automatyczne wykrywanie ustawień i skrypty automatycznej konfiguracji (WPAD, PAC) oraz logowanie do proxy kontem Windows (NTLM, Kerberos) nie są obsługiwane.</p>'
    '<p>Certyfikaty HTTPS są sprawdzane także z magazynem certyfikatów Windows, więc firmowy certyfikat główny używany do inspekcji ruchu zadziała, jeśli jest zainstalowany w Windows.</p>'),
   ("W jakich językach jest dostępna?",
@@ -417,11 +419,11 @@ T["de"] = dict(
  hero_alt="Illustration des Fensters von Loonar Compass: eine Anfrage, den Bestellprozess eines Onlineshops als BPMN zu zeichnen, die Schrittliste und die Antwort des Assistenten.",
  f_h="Was er kann", f_sub="Ein Gespräch statt Dutzender Dialogfenster – von der schnellen Frage bis zum vollständigen, einheitlich gestalteten Diagramm.",
  features=[
-  ("Fragen Sie Ihr Modell","Fragen in natürlicher Sprache: Was liegt in einem Paket, welche Elemente realisieren eine Anforderung, was hat sich geändert? Der Assistent fragt das Modell-Repository in PostgreSQL ab (nur lesend) und benennt Objekte mit Name, Paket und GUID."),
+  ("Fragen Sie Ihr Modell","Fragen in natürlicher Sprache: Was liegt in einem Paket, welche Elemente realisieren eine Anforderung, was hat sich geändert? Der Assistent fragt das Modell ab – ein PostgreSQL-Repository oder eine .qea/.qeax-Datei, nur lesend – und benennt Objekte mit Name, Paket und GUID."),
   ("Anlegen und ändern","Pakete, Elemente, Diagramme und Konnektoren; Attribute und Operationen von Klassen mit Parametern; Schlüsselwörter, Farben, Position und Größe. Verschieben, umbenennen, löschen – oder ein ganzes Paket samt Inhalt kopieren."),
   ("BPMN, wie EA es erwartet","Korrekte BPMN-2.0-Typen mit Stereotypen und Tags: Tasks, Ereignisse, Gateways, Flüsse, zugeklappte und eingebettete Teilprozesse. Aus einer BPMN-Datei, einem Foto, einer Skizze oder nur einer Beschreibung."),
   ("Gut lesbare Diagramme","Legenden mit automatischer Einfärbung, Linienstile und Konnektorführung entlang eines vorgegebenen Pfads, Konnektoren nur auf einem Diagramm ausblenden, Navigationskacheln zu anderen Diagrammen."),
-  ("EA schreibt selbst","Änderungen laufen über die Automatisierungsschnittstelle von EA (COM) unter einem EA-Benutzerkonto – Modellsicherheit, Berechtigungen und Sperren gelten. Vor größeren Umbauten ist der Assistent angewiesen, eine Baseline anzulegen."),
+  ("EA schreibt selbst","Änderungen laufen über die Automatisierungsschnittstelle von EA (COM) – bei aktivierter Modellsicherheit unter einem EA-Benutzerkonto, mit dessen Berechtigungen und Sperren. Vor größeren Umbauten ist der Assistent angewiesen, eine Baseline anzulegen."),
   ("Jede Änderung geben Sie frei","Drei Freigabemodi: ask, plan und auto. Jede Speicherung, auch eine fehlgeschlagene, steht im Änderungsprotokoll mit Zeit, Konto und Ergebnis – exportierbar nach Excel."),
   ("Auswirkungsanalyse","Von einem Element entlang der Beziehungen bis zu sechs Ebenen tief, mit Pfaden und betroffenen Diagrammen. Wo eine Service-Operation in Sequenz- und Aktivitätsdiagrammen verwendet wird – und welche nirgends."),
   ("Arbeitet mit Ihrem offenen EA","Kennt das geöffnete Diagramm und die Auswahl, öffnet Diagramme, hebt Elemente im Projekt-Browser hervor und aktualisiert Geändertes selbst – ganz ohne F5."),
@@ -434,7 +436,7 @@ T["de"] = dict(
  steps=[
   ("Sie fragen","Frage oder Aufgabe eingeben; PDF, Screenshot, Skizze oder BPMN-Datei anhängen."),
   ("Claude plant","Das Claude-Modell entscheidet, was nachzuschlagen und was zu ändern ist. Jeden Schritt sehen Sie live im Chat."),
-  ("Lesen und Schreiben im Modell","Liest direkt aus dem PostgreSQL-Repository (nur lesend) und schreibt ausschließlich über Enterprise Architect (COM)."),
+  ("Lesen und Schreiben im Modell","Liest direkt aus dem PostgreSQL-Repository oder der .qea/.qeax-Datei (nur lesend) und schreibt ausschließlich über Enterprise Architect (COM)."),
   ("Sie geben frei","Sie sehen die geplanten Änderungen und geben sie frei oder lehnen sie ab. Gespeichertes landet im Änderungsprotokoll und sofort in Ihrem EA-Fenster."),
  ],
  s_h="Ein Blick hinein", s_sub="Die Oberfläche mit Beispielinhalten aus einem fiktiven Onlineshop.",
@@ -443,24 +445,24 @@ T["de"] = dict(
  sec=[
   ("Läuft lokal","Eine Desktop-Anwendung für Windows, installiert für Ihr Benutzerkonto. Einstellungen, Gesprächsverlauf, Gedächtnis und Änderungsprotokoll liegen in Ihrem Benutzerprofil."),
   ("Geheimnisse bleiben in Windows","API-Schlüssel für Claude, Passwort des EA-Kontos, Datenbankpasswort und Confluence-Token liegen in der Windows-Anmeldeinformationsverwaltung – nie im Klartext in der Einstellungsdatei."),
-  ("Verschlüsselte Verbindungen","Claude-API und Confluence werden nur über HTTPS angesprochen. Die Verbindung zu PostgreSQL lässt sich mit TLS verschlüsseln – bevorzugt, erforderlich oder erforderlich mit Prüfung des Serverzertifikats gegen den Windows-Zertifikatspeicher."),
-  ("Schreiben nur über EA","Die Datenbanksitzung ist nur lesend. Jede Änderung führt Enterprise Architect unter dem eingerichteten EA-Konto aus – mit dessen Berechtigungen und Sperren. Inhalte von Anhängen, Dokumenten und Modell soll der Assistent als Daten behandeln, nicht als Anweisungen."),
-  ("Was an Anthropic geht","Für die Antwort erhält Claude das Gespräch, Ihre Anhänge, gemerkte Vereinbarungen, verwendete Vorlagen, die Ergebnisse der Abfragen des Assistenten und die gezeigten Diagrammbilder – nicht die ganze Datenbank. Prüfen Sie vor dem Einsatz an Firmenmodellen die Regeln Ihrer Organisation."),
+  ("Verschlüsselte Verbindungen","Claude-API und Confluence werden nur über HTTPS angesprochen. Die Verbindung zu PostgreSQL lässt sich mit TLS verschlüsseln – bevorzugt, erforderlich oder erforderlich mit Prüfung des Serverzertifikats gegen den Windows-Zertifikatspeicher. Eine Modelldatei (.qea, .qeax) braucht keine Datenbankverbindung: Der Assistent liest sie direkt und nur lesend."),
+  ("Schreiben nur über EA","Die Datenbanksitzung ist nur lesend, eine Modelldatei wird schreibgeschützt geöffnet. Jede Änderung führt Enterprise Architect aus – bei aktivierter Sicherheit unter dem eingerichteten EA-Konto, mit dessen Berechtigungen und Sperren. Inhalte von Anhängen, Dokumenten und Modell soll der Assistent als Daten behandeln, nicht als Anweisungen."),
+  ("Was an Anthropic geht","Für die Antwort erhält Claude das Gespräch, Ihre Anhänge, gemerkte Vereinbarungen, verwendete Vorlagen, die Ergebnisse der Abfragen des Assistenten und die gezeigten Diagrammbilder – nicht das ganze Modell. Prüfen Sie vor dem Einsatz an Firmenmodellen die Regeln Ihrer Organisation."),
   ("Ihr eigener API-Schlüssel","Die App nutzt Ihren Claude-API-Schlüssel aus der Anthropic Console. Die App selbst ist kostenlos; die Nutzung von Claude rechnet Anthropic mit dem Konto ab, zu dem der Schlüssel gehört."),
  ],
  r_h="Voraussetzungen", r_need="Erforderlich", r_opt="Optional",
  req=[
   "Windows 10 oder 11 (64 Bit)",
-  "Sparx Enterprise Architect mit Lizenz – der Assistent startet EA im Hintergrund, das währenddessen einen Lizenzplatz belegt",
-  "Ein EA-Modell in einer PostgreSQL-Datenbank mit aktivierter Sicherheit („Require User Lock to Edit“)",
-  "Ein EA-Benutzerkonto für den Assistenten mit Bearbeitungsrechten sowie Zugang zur Datenbank (Server, Port, Name, Konto)",
+  "Sparx Enterprise Architect mit Lizenz – zum Speichern startet der Assistent EA im Hintergrund (das währenddessen einen Lizenzplatz belegt) oder nutzt bei einer dort geöffneten Modelldatei Ihr EA-Fenster",
+  "Ein EA-Modell als Projektdatei .qea oder .qeax oder in einer PostgreSQL-Datenbank mit aktivierter Sicherheit („Require User Lock to Edit“)",
+  "Für ein Datenbankmodell: Zugang zur Datenbank (Server, Port, Name, Konto) und ein EA-Benutzerkonto für den Assistenten mit Bearbeitungsrechten; für eine Modelldatei genügt der Pfad (ein Konto nur bei aktivierter Sicherheit)",
   "Ein Claude-API-Schlüssel aus der Anthropic Console und eine Internetverbindung",
  ],
  opt=[
   "Confluence (Data Center oder Cloud) – zum direkten Veröffentlichen von Seiten",
   "Ein Standard-E-Mail-Programm in Windows – für Fehlermeldungen und Neuigkeiten zu Versionen",
  ],
- r_note="Modelle in Dateien (.qea, .eap) und in anderen Datenbanken werden nicht unterstützt.",
+ r_note="Ältere Dateiformate (.eap, .eapx, .feap) und andere Datenbanken werden nicht unterstützt; eine .eap/.eapx-Datei überführt EA per Projekttransfer in eine .qea-Datei (Settings → Model → Transfer → Full Project Transfer).",
  faq_h="Häufige Fragen", faq_sub="Klare Antworten zu Kosten, Voraussetzungen, Sicherheit und Datenschutz.",
  faq=[
   ("Ist das wirklich kostenlos? Darf ich es beruflich nutzen?",
@@ -472,11 +474,11 @@ T["de"] = dict(
   ("Unter welchen Betriebssystemen läuft es?",
    '<p>Unter Windows 10 und Windows 11, jeweils 64 Bit. Es ist eine native Windows-Desktopanwendung und arbeitet mit Enterprise Architect zusammen, das auf demselben Computer installiert ist.</p>'),
   ("Welche Enterprise-Architect-Umgebungen werden unterstützt?",
-   '<ul><li>Enterprise Architect auf demselben Computer, mit gültiger Lizenz. Der Assistent startet es im Hintergrund, wo es einen Lizenzplatz belegt; nach 10 Minuten ohne Arbeit und beim Schließen der Anwendung wird es wieder beendet.</li>'
-   '<li>Das Modell in einer PostgreSQL-Datenbank, die Ihr Computer erreicht (Server, Port, Datenbankname, Konto). Modelle in Dateien (.qea, .qeax, .eap, .eapx, .feap) und Repositorys in anderen Datenbanken werden nicht unterstützt.</li>'
-   '<li>Aktivierte Benutzersicherheit im Modell (Settings → Security → Enable Security) im Modus „Require User Lock to Edit“.</li>'
-   '<li>Ein EA-Benutzerkonto für den Assistenten mit Passwort und Bearbeitungsrechten – am besten ein eigenes, damit sich seine Änderungen und Sperren leicht von Ihren unterscheiden lassen.</li></ul>'
-   '<p>Die Anwendung prüft weder Version noch Edition von EA. Entscheidend ist, dass Ihr Enterprise Architect dieses Repository mit aktivierter Sicherheit öffnen kann.</p>'),
+   '<ul><li>Enterprise Architect auf demselben Computer, mit gültiger Lizenz. Zum Speichern startet der Assistent es im Hintergrund, wo es einen Lizenzplatz belegt; nach 10 Minuten ohne Arbeit und beim Schließen der Anwendung wird es wieder beendet. Ist die Modelldatei in Ihrem EA geöffnet, laufen die Änderungen stattdessen über Ihr Fenster – ein zweites EA öffnet nie dieselbe Datei.</li>'
+   '<li>Das Modell als EA-Projektdatei .qea oder .qeax – in den Einstellungen „2. Modell“ → „EA-Datei (.qea, .qeax)“ und der Pfad unter „Modelldatei“, ohne Datenbankserver, Konto und Passwort – oder in einer PostgreSQL-Datenbank, die Ihr Computer erreicht (Server, Port, Datenbankname, Konto). Eine .qea-Datei ist für eine Person gedacht, .qeax für ein kleines Team, das die Datei gemeinsam nutzt (Sparx empfiehlt es für weniger als 5 Benutzer). Ältere Dateiformate (.eap, .eapx, .feap) und Repositorys in anderen Datenbanken werden nicht unterstützt; eine .eap/.eapx-Datei überführt Enterprise Architect per Projekttransfer in eine .qea-Datei (Settings → Model → Transfer → Full Project Transfer).</li>'
+   '<li>Für ein Modell in einer Datenbank: aktivierte Benutzersicherheit (Settings → Security → Enable Security) im Modus „Require User Lock to Edit“. In einer Modelldatei ist die Sicherheit optional – ohne sie braucht der Assistent kein EA-Konto.</li>'
+   '<li>Bei aktivierter Sicherheit: ein EA-Benutzerkonto für den Assistenten mit Passwort und Bearbeitungsrechten – am besten ein eigenes, damit sich seine Änderungen und Sperren leicht von Ihren unterscheiden lassen.</li></ul>'
+   '<p>Die Anwendung prüft weder Version noch Edition von EA. Entscheidend ist, dass Ihr Enterprise Architect dieses Modell öffnen kann: die Datei oder das Datenbank-Repository mit aktivierter Sicherheit.</p>'),
   ("Brauche ich Administratorrechte für die Installation?",
    '<p>Nein. Standardmäßig („Nur für mich“) installiert das Installationsprogramm Loonar Compass nur für Ihr Benutzerkonto, unter <code>%LOCALAPPDATA%\\Programs\\Loonar Compass</code>, und braucht dafür keine Administratorrechte. Wählen Sie stattdessen „Für alle Benutzer dieses Computers“ (unter C:\\Program Files\\Loonar Compass), fragt das Installationsprogramm nach Administratorrechten.</p>'
    '<p>Die Anwendung selbst läuft immer als normaler Benutzer, und jeder Benutzer hat eigene Einstellungen und Unterhaltungen. Bestätigt jemand anderes eine Installation für alle Benutzer mit einem Administratorkonto, geben Sie Ihre Konfiguration später in der Anwendung ein (Einstellungen), nicht im Installationsprogramm – sonst landet sie im Profil des Administrators.</p>'),
@@ -489,13 +491,13 @@ T["de"] = dict(
   ("Kann der Assistent mein Modell beschädigen?",
    '<p>Er speichert nur, was Sie zulassen, und nur so, wie Enterprise Architect es erlaubt:</p>'
    '<ul><li><strong>Freigabemodi:</strong> ask – Sie geben jede Speicherung frei; plan – eine Freigabe pro Antwort; auto – ohne Rückfrage, für Testmodelle. Veröffentlichungen in Confluence brauchen immer Ihre Freigabe, und die Anfrage sagt ausdrücklich, wenn eine bestehende Seite ersetzt wird.</li>'
-   '<li><strong>Schreiben nur über EA:</strong> Die Datenbank wird in einer schreibgeschützten Sitzung gelesen; jede Änderung führt Enterprise Architect unter dem EA-Konto des Assistenten aus, mit dessen Berechtigungen und Sperren. Objekte, die andere Benutzer gesperrt haben, bleiben unangetastet.</li>'
+   '<li><strong>Schreiben nur über EA:</strong> Die Datenbank wird in einer schreibgeschützten Sitzung gelesen, eine Modelldatei schreibgeschützt; jede Änderung führt Enterprise Architect aus – bei aktivierter Sicherheit unter dem EA-Konto des Assistenten, mit dessen Berechtigungen und Sperren. Objekte, die andere Benutzer gesperrt haben, bleiben unangetastet.</li>'
    '<li><strong>Anweisungen nur von Ihnen:</strong> Inhalte von Anhängen, Dokumenten und Modell soll der Assistent als Daten behandeln, nicht als auszuführende Anweisungen.</li>'
    '<li><strong>Änderungsprotokoll:</strong> Jede Speicherung, auch eine fehlgeschlagene, wird mit Zeit, Konto und Ergebnis festgehalten und lässt sich nach Excel exportieren.</li>'
    '<li><strong>Baselines:</strong> Vor dem Löschen oder größeren Umbau eines bestehenden Pakets ist der Assistent angewiesen, zuerst eine Baseline davon anzulegen; wiederhergestellt wird sie in EA (Manage Baselines → Compare/Restore).</li></ul>'
-   '<p>Trotzdem: Löschen ist endgültig, und KI kann sich irren – die Anwendung weist darauf hin; prüfen Sie die vorgeschlagenen Änderungen daher vor der Freigabe. Nutzen Sie bei wichtigen Modellen den Modus ask und sichern Sie die Datenbank – die Anwendung wird unentgeltlich und im vorliegenden Zustand bereitgestellt (Einzelheiten in der Lizenz).</p>'),
+   '<p>Trotzdem: Löschen ist endgültig, und KI kann sich irren – die Anwendung weist darauf hin; prüfen Sie die vorgeschlagenen Änderungen daher vor der Freigabe. Nutzen Sie bei wichtigen Modellen den Modus ask und sichern Sie die Datenbank bzw. die Modelldatei – die Anwendung wird unentgeltlich und im vorliegenden Zustand bereitgestellt (Einzelheiten in der Lizenz).</p>'),
   ("Welche Daten verlassen meinen Computer, und wohin gehen sie?",
-   '<p>Für eine Antwort sendet der Assistent an die Claude-API von Anthropic (api.anthropic.com) nur, was er braucht: Ihre Nachrichten und Anhänge, gemerkte Vereinbarungen, verwendete Vorlagen und das, was er in dieser Unterhaltung aus dem Modell gelesen hat – die Ergebnisse seiner Datenbankabfragen (Namen und Beschreibungen von Paketen, Elementen, Diagrammen) und Bilder der gezeigten Diagramme. Nicht die ganze Datenbank. Nach einem Sprachwechsel gehen auch Gedächtnis und Vorlagen zur Übersetzung dorthin.</p>'
+   '<p>Für eine Antwort sendet der Assistent an die Claude-API von Anthropic (api.anthropic.com) nur, was er braucht: Ihre Nachrichten und Anhänge, gemerkte Vereinbarungen, verwendete Vorlagen und das, was er in dieser Unterhaltung aus dem Modell gelesen hat – die Ergebnisse seiner Abfragen am Modell (Namen und Beschreibungen von Paketen, Elementen, Diagrammen) und Bilder der gezeigten Diagramme. Nicht das ganze Modell. Nach einem Sprachwechsel gehen auch Gedächtnis und Vorlagen zur Übersetzung dorthin.</p>'
    '<p>Darüber hinaus gehen Daten nur dorthin, wohin Sie sie schicken: veröffentlichte Seiten in Ihr Confluence; Fehlermeldungen und die Newsletter-Anmeldung sind E-Mails, die Sie in Ihrem E-Mail-Programm prüfen und selbst senden. Von sich aus sendet die Anwendung nichts an Loonar. Prüfen Sie vor dem Einsatz an Firmenmodellen die Regeln Ihrer Organisation und die Datenverarbeitungsbedingungen Ihres Anthropic-Kontos.</p>'),
   ("Wo werden Einstellungen, Unterhaltungen und Passwörter gespeichert?",
    '<p>Auf Ihrem Computer, in Ihrem Windows-Benutzerprofil – jeder Benutzer des Computers hat eigene:</p>'
@@ -505,10 +507,11 @@ T["de"] = dict(
   ("Ist die Kommunikation verschlüsselt?",
    '<p>Ja, überall dort, wo die Anwendung selbst Verbindungen aufbaut:</p>'
    '<ul><li><strong>Claude-API und Confluence:</strong> nur über HTTPS. Eine Confluence-Adresse mit <code>http://</code> wird nur für einen Server auf demselben Computer (localhost) akzeptiert.</li>'
-   '<li><strong>Modelldatenbank (PostgreSQL):</strong> TLS, einstellbar mit „Verschlüsselung der Verbindung“ auf der Karte „2. Modelldatenbank (PostgreSQL)“ in den Einstellungen: „Bevorzugt“ (Standard) – TLS, sofern der Server es anbietet, sonst eine unverschlüsselte Verbindung; „Erforderlich“ – TLS oder keine Verbindung; „Erforderlich, mit Zertifikatsprüfung“ – TLS, wobei Zertifikat und Name des Servers gegen den Windows-Zertifikatspeicher geprüft werden, einschließlich der Zertifikate Ihres Unternehmens. „Bevorzugt“ und „Erforderlich“ prüfen das Zertifikat nicht. Nach „Speichern und Verbindung prüfen“ zeigt die Anwendung an, ob die Verbindung verschlüsselt ist. In app.properties heißt die Einstellung <code>db.sslmode</code> = <code>prefer</code>, <code>require</code> oder <code>verify-full</code>.</li></ul>'
+   '<li><strong>Modelldatenbank (PostgreSQL):</strong> TLS, einstellbar mit „Verschlüsselung der Verbindung“ auf der Karte „2. Modell“ in den Einstellungen (Option „PostgreSQL-Datenbank“): „Bevorzugt“ (Standard) – TLS, sofern der Server es anbietet, sonst eine unverschlüsselte Verbindung; „Erforderlich“ – TLS oder keine Verbindung; „Erforderlich, mit Zertifikatsprüfung“ – TLS, wobei Zertifikat und Name des Servers gegen den Windows-Zertifikatspeicher geprüft werden, einschließlich der Zertifikate Ihres Unternehmens. „Bevorzugt“ und „Erforderlich“ prüfen das Zertifikat nicht. Nach „Speichern und Verbindung prüfen“ zeigt die Anwendung an, ob die Verbindung verschlüsselt ist. In app.properties heißt die Einstellung <code>db.sslmode</code> = <code>prefer</code>, <code>require</code> oder <code>verify-full</code>.</li>'
+   '<li><strong>Modelldatei (.qea, .qeax):</strong> keine Datenbankverbindung – der Assistent liest die Datei direkt und nur lesend.</li></ul>'
    '<p>Tipp für Datenbankadministratoren: Mit <code>hostssl</code>-Einträgen in pg_hba.conf nimmt der Server von allen Clients nur TLS-Verbindungen an. Die eigene Verbindung von Enterprise Architect zur Datenbank richtet sich nach den Einstellungen von EA, nicht nach denen der Anwendung.</p>'),
   ("Funktioniert es hinter einem Firmen-Proxy oder einer Firewall?",
-   '<p>Benötigt werden diese Verbindungen: HTTPS (Port 443) zu api.anthropic.com, zu Ihrem PostgreSQL-Server (standardmäßig Port 5432; direkt, nicht über den Proxy) und – wenn Sie Seiten veröffentlichen – zu Ihrem Confluence.</p>'
+   '<p>Benötigt werden diese Verbindungen: HTTPS (Port 443) zu api.anthropic.com, bei einem Datenbankmodell zu Ihrem PostgreSQL-Server (standardmäßig Port 5432; direkt, nicht über den Proxy) und – wenn Sie Seiten veröffentlichen – zu Ihrem Confluence.</p>'
    '<p>Für HTTPS verwendet die Anwendung den Proxy aus den Windows-Internetoptionen (System-Proxy). Sie können auch die Umgebungsvariable <code>HTTPS_PROXY</code> oder <code>ALL_PROXY</code> setzen, z.\u00a0B. <code>http://proxy.example.com:8080</code> (Ausnahmen in <code>NO_PROXY</code>); sie hat Vorrang vor dem System-Proxy. Starten Sie die Anwendung nach einer Änderung neu. Bei Standardauthentifizierung (Basic) können Benutzername und Passwort Teil der Adresse in dieser Variablen sein; automatische Erkennung und Skripte zur automatischen Konfiguration (WPAD, PAC) sowie die Proxy-Anmeldung mit dem Windows-Konto (NTLM, Kerberos) werden nicht unterstützt.</p>'
    '<p>HTTPS-Zertifikate werden auch gegen den Windows-Zertifikatspeicher geprüft – ein firmeneigenes Stammzertifikat für die Prüfung des Datenverkehrs wird also akzeptiert, sobald es in Windows installiert ist.</p>'),
   ("In welchen Sprachen gibt es die Anwendung?",
@@ -596,11 +599,11 @@ T["fr"] = dict(
  hero_alt="Illustration de la fenêtre de Loonar Compass : une demande de dessiner en BPMN le processus de commande d’une boutique en ligne, la liste des étapes et la réponse de l’assistant.",
  f_h="Ce qu’il sait faire", f_sub="Une conversation au lieu de dizaines de boîtes de dialogue — de la question rapide au diagramme complet et homogène.",
  features=[
-  ("Interrogez votre modèle","Des questions en langage naturel : que contient ce paquetage, quels éléments réalisent cette exigence, qu’est-ce qui a changé ? L’assistant interroge le référentiel du modèle dans PostgreSQL (en lecture seule) et désigne chaque objet par son nom, son paquetage et son GUID."),
+  ("Interrogez votre modèle","Des questions en langage naturel : que contient ce paquetage, quels éléments réalisent cette exigence, qu’est-ce qui a changé ? L’assistant interroge le modèle — référentiel PostgreSQL ou fichier .qea/.qeax — en lecture seule, et désigne chaque objet par son nom, son paquetage et son GUID."),
   ("Créez et modifiez","Paquetages, éléments, diagrammes et connecteurs ; attributs et opérations de classes avec paramètres ; mots-clés, couleurs, position et taille. Déplacer, renommer, supprimer — ou copier un paquetage entier avec son contenu."),
   ("Du BPMN comme EA l’attend","De vrais types BPMN 2.0 avec stéréotypes et tags : tâches, événements, passerelles, flux, sous-processus réduits ou intégrés. À partir d’un fichier BPMN, d’une photo, d’un croquis ou d’une simple description."),
   ("Des diagrammes lisibles","Légendes avec coloration automatique, styles de ligne et tracé des connecteurs selon un chemin donné, connecteurs masqués sur un seul diagramme, tuiles de navigation vers d’autres diagrammes."),
-  ("C’est EA qui enregistre","Les modifications passent par l’interface d’automatisation d’EA (COM) avec un compte utilisateur EA : la sécurité du modèle, les droits et les verrous s’appliquent. Avant une restructuration importante, l’assistant a pour consigne de créer une baseline."),
+  ("C’est EA qui enregistre","Les modifications passent par l’interface d’automatisation d’EA (COM) — si la sécurité du modèle est activée, avec un compte utilisateur EA, ses droits et ses verrous. Avant une restructuration importante, l’assistant a pour consigne de créer une baseline."),
   ("Vous validez chaque modification","Trois modes de validation : ask, plan et auto. Chaque enregistrement, même en échec, figure dans le journal des modifications avec l’heure, le compte et le résultat — exportable vers Excel."),
   ("Analyse d’impact","Depuis un élément, le long des relations jusqu’à six niveaux, avec les chemins et les diagrammes concernés. Où une opération de service est utilisée dans les diagrammes de séquence et d’activité — et lesquelles ne le sont nulle part."),
   ("Travaille avec votre EA ouvert","Connaît le diagramme ouvert et la sélection, ouvre des diagrammes, met en évidence les éléments dans le navigateur de projet et rafraîchit ce qu’il a modifié — sans F5."),
@@ -613,7 +616,7 @@ T["fr"] = dict(
  steps=[
   ("Vous demandez","Saisissez une question ou une tâche ; joignez un PDF, une capture d’écran, un croquis ou un fichier BPMN."),
   ("Claude planifie","Le modèle Claude décide quoi consulter et quoi modifier. Vous suivez chaque étape en direct dans le chat."),
-  ("Il lit et écrit le modèle","Lecture directe du référentiel PostgreSQL (en lecture seule) ; écriture uniquement à travers Enterprise Architect (COM)."),
+  ("Il lit et écrit le modèle","Lecture directe du référentiel PostgreSQL ou du fichier .qea/.qeax (en lecture seule) ; écriture uniquement à travers Enterprise Architect (COM)."),
   ("Vous validez","Vous voyez les modifications prévues, vous les validez ou les refusez. L’enregistrement est consigné au journal et apparaît aussitôt dans votre fenêtre EA."),
  ],
  s_h="Aperçu", s_sub="L’interface avec un contenu d’exemple : une boutique en ligne fictive.",
@@ -622,24 +625,24 @@ T["fr"] = dict(
  sec=[
   ("Fonctionne en local","Une application de bureau pour Windows, installée pour votre compte utilisateur. Paramètres, historique des conversations, mémoire et journal des modifications sont stockés dans votre profil utilisateur."),
   ("Les secrets restent dans Windows","La clé API Claude, le mot de passe du compte EA, le mot de passe de la base et le jeton Confluence sont conservés dans le Gestionnaire d’identification Windows — jamais en clair dans le fichier de paramètres."),
-  ("Connexions chiffrées","L’API Claude et Confluence ne sont utilisés qu’en HTTPS. La connexion à PostgreSQL peut être chiffrée en TLS — de préférence, obligatoirement, ou obligatoirement avec vérification du certificat du serveur dans le magasin de certificats Windows."),
-  ("Écriture uniquement via EA","La session de base de données est en lecture seule. Chaque modification est effectuée par Enterprise Architect avec le compte EA configuré — avec ses droits et ses verrous. Le contenu des pièces jointes, des documents et du modèle est traité comme des données, et non comme des instructions."),
-  ("Ce qui est envoyé à Anthropic","Pour répondre, Claude reçoit la conversation, vos pièces jointes, les notes mémorisées, les modèles utilisés, les résultats des requêtes de l’assistant et les images de diagrammes affichées — pas toute la base. Vérifiez les règles de votre organisation avant de l’utiliser sur des modèles d’entreprise."),
+  ("Connexions chiffrées","L’API Claude et Confluence ne sont utilisés qu’en HTTPS. La connexion à PostgreSQL peut être chiffrée en TLS — de préférence, obligatoirement, ou obligatoirement avec vérification du certificat du serveur dans le magasin de certificats Windows. Un fichier de modèle (.qea, .qeax) ne demande aucune connexion à une base : l’assistant le lit directement, en lecture seule."),
+  ("Écriture uniquement via EA","La session de base de données est en lecture seule, et un fichier de modèle est ouvert en lecture seule. Chaque modification est effectuée par Enterprise Architect — si la sécurité est activée, avec le compte EA configuré, ses droits et ses verrous. Le contenu des pièces jointes, des documents et du modèle est traité comme des données, et non comme des instructions."),
+  ("Ce qui est envoyé à Anthropic","Pour répondre, Claude reçoit la conversation, vos pièces jointes, les notes mémorisées, les modèles utilisés, les résultats des requêtes de l’assistant et les images de diagrammes affichées — pas tout le modèle. Vérifiez les règles de votre organisation avant de l’utiliser sur des modèles d’entreprise."),
   ("Votre propre clé API","L’application utilise votre clé API Claude issue de la console Anthropic. L’application est gratuite ; Anthropic facture l’utilisation de Claude au compte auquel appartient la clé."),
  ],
  r_h="Prérequis", r_need="Indispensable", r_opt="Facultatif",
  req=[
   "Windows 10 ou 11 (64 bits)",
-  "Sparx Enterprise Architect avec licence — l’assistant lance EA en arrière-plan ; EA occupe alors une place de licence",
-  "Un modèle EA dans une base PostgreSQL, avec la sécurité activée (« Require User Lock to Edit »)",
-  "Un compte utilisateur EA pour l’assistant, avec droits de modification, et l’accès à la base (serveur, port, nom, compte)",
+  "Sparx Enterprise Architect avec licence — pour enregistrer, l’assistant lance EA en arrière-plan (EA occupe alors une place de licence) ou, pour un fichier de modèle ouvert dans votre EA, passe par votre fenêtre",
+  "Un modèle EA sous forme de fichier de projet .qea ou .qeax, ou dans une base PostgreSQL avec la sécurité activée (« Require User Lock to Edit »)",
+  "Pour un modèle en base : l’accès à la base (serveur, port, nom, compte) et un compte utilisateur EA pour l’assistant, avec droits de modification ; pour un fichier de modèle, son chemin suffit (un compte seulement si la sécurité est activée)",
   "Une clé API Claude de la console Anthropic et une connexion Internet",
  ],
  opt=[
   "Confluence (Data Center ou Cloud) — pour publier directement des pages",
   "Un logiciel de messagerie par défaut sous Windows — pour signaler des bugs et recevoir les nouveautés",
  ],
- r_note="Les modèles stockés dans des fichiers (.qea, .eap) ou dans d’autres bases de données ne sont pas pris en charge.",
+ r_note="Les anciens formats de fichier (.eap, .eapx, .feap) et les autres bases de données ne sont pas pris en charge ; EA convertit un fichier .eap/.eapx en .qea par un transfert de projet (Settings → Model → Transfer → Full Project Transfer).",
  faq_h="Questions fréquentes", faq_sub="Des réponses claires sur le coût, les prérequis, la sécurité et la confidentialité.",
  faq=[
   ("Est-ce vraiment gratuit ? Puis-je l’utiliser au travail ?",
@@ -651,11 +654,11 @@ T["fr"] = dict(
   ("Sur quels systèmes fonctionne-t-il ?",
    '<p>Sur Windows 10 et Windows 11, en 64 bits. C’est une application de bureau Windows native, qui travaille avec Enterprise Architect installé sur le même ordinateur.</p>'),
   ("Quelles configurations d’Enterprise Architect sont prises en charge ?",
-   '<ul><li>Enterprise Architect installé sur le même ordinateur, avec une licence valide. L’assistant le lance en arrière-plan, où il occupe une place de licence ; il se ferme après 10 minutes sans activité et à la fermeture de l’application.</li>'
-   '<li>Le modèle dans une base PostgreSQL accessible depuis votre ordinateur (serveur, port, nom de la base, compte). Les modèles sous forme de fichier (.qea, .qeax, .eap, .eapx, .feap) et les référentiels dans d’autres bases ne sont pas pris en charge.</li>'
-   '<li>La sécurité utilisateur activée dans le modèle (Settings → Security → Enable Security), en mode « Require User Lock to Edit ».</li>'
-   '<li>Un compte utilisateur EA pour l’assistant, avec mot de passe et droits de modification — de préférence un compte distinct, pour distinguer facilement ses modifications et ses verrous des vôtres.</li></ul>'
-   '<p>L’application ne vérifie ni la version ni l’édition d’EA. L’essentiel est que votre Enterprise Architect puisse ouvrir ce référentiel avec la sécurité activée.</p>'),
+   '<ul><li>Enterprise Architect installé sur le même ordinateur, avec une licence valide. Pour enregistrer, l’assistant le lance en arrière-plan, où il occupe une place de licence ; il se ferme après 10 minutes sans activité et à la fermeture de l’application. Si le fichier de modèle est ouvert dans votre EA, les modifications passent plutôt par votre fenêtre — un second EA n’ouvre jamais le même fichier.</li>'
+   '<li>Le modèle sous forme de fichier de projet EA .qea ou .qeax — dans les Paramètres, « 2. Modèle » → « Fichier EA (.qea, .qeax) » et son chemin dans « Fichier du modèle », sans serveur de base, compte ni mot de passe — ou dans une base PostgreSQL accessible depuis votre ordinateur (serveur, port, nom de la base, compte). Un fichier .qea est prévu pour une seule personne, un .qeax pour une petite équipe qui partage le fichier (Sparx le recommande pour moins de 5 utilisateurs). Les anciens formats de fichier (.eap, .eapx, .feap) et les référentiels dans d’autres bases ne sont pas pris en charge ; Enterprise Architect convertit un fichier .eap/.eapx en .qea par un transfert de projet (Settings → Model → Transfer → Full Project Transfer).</li>'
+   '<li>Pour un modèle en base : la sécurité utilisateur activée (Settings → Security → Enable Security), en mode « Require User Lock to Edit ». Dans un fichier de modèle, la sécurité est facultative ; sans elle, l’assistant n’a pas besoin de compte EA.</li>'
+   '<li>Si la sécurité est activée : un compte utilisateur EA pour l’assistant, avec mot de passe et droits de modification — de préférence un compte distinct, pour distinguer facilement ses modifications et ses verrous des vôtres.</li></ul>'
+   '<p>L’application ne vérifie ni la version ni l’édition d’EA. L’essentiel est que votre Enterprise Architect puisse ouvrir ce modèle : le fichier, ou le référentiel en base avec la sécurité activée.</p>'),
   ("Faut-il des droits d’administrateur pour l’installer ?",
    '<p>Non. Par défaut (« Pour moi uniquement »), le programme d’installation installe Loonar Compass uniquement pour votre compte utilisateur, dans <code>%LOCALAPPDATA%\\Programs\\Loonar Compass</code>, sans droits d’administrateur. Si vous choisissez plutôt « Pour tous les utilisateurs de cet ordinateur » (dans C:\\Program Files\\Loonar Compass), le programme d’installation demande des droits d’administrateur.</p>'
    '<p>L’application elle-même s’exécute toujours en tant qu’utilisateur standard, et chaque utilisateur a ses propres paramètres et conversations. Si une autre personne valide une installation pour tous les utilisateurs avec un compte administrateur, saisissez votre configuration plus tard dans l’application (Paramètres), pas dans le programme d’installation — sinon elle serait enregistrée dans le profil de l’administrateur.</p>'),
@@ -668,13 +671,13 @@ T["fr"] = dict(
   ("L’assistant peut-il abîmer mon modèle ?",
    '<p>Il n’enregistre que ce que vous autorisez, et uniquement de la manière permise par Enterprise Architect :</p>'
    '<ul><li><strong>Modes de validation :</strong> ask — vous validez chaque enregistrement ; plan — une validation par réponse ; auto — sans question, pour les modèles de test. La publication dans Confluence demande toujours votre validation, et la demande indique explicitement quand une page existante sera remplacée.</li>'
-   '<li><strong>Écriture uniquement via EA :</strong> la base est lue dans une session en lecture seule ; chaque modification est effectuée par Enterprise Architect avec le compte EA de l’assistant, ses droits et ses verrous. Les objets verrouillés par d’autres utilisateurs ne sont pas touchés.</li>'
+   '<li><strong>Écriture uniquement via EA :</strong> la base est lue dans une session en lecture seule, un fichier de modèle en lecture seule ; chaque modification est effectuée par Enterprise Architect — si la sécurité est activée, avec le compte EA de l’assistant, ses droits et ses verrous. Les objets verrouillés par d’autres utilisateurs ne sont pas touchés.</li>'
    '<li><strong>Vos instructions uniquement :</strong> l’assistant a pour consigne de traiter le contenu des pièces jointes, des documents et du modèle comme des données, et non comme des instructions à suivre.</li>'
    '<li><strong>Journal des modifications :</strong> chaque enregistrement, même en échec, y figure avec l’heure, le compte et le résultat, et peut être exporté vers Excel.</li>'
    '<li><strong>Baselines :</strong> avant de supprimer ou de restructurer en profondeur un paquetage existant, l’assistant a pour consigne d’en créer d’abord une baseline ; vous la restaurez dans EA (Manage Baselines → Compare/Restore).</li></ul>'
-   '<p>Cela dit, une suppression est définitive et l’IA peut se tromper — l’application le rappelle : relisez donc les modifications proposées avant de les valider. Pour les modèles importants, utilisez le mode ask et sauvegardez la base — l’application est fournie sans garantie.</p>'),
+   '<p>Cela dit, une suppression est définitive et l’IA peut se tromper — l’application le rappelle : relisez donc les modifications proposées avant de les valider. Pour les modèles importants, utilisez le mode ask et sauvegardez la base ou le fichier du modèle — l’application est fournie sans garantie.</p>'),
   ("Quelles données quittent mon ordinateur, et où vont-elles ?",
-   '<p>Pour répondre, l’assistant envoie à l’API Claude d’Anthropic (api.anthropic.com) uniquement ce dont il a besoin : vos messages et pièces jointes, les notes mémorisées, les modèles de documents utilisés et ce qu’il a lu dans le modèle au cours de la conversation — les résultats de ses requêtes à la base (noms et descriptions des paquetages, éléments, diagrammes) et les images des diagrammes affichés. Pas toute la base. Après un changement de langue, la mémoire et les modèles de documents sont aussi envoyés pour traduction.</p>'
+   '<p>Pour répondre, l’assistant envoie à l’API Claude d’Anthropic (api.anthropic.com) uniquement ce dont il a besoin : vos messages et pièces jointes, les notes mémorisées, les modèles de documents utilisés et ce qu’il a lu dans le modèle au cours de la conversation — les résultats de ses requêtes sur le modèle (noms et descriptions des paquetages, éléments, diagrammes) et les images des diagrammes affichés. Pas tout le modèle. Après un changement de langue, la mémoire et les modèles de documents sont aussi envoyés pour traduction.</p>'
    '<p>Pour le reste, les données ne vont que là où vous les envoyez : les pages publiées dans votre Confluence ; les signalements de bug et l’inscription à la newsletter sont des e-mails que vous vérifiez et envoyez vous-même depuis votre messagerie. L’application n’envoie rien d’elle-même à Loonar. Avant de l’utiliser sur des modèles d’entreprise, vérifiez les règles de votre organisation et les conditions de traitement des données de votre compte Anthropic.</p>'),
   ("Où sont stockés mes paramètres, mes conversations et mes mots de passe ?",
    '<p>Sur votre ordinateur, dans votre profil utilisateur Windows — chaque utilisateur de l’ordinateur a les siens :</p>'
@@ -684,10 +687,11 @@ T["fr"] = dict(
   ("Les communications sont-elles chiffrées ?",
    '<p>Oui, partout où l’application établit elle-même une connexion :</p>'
    '<ul><li><strong>API Claude et Confluence :</strong> uniquement en HTTPS. Une adresse Confluence en <code>http://</code> n’est acceptée que pour un serveur situé sur le même ordinateur (localhost).</li>'
-   '<li><strong>Base de données du modèle (PostgreSQL) :</strong> TLS, à régler avec « Chiffrement de la connexion » sur la carte « 2. Base de données du modèle (PostgreSQL) » des Paramètres : « Préféré » (par défaut) — TLS dès que le serveur le propose, sinon une connexion non chiffrée ; « Obligatoire » — TLS ou pas de connexion ; « Obligatoire, certificat vérifié » — TLS, avec vérification du certificat et du nom du serveur dans le magasin de certificats Windows, y compris les certificats de votre entreprise. « Préféré » et « Obligatoire » ne vérifient pas le certificat. Après « Enregistrer et tester la connexion », l’application indique si la connexion est chiffrée. Dans app.properties, le paramètre est <code>db.sslmode</code> = <code>prefer</code>, <code>require</code> ou <code>verify-full</code>.</li></ul>'
+   '<li><strong>Base de données du modèle (PostgreSQL) :</strong> TLS, à régler avec « Chiffrement de la connexion » sur la carte « 2. Modèle » des Paramètres (option « Base PostgreSQL ») : « Préféré » (par défaut) — TLS dès que le serveur le propose, sinon une connexion non chiffrée ; « Obligatoire » — TLS ou pas de connexion ; « Obligatoire, certificat vérifié » — TLS, avec vérification du certificat et du nom du serveur dans le magasin de certificats Windows, y compris les certificats de votre entreprise. « Préféré » et « Obligatoire » ne vérifient pas le certificat. Après « Enregistrer et tester la connexion », l’application indique si la connexion est chiffrée. Dans app.properties, le paramètre est <code>db.sslmode</code> = <code>prefer</code>, <code>require</code> ou <code>verify-full</code>.</li>'
+   '<li><strong>Fichier du modèle (.qea, .qeax) :</strong> aucune connexion à une base — l’assistant lit le fichier directement, en lecture seule.</li></ul>'
    '<p>Conseil pour les administrateurs de bases de données : avec des entrées <code>hostssl</code> dans pg_hba.conf, le serveur n’accepte que des connexions TLS, quel que soit le client. La connexion propre d’Enterprise Architect à la base suit les paramètres d’EA, et non ceux de l’application.</p>'),
   ("Fonctionne-t-il derrière un proxy ou un pare-feu d’entreprise ?",
-   '<p>Il faut autoriser ces connexions : HTTPS (port 443) vers api.anthropic.com, votre serveur PostgreSQL (port 5432 par défaut ; connexion directe, pas via le proxy) et, si vous publiez des pages, votre Confluence.</p>'
+   '<p>Il faut autoriser ces connexions : HTTPS (port 443) vers api.anthropic.com, pour un modèle en base votre serveur PostgreSQL (port 5432 par défaut ; connexion directe, pas via le proxy) et, si vous publiez des pages, votre Confluence.</p>'
    '<p>Pour le HTTPS, l’application utilise le proxy défini dans les options Internet de Windows (proxy système). Vous pouvez aussi définir la variable d’environnement <code>HTTPS_PROXY</code> ou <code>ALL_PROXY</code>, par exemple <code>http://proxy.example.com:8080</code> (exceptions dans <code>NO_PROXY</code>) ; elle a priorité sur le proxy système. Redémarrez l’application après une modification. Avec une authentification de base (basic), le nom d’utilisateur et le mot de passe peuvent figurer dans l’adresse de cette variable ; la détection automatique et les scripts de configuration automatique (WPAD, PAC) ainsi que l’authentification au proxy avec le compte Windows (NTLM, Kerberos) ne sont pas pris en charge.</p>'
    '<p>Les certificats HTTPS sont aussi vérifiés avec le magasin de certificats Windows : un certificat racine d’entreprise utilisé pour l’inspection du trafic est donc accepté dès qu’il est installé dans Windows.</p>'),
   ("Dans quelles langues est-il disponible ?",

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Loonar Compass 0.3 - User guide</title>
+<title>Loonar Compass 0.4 - User guide</title>
 <style>
   @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
   body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1f1e1b; }
@@ -38,7 +38,7 @@
   <img src="img/logo.png" alt="Loonar Compass logo">
   <h1 style="margin-top: 10mm;">Loonar Compass</h1>
   <div class="sub">User guide</div>
-  <div class="sub" style="font-size: 11pt;">version 0.3 &middot; October 2026</div>
+  <div class="sub" style="font-size: 11pt;">version 0.4 &middot; October 2026</div>
   <div class="owner">
     Loonar Mariusz Głowacki<br>
     ul. Gombrowicza 12, 73-110 Stargard<br>
@@ -81,24 +81,24 @@
   <li><b>prepares documents</b> from the model's content: Word, Excel, PNG images and Confluence pages, also based on templates,</li>
   <li><b>remembers notes</b> between conversations (modeling conventions, preferences, corrections).</li>
 </ul>
-<p>The application uses the Claude Haiku 5.5 language model (Anthropic) over the Internet. It connects to the EA model in two ways: it reads it directly from the PostgreSQL database and writes to it through Enterprise Architect running in the background, using the model user account given in the settings.</p>
+<p>The application uses the Claude Haiku 5.5 language model (Anthropic) over the Internet. It connects to the EA model in two ways: it reads it directly (from the PostgreSQL database or from the .qea/.qeax file) and writes to it through Enterprise Architect, using the model user account given in the settings when the model has one. With a model file you have open in EA, the changes go through your EA window; otherwise EA runs in the background.</p>
 <p>The interface and the assistant's answers are available in four languages: Polish, English, German and French (chapter 5). Answers and changes are prepared by an AI model and may contain errors: review them before you approve them (chapter 12).</p>
 
 <h2 id="s2">2. Requirements</h2>
 <div class="note">
-  <b>Prerequisites.</b> The application works only when all three of the following are met:
+  <b>Prerequisites.</b> The application works only when the following are met:
   <ol style="margin: 4pt 0 0 0;">
-    <li><b>The model is in a PostgreSQL database.</b> Models in files (.qea, .qeax, .eap, .eapx, .feap) and in other databases are not supported.</li>
-    <li><b>User security is enabled in the model</b> (in Enterprise Architect: Settings → Security → Enable Security), in “Require User Lock to Edit” mode. The application logs in to the model as a specific user and locks objects while saving. When security is turned off, the locks are skipped; this is not a supported configuration.</li>
-    <li><b>The model has a user account for the assistant</b> (Settings → Security → Users), with a password and edit permissions. The account name can be anything, for example <code>claude</code> or <code>assistant</code>, but the account must exist. You enter its login and password in the application settings.</li>
+    <li><b>The model is an EA project file .qea or .qeax, or is in a PostgreSQL database.</b> Older file formats (.eap, .eapx, .feap) and other databases are not supported; Enterprise Architect converts an .eap/.eapx file to .qea with a project transfer (Settings → Model → Transfer → Full Project Transfer).</li>
+    <li><b>A model in a database has user security enabled</b> (in Enterprise Architect: Settings → Security → Enable Security), in “Require User Lock to Edit” mode. In a model file, security is optional: without it, the assistant needs no EA account. The application logs in to the model as a specific user and locks objects while saving. When security is turned off, the locks are skipped; this is not a supported configuration.</li>
+    <li><b>A model with security enabled has a user account for the assistant</b> (Settings → Security → Users), with a password and edit permissions. The account name can be anything, for example <code>claude</code> or <code>assistant</code>, but the account must exist. You enter its login and password in the application settings.</li>
   </ol>
 </div>
 <table>
   <tr><th style="width: 32%;">What</th><th>Details</th></tr>
   <tr><td>System</td><td>Windows 10 or Windows 11 (64-bit)</td></tr>
   <tr><td>Enterprise Architect</td><td>Installed on the same computer, with a valid license. The application starts it in the background; while it runs, it takes up one license seat.</td></tr>
-  <tr><td>EA model</td><td>A repository in a PostgreSQL database, with user security enabled. You need: the server, port, database name, and the database user and password.</td></tr>
-  <tr><td>Model user account</td><td>The login and password of a user defined in the EA model. Ideally a separate account just for the assistant, so that its changes and locks are visible separately and do not clash with yours.</td></tr>
+  <tr><td>EA model</td><td>An EA project file .qea or .qeax (you need only its path), or a repository in a PostgreSQL database with user security enabled (you need: the server, port, database name, and the database user and password). A .qea file is meant for one person; .qeax for a small team sharing the file.</td></tr>
+  <tr><td>Model user account</td><td>For a database model, or a model file with security enabled: the login and password of a user defined in the EA model. Ideally a separate account just for the assistant, so that its changes and locks are visible separately and do not clash with yours.</td></tr>
   <tr><td>Claude API key</td><td>A key from the Anthropic Console.</td></tr>
   <tr><td>Internet</td><td>An HTTPS connection to api.anthropic.com. The application uses the proxy from the Windows Internet settings or from the HTTPS_PROXY and ALL_PROXY variables (chapter 14).</td></tr>
   <tr><td>Confluence (optional)</td><td>Confluence Cloud or Data Center, only for publishing pages through the assistant: the Confluence address (https://), a token and the space key (chapter 9). Without them, pages are still created and you paste the code yourself.</td></tr>
@@ -107,7 +107,7 @@
 <div class="note"><b>Costs.</b> The application itself is free. You pay Anthropic for your use of the Claude model, through the account the API key belongs to.</div>
 
 <h2 id="s3">3. Installation</h2>
-<p>Run the file <code>LoonarCompass-Setup-0.3.exe</code>. The wizard guides you through the steps with the <b>Next</b> and <b>Back</b> buttons. You do not need administrator rights unless you install the application for all users of the computer.</p>
+<p>Run the file <code>LoonarCompass-Setup-0.4.exe</code>. The wizard guides you through the steps with the <b>Next</b> and <b>Back</b> buttons. You do not need administrator rights unless you install the application for all users of the computer.</p>
 <div class="note"><b>Windows SmartScreen.</b> The installer is not digitally signed yet, so when you run it for the first time, Windows SmartScreen may show the warning “Windows protected your PC”. Click <b>More info</b> and then <b>Run anyway</b>. If Smart App Control is turned on, Windows blocks unsigned applications altogether; in that case, wait for the signed version.</div>
 <figure class="small"><img src="img/en/installer-language.png" alt="Setup wizard: the language selection page with Polish, English, German and French"><figcaption>The first page of the wizard: choosing the language</figcaption></figure>
 <ol>
@@ -116,11 +116,11 @@
   <li><b>What's new.</b> When updating: the changes since the installed version. For a new installation: the changes in the current version.</li>
   <li><b>License agreement.</b> Select “I accept the terms of the license agreement”.</li>
   <li><b>Destination folder.</b> The installation type (described below), the program folder (<b>Browse…</b>) and the shortcuts: Start menu (application, user guide, uninstall) and Desktop.</li>
-  <li><b>Configuration.</b> Choose “Enter the details now” or “Configure later in the application ("Settings" view)”. The page contains the Claude API key (with a note on what the application sends to Anthropic), the model database (server, port, database name, database user, database password), Enterprise Architect (the path to <code>EA.exe</code>, which you can select with the <b>…</b> button, the EA user account and the EA account password) and the approval mode.</li>
+  <li><b>Configuration.</b> Choose “Enter the details now” or “Configure later in the application ("Settings" view)”. The page contains the Claude API key (with a note on what the application sends to Anthropic), the model (a PostgreSQL database: server, port, database name, database user, database password; or an EA file: the path to the .qea/.qeax file, which you can select with the <b>…</b> button), Enterprise Architect (the path to <code>EA.exe</code>, which you can select with the <b>…</b> button, the EA user account and the EA account password) and the approval mode.</li>
   <li><b>Ready to install.</b> A summary of the installation type, folder, shortcuts and configuration. Click <b>Install</b>; the progress bar shows the percentage and the current step.</li>
   <li><b>Installation complete.</b> With “Launch Loonar Compass” selected, the application opens after you click <b>Finish</b>.</li>
 </ol>
-<figure class="small"><img src="img/en/installer-config.png" alt="Setup wizard: optional configuration of the Claude API key, model database, Enterprise Architect and approval mode"><figcaption>Configuration in the wizard is optional: you can enter the same details later in the “Settings” view</figcaption></figure>
+<figure class="small"><img src="img/en/installer-config.png" alt="Setup wizard: optional configuration of the Claude API key, the model (database or file), Enterprise Architect and approval mode"><figcaption>Configuration in the wizard is optional: you can enter the same details later in the “Settings” view</figcaption></figure>
 <h3>Installation type</h3>
 <p>On the “Destination folder” page, you choose who the application is installed for:</p>
 <ul>
@@ -171,8 +171,8 @@
 <table>
   <tr><th style="width: 26%;">Card</th><th>Fields</th><th style="width: 34%;">What the test checks</th></tr>
   <tr><td>1. Claude</td><td>Model (Claude Haiku 5.5, read-only), Max tokens (the length limit of a single model answer), Claude API key. A note below the fields says what the application sends to Anthropic (chapter 14).</td><td>Sends a short request to the model</td></tr>
-  <tr><td>2. Model database (PostgreSQL)</td><td>Server, Port, Database name, Database user, Database password (stored in Windows Credential Manager), Connection encryption</td><td>Connects to the database and counts packages, elements and diagrams; says whether the connection is encrypted and warns if the database user is a superuser</td></tr>
-  <tr><td>3. Enterprise Architect</td><td>Path to EA.exe (the <b>…</b> button opens a file selection dialog), EA user account, EA account password</td><td>Starts EA in the background, opens the model and logs in with the given account</td></tr>
+  <tr><td>2. Model</td><td>Choice: <b>PostgreSQL database</b> (Server, Port, Database name, Database user, Database password stored in Windows Credential Manager, Connection encryption) or <b>EA file (.qea, .qeax)</b> (Model file; the <b>…</b> button opens a file selection dialog)</td><td>Database: connects, counts packages, elements and diagrams, says whether the connection is encrypted and warns if the database user is a superuser. File: opens it read-only and counts packages, elements and diagrams</td></tr>
+  <tr><td>3. Enterprise Architect</td><td>Path to EA.exe (the <b>…</b> button opens a file selection dialog), EA user account, EA account password (for a model file without security, both stay empty)</td><td>Opens the model in EA (a model file you have open: in your EA window) and logs in with the given account</td></tr>
   <tr><td>4. Language and change approval</td><td>Language; Approval mode: ask, plan or auto (chapter 12); after a language change, also the <b>Translate now</b> button</td><td>Saving only</td></tr>
   <tr><td>5. New releases (newsletter)</td><td>Email address and consent to news about new releases, with an information note and a link to the privacy policy (chapter 16)</td><td>Prepares a message in the mail program</td></tr>
   <tr><td>6. Confluence</td><td>Confluence address, Email (Cloud only), Token, Space key, Parent page ID (chapter 9). The address must start with https:// (http:// only for a server on the same computer).</td><td>Connects to Confluence with the given token and checks the space</td></tr>
@@ -192,7 +192,7 @@
 <div class="note"><b>No connection to Claude.</b> Translation requires a working API key. If there is no connection, an orange <b>“!”</b> appears on the <b>Settings</b>, <b>Assistant memory</b> and <b>Document templates</b> icons, and the tooltip explains that the content has not been translated yet. The translation resumes the next time the application starts, or immediately when you click the <b>Translate now</b> button on card 4. Saving other cards does not start it.</div>
 
 <h3>Database connection encryption</h3>
-<p>The <b>Connection encryption</b> field on the “2. Model database (PostgreSQL)” card decides whether the assistant reads the model over TLS:</p>
+<p>The <b>Connection encryption</b> field on the “2. Model” card (PostgreSQL database) decides whether the assistant reads the model over TLS:</p>
 <table>
   <tr><th style="width: 34%;">Setting</th><th>Effect</th></tr>
   <tr><td><b>Preferred</b> (default)</td><td>TLS when the server offers it; otherwise an unencrypted connection. Works with any server.</td></tr>
@@ -424,7 +424,7 @@
 <div class="note"><b>Before you use the application on a company model</b>, check whether your organization's rules and your agreements with customers allow the content of the model to be passed to an external AI service, and which data processing terms apply to your Anthropic account.</div>
 <h3>The assistant's permissions</h3>
 <ul>
-  <li>The assistant reads the database in a read-only session, with a time limit for each query; server functions that read files or affect other sessions are blocked. All changes go through Enterprise Architect, under the account given in the settings, so the permissions and locks of that account apply to them.</li>
+  <li>The assistant reads the database in a read-only session, and a model file read-only, with a time limit for each query; server functions that read files or affect other sessions are blocked. All changes go through Enterprise Architect, under the account given in the settings, so the permissions and locks of that account apply to them.</li>
   <li>In Confluence, the assistant works with the permissions of the token from card 6 and publishes only after your approval.</li>
   <li>The assistant has no access to files on disk other than those you attach to it yourself and its own memory and templates folders. Images drawn by the assistant cannot read files from disk or from the network.</li>
   <li>The assistant treats the content of attachments, documents and the model as data, not as instructions.</li>
@@ -445,6 +445,7 @@
   <tr><td>“The Claude API rejected the API key (401)”</td><td>The key is wrong or has been revoked. Paste the current key from the Anthropic Console on card 1.</td></tr>
   <tr><td>“The Claude API returned … with a response that is not from the API”</td><td>A proxy or firewall is probably blocking api.anthropic.com. Ask your IT department to allow the connection. The application uses the proxy from the Windows Internet settings or the HTTPS_PROXY / ALL_PROXY variables; PAC scripts and NTLM/Kerberos proxy authentication are not supported.</td></tr>
   <tr><td>“The Claude API rate limit was reached (429)” or “The Claude API is overloaded or temporarily unavailable”</td><td>The application has already retried the request several times. Wait a moment and send the message again.</td></tr>
+  <tr><td>File test: “this does not look like an Enterprise Architect model file”</td><td>Choose a .qea or .qeax project file created by Enterprise Architect 16 or later. Older .eap/.eapx files must first be converted to .qea in EA (project transfer).</td></tr>
   <tr><td>Database test: no connection</td><td>Check the server, port, database name, user and password, and whether the PostgreSQL server accepts connections from this computer. The database password must not contain a semicolon (;).</td></tr>
   <tr><td>“The connection is NOT encrypted: the server does not offer TLS”, or the connection fails with “Required” or “Required, certificate verified”</td><td>The server does not offer TLS: ask the database administrator to enable it. With certificate verification, the server certificate must be trusted in the Windows certificate store (for example through your company's certificate authority) and the server name must match the certificate.</td></tr>
   <tr><td>The database test warns that the account is a superuser</td><td>Superuser rights are not needed. Ask the administrator for a normal account with read and write rights on the model tables, without superuser rights: the assistant only reads the database, but Enterprise Architect saves changes with the same account. Enter it on card 2.</td></tr>
@@ -493,7 +494,7 @@
 <p><b>Open-source components.</b> The application includes open-source libraries and fonts; each keeps its own license. The list and the license texts are in the <code>THIRD-PARTY-NOTICES.txt</code> file in the installation folder; in the <b>About</b> view, click <b>Show licenses of the components</b>.</p>
 <p><b>Support.</b> The application is free and will stay free. If you want to support its development, use the <b>Support the project</b> view or go to <a href="https://suppi.pl/loonar">suppi.pl/loonar</a>. The source code is at <a href="https://github.com/loonar-eu/loonar-compass">github.com/loonar-eu/loonar-compass</a>.</p>
 <p>Application owner: Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard.<br>Contact: mariusz@loonar.eu, <a href="https://loonar.eu">loonar.eu</a>. The most convenient way to report bugs is the <b>Report a bug</b> view.</p>
-<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.3. Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. Atlassian, Confluence and Jira are trademarks of Atlassian. Microsoft, Windows, Word and Excel are trademarks of the Microsoft group of companies. PostgreSQL is a trademark of the PostgreSQL Community Association of Canada. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.</p>
+<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.4. Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. Atlassian, Confluence and Jira are trademarks of Atlassian. Microsoft, Windows, Word and Excel are trademarks of the Microsoft group of companies. PostgreSQL is a registered trademark of the PostgreSQL Community Association. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.</p>
 
 </body>
 </html>

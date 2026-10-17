@@ -52,9 +52,9 @@ const MAX_FILES: usize = 5;
 
 /// Full system prompt: the assistant's role plus knowledge about the application itself. The description of what
 /// the application can do comes from the embedded changelog, so the assistant always describes the current version.
-fn system_prompt(memory_dir: &Path, templates_dir: &Path) -> String {
+fn system_prompt(cfg: &AppConfig) -> String {
     format!(
-        "{SYSTEM_PROMPT}\n\n{LANGUAGE_RULE}\n\n{MEMORY_RULES}\n\n{memories}\n\n{DOC_RULES}\n\n{templates}\n\n\
+        "{SYSTEM_PROMPT}\n\n{MODEL_STORE}\n\n{LANGUAGE_RULE}\n\n{MEMORY_RULES}\n\n{memories}\n\n{DOC_RULES}\n\n{templates}\n\n\
          You are running inside the {app} application, version {version} (a desktop AI assistant for Enterprise Architect). \
          Application owner: {OWNER}, {OWNER_ADDRESS}, {OWNER_CONTACT}. Language model: {model}. \
          Answer questions about yourself, this application, its features and limitations based on the changelog below \
@@ -65,11 +65,18 @@ fn system_prompt(memory_dir: &Path, templates_dir: &Path) -> String {
         app = config::APP_NAME,
         version = app_version(),
         model = config::CLAUDE_MODEL,
-        memories = memory::prompt_section(memory_dir),
+        memories = memory::prompt_section(&cfg.memory_dir),
+        MODEL_STORE = if cfg.uses_file() { MODEL_IN_FILE } else { MODEL_IN_POSTGRES },
         LANGUAGE_RULE = format!("Response language: {} (the language selected in the application). Answer in it unless the user writes to you in a different language; then answer in the user's language. Create documents, pages and images in the response language unless the user asks for a different one.", i18n::current().english_name()),
-        templates = templates::prompt_section(templates_dir),
+        templates = templates::prompt_section(&cfg.templates_dir),
     )
 }
+
+/// Where the model is: the SQL dialect of db_query.
+const MODEL_IN_POSTGRES: &str = "The model is in a PostgreSQL database: write db_query queries in PostgreSQL SQL (ILIKE for case-insensitive search).";
+const MODEL_IN_FILE: &str = "The model is an Enterprise Architect project file (.qea/.qeax), which is a SQLite database: write db_query queries in SQLite SQL. \
+There is no ILIKE (LIKE already ignores the case of ASCII letters; for other letters compare lower(...)), no :: casts (use CAST(x AS type)), \
+booleans are 0/1, and functions such as string_agg are group_concat. The tables and columns are the same as in a database model.";
 
 /// Rules for preparing documentation (Word, Confluence, templates).
 const DOC_RULES: &str = "Documentation: when the user asks for a document or a page (feasibility study, BRD, change description, process description, specification), \
@@ -374,7 +381,7 @@ fn info_ui(ui: &mut egui::Ui) {
     ui.add_space(16.0);
 
     ui.label(egui::RichText::new(crate::i18n::tr("About the application")).font(egui::FontId::new(16.0, egui::FontFamily::Name(markdown::BOLD_FAMILY.into()))));
-    ui.add(egui::Label::new(crate::i18n::tr("A standalone assistant for Enterprise Architect. It reads the model from a PostgreSQL database, saves changes through COM and shows diagrams as images. It uses only the Claude Haiku 5.5 model through the Anthropic API.")).wrap());
+    ui.add(egui::Label::new(crate::i18n::tr("A standalone assistant for Enterprise Architect. It reads the model from a PostgreSQL database or an EA file (.qea, .qeax), saves changes through COM and shows diagrams as images. It uses only the Claude Haiku 5.5 model through the Anthropic API.")).wrap());
     ui.add_space(8.0);
     ui.horizontal_wrapped(|ui| {
         ui.hyperlink_to(crate::i18n::tr("Privacy policy"), privacy_url());
@@ -384,7 +391,7 @@ fn info_ui(ui: &mut egui::Ui) {
         ui.hyperlink_to("loonar.eu", "https://loonar.eu");
     });
     ui.add_space(8.0);
-    ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. Atlassian, Confluence and Jira are trademarks of Atlassian. Microsoft, Windows, Word and Excel are trademarks of the Microsoft group of companies. PostgreSQL is a trademark of the PostgreSQL Community Association of Canada. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.")).small().color(theme::MUTED)).wrap());
+    ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. Atlassian, Confluence and Jira are trademarks of Atlassian. Microsoft, Windows, Word and Excel are trademarks of the Microsoft group of companies. PostgreSQL is a registered trademark of the PostgreSQL Community Association. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.")).small().color(theme::MUTED)).wrap());
     ui.add_space(16.0);
 
     ui.label(egui::RichText::new(crate::i18n::tr("License")).font(egui::FontId::new(16.0, egui::FontFamily::Name(markdown::BOLD_FAMILY.into()))));
@@ -529,6 +536,8 @@ struct Form {
     claude_max_tokens: String,
     claude_workspace_id: String,
     claude_api_key: String,
+    model_source: String,
+    model_file: String,
     db_host: String,
     db_port: String,
     db_name: String,
@@ -552,6 +561,8 @@ impl Form {
         Self {
             claude_max_tokens: c.claude_max_tokens.to_string(),
             claude_workspace_id: c.claude_workspace_id.clone(),
+            model_source: c.model_source.as_str().into(),
+            model_file: c.model_file.display().to_string(),
             db_host: c.db_host.clone(),
             db_port: c.db_port.to_string(),
             db_name: c.db_name.clone(),
@@ -572,6 +583,7 @@ impl Form {
     fn defaults() -> Self {
         Self {
             claude_max_tokens: "10000".into(),
+            model_source: "postgres".into(),
             db_host: String::new(),
             db_port: "5432".into(),
             db_name: String::new(),
@@ -774,13 +786,15 @@ impl App {
         let form = cfg.as_ref().map(Form::from_cfg).unwrap_or_else(Form::defaults);
 
         let mut missing: Vec<&str> = Vec::new();
-        if cfg.as_ref().is_some_and(|c| c.db_password.is_empty()) {
+        if cfg.as_ref().is_some_and(|c| !c.uses_file() && c.db_password.is_empty()) {
             missing.push(crate::i18n::tr("database password"));
         }
         if !secrets::exists(secrets::CLAUDE_API_KEY) {
             missing.push(crate::i18n::tr("Claude API key@@in-sentence"));
         }
-        if !secrets::exists(secrets::EA_PASSWORD) {
+        // An EA file without security needs no EA account; a database model always does.
+        let needs_ea_password = cfg.as_ref().map_or(true, |c| !c.uses_file() || !c.ea_user.trim().is_empty());
+        if needs_ea_password && !secrets::exists(secrets::EA_PASSWORD) {
             missing.push(crate::i18n::tr("EA account password@@in-sentence"));
         }
 
@@ -1234,7 +1248,19 @@ impl App {
                     self.form.claude_api_key.clear();
                 }
             }
+            GROUP_DB if f.model_source == "file" => {
+                let file = PathBuf::from(f.model_file.trim().trim_matches('"'));
+                if !config::is_model_file(&file) {
+                    bail!("{}", crate::i18n::tr("Choose an Enterprise Architect project file .qea or .qeax"));
+                }
+                if !file.is_file() {
+                    bail!("{}", crate::i18n::fmt("file {0} does not exist", &[file.display().to_string()]));
+                }
+                updates.push(("model.source", "file".to_string()));
+                updates.push(("model.file", file.display().to_string()));
+            }
             GROUP_DB => {
+                updates.push(("model.source", "postgres".to_string()));
                 let port: u16 = f.db_port.trim().parse().context(crate::i18n::tr("Database port: enter a number"))?;
                 if f.db_name.trim().is_empty() || f.db_user.trim().is_empty() {
                     bail!("{}", crate::i18n::fmt("Database name and database user are required", &[]));
@@ -1259,7 +1285,8 @@ impl App {
                 }
             }
             GROUP_EA => {
-                if f.ea_user.trim().is_empty() {
+                let file_model = self.cfg.as_ref().is_some_and(AppConfig::uses_file);
+                if f.ea_user.trim().is_empty() && !file_model {
                     bail!("{}", crate::i18n::fmt("EA user account is required", &[]));
                 }
                 updates.push(("ea.path", f.ea_path.trim().to_string()));
@@ -1621,7 +1648,37 @@ impl App {
             ui.add_space(8.0);
 
             ui.vertical(|ui| {
-                settings_group(ui, crate::i18n::tr("2. Model database (PostgreSQL)"), inner_width, |ui| {
+                settings_group(ui, crate::i18n::tr("2. Model"), inner_width, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.radio_value(&mut self.form.model_source, "postgres".to_string(), crate::i18n::tr("PostgreSQL database"));
+                        ui.radio_value(&mut self.form.model_source, "file".to_string(), crate::i18n::tr("EA file (.qea, .qeax)"));
+                    });
+                    ui.add_space(4.0);
+                    if self.form.model_source == "file" {
+                        egui::Grid::new("settings_file").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
+                            label_cell(ui, crate::i18n::tr("Model file"));
+                            ui.horizontal(|ui| {
+                                ui.add(
+                                    egui::TextEdit::singleline(&mut self.form.model_file)
+                                        .hint_text(egui::RichText::new(crate::i18n::fmt("e.g. {0}", &[r"C:\Models\Shop.qea".to_string()])).color(theme::HINT))
+                                        .desired_width(SETTINGS_FIELD_WIDTH - 44.0),
+                                );
+                                if ui.button("…").on_hover_text(crate::i18n::tr("Choose the model file")).clicked() {
+                                    if let Some(file) = rfd::FileDialog::new()
+                                        .set_title(crate::i18n::tr("Choose the model file"))
+                                        .add_filter(crate::i18n::tr("Enterprise Architect project"), &config::MODEL_FILE_EXTENSIONS)
+                                        .pick_file()
+                                    {
+                                        self.form.model_file = file.display().to_string();
+                                    }
+                                }
+                            });
+                            ui.end_row();
+                        });
+                        ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("The assistant reads the file directly (read-only). Changes are saved by Enterprise Architect: through your EA window when you have this file open there, otherwise by EA in the background. A .qea file is for one person; .qeax is for a small team sharing the file.")).small().color(theme::MUTED)).wrap());
+                        self.group_footer(ui, &ctx, GROUP_DB, crate::i18n::tr("Save and test the file"));
+                        return;
+                    }
                     egui::Grid::new("settings_db").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
                         row_hint(ui, crate::i18n::tr("Server"), &mut self.form.db_host, crate::i18n::tr("e.g. 127.0.0.1"));
                         row(ui, crate::i18n::tr("Port"), &mut self.form.db_port);
@@ -1661,8 +1718,18 @@ impl App {
                             }
                         });
                         ui.end_row();
-                        row(ui, crate::i18n::tr("EA user account"), &mut self.form.ea_user);
-                        row_secret(ui, crate::i18n::tr("EA account password"), &mut self.form.ea_password, secrets::exists(secrets::EA_PASSWORD));
+                        if self.form.model_source == "file" {
+                            row_hint(ui, crate::i18n::tr("EA user account"), &mut self.form.ea_user, crate::i18n::tr("only if the file has security enabled"));
+                        } else {
+                            row(ui, crate::i18n::tr("EA user account"), &mut self.form.ea_user);
+                        }
+                        if self.form.model_source == "file" && self.form.ea_user.trim().is_empty() {
+                            label_cell(ui, crate::i18n::tr("EA account password"));
+                            ui.add_enabled(false, egui::TextEdit::singleline(&mut String::new()).desired_width(SETTINGS_FIELD_WIDTH));
+                            ui.end_row();
+                        } else {
+                            row_secret(ui, crate::i18n::tr("EA account password"), &mut self.form.ea_password, secrets::exists(secrets::EA_PASSWORD));
+                        }
                     });
                     self.group_footer(ui, &ctx, GROUP_EA, crate::i18n::tr("Save and test EA login"));
                 });
@@ -2226,6 +2293,12 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
             let response = client.send_value("Answer in one word.", &[json!({ "role": "user", "content": "ping" })], None)?;
             Ok(crate::i18n::fmt("Saved. The key works: model {0} replied.", &[(response["model"].as_str().unwrap_or(config::CLAUDE_MODEL)).to_string()]))
         }
+        GROUP_DB if cfg.uses_file() => {
+            let rows = tools::query_rows(cfg, "select (select count(*) from t_package), (select count(*) from t_object), (select count(*) from t_diagram)")
+                .context(crate::i18n::tr("this does not look like an Enterprise Architect model file"))?;
+            let row = rows.first().context(crate::i18n::tr("the file returned no result"))?;
+            Ok(crate::i18n::fmt("Saved. Opened the model file {0}: {1} packages, {2} elements, {3} diagrams.", &[cfg.model_label(), row[0].to_string(), row[1].to_string(), row[2].to_string()]))
+        }
         GROUP_DB => {
             let rows = tools::query_rows(
                 cfg,
@@ -2261,6 +2334,9 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
                 bail!("{}", crate::i18n::fmt("file {0} does not exist", &[(cfg.ea_path.display()).to_string()]));
             }
             let result = ea::run_batch(cfg, &[json!({ "op": "ping" })], &ea::BatchOptions::default())?;
+            if result["security"] != true && result["user"].as_str().unwrap_or("").is_empty() {
+                return Ok(crate::i18n::tr("Saved. EA opened the model; model security is disabled, so no EA account is needed.").into());
+            }
             Ok(crate::i18n::fmt("Saved. EA opened the model and logged in as {0} (model security: {1}).", &[(result["user"].as_str().unwrap_or("?")).to_string(), (if result["security"] == true { crate::i18n::tr("enabled") } else { crate::i18n::tr("disabled") }).to_string()]))
         }
     }
@@ -2414,7 +2490,7 @@ fn run_turn(
     // The system prompt (with memory) stays fixed for the whole response: the model's reasoning blocks are signed
     // for a specific prompt and the API rejects them when the prompt changes midway (e.g. after memory_save).
     // The model knows notes saved during this response from the tool results; in the next response they go into the prompt.
-    let system = system_prompt(&cfg.memory_dir, &cfg.templates_dir);
+    let system = system_prompt(&cfg);
 
     for round in 1..=MAX_ROUNDS {
         if cancel.load(Ordering::Relaxed) {
@@ -2914,18 +2990,15 @@ fn session_group(session: &Session) -> &'static str {
 /// Label in the first column of a settings card: wraps instead of widening the card (long German and French labels).
 fn label_cell(ui: &mut egui::Ui, label: &str) {
     let font = egui::TextStyle::Body.resolve(ui.style());
-    let width = ui.fonts(|f| f.layout_no_wrap(label.to_string(), font, egui::Color32::BLACK).size().x);
+    let width = ui.fonts(|f| f.layout_no_wrap(label.to_string(), font.clone(), egui::Color32::BLACK).size().x);
     if width <= SETTINGS_LABEL_WIDTH {
         ui.label(label);
     } else {
-        ui.allocate_ui_with_layout(
-            egui::vec2(SETTINGS_LABEL_WIDTH, 0.0),
-            egui::Layout::top_down(egui::Align::Min),
-            |ui| {
-                ui.set_max_width(SETTINGS_LABEL_WIDTH);
-                ui.add(egui::Label::new(label).wrap());
-            },
-        );
+        // The full height of the wrapped text is allocated, so the grid row grows instead of overlapping the next row.
+        let color = ui.visuals().text_color();
+        let galley = ui.fonts(|f| f.layout(label.to_string(), font, color, SETTINGS_LABEL_WIDTH));
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(SETTINGS_LABEL_WIDTH, galley.size().y), egui::Sense::hover());
+        ui.painter().galley(rect.min, galley, color);
     }
 }
 

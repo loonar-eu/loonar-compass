@@ -2,6 +2,16 @@
 
 Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen Loonar EA Assistant).
 
+## Version 0.4 (2026-10-17)
+
+Modelle in Dateien:
+
+- Das Modell kann jetzt eine Enterprise-Architect-Projektdatei .qea oder .qeax sein: Einstellungen → „2. Modell“ → „EA-Datei (.qea, .qeax)“ und der Pfad zur Datei. Ein Datenbankserver, ein Konto oder ein Passwort sind nicht nötig.
+- Der Assistent liest die Datei direkt und nur lesend. Änderungen speichert EA: über Ihr EA-Fenster, wenn Sie die Datei dort geöffnet haben (ein zweites EA öffnet nie dieselbe Datei), sonst über EA im Hintergrund.
+- Die Benutzersicherheit ist in einer Datei optional: ohne sie bleiben EA-Konto und Passwort leer. Eine Datei mit aktivierter Sicherheit funktioniert wie ein Datenbankmodell, mit einem EA-Konto.
+- Das Installationsprogramm bietet dieselbe Auswahl auf der Konfigurationsseite.
+- Der Assistent schreibt seine Abfragen im SQL des Speicherorts des Modells (SQLite für Dateien, PostgreSQL für Datenbanken).
+
 ## Version 0.3 (2026-10-17)
 
 Neuer Name und Veröffentlichung:
@@ -196,9 +206,9 @@ Installation:
 
 ### Voraussetzungen
 
-- Das EA-Modell muss in einer PostgreSQL-Datenbank liegen. Modelle in Dateien (.qea, .eap und ähnliche) sowie in anderen Datenbanken werden nicht unterstützt.
-- Im Modell muss die Benutzersicherheit aktiviert sein (Enable Security, Modus „Require User Lock to Edit“).
-- Im Modell muss ein Benutzerkonto für den Assistenten vorhanden sein (beliebiger Name), mit Passwort und Bearbeitungsrechten.
+- Das EA-Modell ist eine Projektdatei .qea oder .qeax oder liegt in einer PostgreSQL-Datenbank. Ältere Dateiformate (.eap, .eapx, .feap) und andere Datenbanken werden nicht unterstützt; eine .eap/.eapx-Datei überträgt EA mit einem Projekttransfer nach .qea.
+- Ein Modell in einer Datenbank muss die Benutzersicherheit aktiviert haben (Enable Security, Modus „Require User Lock to Edit“) und ein Benutzerkonto für den Assistenten (beliebiger Name) mit Passwort und Bearbeitungsrechten enthalten.
+- In einer Modelldatei ist die Benutzersicherheit optional; ist sie aktiviert, braucht auch die Datei ein solches Konto.
 
 ### Bekannte Einschränkungen
 

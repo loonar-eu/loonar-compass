@@ -1,5 +1,5 @@
 //! Tools for the model:
-//! - `db_query`: reads the model from PostgreSQL (SELECT/WITH only),
+//! - `db_query`: reads the model from PostgreSQL or from an EA file (SQLite) (SELECT/WITH only),
 //! - `ea_write`: generic write to EA through COM (packages, diagrams, elements, connectors, layout).
 //! There are no importers or format-specific logic here: the model decides what to draw
 //! (from a photo, a description or a file) and builds the list of operations itself.
@@ -72,7 +72,7 @@ pub fn definitions() -> Value {
     json!([
         {
             "name": "db_query",
-            "description": "Read-only access (SELECT/WITH only) to the EA model database in PostgreSQL. Table and column names are lowercase. \
+            "description": "Read-only access (SELECT/WITH only) to the EA model: a PostgreSQL database or an EA project file (.qea/.qeax, a SQLite database); the system prompt says which, and you write the query in that SQL dialect. Table and column names are lowercase. \
 Tables: t_package (package_id, name, parent_id, ea_guid, modifieddate), t_object (object_id, name, alias, object_type, stereotype, package_id, parentid, note, pdata1, ea_guid, modifieddate), \
 t_diagram (diagram_id, name, diagram_type, package_id, parentid, ea_guid, modifieddate), t_diagramobjects (diagram_id, object_id, rectleft, recttop, rectright, rectbottom; the Y axis is inverted in the database: recttop and rectbottom are negative, so an element placed with place at top=50 and height=115 has recttop=-50 and rectbottom=-165, and that is the correct position on the diagram), \
 t_connector (connector_id, name, connector_type, stereotype, start_object_id, end_object_id), t_objectproperties (object_id, property, value), t_operation. \
@@ -401,7 +401,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "impact_analysis" => impact_analysis(input, ctx.cfg).map(Into::into),
         "operation_usage" => operation_usage(input, ctx.cfg).map(Into::into),
         "ea_ui" => {
-            let db = &ctx.cfg.db_name;
+            let db = &crate::ea_ui::Target::of(ctx.cfg);
             match input["action"].as_str().unwrap_or("context") {
                 "context" => Ok(serde_json::to_string_pretty(&crate::ea_ui::context(db)?)?.into()),
                 "open_diagram" => {
@@ -899,7 +899,7 @@ fn refresh_user_ea(cfg: &AppConfig, ops: &[Value], result: &Value) {
     diagrams.dedup();
     packages.sort_unstable();
     packages.dedup();
-    let db = cfg.db_name.clone();
+    let db = crate::ea_ui::Target::of(cfg);
     std::thread::spawn(move || {
         let _ = crate::ea_ui::refresh_after_write(&db, diagrams, packages);
     });
@@ -910,7 +910,7 @@ fn audit(cfg: &AppConfig, ops: &[Value], result: &Result<Value>) {
     use std::io::Write;
     let entry = json!({
         "time": chrono::Local::now().to_rfc3339(),
-        "database": format!("{}@{}:{}", cfg.db_name, cfg.db_host, cfg.db_port),
+        "database": if cfg.uses_file() { cfg.model_file.display().to_string() } else { format!("{}@{}:{}", cfg.db_name, cfg.db_host, cfg.db_port) },
         "ea_user": cfg.ea_user,
         "approval": cfg.approval_mode.as_str(),
         "summary": ea::describe(ops),
@@ -957,7 +957,7 @@ fn check_unchanged(cfg: &AppConfig, expect: &Value) -> Result<()> {
             Some("diagram") => ("t_diagram", "diagram_id", crate::i18n::tr("diagram")),
             other => bail!("{}", crate::i18n::fmt("expect_unchanged: unknown kind {0}", &[format!("{other:?}")])),
         };
-        let rows = query_rows(cfg, &format!("select modifieddate::text from {table} where {key} = {id}"))?;
+        let rows = query_rows(cfg, &format!("select cast(modifieddate as text) from {table} where {key} = {id}"))?;
         let now = rows.first().and_then(|r| r.first()).with_context(|| crate::i18n::fmt("{0} with id {1} no longer exists", &[what.to_string(), id.to_string()]))?;
         if normalize_stamp(now) != normalize_stamp(seen) {
             bail!("{}", crate::i18n::fmt("version conflict: {0} with id {1} was changed after you read it (was {2}, now {3}). Read the model again and plan the change once more. Nothing was saved.", &[what.to_string(), id.to_string(), seen.to_string(), now.to_string()]));
@@ -999,25 +999,104 @@ pub fn connect(cfg: &AppConfig) -> Result<postgres::Client> {
     Ok(client)
 }
 
+/// Time limit of a query on an EA file (the same as `statement_timeout` on PostgreSQL).
+const FILE_QUERY_LIMIT: Duration = Duration::from_secs(60);
+
+/// Opens the SQLite database of an EA project file (`.qea`/`.qeax`) read-only: the file cannot be changed through
+/// this connection, and a query that runs longer than the limit is stopped.
+pub fn open_model_file(path: &std::path::Path) -> Result<rusqlite::Connection> {
+    use rusqlite::OpenFlags;
+    if !crate::config::is_model_file(path) {
+        bail!("{}", crate::i18n::tr("the model file must be an Enterprise Architect project file .qea or .qeax"));
+    }
+    if !path.is_file() {
+        bail!("{}", crate::i18n::fmt("file {0} does not exist", &[path.display().to_string()]));
+    }
+    let conn = rusqlite::Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX)
+        .context(crate::i18n::tr("opening the model file"))?;
+    // EA may be writing to the file at the same moment: wait for its write to finish instead of failing at once.
+    conn.busy_timeout(Duration::from_secs(10))?;
+    conn.execute_batch("PRAGMA query_only = ON")?;
+    let started = std::time::Instant::now();
+    conn.progress_handler(10_000, Some(move || started.elapsed() > FILE_QUERY_LIMIT));
+    Ok(conn)
+}
+
 /// Server functions that read files, wait, or act on other sessions or the server; read-only mode does not stop them,
-/// so queries that use them are refused.
+/// so queries that use them are refused. `load_extension` is the SQLite one (EA file models).
 const FORBIDDEN_FUNCTIONS: &[&str] = &[
     "pg_read_file", "pg_read_binary_file", "pg_ls_", "pg_stat_file", "lo_import", "lo_export", "lo_get", "lo_open",
     "dblink", "pg_terminate_backend", "pg_cancel_backend", "pg_sleep", "set_config", "pg_reload_conf",
     "pg_rotate_logfile", "pg_promote", "pg_switch_wal", "pg_create_restore_point", "pg_logical_emit_message",
-    "pg_file_", "pg_advisory", "txid_current", "nextval", "setval",
+    "pg_file_", "pg_advisory", "txid_current", "nextval", "setval", "load_extension",
 ];
+
+/// Result of a read-only query: column names and rows (`None` = NULL). `truncated`: there were more rows than the limit.
+struct Selected {
+    columns: Vec<String>,
+    rows: Vec<Vec<Option<String>>>,
+    truncated: bool,
+}
+
+/// Runs a read-only query on the model (database or file) and returns at most `limit` rows.
+fn select(cfg: &AppConfig, sql: &str, limit: usize) -> Result<Selected> {
+    let mut out = Selected { columns: Vec::new(), rows: Vec::new(), truncated: false };
+    if cfg.uses_file() {
+        let conn = open_model_file(&cfg.model_file)?;
+        let mut run = || -> rusqlite::Result<()> {
+            let mut stmt = conn.prepare(sql)?;
+            out.columns = stmt.column_names().iter().map(|c| c.to_string()).collect();
+            let width = stmt.column_count();
+            let mut rows = stmt.query([])?;
+            while let Some(row) = rows.next()? {
+                if out.rows.len() == limit {
+                    out.truncated = true;
+                    break;
+                }
+                out.rows.push((0..width).map(|i| row.get_ref(i).map(sqlite_text)).collect::<rusqlite::Result<_>>()?);
+            }
+            Ok(())
+        };
+        if let Err(e) = run() {
+            if matches!(&e, rusqlite::Error::SqliteFailure(f, _) if f.code == rusqlite::ErrorCode::OperationInterrupted) {
+                bail!("{}", crate::i18n::fmt("the query took longer than {0} s and was stopped", &[FILE_QUERY_LIMIT.as_secs().to_string()]));
+            }
+            return Err(anyhow::Error::new(e).context(crate::i18n::tr("running the query")));
+        }
+        return Ok(out);
+    }
+    let mut client = connect(cfg)?;
+    for msg in client.simple_query(sql).context(crate::i18n::tr("running the query"))? {
+        if let SimpleQueryMessage::Row(row) = msg {
+            if out.columns.is_empty() {
+                out.columns = row.columns().iter().map(|c| c.name().to_string()).collect();
+            }
+            if out.rows.len() == limit {
+                out.truncated = true;
+                break;
+            }
+            out.rows.push((0..row.len()).map(|i| row.get(i).map(str::to_string)).collect());
+        }
+    }
+    Ok(out)
+}
+
+/// A SQLite value as text (the same way PostgreSQL returns it in a simple query).
+fn sqlite_text(value: rusqlite::types::ValueRef) -> Option<String> {
+    use rusqlite::types::ValueRef;
+    match value {
+        ValueRef::Null => None,
+        ValueRef::Integer(n) => Some(n.to_string()),
+        ValueRef::Real(x) => Some(x.to_string()),
+        ValueRef::Text(s) => Some(String::from_utf8_lossy(s).into_owned()),
+        ValueRef::Blob(b) => Some(format!("<binary data, {} bytes>", b.len())),
+    }
+}
 
 /// Read-only query; rows as strings (NULL as an empty string).
 pub fn query_rows(cfg: &AppConfig, sql: &str) -> Result<Vec<Vec<String>>> {
-    let mut client = connect(cfg)?;
-    let mut rows = Vec::new();
-    for msg in client.simple_query(sql).context(crate::i18n::tr("running the query"))? {
-        if let SimpleQueryMessage::Row(row) = msg {
-            rows.push((0..row.len()).map(|i| row.get(i).unwrap_or("").to_string()).collect());
-        }
-    }
-    Ok(rows)
+    let selected = select(cfg, sql, usize::MAX)?;
+    Ok(selected.rows.into_iter().map(|row| row.into_iter().map(Option::unwrap_or_default).collect()).collect())
 }
 
 fn db_query(sql: &str, cfg: &AppConfig) -> Result<String> {
@@ -1033,29 +1112,19 @@ fn db_query(sql: &str, cfg: &AppConfig) -> Result<String> {
         bail!("{}", crate::i18n::fmt("the query uses a server function that is not allowed ({0}); only reading the model is allowed", &[f.trim_end_matches('_').to_string()]));
     }
 
-    let mut client = connect(cfg)?;
-    let messages = client.simple_query(s).context(crate::i18n::tr("running the query"))?;
-    let mut out = String::new();
-    let mut count = 0usize;
-    for msg in messages {
-        if let SimpleQueryMessage::Row(row) = msg {
-            if count == 0 {
-                let header: Vec<&str> = row.columns().iter().map(|c| c.name()).collect();
-                out.push_str(&header.join(" | "));
-                out.push('\n');
-            }
-            count += 1;
-            if count > MAX_ROWS {
-                out.push_str(&format!("...(truncated to {MAX_ROWS} rows)\n"));
-                break;
-            }
-            let cols: Vec<&str> = (0..row.len()).map(|i| row.get(i).unwrap_or("NULL")).collect();
-            out.push_str(&cols.join(" | "));
-            out.push('\n');
-        }
+    let selected = select(cfg, s, MAX_ROWS)?;
+    if selected.rows.is_empty() {
+        return Ok("(no rows)".into());
     }
-    if count == 0 {
-        out.push_str("(no rows)");
+    let mut out = selected.columns.join(" | ");
+    out.push('\n');
+    for row in &selected.rows {
+        let cols: Vec<&str> = row.iter().map(|v| v.as_deref().unwrap_or("NULL")).collect();
+        out.push_str(&cols.join(" | "));
+        out.push('\n');
+    }
+    if selected.truncated {
+        out.push_str(&format!("...(truncated to {MAX_ROWS} rows)\n"));
     }
     Ok(out)
 }
@@ -1104,6 +1173,66 @@ mod tests {
         assert!(stale.is_err());
         assert!(fresh.is_ok());
     }
+    /// An EA file model: reads through SQLite give the same output as from a database, and nothing can write to the file.
+    #[test]
+    fn file_model_is_read_only() {
+        let dir = std::env::temp_dir().join(format!("loonar-file-model-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("Shop.qea");
+        let _ = std::fs::remove_file(&file);
+        {
+            let db = rusqlite::Connection::open(&file).unwrap();
+            db.execute_batch(
+                "create table t_package (Package_ID integer primary key, Name text, Parent_ID integer, ModifiedDate text);
+                 insert into t_package values (1, 'Model', 0, '2026-10-17 17:33:05'), (2, 'Sales', 1, null);",
+            )
+            .unwrap();
+        }
+        std::fs::write(dir.join("app.properties"), format!("model.source=file\r\nmodel.file={}\r\n", file.display())).unwrap();
+        let cfg = AppConfig::load(&dir.join("app.properties")).unwrap();
+        assert!(cfg.uses_file());
+
+        let out = db_query("select package_id, name, modifieddate from t_package order by package_id", &cfg).unwrap();
+        assert_eq!(out, "Package_ID | Name | ModifiedDate\n1 | Model | 2026-10-17 17:33:05\n2 | Sales | NULL\n");
+        assert!(check_unchanged(&cfg, &json!([{ "kind": "package", "id": 1, "modified": "2026-10-17T17:33:05" }])).is_ok());
+        assert!(db_query("insert into t_package values (3, 'X', 1, null)", &cfg).is_err());
+        assert!(db_query("with x as (select 1) delete from t_package", &cfg).is_err(), "a write hidden in WITH must fail");
+        assert!(db_query("select load_extension('evil')", &cfg).is_err());
+        assert_eq!(query_rows(&cfg, "select count(*) from t_package").unwrap(), vec![vec!["2".to_string()]]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Writing to an EA file (.qea) through EA and reading the result back from the file.
+    /// The file comes from LOONAR_TEST_QEA (a model without security). With the file open in an EA window the write goes
+    /// through that window, otherwise through EA in the background.
+    /// Run with: `cargo test file_model_write_through_ea -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "requires EA, a license and LOONAR_TEST_QEA"]
+    fn file_model_write_through_ea() {
+        let file = std::path::PathBuf::from(std::env::var("LOONAR_TEST_QEA").expect("LOONAR_TEST_QEA"));
+        let dir = std::env::temp_dir().join(format!("loonar-ea-file-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("app.properties"), format!("model.source=file\r\nmodel.file={}\r\napproval.mode=auto\r\n", file.display())).unwrap();
+        let cfg = AppConfig::load(&dir.join("app.properties")).unwrap();
+        let root = query_rows(&cfg, "select package_id from t_package where parent_id = 0 order by package_id limit 1").unwrap()[0][0].clone();
+        let name = format!("ZZ_file_test_{}", chrono::Local::now().format("%H%M%S"));
+        let started = std::time::Instant::now();
+        let ops = vec![
+            json!({"op":"create_package","key":"pkg","parent": root.parse::<i64>().unwrap(),"name": name}),
+            json!({"op":"create_diagram","key":"dgm","package":"#pkg","name":"Order process","type":"Activity"}),
+            json!({"op":"create_element","key":"a","package":"#pkg","type":"Action","name":"Place order"}),
+            json!({"op":"place","diagram":"#dgm","element":"#a","left":40,"top":40,"width":120,"height":60}),
+        ];
+        let result = ea::run_batch(&cfg, &ops, &BatchOptions::default()).expect("write through EA");
+        println!("write: {} s, user {:?}, security {}", started.elapsed().as_secs(), result["user"], result["security"]);
+        let rows = query_rows(&cfg, &format!("select p.name, (select count(*) from t_object o where o.package_id = p.package_id) from t_package p where p.name = '{name}'")).unwrap();
+        println!("{rows:?}");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0][1], "1");
+        ea::shutdown();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn stamps_compare_by_seconds() {
         assert_eq!(normalize_stamp("2026-10-13T05:51:01.123"), normalize_stamp(" 2026-10-13 05:51:01 "));

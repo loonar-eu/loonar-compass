@@ -41,6 +41,40 @@ impl ApprovalMode {
     }
 }
 
+/// Where the EA model is (`model.source`): a PostgreSQL database or an EA project file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelSource {
+    /// A model database on a PostgreSQL server (`db.*` settings).
+    Postgres,
+    /// An EA project file `.qea` or `.qeax` (a SQLite database), path in `model.file`.
+    File,
+}
+
+impl ModelSource {
+    pub fn parse(s: &str) -> Result<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "" | "postgres" => Ok(Self::Postgres),
+            "file" => Ok(Self::File),
+            other => anyhow::bail!("{}", crate::i18n::fmt("unknown model source '{0}' (postgres, file)", &[other.to_string()])),
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Postgres => "postgres",
+            Self::File => "file",
+        }
+    }
+}
+
+/// Extensions of the EA project files the application opens (both are SQLite databases; `.qeax` is the shared variant).
+pub const MODEL_FILE_EXTENSIONS: [&str; 2] = ["qea", "qeax"];
+
+/// Whether the path has one of the supported extensions (`.qea`, `.qeax`, any letter case).
+pub fn is_model_file(path: &Path) -> bool {
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| MODEL_FILE_EXTENSIONS.iter().any(|x| e.eq_ignore_ascii_case(x)))
+}
+
 /// Encryption of the connection to the model database (`db.sslmode`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SslMode {
@@ -81,6 +115,9 @@ pub struct AppConfig {
     /// Workspace ID from the Anthropic Console: required for an API key that is not scoped to a workspace
     /// (empty = the header is not sent).
     pub claude_workspace_id: String,
+    pub model_source: ModelSource,
+    /// EA project file (`.qea`/`.qeax`) when `model_source` is `File`.
+    pub model_file: PathBuf,
     pub db_host: String,
     pub db_port: u16,
     pub db_name: String,
@@ -176,6 +213,19 @@ pub fn find_properties(start: &Path) -> Option<PathBuf> {
 }
 
 impl AppConfig {
+    pub fn uses_file(&self) -> bool {
+        self.model_source == ModelSource::File
+    }
+
+    /// Short name of the model for messages: the database name or the file name.
+    pub fn model_label(&self) -> String {
+        if self.uses_file() {
+            self.model_file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+        } else {
+            self.db_name.clone()
+        }
+    }
+
     /// The working folder is the folder containing `app.properties` (history and attachments next to the application).
     pub fn load(props_path: &Path) -> Result<Self> {
         let text = std::fs::read_to_string(props_path)
@@ -195,6 +245,8 @@ impl AppConfig {
             claude_model: CLAUDE_MODEL.to_string(),
             claude_max_tokens: get_or("claude.max_tokens", "10000").parse().context("claude.max_tokens")?,
             claude_workspace_id: get_or("claude.workspace_id", ""),
+            model_source: ModelSource::parse(&get_or("model.source", "postgres")).context("model.source")?,
+            model_file: PathBuf::from(get_or("model.file", "")),
             db_host: get_or("db.host", ""),
             db_port: get_or("db.port", "5432").parse().context("db.port")?,
             db_name: get_or("db.name", ""),

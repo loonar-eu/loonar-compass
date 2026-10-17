@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<title>Loonar Compass 0.3 - Guide de l'utilisateur</title>
+<title>Loonar Compass 0.4 - Guide de l'utilisateur</title>
 <style>
   @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
   body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1f1e1b; }
@@ -38,7 +38,7 @@
   <img src="img/logo.png" alt="Logo de Loonar Compass">
   <h1 style="margin-top: 10mm;">Loonar Compass</h1>
   <div class="sub">Guide de l'utilisateur</div>
-  <div class="sub" style="font-size: 11pt;">version 0.3 &middot; octobre 2026</div>
+  <div class="sub" style="font-size: 11pt;">version 0.4 &middot; octobre 2026</div>
   <div class="owner">
     Loonar Mariusz Głowacki<br>
     ul. Gombrowicza 12, 73-110 Stargard<br>
@@ -81,24 +81,24 @@
   <li><b>prépare des documents</b> à partir du contenu du modèle : Word, Excel, images PNG et pages Confluence, y compris à partir de modèles de documents,</li>
   <li><b>retient les points convenus</b> d'une conversation à l'autre (conventions de modélisation, préférences, corrections).</li>
 </ul>
-<p>L'application utilise le modèle de langage Claude Haiku 5.5 (Anthropic) via Internet, avec votre propre clé API. Elle se connecte au modèle EA de deux façons : elle le lit directement dans la base PostgreSQL et elle y écrit par l'intermédiaire d'Enterprise Architect lancé en arrière-plan, avec le compte utilisateur du modèle indiqué dans les paramètres.</p>
+<p>L'application utilise le modèle de langage Claude Haiku 5.5 (Anthropic) via Internet, avec votre propre clé API. Elle se connecte au modèle EA de deux façons : elle le lit directement (dans la base PostgreSQL ou dans le fichier .qea/.qeax) et elle y écrit par l'intermédiaire d'Enterprise Architect, avec le compte utilisateur du modèle indiqué dans les paramètres lorsque le modèle en possède un. Avec un fichier de modèle que vous avez ouvert dans EA, les modifications passent par votre fenêtre EA ; sinon, EA est lancé en arrière-plan.</p>
 <p>L'interface et les réponses de l'assistant sont disponibles en quatre langues : polonais, anglais, allemand et français (chapitre 5). L'application est gratuite, y compris pour un usage commercial (chapitre 18).</p>
 
 <h2 id="s2">2. Configuration requise</h2>
 <div class="note">
-  <b>Prérequis.</b> La configuration prise en charge exige les trois conditions suivantes :
+  <b>Prérequis.</b> La configuration prise en charge exige les conditions suivantes :
   <ol style="margin: 4pt 0 0 0;">
-    <li><b>Le modèle se trouve dans une base de données PostgreSQL.</b> Les modèles sous forme de fichier (.qea, .qeax, .eap, .eapx, .feap) et dans d'autres bases ne sont pas pris en charge.</li>
-    <li><b>La sécurité utilisateur est activée dans le modèle</b> (dans Enterprise Architect : Settings → Security → Enable Security), en mode « Require User Lock to Edit ». L'application se connecte au modèle en tant qu'utilisateur précis et pose des verrous pendant l'enregistrement ; lorsque la sécurité est désactivée, les verrous sont ignorés et cette configuration n'est pas prise en charge.</li>
-    <li><b>Le modèle contient un compte utilisateur pour l'assistant</b> (Settings → Security → Users), avec un mot de passe et des droits de modification. Le nom du compte est libre, par exemple <code>claude</code> ou <code>assistant</code>, mais le compte doit exister. Vous saisissez son identifiant et son mot de passe dans les paramètres de l'application.</li>
+    <li><b>Le modèle est un fichier de projet EA .qea ou .qeax, ou se trouve dans une base de données PostgreSQL.</b> Les anciens formats de fichier (.eap, .eapx, .feap) et les autres bases ne sont pas pris en charge ; Enterprise Architect convertit un fichier .eap/.eapx en .qea par un transfert de projet (Settings → Model → Transfer → Full Project Transfer).</li>
+    <li><b>Dans un modèle en base de données, la sécurité utilisateur est activée</b> (dans Enterprise Architect : Settings → Security → Enable Security), en mode « Require User Lock to Edit ». Dans un fichier de modèle, la sécurité est facultative : sans elle, l'assistant n'a besoin d'aucun compte EA. L'application se connecte au modèle en tant qu'utilisateur précis et pose des verrous pendant l'enregistrement ; lorsque la sécurité est désactivée, les verrous sont ignorés et cette configuration n'est pas prise en charge.</li>
+    <li><b>Un modèle dont la sécurité est activée contient un compte utilisateur pour l'assistant</b> (Settings → Security → Users), avec un mot de passe et des droits de modification. Le nom du compte est libre, par exemple <code>claude</code> ou <code>assistant</code>, mais le compte doit exister. Vous saisissez son identifiant et son mot de passe dans les paramètres de l'application.</li>
   </ol>
 </div>
 <table>
   <tr><th style="width: 32%;">Élément</th><th>Détails</th></tr>
   <tr><td>Système</td><td>Windows 10 ou Windows 11 (64 bits)</td></tr>
   <tr><td>Enterprise Architect</td><td>Installé sur le même ordinateur, avec une licence valide. L'application le lance en arrière-plan ; pendant ce temps, il occupe une place de licence.</td></tr>
-  <tr><td>Modèle EA</td><td>Référentiel dans une base PostgreSQL, avec la sécurité utilisateur activée. Informations nécessaires : serveur, port, nom de la base, compte et mot de passe de la base.</td></tr>
-  <tr><td>Compte utilisateur du modèle</td><td>Identifiant et mot de passe d'un utilisateur défini dans le modèle EA. De préférence un compte distinct réservé à l'assistant, afin que ses modifications et ses verrous soient visibles séparément et n'entrent pas en conflit avec les vôtres.</td></tr>
+  <tr><td>Modèle EA</td><td>Fichier de projet EA .qea ou .qeax (seul son chemin est nécessaire) ou référentiel dans une base PostgreSQL avec la sécurité utilisateur activée (informations nécessaires : serveur, port, nom de la base, compte et mot de passe de la base). Un fichier .qea est destiné à une seule personne ; un fichier .qeax à une petite équipe qui partage le fichier.</td></tr>
+  <tr><td>Compte utilisateur du modèle</td><td>Pour un modèle en base de données ou un fichier de modèle dont la sécurité est activée : identifiant et mot de passe d'un utilisateur défini dans le modèle EA. De préférence un compte distinct réservé à l'assistant, afin que ses modifications et ses verrous soient visibles séparément et n'entrent pas en conflit avec les vôtres.</td></tr>
   <tr><td>Clé API Claude</td><td>Une clé de la console Anthropic.</td></tr>
   <tr><td>Internet</td><td>Connexion HTTPS à api.anthropic.com, directement ou via le proxy défini dans Windows (chapitre 14).</td></tr>
   <tr><td>Confluence (facultatif)</td><td>Confluence Cloud ou Data Center, uniquement pour la publication de pages par l'assistant : adresse Confluence, jeton et clé de l'espace (chapitre 9). Sans cela, les pages sont tout de même créées, et vous collez le code vous-même.</td></tr>
@@ -107,7 +107,7 @@
 <div class="note"><b>Coûts.</b> L'application elle-même est gratuite. L'utilisation du modèle Claude est facturée par Anthropic selon la consommation, sur le compte auquel appartient la clé API.</div>
 
 <h2 id="s3">3. Installation</h2>
-<p>Lancez le fichier <code>LoonarCompass-Setup-0.3.exe</code>. L'assistant d'installation vous guide à travers les étapes avec les boutons <b>Suivant</b> et <b>Précédent</b>. Des droits d'administrateur ne sont nécessaires que si vous installez l'application pour tous les utilisateurs de l'ordinateur.</p>
+<p>Lancez le fichier <code>LoonarCompass-Setup-0.4.exe</code>. L'assistant d'installation vous guide à travers les étapes avec les boutons <b>Suivant</b> et <b>Précédent</b>. Des droits d'administrateur ne sont nécessaires que si vous installez l'application pour tous les utilisateurs de l'ordinateur.</p>
 <div class="note"><b>Avertissement Windows SmartScreen.</b> Le programme d'installation n'est pas encore signé numériquement. Si Windows affiche « Windows a protégé votre ordinateur », cliquez sur <b>Informations complémentaires</b>, puis sur <b>Exécuter quand même</b>. Lorsque le contrôle intelligent des applications (Smart App Control) est activé, Windows bloque les applications non signées : attendez alors la version signée.</div>
 <figure class="small"><img src="img/en/installer-language.png" alt="Assistant d'installation : page de choix de la langue avec le polonais, l'anglais, l'allemand et le français"><figcaption>La première page de l'assistant d'installation : le choix de la langue</figcaption></figure>
 <ol>
@@ -116,11 +116,11 @@
   <li><b>Nouveautés.</b> Lors d'une mise à jour : les modifications depuis la version installée. Lors d'une nouvelle installation : les principales modifications de la version actuelle.</li>
   <li><b>Contrat de licence.</b> Cochez « J'accepte les conditions du contrat de licence ».</li>
   <li><b>Dossier de destination.</b> Le type d'installation (décrit ci-dessous), le dossier du programme (le bouton <b>Parcourir…</b> permet d'en choisir un autre) et les raccourcis : menu Démarrer (application, guide de l'utilisateur, désinstallation) et bureau.</li>
-  <li><b>Configuration.</b> Vous pouvez saisir tout de suite les données (« Je saisis les données maintenant ») ou les compléter plus tard dans l'application. Les champs : la clé API Claude (avec une note sur ce qui est envoyé à Anthropic), la base de données du modèle (serveur, port, nom de la base, compte et mot de passe de la base), le chemin d'<code>EA.exe</code> (le bouton <b>…</b> ouvre une fenêtre de sélection de fichier), le compte utilisateur EA et son mot de passe, ainsi que le mode de validation. Un champ de mot de passe ou de clé laissé vide conserve la valeur enregistrée précédemment.</li>
+  <li><b>Configuration.</b> Vous pouvez saisir tout de suite les données (« Je saisis les données maintenant ») ou les compléter plus tard dans l'application. Les champs : la clé API Claude (avec une note sur ce qui est envoyé à Anthropic), le modèle (une base PostgreSQL : serveur, port, nom de la base, compte et mot de passe de la base ; ou un fichier EA : le chemin du fichier .qea/.qeax, que vous pouvez sélectionner avec le bouton <b>…</b>), le chemin d'<code>EA.exe</code> (le bouton <b>…</b> ouvre une fenêtre de sélection de fichier), le compte utilisateur EA et son mot de passe, ainsi que le mode de validation. Un champ de mot de passe ou de clé laissé vide conserve la valeur enregistrée précédemment.</li>
   <li><b>Prêt pour l'installation.</b> Le récapitulatif du type d'installation, du dossier, des raccourcis et de la configuration. Cliquez sur <b>Installer</b> ; la barre de progression affiche le pourcentage et l'étape en cours.</li>
   <li><b>Fin.</b> Si « Lancer Loonar Compass » est coché, l'application s'ouvre après un clic sur <b>Terminer</b>.</li>
 </ol>
-<figure class="small"><img src="img/en/installer-config.png" alt="Assistant d'installation : page de configuration avec la clé API, la base de données, Enterprise Architect et le mode de validation"><figcaption>La configuration dans l'assistant d'installation est facultative : vous pourrez saisir les mêmes données plus tard dans la vue « Paramètres »</figcaption></figure>
+<figure class="small"><img src="img/en/installer-config.png" alt="Assistant d'installation : page de configuration avec la clé API, le modèle (base de données ou fichier), Enterprise Architect et le mode de validation"><figcaption>La configuration dans l'assistant d'installation est facultative : vous pourrez saisir les mêmes données plus tard dans la vue « Paramètres »</figcaption></figure>
 <h3>Type d'installation</h3>
 <p>Sur la page « Dossier de destination », vous choisissez pour qui vous installez l'application :</p>
 <ul>
@@ -171,8 +171,8 @@
 <table>
   <tr><th style="width: 26%;">Carte</th><th>Champs</th><th style="width: 34%;">Ce que vérifie le test</th></tr>
   <tr><td>1. Claude</td><td>Jetons max. (limite de longueur d'une réponse du modèle) et clé API Claude ; le modèle utilisé est affiché en lecture seule. Sous les champs, une note indique ce qui est envoyé à Anthropic (chapitre 14).</td><td>Envoie une courte requête au modèle</td></tr>
-  <tr><td>2. Base de données du modèle (PostgreSQL)</td><td>Serveur, port, nom de la base, compte de la base, mot de passe de la base (conservé dans le Gestionnaire d'identification Windows), chiffrement de la connexion</td><td>Se connecte à la base et compte les paquetages, éléments et diagrammes ; indique si la connexion est chiffrée et avertit si le compte de la base est un superutilisateur</td></tr>
-  <tr><td>3. Enterprise Architect</td><td>Chemin d'EA.exe (le bouton <b>…</b> ouvre la sélection de fichier), compte utilisateur EA, mot de passe du compte EA</td><td>Lance EA en arrière-plan, ouvre le modèle et connecte le compte indiqué ; indique si la sécurité du modèle est activée. Le démarrage d'EA prend de quelques secondes à plus de dix secondes.</td></tr>
+  <tr><td>2. Modèle</td><td>Au choix : <b>Base PostgreSQL</b> (serveur, port, nom de la base, compte de la base, mot de passe de la base conservé dans le Gestionnaire d'identification Windows, chiffrement de la connexion) ou <b>Fichier EA (.qea, .qeax)</b> (Fichier du modèle ; le bouton <b>…</b> ouvre la sélection de fichier)</td><td>Base : se connecte, compte les paquetages, éléments et diagrammes, indique si la connexion est chiffrée et avertit si le compte de la base est un superutilisateur. Fichier : l'ouvre en lecture seule et compte les paquetages, éléments et diagrammes</td></tr>
+  <tr><td>3. Enterprise Architect</td><td>Chemin d'EA.exe (le bouton <b>…</b> ouvre la sélection de fichier), compte utilisateur EA, mot de passe du compte EA (pour un fichier de modèle sans sécurité, ces deux champs restent vides)</td><td>Ouvre le modèle dans EA (pour un fichier de modèle que vous avez ouvert : dans votre fenêtre EA) et connecte le compte indiqué ; indique si la sécurité du modèle est activée. Le démarrage d'EA prend de quelques secondes à plus de dix secondes.</td></tr>
   <tr><td>4. Langue et validation des modifications</td><td>Langue de l'application ; mode de validation : ask, plan ou auto (chapitre 12)</td><td>Enregistrement uniquement</td></tr>
   <tr><td>5. Nouvelles versions (newsletter)</td><td>Adresse e-mail et consentement à recevoir des informations sur les nouvelles versions, avec une note sur l'utilisation de l'adresse et un lien vers la politique de confidentialité (chapitre 16)</td><td>Prépare un message dans le logiciel de messagerie</td></tr>
   <tr><td>6. Confluence</td><td>Adresse (commençant par https://), e-mail (Cloud uniquement), jeton, clé de l'espace, ID de la page parente (chapitre 9)</td><td>Se connecte à Confluence avec le jeton indiqué et vérifie l'accès à l'espace</td></tr>
@@ -193,7 +193,7 @@
 <div class="note"><b>Pas de connexion à Claude.</b> La traduction nécessite une clé API fonctionnelle. En l'absence de connexion, un <b>« ! »</b> orange apparaît sur les icônes <b>Paramètres</b>, <b>Mémoire de l'assistant</b> et <b>Modèles de documents</b>, et l'info-bulle explique que les contenus ne sont pas encore traduits. La traduction reprend au prochain démarrage de l'application, ou immédiatement après un clic sur <b>Traduire maintenant</b> dans la carte 4 ; l'enregistrement des autres cartes ne la relance pas.</div>
 
 <h3>Chiffrement de la connexion à la base</h3>
-<p>Le champ <b>Chiffrement de la connexion</b> de la carte « 2. Base de données du modèle (PostgreSQL) » détermine si la lecture du modèle par l'assistant passe par TLS :</p>
+<p>Le champ <b>Chiffrement de la connexion</b> de la carte « 2. Modèle » (option « Base PostgreSQL ») détermine si la lecture du modèle par l'assistant passe par TLS :</p>
 <table>
   <tr><th style="width: 34%;">Réglage</th><th>Effet</th></tr>
   <tr><td><b>Préféré</b> (par défaut)</td><td>TLS si le serveur le propose, sinon une connexion non chiffrée. Fonctionne avec tous les serveurs.</td></tr>
@@ -419,7 +419,7 @@
 <div class="note"><b>Avant d'utiliser l'application sur un modèle d'entreprise</b>, vérifiez si les règles de votre organisation et vos contrats avec vos clients autorisent la transmission du contenu du modèle à un service d'IA externe, et quelles conditions de traitement des données s'appliquent à votre compte Anthropic.</div>
 <h3>Droits de l'assistant</h3>
 <ul>
-  <li>L'assistant lit la base dans une session en lecture seule, avec une limite de durée des requêtes ; les fonctions du serveur qui lisent des fichiers ou agissent sur d'autres sessions sont bloquées. Toutes les modifications passent par Enterprise Architect, avec le compte indiqué dans les paramètres ; les droits et verrous de ce compte s'y appliquent donc.</li>
+  <li>L'assistant lit la base dans une session en lecture seule, et un fichier de modèle en lecture seule, avec une limite de durée des requêtes ; les fonctions du serveur qui lisent des fichiers ou agissent sur d'autres sessions sont bloquées. Toutes les modifications passent par Enterprise Architect, avec le compte indiqué dans les paramètres ; les droits et verrous de ce compte s'y appliquent donc.</li>
   <li>Dans Confluence, l'assistant agit avec les droits du jeton de la carte 6 et ne publie qu'après votre validation.</li>
   <li>L'assistant n'a accès à aucun fichier sur le disque en dehors de ceux que vous lui joignez vous-même et de ses propres dossiers de mémoire et de modèles. Les images qu'il dessine ne peuvent lire aucun fichier sur le disque ni sur le réseau.</li>
   <li>L'assistant traite le contenu des pièces jointes, des documents et du modèle comme des données, et non comme des instructions. Vérifiez néanmoins chaque modification avant de la valider.</li>
@@ -440,6 +440,7 @@
   <tr><td>Test de la clé : « L'API Claude a refusé la clé API (401) »</td><td>La clé est erronée ou révoquée. Collez la clé actuelle depuis la console Anthropic.</td></tr>
   <tr><td>« … une réponse qui ne provient pas de l'API (un proxy ou un pare-feu bloque peut-être api.anthropic.com) »</td><td>Un proxy ou un pare-feu bloque la connexion. Demandez à votre service informatique d'autoriser api.anthropic.com en HTTPS. Les scripts PAC et l'authentification NTLM/Kerberos sur le proxy ne sont pas pris en charge (chapitre 14).</td></tr>
   <tr><td>« L'API Claude est surchargée ou temporairement indisponible » ou « La limite de requêtes de l'API Claude est atteinte (429) »</td><td>L'application a déjà réessayé automatiquement. Patientez un instant et renvoyez votre message.</td></tr>
+  <tr><td>Test du fichier : « cela ne ressemble pas à un fichier de modèle Enterprise Architect »</td><td>Choisissez un fichier de projet .qea ou .qeax créé par Enterprise Architect 16 ou une version ultérieure. Les anciens fichiers .eap/.eapx doivent d'abord être convertis en .qea dans EA (transfert de projet).</td></tr>
   <tr><td>Test de la base : pas de connexion</td><td>Vérifiez le serveur, le port, le nom de la base, le compte et le mot de passe, et assurez-vous que le serveur PostgreSQL accepte les connexions depuis cet ordinateur.</td></tr>
   <tr><td>« La connexion n'est PAS chiffrée : le serveur ne propose pas TLS » ou échec de la vérification du certificat</td><td>Demandez à l'administrateur de la base d'activer TLS. En mode « Obligatoire, certificat vérifié », le certificat du serveur doit être approuvé dans le magasin de certificats Windows et correspondre au nom saisi dans le champ Serveur ; sinon, choisissez « Obligatoire » ou « Préféré ».</td></tr>
   <tr><td>Le test de la base avertit que le compte est un superutilisateur</td><td>Les droits de superutilisateur ne sont pas nécessaires. Demandez à l'administrateur un compte ordinaire disposant des droits de lecture et d'écriture sur les tables du modèle : l'assistant ne fait que lire la base, mais Enterprise Architect enregistre les modifications avec ce même compte.</td></tr>
@@ -489,7 +490,7 @@
 <p><b>Composants open source.</b> L'application contient des bibliothèques et des polices open source ; chacune conserve sa propre licence. Leur liste se trouve dans le fichier <code>THIRD-PARTY-NOTICES.txt</code> du dossier d'installation ; dans la vue <b>À propos</b>, le bouton <b>Afficher les licences des composants</b> ouvre ce fichier.</p>
 <p><b>Soutien.</b> Si l'application vous est utile, vous pouvez soutenir son développement par une contribution volontaire : vue <b>Soutenir le projet</b> ou <a href="https://suppi.pl/loonar">https://suppi.pl/loonar</a>.</p>
 <p><b>Contact.</b> Propriétaire de l'application : Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard. E-mail : mariusz@loonar.eu, site : <a href="https://loonar.eu">https://loonar.eu</a>, code source : <a href="https://github.com/loonar-eu/loonar-compass">https://github.com/loonar-eu/loonar-compass</a>. Le plus simple pour signaler un bug est d'utiliser la vue <b>Signaler un bug</b>.</p>
-<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.3. Sparx Systems et Enterprise Architect sont des marques déposées de Sparx Systems Pty Ltd. Claude et Anthropic sont des marques d'Anthropic, PBC. Atlassian, Confluence et Jira sont des marques d'Atlassian. Microsoft, Windows, Word et Excel sont des marques du groupe Microsoft. PostgreSQL est une marque de la PostgreSQL Community Association of Canada. Loonar Compass est un produit indépendant, sans lien avec ces sociétés, qui ne l'approuvent ni ne le parrainent.</p>
+<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.4. Sparx Systems et Enterprise Architect sont des marques déposées de Sparx Systems Pty Ltd. Claude et Anthropic sont des marques d'Anthropic, PBC. Atlassian, Confluence et Jira sont des marques d'Atlassian. Microsoft, Windows, Word et Excel sont des marques du groupe Microsoft. PostgreSQL est une marque déposée de la PostgreSQL Community Association. Loonar Compass est un produit indépendant, sans lien avec ces sociétés, qui ne l'approuvent ni ne le parrainent.</p>
 
 </body>
 </html>

@@ -5,6 +5,7 @@
 use crate::com::{i, Disp};
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::{json, Value};
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 /// Runs `f` on the Repository of the open EA window, in a separate COM thread, with a timeout
@@ -24,7 +25,12 @@ fn with_running_ea<T: Send + 'static>(timeout: Duration, f: impl FnOnce(&Disp) -
                 GetActiveObject(&clsid, None, &mut unknown).map_err(|_| anyhow!("{}", crate::i18n::tr("no Enterprise Architect window is open")))?;
                 unknown.ok_or_else(|| anyhow!("{}", crate::i18n::tr("no Enterprise Architect window is open")))?.cast::<IDispatch>()?
             };
-            let repo = Disp(app).obj("Repository").context(crate::i18n::tr("the EA window has no model open"))?;
+            let app = Disp(app);
+            // The assistant's own background EA registers as "EA.App" too, but it has no visible window: it is not the user's EA.
+            if !app.get("Visible").map(|v| v.bool()).unwrap_or(false) {
+                bail!("{}", crate::i18n::tr("no Enterprise Architect window is open"));
+            }
+            let repo = app.obj("Repository").context(crate::i18n::tr("the EA window has no model open"))?;
             f(&repo)
         })();
         let _ = tx.send(result);
@@ -46,18 +52,64 @@ fn safe_connection(connection: &str) -> String {
     if label.is_empty() { cleaned } else { format!("{label} --- {cleaned}") }
 }
 
-/// Checks whether the open EA window shows the same model the assistant works with (database name in the connection).
-fn same_model(repo: &Disp, db_name: &str) -> Result<()> {
+/// The model the assistant works with, as the user's EA window is compared against: a database name or an EA file.
+#[derive(Clone, Debug)]
+pub struct Target {
+    db_name: String,
+    file: Option<PathBuf>,
+}
+
+impl Target {
+    pub fn of(cfg: &crate::config::AppConfig) -> Self {
+        Self { db_name: cfg.db_name.clone(), file: cfg.uses_file().then(|| cfg.model_file.clone()) }
+    }
+}
+
+/// The same file under different spellings (short 8.3 names, letter case, `/` or `\`) compares equal.
+fn same_file(a: &Path, b: &Path) -> bool {
+    let canonical = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()).to_string_lossy().to_lowercase();
+    canonical(a) == canonical(b)
+}
+
+/// Checks whether the open EA window shows the same model the assistant works with
+/// (the database name in the connection, or the same EA file).
+fn same_model(repo: &Disp, target: &Target) -> Result<()> {
     let connection = repo.text("ConnectionString").unwrap_or_default();
-    if !db_name.is_empty() && !connection.to_lowercase().contains(&db_name.to_lowercase()) {
-        bail!("{}", crate::i18n::fmt("the open EA window shows a different model (connection: {0}), but the assistant works with the database \"{1}\"", &[safe_connection(&connection), db_name.to_string()]));
+    match &target.file {
+        Some(file) => {
+            if !same_file(Path::new(connection.trim()), file) {
+                bail!("{}", crate::i18n::fmt("the open EA window shows a different model (connection: {0}), but the assistant works with the file \"{1}\"", &[safe_connection(&connection), file.display().to_string()]));
+            }
+        }
+        None => {
+            let db_name = &target.db_name;
+            if !db_name.is_empty() && !connection.to_lowercase().contains(&db_name.to_lowercase()) {
+                bail!("{}", crate::i18n::fmt("the open EA window shows a different model (connection: {0}), but the assistant works with the database \"{1}\"", &[safe_connection(&connection), db_name.to_string()]));
+            }
+        }
     }
     Ok(())
 }
 
+/// Whether the user's EA window has this model open (answers within a few seconds; no window = false).
+pub fn has_model_open(target: &Target) -> bool {
+    let target = target.clone();
+    with_running_ea(Duration::from_secs(5), move |repo| same_model(repo, &target)).is_ok()
+}
+
+/// Runs a write job in the user's EA window (an EA file the user has open: a second EA instance must not
+/// open the same `.qea` file). The reply has the same form as from the background session.
+pub fn run_in_window(target: &Target, user: String, ops: Vec<Value>, rollback_key: Option<String>, keep_locks: bool, timeout: Duration) -> Result<Value> {
+    let target = target.clone();
+    with_running_ea(timeout, move |repo| {
+        same_model(repo, &target)?;
+        Ok(crate::ea_com::run_request(repo, &user, &ops, rollback_key.as_deref(), keep_locks))
+    })
+}
+
 /// What the user has open and selected in EA.
-pub fn context(db_name: &str) -> Result<Value> {
-    let db = db_name.to_string();
+pub fn context(target: &Target) -> Result<Value> {
+    let db = target.clone();
     with_running_ea(Duration::from_secs(10), move |repo| {
         same_model(repo, &db)?;
         let mut out = json!({ "model": safe_connection(&repo.text("ConnectionString").unwrap_or_default()) });
@@ -107,8 +159,8 @@ pub fn context(db_name: &str) -> Result<Value> {
 }
 
 /// Opens a diagram in the user's EA window.
-pub fn open_diagram(db_name: &str, diagram_id: i32) -> Result<()> {
-    let db = db_name.to_string();
+pub fn open_diagram(target: &Target, diagram_id: i32) -> Result<()> {
+    let db = target.clone();
     with_running_ea(Duration::from_secs(15), move |repo| {
         same_model(repo, &db)?;
         repo.call("OpenDiagram", &[i(diagram_id)])?;
@@ -117,8 +169,8 @@ pub fn open_diagram(db_name: &str, diagram_id: i32) -> Result<()> {
 }
 
 /// Shows an element in the project browser of the user's EA window.
-pub fn show_element(db_name: &str, element_id: i32) -> Result<()> {
-    let db = db_name.to_string();
+pub fn show_element(target: &Target, element_id: i32) -> Result<()> {
+    let db = target.clone();
     with_running_ea(Duration::from_secs(15), move |repo| {
         same_model(repo, &db)?;
         let element = repo.call_obj("GetElementByID", &[i(element_id)])?;
@@ -129,8 +181,8 @@ pub fn show_element(db_name: &str, element_id: i32) -> Result<()> {
 
 /// Refreshes the changed diagrams (if open) and the project browser in the user's EA window.
 /// Does nothing without an EA window or with a different model. Returns the number of refreshed diagrams.
-pub fn refresh_after_write(db_name: &str, diagrams: Vec<i32>, packages: Vec<i32>) -> Result<usize> {
-    let db = db_name.to_string();
+pub fn refresh_after_write(target: &Target, diagrams: Vec<i32>, packages: Vec<i32>) -> Result<usize> {
+    let db = target.clone();
     with_running_ea(Duration::from_secs(10), move |repo| {
         same_model(repo, &db)?;
         let mut reloaded = 0;
@@ -163,7 +215,7 @@ mod tests {
     #[ignore = "depends on whether EA is open"]
     fn ea_ui_context() {
         let started = std::time::Instant::now();
-        let result = super::context("");
+        let result = super::context(&super::Target { db_name: String::new(), file: None });
         println!("{result:?} ({} ms)", started.elapsed().as_millis());
         assert!(started.elapsed().as_secs() < 12);
     }

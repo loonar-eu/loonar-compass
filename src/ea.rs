@@ -59,9 +59,13 @@ pub struct BatchOptions {
     pub keep_locks: bool,
 }
 
-/// EA connection string for the model database, built from the database settings (EA needs the database account in it).
-/// The port follows a comma (`SRC=server,port@database`), the same way EA itself writes it.
+/// What EA opens: the path of an EA file, or the connection string of the model database built from the database
+/// settings (EA needs the database account in it). The port follows a comma (`SRC=server,port@database`), the same way
+/// EA itself writes it.
 fn connection_string(cfg: &AppConfig) -> String {
+    if cfg.uses_file() {
+        return cfg.model_file.display().to_string();
+    }
     format!(
         "{db} --- DBType=4;Connect=Provider=SSDB;SRC={host},{port}@{db};UID={user};PWD={pwd};",
         db = cfg.db_name,
@@ -169,16 +173,33 @@ pub fn run_batch(cfg: &AppConfig, ops: &[Value], options: &BatchOptions) -> Resu
     if ops.is_empty() {
         bail!("{}", crate::i18n::tr("empty list of operations"));
     }
+    // An EA file without security opens without an account; a database always needs one.
+    let anonymous = cfg.uses_file() && cfg.ea_user.trim().is_empty();
     let login = Login {
         connection: connection_string(cfg),
         user: cfg.ea_user.clone(),
-        // Tests and development builds may use a separate EA account of the test model (never in a release build).
-        password: match std::env::var("LOONAR_TEST_EA_PASSWORD") {
-            Ok(password) if cfg!(any(test, debug_assertions)) => password,
-            _ => secrets::get(secrets::EA_PASSWORD)?,
+        password: if anonymous {
+            String::new()
+        } else {
+            // Tests and development builds may use a separate EA account of the test model (never in a release build).
+            match std::env::var("LOONAR_TEST_EA_PASSWORD") {
+                Ok(password) if cfg!(any(test, debug_assertions)) => password,
+                _ => secrets::get(secrets::EA_PASSWORD)?,
+            }
         },
         ea_exe: cfg.ea_path.clone(),
     };
+
+    // An EA file the user has open is written through the user's EA window: a second EA instance must not open
+    // the same file (a .qea file is meant for one user). The background session for it, if any, is closed.
+    if cfg.uses_file() {
+        let target = crate::ea_ui::Target::of(cfg);
+        if crate::ea_ui::has_model_open(&target) {
+            WORKER.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).take();
+            let result = crate::ea_ui::run_in_window(&target, cfg.ea_user.clone(), ops.to_vec(), options.rollback_key.clone(), options.keep_locks, timeout())?;
+            return check_result(ops, result);
+        }
+    }
 
     let mut guard = WORKER.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     // A session opened with different settings is closed (closing the channel ends the thread) and opened again.
@@ -211,7 +232,11 @@ pub fn run_batch(cfg: &AppConfig, ops: &[Value], options: &BatchOptions) -> Resu
     if result["session_lost"] == true {
         guard.take();
     }
+    check_result(ops, result)
+}
 
+/// Turns an EA reply into the result of a write: an error message that says what failed and what was left in the model.
+fn check_result(ops: &[Value], result: Value) -> Result<Value> {
     if result["ok"] != true {
         let error = result["error"].as_str().unwrap_or(crate::i18n::tr("unknown error"));
         let at = result["failed_op"].as_i64().filter(|i| *i >= 0);

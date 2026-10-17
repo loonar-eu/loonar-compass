@@ -1140,6 +1140,9 @@ fn remove_uninstaller_later(dir: &Path) {
 struct ConfigForm {
     configure_now: bool,
     api_key: String,
+    /// "postgres" or "file" (an EA project file .qea/.qeax).
+    model_source: String,
+    model_file: String,
     db_host: String,
     db_port: String,
     db_name: String,
@@ -1154,7 +1157,18 @@ struct ConfigForm {
 impl ConfigForm {
     /// A value that cannot be saved (shown on the configuration page, which then cannot be left with "Next").
     fn problem(&self) -> Option<&'static str> {
-        (self.configure_now && self.db_port.trim().parse::<u16>().is_err()).then(|| crate::i18n::tr("Database port: enter a number"))
+        if !self.configure_now {
+            return None;
+        }
+        if self.uses_file() {
+            let file = self.model_file.trim();
+            return (!file.is_empty() && !config::is_model_file(Path::new(file))).then(|| crate::i18n::tr("Choose an Enterprise Architect project file .qea or .qeax"));
+        }
+        self.db_port.trim().parse::<u16>().is_err().then(|| crate::i18n::tr("Database port: enter a number"))
+    }
+
+    fn uses_file(&self) -> bool {
+        self.model_source == "file"
     }
 }
 
@@ -1168,17 +1182,23 @@ fn save_user_settings(c: &ConfigForm, lang: Lang) -> Result<Vec<String>> {
     if !c.configure_now {
         return Ok(vec![crate::i18n::tr("Settings: to be completed in the application, in the \"Settings\" view").to_string()]);
     }
-    let port: u16 = c.db_port.trim().parse().context(crate::i18n::tr("Database port: enter a number"))?;
     let mode = config::ApprovalMode::parse(&c.approval_mode)?;
     let mut updates: Vec<(&str, String)> = vec![
-        ("db.host", c.db_host.trim().to_string()),
-        ("db.port", port.to_string()),
-        ("db.name", c.db_name.trim().to_string()),
-        ("db.user", c.db_user.trim().to_string()),
         ("ea.path", c.ea_path.trim().to_string()),
         ("ea.user", c.ea_user.trim().to_string()),
         ("approval.mode", mode.as_str().to_string()),
     ];
+    if c.uses_file() {
+        updates.push(("model.source", "file".to_string()));
+        updates.push(("model.file", c.model_file.trim().trim_matches('"').to_string()));
+    } else {
+        let port: u16 = c.db_port.trim().parse().context(crate::i18n::tr("Database port: enter a number"))?;
+        updates.push(("model.source", "postgres".to_string()));
+        updates.push(("db.host", c.db_host.trim().to_string()));
+        updates.push(("db.port", port.to_string()));
+        updates.push(("db.name", c.db_name.trim().to_string()));
+        updates.push(("db.user", c.db_user.trim().to_string()));
+    }
     // On an update, existing values the wizard does not provide (e.g. the token limit) are kept.
     if new_file {
         updates.push(("claude.max_tokens", "10000".to_string()));
@@ -1711,7 +1731,9 @@ impl Setup {
         let ea_path = if ea_path.contains(":\\\\") { ea_path.replace("\\\\", "\\") } else { ea_path };
         let approval_mode = config::ApprovalMode::parse(&get("approval.mode", "ask")).map_or("ask", |m| m.as_str()).to_string();
         let config = ConfigForm {
-            configure_now: get("db.host", "").is_empty(),
+            configure_now: get("db.host", "").is_empty() && get("model.file", "").is_empty(),
+            model_source: if get("model.source", "postgres") == "file" { "file".to_string() } else { "postgres".to_string() },
+            model_file: get("model.file", ""),
             db_host: get("db.host", ""),
             db_port: get("db.port", "5432"),
             db_name: get("db.name", ""),
@@ -2068,13 +2090,12 @@ impl Setup {
     fn welcome_page(&mut self, ui: &mut egui::Ui) {
         ui.label(bold(&crate::i18n::fmt("Welcome to the {0} Setup Wizard", &[APP_NAME.to_string()]), 21.0));
         ui.add_space(12.0);
-        ui.add(egui::Label::new(crate::i18n::fmt("This wizard will install {0} on your computer: an AI assistant for Enterprise Architect that reads the model from a PostgreSQL database, saves changes through COM and shows diagrams in the chat.", &[APP_NAME.to_string()])).wrap());
+        ui.add(egui::Label::new(crate::i18n::fmt("This wizard will install {0} on your computer: an AI assistant for Enterprise Architect that reads the model from a PostgreSQL database or an EA file, saves changes through COM and shows diagrams in the chat.", &[APP_NAME.to_string()])).wrap());
         ui.add_space(10.0);
         ui.label(bold(crate::i18n::tr("Prerequisites:"), 14.5));
         for line in [
-            crate::i18n::tr("• the EA model is in a PostgreSQL database (file-based models are not supported),"),
-            crate::i18n::tr("• user security is enabled in the model (Enable Security),"),
-            crate::i18n::tr("• the model has a user account for the assistant (any name)."),
+            crate::i18n::tr("• the EA model is a file (.qea, .qeax) or is in a PostgreSQL database,"),
+            crate::i18n::tr("• a model in a database has user security enabled (Enable Security) and a user account for the assistant (any name)."),
         ] {
             ui.label(line);
         }
@@ -2082,8 +2103,8 @@ impl Setup {
         ui.label(bold(crate::i18n::tr("Before installing, have the following ready:"), 14.5));
         for line in [
             crate::i18n::tr("• a Claude API key (Anthropic Console),"),
-            crate::i18n::tr("• database details: server, port, database name, user and password,"),
-            crate::i18n::tr("• the login and password of the assistant's account in the EA model,"),
+            crate::i18n::tr("• the model file, or the database details: server, port, database name, user and password,"),
+            crate::i18n::tr("• for a model in a database: the login and password of the assistant's account in the EA model,"),
             crate::i18n::tr("• Enterprise Architect, installed and licensed."),
         ] {
             ui.label(line);
@@ -2205,16 +2226,39 @@ impl Setup {
             });
             muted(ui, crate::i18n::tr("To answer, the app sends the conversation, attachments, remembered notes, templates, model query results and diagram images to Anthropic (Claude API) using your key. Loonar does not receive this data."));
             ui.add_space(6.0);
-            ui.label(bold(crate::i18n::tr("Model database (PostgreSQL)"), 14.5));
-            egui::Grid::new("cfg_db").num_columns(2).min_col_width(190.0).spacing([10.0, 6.0]).show(ui, |ui| {
-                ui.label(crate::i18n::tr("Server"));
-                ui.add(egui::TextEdit::singleline(&mut c.db_host).hint_text(crate::i18n::tr("e.g. 127.0.0.1")).desired_width(250.0));
-                ui.end_row();
-                field(ui, crate::i18n::tr("Port"), &mut c.db_port, false);
-                field(ui, crate::i18n::tr("Database name"), &mut c.db_name, false);
-                field(ui, crate::i18n::tr("Database user"), &mut c.db_user, false);
-                field(ui, crate::i18n::tr("Database password"), &mut c.db_password, true);
+            ui.label(bold(crate::i18n::tr("Model"), 14.5));
+            ui.horizontal_wrapped(|ui| {
+                ui.radio_value(&mut c.model_source, "postgres".to_string(), crate::i18n::tr("PostgreSQL database"));
+                ui.radio_value(&mut c.model_source, "file".to_string(), crate::i18n::tr("EA file (.qea, .qeax)"));
             });
+            if c.model_source == "file" {
+                egui::Grid::new("cfg_file").num_columns(2).min_col_width(190.0).spacing([10.0, 6.0]).show(ui, |ui| {
+                    ui.label(crate::i18n::tr("Model file"));
+                    ui.horizontal(|ui| {
+                        ui.add(egui::TextEdit::singleline(&mut c.model_file).desired_width(250.0));
+                        if ui.button("…").clicked() {
+                            if let Some(file) = rfd::FileDialog::new()
+                                .set_title(crate::i18n::tr("Choose the model file"))
+                                .add_filter(crate::i18n::tr("Enterprise Architect project"), &config::MODEL_FILE_EXTENSIONS)
+                                .pick_file()
+                            {
+                                c.model_file = file.display().to_string();
+                            }
+                        }
+                    });
+                    ui.end_row();
+                });
+            } else {
+                egui::Grid::new("cfg_db").num_columns(2).min_col_width(190.0).spacing([10.0, 6.0]).show(ui, |ui| {
+                    ui.label(crate::i18n::tr("Server"));
+                    ui.add(egui::TextEdit::singleline(&mut c.db_host).hint_text(crate::i18n::tr("e.g. 127.0.0.1")).desired_width(250.0));
+                    ui.end_row();
+                    field(ui, crate::i18n::tr("Port"), &mut c.db_port, false);
+                    field(ui, crate::i18n::tr("Database name"), &mut c.db_name, false);
+                    field(ui, crate::i18n::tr("Database user"), &mut c.db_user, false);
+                    field(ui, crate::i18n::tr("Database password"), &mut c.db_password, true);
+                });
+            }
             if let Some(problem) = problem {
                 ui.label(egui::RichText::new(problem).small().color(theme::ERROR));
             }
@@ -2232,6 +2276,11 @@ impl Setup {
                 });
                 ui.end_row();
                 field(ui, crate::i18n::tr("EA user account"), &mut c.ea_user, false);
+                if c.model_source == "file" {
+                    ui.label("");
+                    ui.label(egui::RichText::new(crate::i18n::tr("only if the file has security enabled")).small().color(theme::MUTED));
+                    ui.end_row();
+                }
                 field(ui, crate::i18n::tr("EA account password"), &mut c.ea_password, true);
             });
             ui.add_space(6.0);
@@ -2275,7 +2324,11 @@ impl Setup {
             ui.label(bold(crate::i18n::tr("Configuration"), 14.5));
             if self.config.configure_now {
                 let c = &self.config;
-                ui.label(crate::i18n::fmt("Database: {0}@{1}:{2} (user {3})", &[(c.db_name.trim()).to_string(), (c.db_host.trim()).to_string(), (c.db_port.trim()).to_string(), (c.db_user.trim()).to_string()]));
+                if c.uses_file() {
+                    ui.label(crate::i18n::fmt("Model file: {0}", &[c.model_file.trim().to_string()]));
+                } else {
+                    ui.label(crate::i18n::fmt("Database: {0}@{1}:{2} (user {3})", &[(c.db_name.trim()).to_string(), (c.db_host.trim()).to_string(), (c.db_port.trim()).to_string(), (c.db_user.trim()).to_string()]));
+                }
                 ui.label(crate::i18n::fmt("EA account: {0}", &[(c.ea_user.trim()).to_string()]));
                 ui.label(crate::i18n::fmt("Approval mode: {0}", &[(mode_label(&c.approval_mode)).to_string()]));
                 ui.label(crate::i18n::fmt("API key: {0}", &[(if c.api_key.trim().is_empty() { crate::i18n::tr("unchanged") } else { crate::i18n::tr("entered") }).to_string()]));
