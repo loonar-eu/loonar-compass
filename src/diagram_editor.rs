@@ -44,6 +44,25 @@ pub fn model(cfg: &AppConfig, diagram_id: i64) -> Result<Value> {
         operations.entry(int(&r[0])).or_default().push(format!("{} {}(){kind}", visibility(&r[3]), r[1]));
     }
 
+    // Where the elements are used: the other diagrams they are on, and how many relationships they have in the model
+    // (shown before an element is deleted from the model).
+    let mut on_diagrams: std::collections::HashMap<i64, Vec<(i64, String)>> = Default::default();
+    for r in query_rows(cfg, &format!(
+        "select o.object_id, d.diagram_id, d.name from t_diagramobjects o join t_diagram d on d.diagram_id = o.diagram_id where o.object_id in {on_diagram}"
+    ))? {
+        on_diagrams.entry(int(&r[0])).or_default().push((int(&r[1]), r[2].clone()));
+    }
+    let mut relations: std::collections::HashMap<i64, i64> = Default::default();
+    for r in query_rows(cfg, &format!("select start_object_id, end_object_id from t_connector where start_object_id in {on_diagram} or end_object_id in {on_diagram}"))? {
+        *relations.entry(int(&r[0])).or_default() += 1;
+        if r[1] != r[0] {
+            *relations.entry(int(&r[1])).or_default() += 1;
+        }
+    }
+    let other_diagrams = |id: i64| -> Vec<String> {
+        on_diagrams.get(&id).map(|v| v.iter().filter(|(d, _)| *d != diagram_id).map(|(_, n)| n.clone()).collect()).unwrap_or_default()
+    };
+
     let mut elements = Vec::new();
     let mut bpmn = false;
     for r in query_rows(cfg, &format!(
@@ -58,6 +77,8 @@ pub fn model(cfg: &AppConfig, diagram_id: i64) -> Result<Value> {
             "left": left, "top": top.min(bottom), "width": (right - left).abs(), "height": (bottom - top).abs(),
             "attributes": attributes.remove(&id).unwrap_or_default(),
             "operations": operations.remove(&id).unwrap_or_default(),
+            "other_diagrams": other_diagrams(id),
+            "relations": relations.get(&id).copied().unwrap_or(0),
         }));
     }
 
@@ -78,8 +99,12 @@ pub fn model(cfg: &AppConfig, diagram_id: i64) -> Result<Value> {
         if hidden.contains(&id) {
             continue;
         }
+        // Other diagrams that show this relationship: both ends are on them.
+        let (source, target) = (int(&r[4]), int(&r[5]));
+        let ends: Vec<String> = other_diagrams(source).into_iter().filter(|d| other_diagrams(target).contains(d)).collect();
         connectors.push(json!({
-            "id": id, "type": r[1], "stereotype": r[2], "name": r[3], "source": int(&r[4]), "target": int(&r[5]), "subtype": r[6],
+            "id": id, "type": r[1], "stereotype": r[2], "name": r[3], "source": source, "target": target, "subtype": r[6],
+            "other_diagrams": ends,
             "points": parse_path(paths.get(&id).map(String::as_str).unwrap_or("")),
         }));
     }
@@ -157,6 +182,14 @@ fn texts() -> Value {
         "nothing": crate::i18n::tr("Nothing has changed."), "add_hint": crate::i18n::tr("Adds the element in the middle of the view"),
         "align_left": crate::i18n::tr("Align left"), "align_center": crate::i18n::tr("Align centers"), "align_top": crate::i18n::tr("Align tops"),
         "align_middle": crate::i18n::tr("Align middles"), "same_size": crate::i18n::tr("Same size as the first selected"), "fit": crate::i18n::tr("Fit to window"),
+        "delete_title": crate::i18n::tr("Delete"), "delete_from_diagram": crate::i18n::tr("Remove from this diagram"),
+        "delete_from_diagram_hint": crate::i18n::tr("The element stays in the model and on other diagrams."),
+        "hide_connector": crate::i18n::tr("Hide on this diagram"), "hide_connector_hint": crate::i18n::tr("The relationship stays in the model and on other diagrams."),
+        "delete_from_model": crate::i18n::tr("Delete from the model"),
+        "delete_from_model_hint": crate::i18n::tr("Deleted permanently, with its relationships, from every diagram."),
+        "used_on": crate::i18n::tr("Also on {0} other diagrams: {1}"), "used_nowhere": crate::i18n::tr("Not on any other diagram."),
+        "relations": crate::i18n::tr("Relationships in the model: {0}"), "cancel_delete": crate::i18n::tr("Cancel"),
+        "new_removed": crate::i18n::tr("Removed what was added in the editor."),
     })
 }
 
@@ -192,6 +225,20 @@ pub fn to_ops(model: &Value, changes: &Value) -> Vec<Value> {
     }
     for c in list("routed") {
         ops.push(json!({ "op": "route_connector", "diagram": diagram, "connector": c["id"], "points": c["points"] }));
+    }
+    // Removals last: from this diagram only, or from the model (connectors before elements, which take theirs along).
+    for id in list("removed") {
+        ops.push(json!({ "op": "remove_from_diagram", "diagram": diagram, "element": id }));
+    }
+    let hidden = list("hidden");
+    if !hidden.is_empty() {
+        ops.push(json!({ "op": "hide_connectors", "diagram": diagram, "connectors": hidden, "hidden": true }));
+    }
+    for id in list("deleted_connectors") {
+        ops.push(json!({ "op": "delete", "connector": id }));
+    }
+    for id in list("deleted") {
+        ops.push(json!({ "op": "delete", "element": id }));
     }
     ops
 }

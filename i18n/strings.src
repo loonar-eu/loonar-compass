@@ -818,3 +818,14 @@ Saving the changes from the diagram editor: {0} ‖ Zapis zmian z edytora diagra
 Saving the changes from the diagram editor… ‖ Zapisywanie zmian z edytora diagramu… ‖ Änderungen aus dem Diagrammeditor werden gespeichert… ‖ Enregistrement des modifications de l'éditeur de diagrammes…
 The diagram editor is open. Save to EA there, or close it. ‖ Edytor diagramu jest otwarty. Zapisz w nim do EA albo go zamknij. ‖ Der Diagrammeditor ist geöffnet. Speichern Sie dort in EA oder schließen Sie ihn. ‖ L'éditeur de diagrammes est ouvert. Enregistrez dans EA depuis l'éditeur ou fermez-le.
 The diagram editor was closed without saving. ‖ Edytor diagramu zamknięto bez zapisu. ‖ Der Diagrammeditor wurde ohne Speichern geschlossen. ‖ L'éditeur de diagrammes a été fermé sans enregistrer.
+Delete ‖ Usuń ‖ Löschen ‖ Supprimer
+Remove from this diagram ‖ Usuń z tego diagramu ‖ Aus diesem Diagramm entfernen ‖ Retirer de ce diagramme
+The element stays in the model and on other diagrams. ‖ Element zostaje w modelu i na innych diagramach. ‖ Das Element bleibt im Modell und in anderen Diagrammen. ‖ L'élément reste dans le modèle et dans les autres diagrammes.
+Hide on this diagram ‖ Ukryj na tym diagramie ‖ In diesem Diagramm ausblenden ‖ Masquer dans ce diagramme
+The relationship stays in the model and on other diagrams. ‖ Relacja zostaje w modelu i na innych diagramach. ‖ Die Beziehung bleibt im Modell und in anderen Diagrammen. ‖ La relation reste dans le modèle et dans les autres diagrammes.
+Delete from the model ‖ Usuń z modelu ‖ Aus dem Modell löschen ‖ Supprimer du modèle
+Deleted permanently, with its relationships, from every diagram. ‖ Usunięcie trwałe, razem z relacjami, ze wszystkich diagramów. ‖ Wird endgültig gelöscht, mit seinen Beziehungen, aus allen Diagrammen. ‖ Suppression définitive, avec ses relations, de tous les diagrammes.
+Also on {0} other diagrams: {1} ‖ Jest też na {0} innych diagramach: {1} ‖ Auch in {0} weiteren Diagrammen: {1} ‖ Figure aussi dans {0} autres diagrammes : {1}
+Not on any other diagram. ‖ Nie ma go na żadnym innym diagramie. ‖ In keinem anderen Diagramm. ‖ Ne figure dans aucun autre diagramme.
+Relationships in the model: {0} ‖ Relacji w modelu: {0} ‖ Beziehungen im Modell: {0} ‖ Relations dans le modèle : {0}
+Removed what was added in the editor. ‖ Usunięto to, co dodano w edytorze. ‖ Im Editor Hinzugefügtes wurde entfernt. ‖ Ce qui a été ajouté dans l'éditeur a été retiré.

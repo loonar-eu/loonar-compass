@@ -162,6 +162,7 @@ mod tests {
             include_str!("com.rs"),
             include_str!("config.rs"),
             include_str!("confluence.rs"),
+            include_str!("diagram_editor.rs"),
             include_str!("docx.rs"),
             include_str!("ea.rs"),
             include_str!("ea_com.rs"),

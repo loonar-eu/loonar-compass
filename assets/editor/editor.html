@@ -192,6 +192,16 @@ button.primary:hover { background: #0B3B56; }
 .cls .cmp { padding: 3px 6px; min-height: 8px; border-bottom: 1px solid #0E4A6B; }
 .cls .cmp:last-child { border-bottom: none; }
 .cls .row { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#delete { position: fixed; inset: 0; background: rgba(15, 30, 42, .35); display: grid; place-items: center; z-index: 10; }
+#delete[hidden] { display: none; }
+.d-box { background: #FFFFFF; border-radius: 14px; padding: 20px 22px; width: min(520px, 92vw); box-shadow: 0 24px 60px rgba(8, 44, 65, .25); display: flex; flex-direction: column; gap: 10px; }
+.d-title { margin: 0; font-size: 17px; }
+.d-names { margin: 0; color: #55667A; font-size: 13px; }
+.d-box button[data-d] { display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 3px; padding: 10px 12px; }
+.d-box button span { font-size: 12px; color: #55667A; }
+.d-box button.danger { border-color: #E3A7A2; }
+.d-box button.danger b { color: #B3261E; }
+.d-box button.d-cancel { align-self: flex-end; }
 </style>
 </head>
 <body>
@@ -217,12 +227,23 @@ button.primary:hover { background: #0B3B56; }
   <button id="save" class="primary"></button>
 </header>
 <div id="graph"></div>
+<div id="delete" hidden>
+  <div class="d-box">
+    <h2 class="d-title"></h2>
+    <p class="d-names"></p>
+    <button data-d="diagram"><b></b><span></span></button>
+    <button data-d="model" class="danger"><b></b><span></span></button>
+    <button data-d="cancel" class="d-cancel"></button>
+  </div>
+</div>
 <script>/*DIAGRAM*/</script>
 <script>
 (function () {
   var t = window.__DIAGRAM__.texts;
   var set = function (id, text) { document.getElementById(id).textContent = text; };
   set('l-add', t.add); set('l-conn', t.connector); set('save', t.save); set('cancel', t.cancel); set('status', t.hint);
+  document.querySelector('#delete .d-title').textContent = t.delete_title;
+  document.querySelector('#delete .d-cancel').textContent = t.cancel_delete;
   var tips = { 'b-al': t.align_left, 'b-ac': t.align_center, 'b-at': t.align_top, 'b-am': t.align_middle, 'b-ss': t.same_size, 'b-fit': t.fit };
   for (var id in tips) document.getElementById(id).title = tips[id];
 })();

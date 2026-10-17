@@ -116,12 +116,45 @@ document.addEventListener('keydown', (ev) => {
   if (graph.isEditing()) return;
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { undo.undo(); ev.preventDefault(); }
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'y') { undo.redo(); ev.preventDefault(); }
-  if (ev.key === 'Delete') {
-    // Only elements and connectors added in this editor can be removed; deleting from the model stays an explicit request.
-    const removable = graph.getSelectionCells().filter((c) => meta.get(c.id)?.isNew);
-    if (removable.length) graph.removeCells(removable, true);
+  if (ev.key === 'Delete' || ev.key === 'Backspace') {
+    const selected = graph.getSelectionCells().filter((c) => meta.get(c.id));
+    if (!selected.length) return;
+    // What was added in this editor is simply removed; existing model objects ask: from this diagram or from the model.
+    const added = selected.filter((c) => meta.get(c.id).isNew);
+    const existing = selected.filter((c) => !meta.get(c.id).isNew);
+    if (added.length) graph.removeCells(added, true);
+    if (existing.length) askDelete(existing);
+    ev.preventDefault();
   }
 });
+
+// --- deleting existing objects: from this diagram or from the model ------------------------------------------------
+
+const choices = new Map(); // cell id -> 'diagram' | 'model' (cells the user deleted explicitly)
+function askDelete(list) {
+  const overlay = document.getElementById('delete');
+  const names = list.map((c) => meta.get(c.id).ea.name || String(c.value || '') || '—');
+  const elements = list.filter((c) => c.isVertex());
+  const others = [...new Set(list.flatMap((c) => meta.get(c.id).ea.other_diagrams || []))];
+  const relations = elements.reduce((n, c) => n + (meta.get(c.id).ea.relations || 0), 0);
+  const onlyConnectors = elements.length === 0;
+  overlay.querySelector('.d-names').textContent = names.slice(0, 6).join(', ') + (names.length > 6 ? ` (+${names.length - 6})` : '');
+  overlay.querySelector('[data-d="diagram"] b').textContent = onlyConnectors ? t.hide_connector : t.delete_from_diagram;
+  overlay.querySelector('[data-d="diagram"] span').textContent = onlyConnectors ? t.hide_connector_hint : t.delete_from_diagram_hint;
+  overlay.querySelector('[data-d="model"] b').textContent = t.delete_from_model;
+  const usage = [others.length ? t.used_on.replace('{0}', others.length).replace('{1}', others.slice(0, 8).join(', ') + (others.length > 8 ? '…' : '')) : t.used_nowhere];
+  if (elements.length) usage.push(t.relations.replace('{0}', relations));
+  overlay.querySelector('[data-d="model"] span').textContent = `${t.delete_from_model_hint} ${usage.join(' ')}`;
+  overlay.hidden = false;
+  overlay.onclick = (e) => {
+    const choice = e.target.closest('[data-d]')?.dataset.d;
+    if (!choice) return;
+    overlay.hidden = true;
+    if (choice === 'cancel') return;
+    list.forEach((c) => choices.set(c.id, choice));
+    graph.removeCells(list, true);
+  };
+}
 
 // --- toolbox and new connectors ----------------------------------------------------------------------------------
 
@@ -186,7 +219,17 @@ document.querySelectorAll('[data-action]').forEach((b) => b.addEventListener('cl
 
 const round = (n) => Math.round(n);
 function changes() {
-  const out = { action: 'save', moved: [], renamed: [], routed: [], created: [], connected: [] };
+  const out = { action: 'save', moved: [], renamed: [], routed: [], created: [], connected: [], removed: [], hidden: [], deleted: [], deleted_connectors: [] };
+  // Existing objects that are no longer on the diagram: what the user chose for them (elements removed with them
+  // take their connectors off this diagram without any separate operation).
+  const present = graph.getDataModel().cells;
+  for (const [id, m] of meta) {
+    if (m.isNew || present[id]) continue;
+    const choice = choices.get(id);
+    if (!choice) continue;
+    if (m.kind === 'element') (choice === 'model' ? out.deleted : out.removed).push(m.ea.id);
+    else (choice === 'model' ? out.deleted_connectors : out.hidden).push(m.ea.id);
+  }
   const key = (cell) => (meta.get(cell.id)?.isNew ? `#${cell.id}` : meta.get(cell.id).ea.id);
   for (const cell of Object.values(graph.getDataModel().cells)) {
     const m = meta.get(cell.id);
@@ -220,7 +263,8 @@ function send(message) {
 }
 document.getElementById('save').addEventListener('click', () => {
   const c = changes();
-  const count = c.moved.length + c.renamed.length + c.routed.length + c.created.length + c.connected.length;
+  const count = c.moved.length + c.renamed.length + c.routed.length + c.created.length + c.connected.length
+    + c.removed.length + c.hidden.length + c.deleted.length + c.deleted_connectors.length;
   if (!count) { document.getElementById('status').textContent = t.nothing; return; }
   send(c);
 });
