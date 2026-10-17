@@ -36,7 +36,7 @@ fn clear_pending(props: &Path) -> Result<()> {
 
 /// Translation of one text by Claude (keeps the Markdown structure and the application's markers).
 fn translate(cfg: &AppConfig, key: &str, text: &str, to: Lang) -> Result<String> {
-    let client = crate::claude::ClaudeClient::new(key.to_string(), cfg.claude_model.clone(), 8000)?;
+    let client = crate::claude::ClaudeClient::new(key.to_string(), cfg.claude_model.clone(), 8000, cfg.claude_workspace_id.clone())?;
     let system = format!(
         "You translate documents into {}. Return ONLY the translated document, nothing else. Keep the Markdown structure, \
          tables, the first line marker word before the colon translated naturally (e.g. 'Template:', 'Vorlage:', 'Modèle:', 'Szablon:'), \

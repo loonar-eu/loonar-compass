@@ -172,9 +172,9 @@ pub fn run_batch(cfg: &AppConfig, ops: &[Value], options: &BatchOptions) -> Resu
     let login = Login {
         connection: connection_string(cfg),
         user: cfg.ea_user.clone(),
-        // Tests may use a separate EA account of the test model (never compiled into the application).
+        // Tests and development builds may use a separate EA account of the test model (never in a release build).
         password: match std::env::var("LOONAR_TEST_EA_PASSWORD") {
-            Ok(password) if cfg!(test) => password,
+            Ok(password) if cfg!(any(test, debug_assertions)) => password,
             _ => secrets::get(secrets::EA_PASSWORD)?,
         },
         ea_exe: cfg.ea_path.clone(),

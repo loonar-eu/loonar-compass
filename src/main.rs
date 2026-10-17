@@ -527,6 +527,7 @@ enum View {
 #[derive(Default, Clone)]
 struct Form {
     claude_max_tokens: String,
+    claude_workspace_id: String,
     claude_api_key: String,
     db_host: String,
     db_port: String,
@@ -550,6 +551,7 @@ impl Form {
     fn from_cfg(c: &AppConfig) -> Self {
         Self {
             claude_max_tokens: c.claude_max_tokens.to_string(),
+            claude_workspace_id: c.claude_workspace_id.clone(),
             db_host: c.db_host.clone(),
             db_port: c.db_port.to_string(),
             db_name: c.db_name.clone(),
@@ -1223,9 +1225,10 @@ impl App {
         let mut updates: Vec<(&str, String)> = Vec::new();
         match group {
             GROUP_CLAUDE => {
-                let _ = config::remove_properties(&self.props_path, &["claude.workspace_id", "claude.model"]);
+                let _ = config::remove_properties(&self.props_path, &["claude.model"]);
                 let max_tokens: u32 = f.claude_max_tokens.trim().parse().context(crate::i18n::tr("Max tokens: enter a number"))?;
                 updates.push(("claude.max_tokens", max_tokens.to_string()));
+                updates.push(("claude.workspace_id", f.claude_workspace_id.trim().to_string()));
                 if !f.claude_api_key.is_empty() {
                     secrets::set(secrets::CLAUDE_API_KEY, &f.claude_api_key)?;
                     self.form.claude_api_key.clear();
@@ -1567,10 +1570,11 @@ impl App {
                 settings_group(ui, crate::i18n::tr("1. Claude"), inner_width, |ui| {
                     egui::Grid::new("settings_claude").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
                         // The model is fixed (Claude Haiku 5.5 only), so it is shown read-only.
-                        ui.label(crate::i18n::tr("Model"));
+                        label_cell(ui, crate::i18n::tr("Model"));
                         ui.label(egui::RichText::new(config::CLAUDE_MODEL).color(theme::MUTED));
                         ui.end_row();
                         row(ui, crate::i18n::tr("Max tokens"), &mut self.form.claude_max_tokens);
+                        row_hint(ui, crate::i18n::tr("Workspace ID"), &mut self.form.claude_workspace_id, crate::i18n::tr("optional, e.g. wrkspc_…"));
                         row_secret(ui, crate::i18n::tr("Claude API key"), &mut self.form.claude_api_key, secrets::exists(secrets::CLAUDE_API_KEY));
                     });
                     ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("To answer, the app sends the conversation, attachments, remembered notes, templates, model query results and diagram images to Anthropic (Claude API) using your key. Loonar does not receive this data.")).small().color(theme::MUTED)).wrap());
@@ -1581,7 +1585,7 @@ impl App {
                 settings_group(ui, crate::i18n::tr("4. Language and change approval"), inner_width, |ui| {
                     egui::Grid::new("settings_approval").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
                         // Language of the interface, of the assistant's responses and of new templates (changes after "Save").
-                        ui.label(crate::i18n::tr("Language"));
+                        label_cell(ui, crate::i18n::tr("Language"));
                         egui::ComboBox::from_id_salt("ui_language")
                             .width(SETTINGS_FIELD_WIDTH)
                             .selected_text(i18n::Lang::parse(&self.form.ui_language).native_name())
@@ -1591,7 +1595,7 @@ impl App {
                                 }
                             });
                         ui.end_row();
-                        ui.label(crate::i18n::tr("Approval mode"));
+                        label_cell(ui, crate::i18n::tr("Approval mode"));
                         egui::ComboBox::from_id_salt("approval_mode")
                             .width(SETTINGS_FIELD_WIDTH)
                             .selected_text(self.form.approval_mode.clone())
@@ -1629,7 +1633,7 @@ impl App {
                             &mut self.form.db_password,
                             self.cfg.as_ref().is_some_and(|c| !c.db_password.is_empty()),
                         );
-                        ui.label(crate::i18n::tr("Connection encryption"));
+                        label_cell(ui, crate::i18n::tr("Connection encryption"));
                         egui::ComboBox::from_id_salt("db_sslmode")
                             .width(SETTINGS_FIELD_WIDTH)
                             .selected_text(sslmode_label(&self.form.db_sslmode))
@@ -1647,7 +1651,7 @@ impl App {
 
                 settings_group(ui, crate::i18n::tr("3. Enterprise Architect"), inner_width, |ui| {
                     egui::Grid::new("settings_ea").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
-                        ui.label(crate::i18n::tr("Path to EA.exe"));
+                        label_cell(ui, crate::i18n::tr("Path to EA.exe"));
                         ui.horizontal(|ui| {
                             ui.add(egui::TextEdit::singleline(&mut self.form.ea_path).desired_width(SETTINGS_FIELD_WIDTH - 44.0));
                             if ui.button("…").on_hover_text(crate::i18n::tr("Choose EA.exe")).clicked() {
@@ -2218,7 +2222,7 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
     match group {
         GROUP_CLAUDE => {
             let key = secrets::get(secrets::CLAUDE_API_KEY)?;
-            let client = claude::ClaudeClient::new(key, cfg.claude_model.clone(), 16)?;
+            let client = claude::ClaudeClient::new(key, cfg.claude_model.clone(), 16, cfg.claude_workspace_id.clone())?;
             let response = client.send_value("Answer in one word.", &[json!({ "role": "user", "content": "ping" })], None)?;
             Ok(crate::i18n::fmt("Saved. The key works: model {0} replied.", &[(response["model"].as_str().unwrap_or(config::CLAUDE_MODEL)).to_string()]))
         }
@@ -2404,7 +2408,7 @@ fn run_turn(
 ) -> anyhow::Result<()> {
     let tool_ctx = tools::ToolContext { cfg, approver };
     let key = secrets::get(secrets::CLAUDE_API_KEY)?;
-    let client = claude::ClaudeClient::new(key, cfg.claude_model.clone(), cfg.claude_max_tokens)?;
+    let client = claude::ClaudeClient::new(key, cfg.claude_model.clone(), cfg.claude_max_tokens, cfg.claude_workspace_id.clone())?;
     let mut msgs = history_to_api(messages, &cfg.attachments_dir)?;
     let tools = tools::definitions();
     // The system prompt (with memory) stays fixed for the whole response: the model's reasoning blocks are signed
@@ -2907,24 +2911,46 @@ fn session_group(session: &Session) -> &'static str {
     }
 }
 
+/// Label in the first column of a settings card: wraps instead of widening the card (long German and French labels).
+fn label_cell(ui: &mut egui::Ui, label: &str) {
+    let font = egui::TextStyle::Body.resolve(ui.style());
+    let width = ui.fonts(|f| f.layout_no_wrap(label.to_string(), font, egui::Color32::BLACK).size().x);
+    if width <= SETTINGS_LABEL_WIDTH {
+        ui.label(label);
+    } else {
+        ui.allocate_ui_with_layout(
+            egui::vec2(SETTINGS_LABEL_WIDTH, 0.0),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                ui.set_max_width(SETTINGS_LABEL_WIDTH);
+                ui.add(egui::Label::new(label).wrap());
+            },
+        );
+    }
+}
+
 fn row(ui: &mut egui::Ui, label: &str, value: &mut String) {
-    ui.label(label);
+    label_cell(ui, label);
     ui.add(egui::TextEdit::singleline(value).desired_width(SETTINGS_FIELD_WIDTH));
     ui.end_row();
 }
 
 fn row_hint(ui: &mut egui::Ui, label: &str, value: &mut String, hint: &str) {
-    ui.label(label);
+    label_cell(ui, label);
     ui.add(egui::TextEdit::singleline(value).hint_text(egui::RichText::new(hint).color(theme::HINT)).desired_width(SETTINGS_FIELD_WIDTH));
     ui.end_row();
 }
 
 fn row_secret(ui: &mut egui::Ui, label: &str, value: &mut String, stored: bool) {
-    ui.label(label);
-    ui.horizontal(|ui| {
-        ui.add(egui::TextEdit::singleline(value).password(true).desired_width(SETTINGS_FIELD_WIDTH - 70.0));
-        ui.label(if stored { crate::i18n::tr("saved") } else { crate::i18n::tr("MISSING") });
-    });
+    label_cell(ui, label);
+    // Whether a value is stored is shown inside the empty field, so the field keeps the width of the others.
+    let (hint, color) = if stored { (crate::i18n::tr("saved"), theme::SUCCESS) } else { (crate::i18n::tr("MISSING"), theme::ERROR) };
+    ui.add(
+        egui::TextEdit::singleline(value)
+            .password(true)
+            .hint_text(egui::RichText::new(format!("•••• {hint}")).color(color))
+            .desired_width(SETTINGS_FIELD_WIDTH),
+    );
     ui.end_row();
 }
 
@@ -3806,7 +3832,9 @@ mod tests {
         let client = claude::ClaudeClient::new(
             secrets::get(secrets::CLAUDE_API_KEY).expect("API key"),
             cfg.claude_model.clone(),
-            600)
+            600,
+            cfg.claude_workspace_id.clone(),
+        )
         .unwrap();
         let response = client.send_value("You answer in English.", &[json!({ "role": "user", "content": content })], None).expect("API response");
         println!("model response: {}", text_of(&response["content"]));

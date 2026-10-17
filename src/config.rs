@@ -78,6 +78,9 @@ pub struct AppConfig {
     pub base_dir: PathBuf,
     pub claude_model: String,
     pub claude_max_tokens: u32,
+    /// Workspace ID from the Anthropic Console: required for an API key that is not scoped to a workspace
+    /// (empty = the header is not sent).
+    pub claude_workspace_id: String,
     pub db_host: String,
     pub db_port: u16,
     pub db_name: String,
@@ -191,6 +194,7 @@ impl AppConfig {
             // The model is fixed: the `claude.model` entry in the file is informational only and does not change the model.
             claude_model: CLAUDE_MODEL.to_string(),
             claude_max_tokens: get_or("claude.max_tokens", "10000").parse().context("claude.max_tokens")?,
+            claude_workspace_id: get_or("claude.workspace_id", ""),
             db_host: get_or("db.host", ""),
             db_port: get_or("db.port", "5432").parse().context("db.port")?,
             db_name: get_or("db.name", ""),

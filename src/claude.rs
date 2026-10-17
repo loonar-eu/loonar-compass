@@ -17,15 +17,17 @@ pub struct ClaudeClient {
     api_key: String,
     model: String,
     max_tokens: u32,
+    /// Workspace ID: needed when the API key is not scoped to a workspace (empty = no header).
+    workspace_id: String,
 }
 
 impl ClaudeClient {
-    pub fn new(api_key: String, model: String, max_tokens: u32) -> Result<Self> {
+    pub fn new(api_key: String, model: String, max_tokens: u32, workspace_id: String) -> Result<Self> {
         let http = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(300))
             .connect_timeout(Duration::from_secs(20))
             .build()?;
-        Ok(Self { http, api_key, model, max_tokens })
+        Ok(Self { http, api_key, model, max_tokens, workspace_id: workspace_id.trim().to_string() })
     }
 
     /// One Messages API call. Returns the whole response (with `content` and `stop_reason`),
@@ -56,13 +58,11 @@ impl ClaudeClient {
     }
 
     fn send_once(&self, body: &Value) -> std::result::Result<Value, Failure> {
-        let response = self
-            .http
-            .post(API_URL)
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", API_VERSION)
-            .json(body)
-            .send();
+        let mut request = self.http.post(API_URL).header("x-api-key", &self.api_key).header("anthropic-version", API_VERSION);
+        if !self.workspace_id.is_empty() {
+            request = request.header("anthropic-workspace-id", &self.workspace_id);
+        }
+        let response = request.json(body).send();
         let response = match response {
             Ok(response) => response,
             // Network problems (no connection, proxy, timeout) are worth another attempt.
@@ -102,6 +102,7 @@ impl ClaudeClient {
             401 => crate::i18n::tr("The Claude API rejected the API key (401). Check the key in Settings → 1. Claude.").to_string(),
             403 => crate::i18n::fmt("The API key has no access to this operation (403): {0}", &[message]),
             404 => crate::i18n::fmt("The Claude API does not know the model {0} (404): {1}", &[self.model.clone(), message]),
+            400 if message.contains("workspace") => crate::i18n::fmt("The API key is not assigned to a workspace: enter the Workspace ID from the Anthropic Console in Settings → 1. Claude ({0}).", &[message]),
             413 => crate::i18n::tr("The request is too large for the Claude API (413): the attachments may be too big.").to_string(),
             429 => crate::i18n::tr("The Claude API rate limit was reached (429). Wait a moment and try again.").to_string(),
             500..=599 => crate::i18n::fmt("The Claude API is overloaded or temporarily unavailable ({0}). Try again in a moment.", &[status.to_string()]),

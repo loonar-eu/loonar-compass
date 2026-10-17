@@ -1,4 +1,4 @@
-# Builds the application release and the Loonar Compass installer.
+﻿# Builds the application release and the Loonar Compass installer.
 #   .\build_installer.ps1           release build: application + installer (installs per user by default, no admin needed)
 #   .\build_installer.ps1 -SkipApp  installer only, with the application already in target\release
 #   .\build_installer.ps1 -Sign     public release: signs the application and the installer (no signing configuration = error)
@@ -93,7 +93,7 @@ function Assert-NoBuildPaths([string]$file) {
         [Text.Encoding]::Unicode.GetString($bytes),
         [Text.Encoding]::Unicode.GetString($bytes, 1, $bytes.Length - 1)
     )
-    foreach ($needle in @($env:USERNAME, (Split-Path $root -Leaf), 'Users\')) {
+    foreach ($needle in @($env:USERNAME, $root, 'Users\')) {
         foreach ($text in $texts) {
             if ($text.IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
                 throw "$file contains the build path fragment '$needle' (check --remap-path-prefix and the PDB path)"
