@@ -1,0 +1,34 @@
+# Build output
+/target/
+/installer/target/
+/installer/payload/
+/dist/
+
+# Generated documentation (built by build_manual.ps1)
+/docs/*.pdf
+
+# Local data of a portable or development run - never commit
+/app.properties
+/history/
+/attachments/
+/memory/
+/templates_user/
+/backups/
+/audit_log.jsonl
+/dziennik_zmian.jsonl
+/confluence_pages.json
+/confluence_strony.json
+*.dump
+
+# Personal macOS / Wine experiments
+/mac/
+
+# Previous artwork kept only locally
+/assets/old_logo/
+
+# IDE and OS files
+/.idea/
+*.iml
+/.vscode/
+Thumbs.db
+desktop.ini

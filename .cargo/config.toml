@@ -1,0 +1,5 @@
+# Link the C runtime statically: the application and the installer start on a clean Windows
+# without the Visual C++ Redistributable and load no VCRUNTIME DLL from the download folder.
+# Note: a RUSTFLAGS environment variable replaces these flags (build_installer.ps1 repeats them).
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

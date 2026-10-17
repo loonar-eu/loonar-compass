@@ -1,0 +1,62 @@
+FREEWARE-LIZENZ – Loonar Compass
+
+Lizenzgeber: Mariusz Głowacki, Einzelunternehmer unter der Firma Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard, Polen, NIP (Steuernummer) 8542139307, REGON 320090308, eingetragen im polnischen Zentralregister für Gewerbetreibende (CEIDG) („Lizenzgeber“).
+
+Copyright © 2026 Mariusz Głowacki (Loonar). Alle Rechte vorbehalten.
+
+Dies ist eine Übersetzung. Verbindlich ist die polnische Fassung.
+
+1. Lizenzerteilung
+Der Lizenzgeber räumt jeder Person, die rechtmäßig eine Kopie der Anwendung erhalten hat („Nutzer“), eine unentgeltliche, nicht ausschließliche, zeitlich und räumlich unbeschränkte Lizenz ein, die Anwendung für jeden Zweck, auch beruflich und kommerziell, auf beliebig vielen Computern zu nutzen, und zwar für folgende Nutzungsarten:
+a) dauerhafte oder vorübergehende Vervielfältigung ganz oder teilweise, soweit dies für Installation, Ausführung, Anzeige, Anwendung, Übertragung und Speicherung der Anwendung erforderlich ist,
+b) Vervielfältigung und Verbreitung unveränderter Kopien nach Ziffer 2.
+„Anwendung“ bezeichnet das Programm Loonar Compass samt Installationsprogramm, Dokumentation, Vorlagen und Grafiken, die der Lizenzgeber bereitstellt.
+
+2. Kopieren und Weitergabe
+Die Anwendung darf nur unentgeltlich, vollständig und unverändert und nur zusammen mit den Dateien LICENSE und THIRD-PARTY-NOTICES kopiert und an andere weitergegeben werden. Es ist nicht gestattet, die Anwendung in kostenpflichtige Pakete oder in Installationsprogramme mit Werbung oder anderer Software aufzunehmen oder eine Verbindung zum Lizenzgeber anzudeuten. Der Lizenzgeber kann diese Erlaubnis gegenüber einzelnen Verbreitern widerrufen.
+
+3. Keine Änderungen
+Ohne schriftliche Zustimmung des Lizenzgebers ist es nicht gestattet,
+a) die Anwendung zu ändern oder auf ihrer Grundlage abgeleitete Werke zu schaffen,
+b) sie zu dekompilieren, zu disassemblieren oder ihren Quellcode auf andere Weise wiederherzustellen,
+c) Angaben zum Lizenzgeber sowie Namen, Kennzeichen und Bezeichnungen der Anwendung zu entfernen oder zu ändern,
+d) die Anwendung zu verkaufen, zu vermieten oder für ihre Bereitstellung Entgelte zu verlangen.
+Die Beschränkungen in a–d gelten nicht für Rechte, die vertraglich nicht ausgeschlossen werden können, insbesondere nach Art. 75 Abs. 2 und 3 des polnischen Urheberrechtsgesetzes sowie Art. 5 und 6 der Richtlinie 2009/24/EG (Sicherungskopie, Untersuchung der Funktionsweise des Programms, Dekompilierung zur Herstellung der Interoperabilität, Fehlerberichtigung im gesetzlich vorgesehenen Umfang).
+
+4. Rechte an der Anwendung
+Die Anwendung wird lizenziert, nicht verkauft. Alle Rechte an der Anwendung, die diese Lizenz nicht ausdrücklich einräumt, verbleiben beim Lizenzgeber.
+
+5. Open-Source-Komponenten und Dienste Dritter
+a) Die Anwendung enthält Open-Source-Komponenten (Bibliotheken und Schriftarten), die in der Datei THIRD-PARTY-NOTICES.txt aufgeführt sind. Jede unterliegt ihrer eigenen Lizenz, die im Widerspruchsfall Vorrang hat; die Beschränkungen in Ziffer 2 und 3 gelten für sie nicht.
+b) Die Anwendung arbeitet mit Enterprise Architect (Sparx Systems), der Claude-API (Anthropic), Confluence (Atlassian), PostgreSQL und Microsoft Windows zusammen. Deren Nutzung erfordert eigene Lizenzen und Konten sowie die Einhaltung der Bedingungen der jeweiligen Anbieter (für die Claude-API unter anderem die Commercial Terms of Service und die Usage Policy von Anthropic). Entgelte für diese Dienste trägt der Nutzer. Der Lizenzgeber ist für deren Verfügbarkeit und Funktion nicht verantwortlich.
+
+6. Ergebnisse künstlicher Intelligenz
+Antworten, Modelländerungen, Dokumente, Seiten und Bilder werden automatisch von einem KI-Modell erstellt. Sie können unvollständig oder falsch sein, auch wenn sie glaubwürdig wirken. Der Nutzer prüft sie, bevor er sie freigibt oder verwendet. Der Modus „auto“ speichert Änderungen ohne gesonderte Freigabe; der Nutzer aktiviert ihn auf eigenes Risiko. Die Ergebnisse sind keine fachliche Beratung. Vor der Nutzung der Anwendung sichert der Nutzer das Modell (Baseline in EA, Sicherung der Datenbank).
+
+7. Daten
+Der Lizenzgeber erhebt über die Anwendung keine Daten (keine Telemetrie). Gesprächsinhalte, Anhänge und die für eine Antwort nötigen Modellausschnitte gehen direkt an Anthropic auf Grundlage des Vertrags des Nutzers oder seiner Organisation mit Anthropic, Confluence-Seiten an den vom Nutzer angegebenen Server. Der Nutzer ist dafür verantwortlich, dass diese Übermittlung den Regeln seiner Organisation, seinen Verträgen und dem Datenschutzrecht entspricht. Fehlerberichte und Anmeldungen für Informationen zu neuen Versionen verarbeitet der Lizenzgeber gemäß der Datenschutzerklärung: https://loonar.eu/de/privacy/
+
+8. Keine Gewährleistung
+Die Anwendung wird unentgeltlich und im vorliegenden Zustand bereitgestellt. Der Lizenzgeber sichert nicht zu, dass sie fehlerfrei ist, ohne Unterbrechungen läuft oder für einen bestimmten Zweck geeignet ist. Die gesetzliche Mängelhaftung ist ausgeschlossen, vorbehaltlich Ziffer 9 Buchst. a und c.
+
+9. Haftung
+a) Der Lizenzgeber haftet unbeschränkt für Schäden, die vorsätzlich oder grob fahrlässig verursacht wurden, für Personenschäden sowie nach dem Produkthaftungsrecht.
+b) Im Übrigen haftet der Lizenzgeber nicht für Schäden aus der Nutzung oder der fehlenden Nutzbarkeit der Anwendung, insbesondere nicht für Verlust oder Beschädigung von Daten und Modellen, entgangenen Gewinn, Änderungen, die nach Freigabe durch den Nutzer oder im Modus „auto“ gespeichert wurden, und für das Funktionieren von Diensten Dritter.
+c) Gegenüber Verbrauchern schränkt diese Ziffer keine Rechte nach den zwingenden Vorschriften des Staates ihres gewöhnlichen Aufenthalts ein.
+
+10. Marken
+Diese Lizenz gewährt kein Recht zur Nutzung der Kennzeichen von Loonar. Die genannten Marken Dritter gehören ihren Inhabern; die Anwendung ist ein unabhängiges Produkt, das nicht mit ihnen verbunden ist.
+
+11. Erlöschen
+Die Lizenz erlischt automatisch bei einem Verstoß gegen ihre Bedingungen. Danach ist die Nutzung der Anwendung einzustellen und es sind alle Kopien zu löschen.
+
+12. Anwendbares Recht und Gerichtsstand
+Diese Lizenz unterliegt polnischem Recht. Streitigkeiten mit Unternehmern entscheidet das für den Sitz des Lizenzgebers zuständige Gericht. Verbraucher behalten den Schutz der zwingenden Vorschriften des Staates ihres gewöhnlichen Aufenthalts und können vor den Gerichten dieses Staates klagen.
+
+13. Sprachfassungen
+Verbindlich ist die polnische Fassung; die englische, deutsche und französische Fassung sind Übersetzungen.
+
+14. Schlussbestimmungen
+Ist eine Bestimmung unwirksam, bleiben die übrigen wirksam. Neue Versionen der Anwendung können unter einer geänderten Lizenz bereitgestellt werden; für eine heruntergeladene Version gilt die ihr beigefügte Lizenz.
+
+Kontakt: mariusz@loonar.eu, https://loonar.eu

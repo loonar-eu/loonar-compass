@@ -1,0 +1,62 @@
+FREEWARE LICENSE – Loonar Compass
+
+Licensor: Mariusz Głowacki, trading as Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard, Poland, NIP (tax ID) 8542139307, REGON 320090308, registered in the Polish Central Register and Information on Economic Activity (CEIDG) (the "Licensor").
+
+Copyright © 2026 Mariusz Głowacki (Loonar). All rights reserved.
+
+This is a translation. The Polish version is binding.
+
+1. License grant
+The Licensor grants everyone who has lawfully obtained a copy of the Application (the "User") a free, non-exclusive, worldwide license of unlimited duration to use the Application for any purpose, including professional and commercial purposes, on any number of computers, covering the following fields of use:
+a) permanent or temporary reproduction, in whole or in part, to the extent needed to install, run, display, use, transmit and store the Application,
+b) reproduction and distribution of unmodified copies under clause 2.
+"Application" means the Loonar Compass program together with the installer, documentation, templates and graphics supplied by the Licensor.
+
+2. Copying and distribution
+You may copy the Application and pass it on to others only free of charge, complete and unmodified, together with the LICENSE and THIRD-PARTY-NOTICES files. You may not bundle the Application into paid packages or into installers with advertising or other software, or suggest a connection with the Licensor. The Licensor may withdraw this permission from a specific distributor.
+
+3. No modifications
+Without the Licensor's written consent you may not:
+a) modify the Application or create derivative works based on it,
+b) decompile or disassemble it, or otherwise reconstruct its source code,
+c) remove or change information about the Licensor, or the Application's name, marks and labels,
+d) sell or rent the Application, or charge fees for making it available.
+The restrictions in a–d do not apply to rights that cannot be excluded by contract, in particular under Art. 75(2)–(3) of the Polish Act on Copyright and Related Rights and Arts. 5 and 6 of Directive 2009/24/EC (making a back-up copy, studying how the program works, decompiling for interoperability, correcting errors to the extent provided by law).
+
+4. Ownership
+The Application is licensed, not sold. All rights in the Application that this license does not expressly grant remain with the Licensor.
+
+5. Open-source components and third-party services
+a) The Application includes open-source components (libraries and fonts) listed in THIRD-PARTY-NOTICES.txt. Each is governed by its own license, which prevails in case of conflict; the restrictions in clauses 2 and 3 do not apply to them.
+b) The Application works with Enterprise Architect (Sparx Systems), the Claude API (Anthropic), Confluence (Atlassian), PostgreSQL and Microsoft Windows. Their use requires separate licenses and accounts and compliance with their providers' terms (for the Claude API, among others, Anthropic's Commercial Terms of Service and Usage Policy). The User pays any fees for these services. The Licensor is not responsible for their availability or operation.
+
+6. AI-generated output
+Answers, model changes, documents, pages and images are generated automatically by an artificial intelligence model. They may be incomplete or wrong, even when they look plausible. The User reviews them before approving or relying on them. "auto" mode saves changes without separate approval and is enabled at the User's own risk. Outputs are not professional advice. Before using the Application, the User backs up the model (an EA baseline, a database backup).
+
+7. Data
+The Licensor collects no data through the Application (no telemetry). Conversation content, attachments and the model excerpts needed for an answer go directly to Anthropic under the User's or their organization's agreement with Anthropic, and Confluence pages go to the server the User specifies. The User is responsible for making sure this transfer complies with their organization's rules, contracts and data protection law. The Licensor processes bug reports and release-news sign-ups as described in the privacy policy: https://loonar.eu/privacy/
+
+8. No warranty
+The Application is provided free of charge and "as is". The Licensor does not warrant that it is free of errors, that it will run without interruption or that it is fit for a particular purpose. Statutory warranty for defects is excluded, subject to clause 9(a) and (c).
+
+9. Liability
+a) The Licensor is liable without limitation for damage caused intentionally or through gross negligence, for personal injury and under product liability law.
+b) Otherwise the Licensor is not liable for damage arising from the use of, or inability to use, the Application, in particular for loss of or damage to data and models, lost profits, changes saved after the User's approval or in "auto" mode, and the operation of third-party services.
+c) For consumers, this clause does not limit rights under the mandatory law of their country of habitual residence.
+
+10. Trademarks
+This license grants no right to use the Loonar marks. Third-party trademarks named here belong to their owners; the Application is an independent product not affiliated with them.
+
+11. Termination
+The license terminates automatically if its terms are breached. After termination you must stop using the Application and delete any copies of it.
+
+12. Governing law and jurisdiction
+This license is governed by Polish law. Disputes with businesses are decided by the court competent for the Licensor's registered place of business. Consumers keep the protection of the mandatory law of their country of habitual residence and may sue in the courts of that country.
+
+13. Language versions
+The Polish version is binding; the English, German and French versions are translations.
+
+14. Final provisions
+If one provision is invalid, the others remain in force. New versions of the Application may be released under a revised license; a downloaded version is governed by the license included with it.
+
+Contact: mariusz@loonar.eu, https://loonar.eu

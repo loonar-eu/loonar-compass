@@ -1,0 +1,731 @@
+# A key may end with @@context to tell apart identical English texts; the suffix is never shown.
+# \n in a cell is a line break.
+version {0} ‖ wersja {0} ‖ Version {0} ‖ version {0}
+AI assistant for Enterprise Architect ‖ Asystent AI do Enterprise Architect ‖ KI-Assistent für Enterprise Architect ‖ Assistant IA pour Enterprise Architect
+Application owner ‖ Właściciel aplikacji ‖ Eigentümer der Anwendung ‖ Propriétaire de l'application
+The application is the property of Loonar Mariusz Głowacki. All rights reserved. ‖ Aplikacja jest własnością Loonar Mariusz Głowacki. Wszelkie prawa zastrzeżone. ‖ Die Anwendung ist Eigentum von Loonar Mariusz Głowacki. Alle Rechte vorbehalten. ‖ L'application est la propriété de Loonar Mariusz Głowacki. Tous droits réservés.
+About the application ‖ O aplikacji ‖ Über die Anwendung ‖ À propos de l'application
+License ‖ Licencja ‖ Lizenz ‖ Licence
+Freeware: free to use; modifying the application is prohibited. Full text: ‖ Freeware: korzystanie jest bezpłatne, zmienianie aplikacji jest zabronione. Pełna treść: ‖ Freeware: Die Nutzung ist kostenlos, Änderungen an der Anwendung sind untersagt. Vollständiger Text: ‖ Freeware : l'utilisation est gratuite, la modification de l'application est interdite. Texte intégral :
+{0}: not an image (only photos and screenshots can be attached). ‖ {0}: to nie jest obraz (dołączać można zdjęcia i zrzuty ekranu). ‖ {0}: Das ist kein Bild (Sie können Fotos und Screenshots anhängen). ‖ {0} : ce n'est pas une image (vous pouvez joindre des photos et des captures d'écran).
+Could not read {0}: {1} ‖ Nie udało się odczytać {0}: {1} ‖ {0} konnte nicht gelesen werden: {1} ‖ Impossible de lire {0} : {1}
+database password ‖ hasło do bazy ‖ Datenbankpasswort ‖ mot de passe de la base
+Claude API key@@in-sentence ‖ klucz API Claude ‖ Claude-API-Schlüssel ‖ clé API Claude
+EA account password@@in-sentence ‖ hasło konta EA ‖ Passwort des EA-Kontos ‖ mot de passe du compte EA
+No app.properties file found. Fill in and save each group of settings. ‖ Brak pliku app.properties – uzupełnij i zapisz kolejne karty ustawień. ‖ Keine app.properties gefunden – füllen Sie die Einstellungsgruppen nacheinander aus und speichern Sie sie. ‖ Fichier app.properties absent – remplissez et enregistrez les groupes de paramètres un à un.
+Fill in: {0} ‖ Uzupełnij: {0} ‖ Bitte ergänzen: {0} ‖ À compléter : {0}
+Ready. ‖ Gotowe. ‖ Bereit. ‖ Prêt.
+Conversation renamed. ‖ Zmieniono nazwę rozmowy. ‖ Unterhaltung umbenannt. ‖ Conversation renommée.
+Could not rename: {0} ‖ Nie zmieniono nazwy: {0} ‖ Name nicht geändert: {0} ‖ Nom non modifié : {0}
+New conversation. ‖ Nowa rozmowa. ‖ Neue Unterhaltung. ‖ Nouvelle conversation.
+Loaded: {0} ‖ Wczytano: {0} ‖ Geladen: {0} ‖ Chargé : {0}
+Claude is waiting for your approval to save. ‖ Claude czeka na Twoją zgodę na zapis. ‖ Claude wartet auf Ihre Freigabe zum Speichern. ‖ Claude attend votre accord pour enregistrer.
+the worker thread ended without a result ‖ wątek roboczy zakończył się bez wyniku ‖ der Arbeitsthread endete ohne Ergebnis ‖ le thread de travail s'est terminé sans résultat
+Model: {0} ‖ Model: {0} ‖ Modell: {0} ‖ Modèle : {0}
+stopped at your request ‖ przerwano na Twoje polecenie ‖ auf Ihre Anweisung abgebrochen ‖ interrompu à votre demande
+Stopped at your request. ‖ Przerwano na Twoje polecenie. ‖ Auf Ihre Anweisung abgebrochen. ‖ Interrompu à votre demande.
+Could not finish: {0} ‖ Nie udało się dokończyć: {0} ‖ Die Aufgabe konnte nicht abgeschlossen werden: {0} ‖ Impossible de terminer : {0}
+History: {0} ‖ Historia: {0} ‖ Verlauf: {0} ‖ Historique : {0}
+version {0}  ·  AI assistant for Enterprise Architect ‖ wersja {0}  ·  Asystent AI do Enterprise Architect ‖ Version {0}  ·  KI-Assistent für Enterprise Architect ‖ version {0}  ·  Assistant IA pour Enterprise Architect
+© 2026 {0}. All rights reserved. ‖ © 2026 {0}. Wszelkie prawa zastrzeżone. ‖ © 2026 {0}. Alle Rechte vorbehalten. ‖ © 2026 {0}. Tous droits réservés.
+Max tokens: enter a number ‖ Max tokenów: wpisz liczbę ‖ Max. Tokens: Zahl eingeben ‖ Jetons max. : saisissez un nombre
+Database port: enter a number ‖ Port bazy: wpisz liczbę ‖ Datenbankport: Zahl eingeben ‖ Port de la base : saisissez un nombre
+Database name and database user are required ‖ Nazwa bazy i konto bazy są wymagane ‖ Datenbankname und Datenbankkonto sind erforderlich ‖ Le nom et le compte de la base sont obligatoires
+EA user account is required ‖ Konto użytkownika EA jest wymagane ‖ EA-Benutzerkonto ist erforderlich ‖ Le compte utilisateur EA est obligatoire
+Not saved: {0} ‖ Nie zapisano: {0} ‖ Nicht gespeichert: {0} ‖ Non enregistré : {0}
+Saved. {0} ‖ Zapisano. {0} ‖ Gespeichert. {0} ‖ Enregistré. {0}
+Clipboard is not available: {0} ‖ Schowek jest niedostępny: {0} ‖ Zwischenablage nicht verfügbar: {0} ‖ Presse-papiers indisponible : {0}
+You can attach up to {0} files per message. ‖ Maksymalnie {0} plików w jednej wiadomości. ‖ Höchstens {0} Dateien pro Nachricht. ‖ {0} fichiers au maximum par message.
+the clipboard image has an unexpected format ‖ obraz ze schowka ma nieoczekiwany format ‖ das Bild in der Zwischenablage hat ein unerwartetes Format ‖ l'image du presse-papiers a un format inattendu
+saving PNG ‖ zapis PNG ‖ Speichern als PNG ‖ enregistrement PNG
+Could not paste the image: {0} ‖ Nie wklejono obrazu: {0} ‖ Bild nicht eingefügt: {0} ‖ Image non collée : {0}
+The clipboard image is larger than 10 MB. ‖ Obraz ze schowka jest większy niż 10 MB. ‖ Das Bild in der Zwischenablage ist größer als 10 MB. ‖ L'image du presse-papiers dépasse 10 Mo.
+Image pasted from the clipboard. ‖ Wklejono obraz ze schowka. ‖ Bild aus der Zwischenablage eingefügt. ‖ Image collée depuis le presse-papiers.
+Could not save the attachment: {0} ‖ Zapis załącznika: {0} ‖ Anhang konnte nicht gespeichert werden: {0} ‖ Enregistrement de la pièce jointe : {0}
+The clipboard contains no image or files. ‖ W schowku nie ma obrazu ani plików. ‖ Die Zwischenablage enthält kein Bild und keine Dateien. ‖ Le presse-papiers ne contient ni image ni fichiers.
+{0}: the file is larger than 10 MB. ‖ {0}: plik większy niż 10 MB. ‖ {0}: Datei größer als 10 MB. ‖ {0} : fichier de plus de 10 Mo.
+Could not add {0}: {1} ‖ Nie dodano {0}: {1} ‖ {0} nicht hinzugefügt: {1} ‖ {0} non ajouté : {1}
+Cannot read {0}: {1} ‖ Nie można odczytać {0}: {1} ‖ {0} kann nicht gelesen werden: {1} ‖ Impossible de lire {0} : {1}
+Complete the settings first. ‖ Najpierw uzupełnij ustawienia. ‖ Bitte zuerst die Einstellungen ausfüllen. ‖ Complétez d'abord les paramètres.
+Attachment ‖ Załącznik ‖ Anhang ‖ Pièce jointe
+New conversation ‖ Nowa rozmowa ‖ Neue Unterhaltung ‖ Nouvelle conversation
+Message added. Claude will take it into account at the next step. ‖ Wiadomość dodana. Claude uwzględni ją przy najbliższym kroku. ‖ Nachricht hinzugefügt. Claude berücksichtigt sie beim nächsten Schritt. ‖ Message ajouté. Claude en tiendra compte à la prochaine étape.
+Claude is writing… ‖ Claude pisze… ‖ Claude schreibt… ‖ Claude écrit…
+Settings ‖ Ustawienia ‖ Einstellungen ‖ Paramètres
+Each group is saved separately; after saving, the application immediately checks that the details work. Leave a password or key field empty to keep the current value. ‖ Każdą kartę zapisujesz osobno; po zapisie aplikacja od razu sprawdza, czy dane działają. Puste pole hasła lub klucza oznacza brak zmiany. ‖ Jede Gruppe wird einzeln gespeichert; danach prüft die Anwendung sofort, ob die Daten funktionieren. Ein leeres Passwort- oder Schlüsselfeld bedeutet keine Änderung. ‖ Chaque groupe s'enregistre séparément ; après l'enregistrement, l'application teste aussitôt les données saisies. Un champ de mot de passe ou de clé laissé vide conserve la valeur actuelle.
+1. Claude ‖ 1. Claude ‖ 1. Claude ‖ 1. Claude
+Model ‖ Model ‖ Modell ‖ Modèle
+Max tokens ‖ Max tokenów ‖ Max. Tokens ‖ Jetons max.
+Claude API key ‖ Klucz API Claude ‖ Claude-API-Schlüssel ‖ Clé API Claude
+Save and test key ‖ Zapisz i sprawdź klucz ‖ Speichern und Schlüssel prüfen ‖ Enregistrer et tester la clé
+Approval mode ‖ Tryb ‖ Modus ‖ Mode
+2. Model database (PostgreSQL) ‖ 2. Baza modelu (PostgreSQL) ‖ 2. Modelldatenbank (PostgreSQL) ‖ 2. Base de données du modèle (PostgreSQL)
+Server ‖ Serwer ‖ Server ‖ Serveur
+Database name ‖ Nazwa bazy ‖ Datenbankname ‖ Nom de la base
+Database user ‖ Konto bazy ‖ Datenbankkonto ‖ Compte de la base
+Database password ‖ Hasło do bazy ‖ Datenbankpasswort ‖ Mot de passe de la base
+Save and test connection ‖ Zapisz i sprawdź połączenie ‖ Speichern und Verbindung prüfen ‖ Enregistrer et tester la connexion
+3. Enterprise Architect ‖ 3. Enterprise Architect ‖ 3. Enterprise Architect ‖ 3. Enterprise Architect
+Path to EA.exe ‖ Ścieżka do EA.exe ‖ Pfad zu EA.exe ‖ Chemin d'EA.exe
+Choose EA.exe ‖ Wskaż EA.exe ‖ EA.exe auswählen ‖ Choisir EA.exe
+EA user account ‖ Konto użytkownika EA ‖ EA-Benutzerkonto ‖ Compte utilisateur EA
+EA account password ‖ Hasło konta EA ‖ Passwort des EA-Kontos ‖ Mot de passe du compte EA
+Save and test EA login ‖ Zapisz i sprawdź logowanie do EA ‖ Speichern und EA-Anmeldung prüfen ‖ Enregistrer et tester la connexion à EA
+6. Confluence ‖ 6. Confluence ‖ 6. Confluence ‖ 6. Confluence
+Confluence address ‖ Adres Confluence ‖ Confluence-Adresse ‖ Adresse Confluence
+e.g. https://confluence.example.com ‖ np. https://confluence.firma.pl ‖ z. B. https://confluence.firma.de ‖ p. ex. https://confluence.societe.fr
+Email (Cloud only) ‖ E-mail (tylko Cloud) ‖ E-Mail (nur Cloud) ‖ E-mail (Cloud uniquement)
+leave empty for a personal access token (PAT) ‖ zostaw puste przy tokenie osobistym (PAT) ‖ leer lassen bei persönlichem Zugriffstoken (PAT) ‖ vide pour un jeton d'accès personnel (PAT)
+Space key ‖ Przestrzeń (klucz) ‖ Bereich (Schlüssel) ‖ Espace (clé)
+e.g. ARCH ‖ np. ARCH ‖ z. B. ARCH ‖ p. ex. ARCH
+Parent page ID ‖ Strona nadrzędna (ID) ‖ Übergeordnete Seite (ID) ‖ Page parente (ID)
+optional, e.g. 123456789 ‖ opcjonalnie, np. 123456789 ‖ optional, z. B. 123456789 ‖ facultatif, p. ex. 123456789
+Save and test Confluence connection ‖ Zapisz i sprawdź połączenie z Confluence ‖ Speichern und Confluence-Verbindung prüfen ‖ Enregistrer et tester la connexion à Confluence
+Back to chat ‖ Wróć do czatu ‖ Zurück zum Chat ‖ Retour au chat
+Could not prepare the message: {0} ‖ Nie udało się przygotować wiadomości: {0} ‖ Die Nachricht konnte nicht vorbereitet werden: {0} ‖ Impossible de préparer le message : {0}
+Report a bug ‖ Zgłoś błąd ‖ Fehler melden ‖ Signaler un bug
+Subject ‖ Temat ‖ Betreff ‖ Objet
+e.g. The assistant did not add a step to the subprocess ‖ np. Asystent nie dodał kroku do podprocesu ‖ z. B. Der Assistent hat keinen Schritt zum Teilprozess hinzugefügt ‖ p. ex. L'assistant n'a pas ajouté d'étape au sous-processus
+Description ‖ Opis ‖ Beschreibung ‖ Description
+What you were doing, what happened, what you expected. You can paste the error text from the chat. ‖ Co robiłeś, co się stało, czego się spodziewałeś. Możesz wkleić treść błędu z czatu. ‖ Was Sie getan haben, was passiert ist, was Sie erwartet haben. Sie können den Fehlertext aus dem Chat einfügen. ‖ Ce que vous faisiez, ce qui s'est passé, ce que vous attendiez. Vous pouvez coller le texte de l'erreur depuis le chat.
+Images ‖ Zdjęcia ‖ Bilder ‖ Images
+drag into the window, paste (Ctrl+V) or choose from disk; ideally a screenshot with the problem marked ‖ przeciągnij do okna, wklej (Ctrl+V) albo wybierz z dysku; najlepiej zrzut z zaznaczonym miejscem błędu ‖ in das Fenster ziehen, einfügen (Strg+V) oder von der Festplatte wählen; am besten ein Screenshot mit markierter Fehlerstelle ‖ glissez-les dans la fenêtre, collez-les (Ctrl+V) ou choisissez-les sur le disque ; idéalement une capture d'écran avec le problème entouré
+Remove ‖ Usuń ‖ Entfernen ‖ Supprimer
++ Add image ‖ + Dodaj zdjęcie ‖ + Bild hinzufügen ‖ + Ajouter une image
+Your email address for replies (optional) ‖ Twój e-mail do odpowiedzi (opcjonalnie) ‖ Ihre E-Mail-Adresse für eine Antwort (optional) ‖ Votre adresse e-mail pour vous répondre (facultatif)
+e.g. john.smith@example.com ‖ np. jan.kowalski@firma.pl ‖ z. B. max.mustermann@firma.de ‖ p. ex. jean.dupont@societe.fr
+Include technical information (application version, system, model, approval mode, last message; no passwords or keys) ‖ Dołącz informacje techniczne (wersja aplikacji, system, model, tryb zatwierdzania, ostatni komunikat; bez haseł i kluczy) ‖ Technische Informationen anhängen (Anwendungsversion, System, Modell, Freigabemodus, letzte Meldung; ohne Passwörter und Schlüssel) ‖ Joindre les informations techniques (version de l'application, système, modèle, mode de validation, dernier message ; sans mots de passe ni clés)
+Choose images ‖ Wybierz zdjęcia ‖ Bilder auswählen ‖ Choisir des images
+Images@@file-filter ‖ Obrazy ‖ Bilder ‖ Images
+\n\nContact: {0} ‖ \n\nKontakt: {0} ‖ \n\nKontakt: {0} ‖ \n\nContact : {0}
+Bug report ‖ Zgłoszenie błędu ‖ Fehlerbericht ‖ Signalement de bug
+Waiting for the mail program… ‖ Oczekiwanie na program pocztowy… ‖ Warten auf das E-Mail-Programm… ‖ En attente du logiciel de messagerie…
+Send report ‖ Wyślij zgłoszenie ‖ Meldung senden ‖ Envoyer le signalement
+First describe what happened. ‖ Opisz najpierw, co się stało. ‖ Beschreiben Sie zuerst, was passiert ist. ‖ Décrivez d'abord ce qui s'est passé.
+Opening the message in your mail program… ‖ Otwieranie wiadomości w programie pocztowym… ‖ Nachricht wird im E-Mail-Programm geöffnet… ‖ Ouverture du message dans votre logiciel de messagerie…
+Saved in settings, but the message could not be prepared: {0} ‖ Zapisano w ustawieniach, ale nie udało się przygotować wiadomości: {0} ‖ In den Einstellungen gespeichert, aber die Nachricht konnte nicht vorbereitet werden: {0} ‖ Enregistré dans les paramètres, mais le message n'a pas pu être préparé : {0}
+5. New releases (newsletter) ‖ 5. Nowe wydania (newsletter) ‖ 5. Neue Versionen (Newsletter) ‖ 5. Nouvelles versions (newsletter)
+A short email when a new version is released: what's new and where to get it. No ads; unsubscribe at any time. ‖ Krótki e-mail, gdy wyjdzie nowa wersja aplikacji: co nowego i skąd ją pobrać. Bez reklam, rezygnacja w każdej chwili. ‖ Eine kurze E-Mail, wenn eine neue Version erscheint: was neu ist und wo Sie sie herunterladen können. Keine Werbung, jederzeit abbestellbar. ‖ Un court e-mail à chaque nouvelle version : nouveautés et où la télécharger. Sans publicité, désinscription à tout moment.
+Email address ‖ Adres e-mail ‖ E-Mail-Adresse ‖ Adresse e-mail
+Subscribe ‖ Subskrypcja ‖ Abonnieren ‖ M'inscrire
+I want to receive news about new releases ‖ Chcę dostawać informacje o nowych wydaniach ‖ Ich möchte über neue Versionen informiert werden ‖ je souhaite recevoir des informations sur les nouvelles versions
+Save ‖ Zapisz ‖ Speichern ‖ Enregistrer
+Enter a valid email address. ‖ Wpisz poprawny adres e-mail. ‖ Geben Sie eine gültige E-Mail-Adresse ein. ‖ Saisissez une adresse e-mail valide.
+Could not save settings: {0} ‖ Nie udało się zapisać ustawień: {0} ‖ Einstellungen konnten nicht gespeichert werden: {0} ‖ Impossible d'enregistrer les paramètres : {0}
+Please remove {0} from the new release mailing list. ‖ Proszę o usunięcie adresu {0} z listy odbiorców informacji o nowych wydaniach. ‖ Bitte entfernen Sie {0} aus dem Verteiler für Informationen über neue Versionen. ‖ Merci de retirer l'adresse {0} de la liste de diffusion des nouvelles versions.
+Document templates ‖ Szablony dokumentów ‖ Dokumentvorlagen ‖ Modèles de documents
+Open templates folder ‖ Otwórz folder szablonów ‖ Vorlagenordner öffnen ‖ Ouvrir le dossier des modèles
+Edit ‖ Edytuj ‖ Bearbeiten ‖ Modifier
+Opens the template file in Notepad ‖ Otwiera plik szablonu w Notatniku ‖ Öffnet die Vorlagendatei im Editor ‖ Ouvre le fichier du modèle dans le Bloc-notes
+Use ‖ Użyj ‖ Verwenden ‖ Utiliser
+Inserts a request into the chat to prepare a document from this template ‖ Wstawia do czatu polecenie przygotowania dokumentu z tego szablonu ‖ Fügt im Chat eine Anfrage ein, aus dieser Vorlage ein Dokument zu erstellen ‖ Insère dans le chat une demande de document à partir de ce modèle
+Prepare a Confluence page using the template "{0}" for:  ‖ Przygotuj stronę Confluence według szablonu „{0}” dla:  ‖ Erstelle eine Confluence-Seite nach der Vorlage „{0}“ für:  ‖ Prépare une page Confluence selon le modèle « {0} » pour : 
+Audit log ‖ Dziennik zmian ‖ Änderungsprotokoll ‖ Journal des modifications
+Every save the assistant made to the EA model: when, to which model and under which account, what changed and the result. Failed saves are included too. ‖ Każdy zapis asystenta do modelu EA: kiedy, w jakim modelu i na jakim koncie, co zmienił i z jakim wynikiem. Nieudane zapisy też tu są. ‖ Jede Speicherung des Assistenten im EA-Modell: wann, in welchem Modell und mit welchem Konto, was geändert wurde und mit welchem Ergebnis. Fehlgeschlagene Speicherungen sind ebenfalls enthalten. ‖ Chaque enregistrement de l'assistant dans le modèle EA : quand, dans quel modèle et quel compte, ce qui a changé et avec quel résultat. Les échecs y figurent aussi.
+Open log file ‖ Otwórz plik dziennika ‖ Protokolldatei öffnen ‖ Ouvrir le fichier journal
+The log is still empty. ‖ Dziennik jest jeszcze pusty. ‖ Das Protokoll ist noch leer. ‖ Le journal est encore vide.
+Export to Excel ‖ Eksportuj do Excela ‖ Nach Excel exportieren ‖ Exporter vers Excel
+ERROR ‖ BŁĄD ‖ FEHLER ‖ ERREUR
+EA account ‖ Konto EA ‖ EA-Konto ‖ Compte EA
+Error ‖ Błąd ‖ Fehler ‖ Erreur
+EA audit log.xlsx ‖ Dziennik zmian EA.xlsx ‖ EA-Änderungsprotokoll.xlsx ‖ Journal des modifications EA.xlsx
+Excel workbook ‖ Arkusz Excel ‖ Excel-Arbeitsmappe ‖ Classeur Excel
+Saved: {0} ‖ Zapisano: {0} ‖ Gespeichert: {0} ‖ Enregistré : {0}
+Log not saved: {0} ‖ Nie zapisano dziennika: {0} ‖ Protokoll nicht gespeichert: {0} ‖ Journal non enregistré : {0}
+entries: {0} ‖ zapisów: {0} ‖ Einträge: {0} ‖ entrées : {0}
+Not saved ‖ Nie zapisano ‖ Nicht gespeichert ‖ Non enregistré
+The assistant has not saved anything in the model yet. ‖ Asystent nie zapisał jeszcze nic w modelu. ‖ Der Assistent hat noch nichts im Modell gespeichert. ‖ L'assistant n'a encore rien enregistré dans le modèle.
+Assistant memory ‖ Pamięć asystenta ‖ Gedächtnis des Assistenten ‖ Mémoire de l'assistant
+Open memory folder ‖ Otwórz folder pamięci ‖ Gedächtnisordner öffnen ‖ Ouvrir le dossier de la mémoire
+Nothing has been remembered yet. ‖ Na razie nic nie jest zapamiętane. ‖ Noch keine Festlegungen gespeichert. ‖ Rien n'est encore mémorisé.
+Remove this note from memory ‖ Usuń to ustalenie z pamięci ‖ Diese Festlegung aus dem Gedächtnis entfernen ‖ Supprimer cette note de la mémoire
+Could not remove the note: {0} ‖ Nie udało się usunąć ustalenia: {0} ‖ Festlegung konnte nicht entfernt werden: {0} ‖ Impossible de supprimer la note : {0}
+Saved. The key works: model {0} replied. ‖ Zapisano. Klucz działa: odpowiedział model {0}. ‖ Gespeichert. Der Schlüssel funktioniert: Modell {0} hat geantwortet. ‖ Enregistré. La clé fonctionne : le modèle {0} a répondu.
+this does not look like an EA model database, or the connection does not work ‖ to nie wygląda na bazę modelu EA albo połączenie nie działa ‖ das sieht nicht nach einer EA-Modelldatenbank aus, oder die Verbindung funktioniert nicht ‖ cela ne ressemble pas à une base de modèle EA, ou la connexion ne fonctionne pas
+the database returned no result ‖ baza nie zwróciła wyniku ‖ die Datenbank hat kein Ergebnis geliefert ‖ la base n'a renvoyé aucun résultat
+Saved. Connected to database {0}: {1} packages, {2} elements, {3} diagrams. ‖ Zapisano. Połączono z bazą {0}. Pakiety: {1}, elementy: {2}, diagramy: {3}. ‖ Gespeichert. Mit Datenbank {0} verbunden: {1} Pakete, {2} Elemente, {3} Diagramme. ‖ Enregistré. Connecté à la base {0} : {1} paquetages, {2} éléments, {3} diagrammes.
+Saved. Without a Confluence address, pages are prepared for you to paste into the source editor. ‖ Zapisano. Bez adresu Confluence przygotowane strony wklejasz ręcznie w edytorze kodu źródłowego. ‖ Gespeichert. Ohne Confluence-Adresse bereiten Sie Seiten zum Einfügen im Quelltext-Editor vor. ‖ Enregistré. Sans adresse Confluence, les pages sont préparées pour être collées dans l'éditeur de source.
+no Confluence token ‖ brak tokena Confluence ‖ kein Confluence-Token ‖ pas de jeton Confluence
+enter the key of the space (e.g. ARCH) the assistant will publish to ‖ podaj klucz przestrzeni (np. ARCH), do której asystent będzie publikował ‖ geben Sie den Schlüssel des Bereichs an (z. B. ARCH), in dem der Assistent veröffentlichen soll ‖ indiquez la clé de l'espace (p. ex. ARCH) où l'assistant publiera
+Saved. Connected to Confluence: space "{0}" ({1}) is available. ‖ Zapisano. Połączono z Confluence: przestrzeń „{0}” ({1}) jest dostępna. ‖ Gespeichert. Mit Confluence verbunden: Bereich „{0}“ ({1}) ist verfügbar. ‖ Enregistré. Connecté à Confluence : l'espace « {0} » ({1}) est accessible.
+file {0} does not exist ‖ nie ma pliku {0} ‖ Datei {0} existiert nicht ‖ le fichier {0} n'existe pas
+Saved. EA opened the model and logged in as {0} (model security: {1}). ‖ Zapisano. EA otworzył model i zalogował się na konto {0} (zabezpieczenia modelu: {1}). ‖ Gespeichert. EA hat das Modell geöffnet und das Konto {0} angemeldet (Modellsicherheit: {1}). ‖ Enregistré. EA a ouvert le modèle et connecté le compte {0} (sécurité du modèle : {1}).
+enabled ‖ włączone ‖ aktiviert ‖ activée
+disabled ‖ wyłączone ‖ deaktiviert ‖ désactivée
+Reading the model database: {0} ‖ Odczyt z bazy modelu: {0} ‖ Lesen der Modelldatenbank: {0} ‖ Lecture de la base de données du modèle : {0}
+Saving to EA, {0} operations: {1} ‖ Zapis do EA (operacje: {0}): {1} ‖ Speichern in EA, {0} Operationen: {1} ‖ Enregistrement dans EA, {0} opérations : {1}
+Getting diagram {0} from EA as an image ‖ Pobranie diagramu {0} z EA jako obrazka ‖ Abruf von Diagramm {0} aus EA als Bild ‖ Récupération du diagramme {0} depuis EA sous forme d'image
+Remembering a note: {0} ‖ Zapamiętanie ustalenia: {0} ‖ Merken einer Festlegung: {0} ‖ Mémorisation d'une note : {0}
+Drawing an image: {0} ‖ Rysowanie obrazka: {0} ‖ Zeichnen eines Bildes: {0} ‖ Dessin d'une image : {0}
+Creating a Word document: {0}.docx ‖ Tworzenie dokumentu Word: {0}.docx ‖ Erstellen eines Word-Dokuments: {0}.docx ‖ Création d'un document Word : {0}.docx
+Creating an Excel workbook: {0}.xlsx ‖ Tworzenie arkusza Excel: {0}.xlsx ‖ Erstellen einer Excel-Arbeitsmappe: {0}.xlsx ‖ Création d'un classeur Excel : {0}.xlsx
+EA window: {0} ‖ Okno EA: {0} ‖ EA-Fenster: {0} ‖ Fenêtre EA : {0}
+opening a diagram ‖ otwarcie diagramu ‖ Öffnen eines Diagramms ‖ ouverture d'un diagramme
+showing an element in the Project Browser ‖ wskazanie elementu w przeglądarce projektu ‖ Anzeigen eines Elements im Projekt-Browser ‖ affichage d'un élément dans le navigateur
+what is open and selected ‖ co jest otwarte i zaznaczone ‖ was geöffnet und ausgewählt ist ‖ ce qui est ouvert et sélectionné
+Where the operations of element {0} are used ‖ Gdzie użyte są operacje elementu {0} ‖ Wo die Operationen von Element {0} verwendet werden ‖ Où les opérations de l'élément {0} sont utilisées
+Confluence page: {0} ‖ Strona Confluence: {0} ‖ Confluence-Seite: {0} ‖ Page Confluence : {0}
+Publishing to Confluence: {0} ‖ Publikacja w Confluence: {0} ‖ Veröffentlichung in Confluence: {0} ‖ Publication dans Confluence : {0}
+List of published Confluence pages ‖ Lista opublikowanych stron Confluence ‖ Liste der veröffentlichten Confluence-Seiten ‖ Liste des pages Confluence publiées
+Reading template: {0} ‖ Odczyt szablonu: {0} ‖ Lesen der Vorlage: {0} ‖ Lecture du modèle : {0}
+Saving template: {0} ‖ Zapis szablonu: {0} ‖ Speichern der Vorlage: {0} ‖ Enregistrement du modèle : {0}
+Impact analysis of element {0} (direction {1}, depth {2}) ‖ Analiza wpływu elementu {0} (kierunek {1}, głębokość {2}) ‖ Auswirkungsanalyse für Element {0} (Richtung {1}, Tiefe {2}) ‖ Analyse d'impact de l'élément {0} (direction {1}, profondeur {2})
+Removing a note from memory: {0} ‖ Usunięcie ustalenia z pamięci: {0} ‖ Entfernen einer Festlegung aus dem Gedächtnis: {0} ‖ Suppression d'une note de la mémoire : {0}
+Reading a note from memory: {0} ‖ Odczyt ustalenia z pamięci: {0} ‖ Lesen einer Festlegung aus dem Gedächtnis: {0} ‖ Lecture d'une note de la mémoire : {0}
+Tool {0} ‖ Narzędzie {0} ‖ Werkzeug {0} ‖ Outil {0}
+Claude is reading the model… ‖ Claude czyta model… ‖ Claude liest das Modell… ‖ Claude lit le modèle…
+Claude is saving to EA ({0} operations)… ‖ Claude zapisuje do EA (operacje: {0})… ‖ Claude speichert in EA ({0} Operationen)… ‖ Claude enregistre dans EA ({0} opérations)…
+Claude is getting a diagram from EA… ‖ Claude pobiera diagram z EA… ‖ Claude ruft ein Diagramm aus EA ab… ‖ Claude récupère un diagramme depuis EA…
+Claude is using its memory… ‖ Claude korzysta z pamięci… ‖ Claude nutzt sein Gedächtnis… ‖ Claude utilise sa mémoire…
+Claude is drawing an image… ‖ Claude rysuje obrazek… ‖ Claude zeichnet ein Bild… ‖ Claude dessine une image…
+Claude is creating a Word document… ‖ Claude tworzy dokument Word… ‖ Claude erstellt ein Word-Dokument… ‖ Claude crée un document Word…
+Claude is creating an Excel workbook… ‖ Claude tworzy arkusz Excel… ‖ Claude erstellt eine Excel-Arbeitsmappe… ‖ Claude crée un classeur Excel…
+Claude is preparing a Confluence page… ‖ Claude przygotowuje stronę Confluence… ‖ Claude bereitet eine Confluence-Seite vor… ‖ Claude prépare une page Confluence…
+Claude is publishing a page to Confluence… ‖ Claude publikuje stronę w Confluence… ‖ Claude veröffentlicht eine Seite in Confluence… ‖ Claude publie une page dans Confluence…
+Claude is looking at templates and pages… ‖ Claude sięga po szablony i strony… ‖ Claude greift auf Vorlagen und Seiten zu… ‖ Claude consulte les modèles et les pages…
+Claude is analyzing the impact of a change… ‖ Claude analizuje wpływ zmiany… ‖ Claude analysiert die Auswirkungen einer Änderung… ‖ Claude analyse l'impact d'une modification…
+Claude is looking at the open EA window… ‖ Claude zagląda do otwartego okna EA… ‖ Claude sieht sich das geöffnete EA-Fenster an… ‖ Claude regarde la fenêtre EA ouverte…
+Claude is checking where operations are used… ‖ Claude szuka, gdzie użyte są operacje… ‖ Claude sucht, wo Operationen verwendet werden… ‖ Claude cherche où les opérations sont utilisées…
+Claude is using the tool {0}… ‖ Claude używa narzędzia {0}… ‖ Claude verwendet das Werkzeug {0}… ‖ Claude utilise l'outil {0}…
+Claude is thinking… ‖ Claude myśli… ‖ Claude denkt nach… ‖ Claude réfléchit…
+Claude is analyzing and planning (step {0}) ‖ Claude analizuje i planuje (krok {0}) ‖ Claude analysiert und plant (Schritt {0}) ‖ Claude analyse et planifie (étape {0})
+{0}, {1} response tokens ‖ {0}, tokeny odpowiedzi: {1} ‖ {0}, {1} Antwort-Tokens ‖ {0}, {1} jetons de réponse
+final answer ‖ odpowiedź dla Ciebie ‖ Antwort für Sie ‖ réponse pour vous
+next: {0} ‖ następne: {0} ‖ als Nächstes: {0} ‖ ensuite : {0}
+the assistant took {0} steps without finishing; stopped to prevent an endless loop ‖ asystent wykonał maksymalną liczbę kroków ({0}) i nie skończył; przerwano, aby uniknąć pętli bez końca ‖ der Assistent hat {0} Schritte ausgeführt und ist nicht fertig geworden; abgebrochen, um eine Endlosschleife zu vermeiden ‖ l'assistant a effectué {0} étapes sans terminer ; interruption pour éviter une boucle sans fin
+plan - asks once, before the first save in each assistant answer ‖ plan – jedno pytanie przed pierwszym zapisem w każdej odpowiedzi asystenta ‖ plan - eine Rückfrage vor dem ersten Speichern in jeder Antwort ‖ plan - une demande de validation avant le premier enregistrement de chaque réponse
+ask - asks before every save ‖ ask – pytanie przed każdym zapisem ‖ ask - Rückfrage vor jedem Speichern ‖ ask - une demande de validation avant chaque enregistrement
+Done: the message to {0} was opened in your mail program. If you did not send it, it is in your drafts. ‖ Gotowe: wiadomość do {0} została otwarta w Twoim programie pocztowym. Jeśli jej nie wysłałeś, jest w wersjach roboczych. ‖ Fertig: Die Nachricht an {0} wurde in Ihrem E-Mail-Programm geöffnet. Falls Sie sie nicht gesendet haben, liegt sie in den Entwürfen. ‖ Terminé : le message destiné à {0} a été ouvert dans votre logiciel de messagerie. Si vous ne l'avez pas envoyé, il se trouve dans les brouillons.
+You closed the message without sending it. The form has been kept, so you can try again. ‖ Zamknąłeś wiadomość bez wysłania; formularz zostaje, możesz spróbować ponownie. ‖ Sie haben die Nachricht ohne Senden geschlossen; das Formular bleibt erhalten, Sie können es erneut versuchen. ‖ Vous avez fermé le message sans l'envoyer ; le formulaire est conservé, vous pouvez réessayer.
+Your mail program does not accept attachments from other programs, so the message was opened without images, together with the folder containing them ({0}). Drag the images into the message and send it. ‖ Twój program pocztowy nie przyjmuje załączników z innych programów, dlatego otwarto wiadomość bez zdjęć oraz folder ze zdjęciami ({0}). Przeciągnij zdjęcia do wiadomości i wyślij ją. ‖ Ihr E-Mail-Programm nimmt keine Anhänge von anderen Programmen an: Die Nachricht wurde ohne Bilder geöffnet, dazu der Ordner mit den Bildern ({0}). Ziehen Sie die Bilder in die Nachricht und senden Sie sie ab. ‖ Votre logiciel de messagerie n'accepte pas les pièces jointes d'autres programmes : le message a été ouvert sans les images, ainsi que le dossier qui les contient ({0}). Glissez-les dans le message et envoyez-le.
+The message is open in your mail program: check it and send it. ‖ Wiadomość jest otwarta w programie pocztowym: sprawdź ją i wyślij. ‖ Die Nachricht ist in Ihrem E-Mail-Programm geöffnet. Prüfen Sie sie und senden Sie sie ab. ‖ Le message est ouvert dans votre logiciel de messagerie : vérifiez-le et envoyez-le.
+Word document ‖ Dokument Word ‖ Word-Dokument ‖ Document Word
+Confluence page code ‖ Kod strony Confluence ‖ Confluence-Seitencode ‖ Code de page Confluence
+PNG image ‖ Obraz PNG ‖ PNG-Bild ‖ Image PNG
+PDF document ‖ Dokument PDF ‖ PDF-Dokument ‖ Document PDF
+File ‖ Plik ‖ Datei ‖ Fichier
+Today ‖ Dzisiaj ‖ Heute ‖ Aujourd'hui
+Yesterday ‖ Wczoraj ‖ Gestern ‖ Hier
+Last 7 days ‖ Ostatnie 7 dni ‖ Letzte 7 Tage ‖ 7 derniers jours
+Earlier ‖ Wcześniej ‖ Älter ‖ Plus ancien
+saved ‖ zapisano ‖ gespeichert ‖ enregistré
+MISSING ‖ BRAK ‖ FEHLT ‖ ABSENT
+Chat ‖ Czat ‖ Chat ‖ Chat
+Model audit log ‖ Dziennik zmian w modelu ‖ Änderungsprotokoll des Modells ‖ Journal des modifications du modèle
+Changelog ‖ Changelog ‖ Versionshinweise ‖ Nouveautés
+About ‖ Informacje ‖ Info ‖ À propos
+Conversations ‖ Rozmowy ‖ Unterhaltungen ‖ Conversations
+Search conversations… ‖ Szukaj w rozmowach… ‖ Unterhaltungen durchsuchen… ‖ Rechercher dans les conversations…
+Rename conversation ‖ Zmień nazwę rozmowy ‖ Unterhaltung umbenennen ‖ Renommer la conversation
+No saved conversations ‖ Brak zapisanych rozmów ‖ Keine gespeicherten Unterhaltungen ‖ Aucune conversation enregistrée
+No conversations match the search ‖ Brak rozmów pasujących do wyszukiwania ‖ Keine passenden Unterhaltungen gefunden ‖ Aucune conversation ne correspond à la recherche
+Claude is working ‖ Claude pracuje ‖ Claude arbeitet ‖ Claude travaille
+Remove attachment ‖ Usuń załącznik ‖ Anhang entfernen ‖ Supprimer la pièce jointe
+Drop files here… ‖ Upuść pliki tutaj… ‖ Dateien hier ablegen… ‖ Déposez les fichiers ici…
+Add a message: Claude will take it into account while working… ‖ Dopisz wiadomość: Claude uwzględni ją w trakcie pracy… ‖ Nachricht ergänzen: Claude berücksichtigt sie während der Arbeit… ‖ Ajoutez un message : Claude en tiendra compte pendant son travail…
+Write a message, drag in files or paste an image (Ctrl+V)… ‖ Napisz wiadomość, przeciągnij pliki albo wklej obraz (Ctrl+V)… ‖ Nachricht schreiben, Dateien hineinziehen oder Bild einfügen (Strg+V)… ‖ Écrivez un message, glissez des fichiers ou collez une image (Ctrl+V)…
+Paste ‖ Wklej ‖ Einfügen ‖ Coller
+Paste an image or files from the clipboard (Ctrl+V) ‖ Wklej obraz albo pliki ze schowka (Ctrl+V) ‖ Bild oder Dateien aus der Zwischenablage einfügen (Strg+V) ‖ Coller une image ou des fichiers du presse-papiers (Ctrl+V)
+Drag files into the window to attach them ‖ Przeciągnij pliki do okna, żeby je dołączyć ‖ Dateien in das Fenster ziehen, um sie anzuhängen ‖ Glissez des fichiers dans la fenêtre pour les joindre
+Send ‖ Wyślij ‖ Senden ‖ Envoyer
+Send (Enter) ‖ Wyślij (Enter) ‖ Senden (Eingabe) ‖ Envoyer (Entrée)
+Stop ‖ Przerwij ‖ Abbrechen ‖ Arrêter
+Stop after the current step ‖ Przerwij po bieżącym kroku ‖ Nach dem aktuellen Schritt abbrechen ‖ Arrêter après l'étape en cours
+Stopping after the current step… ‖ Przerywanie po bieżącym kroku… ‖ Wird nach dem aktuellen Schritt abgebrochen… ‖ Arrêt après l'étape en cours…
+{0} · mode {1} ‖ {0} · tryb {1} ‖ {0} · Modus {1} ‖ {0} · mode {1}
+Claude wants to save changes to the model ‖ Claude chce zapisać zmiany w modelu ‖ Claude möchte Änderungen im Modell speichern ‖ Claude veut enregistrer des modifications dans le modèle
+Approve ‖ Zatwierdź ‖ Freigeben ‖ Valider
+Reject ‖ Odrzuć ‖ Ablehnen ‖ Refuser
+Approved, Claude is saving… ‖ Zatwierdzono, Claude zapisuje… ‖ Freigegeben, Claude speichert… ‖ Validé, Claude enregistre…
+Save rejected. ‖ Odrzucono zapis. ‖ Speichern abgelehnt. ‖ Enregistrement refusé.
+How can I help? ‖ W czym mogę pomóc? ‖ Wie kann ich helfen? ‖ Comment puis-je vous aider ?
+Ask about the Enterprise Architect model, request a diagram, or attach a file, photo or sketch. ‖ Zapytaj o model w Enterprise Architect, poproś o diagram albo dołącz plik, zdjęcie lub szkic. ‖ Stellen Sie Fragen zum Enterprise-Architect-Modell, fordern Sie ein Diagramm an oder hängen Sie eine Datei, ein Foto oder eine Skizze an. ‖ Posez une question sur le modèle Enterprise Architect, demandez un diagramme ou joignez un fichier, une photo ou un croquis.
+Could not finish ‖ Nie udało się dokończyć ‖ Die Aufgabe konnte nicht abgeschlossen werden ‖ Impossible de terminer
+Copy page code ‖ Kopiuj kod strony ‖ Seitencode kopieren ‖ Copier le code de la page
+To paste in Confluence: Insert → Source Editor ‖ Do wklejenia w Confluence: Wstaw → Edytor kodu źródłowego (Source Editor) ‖ Zum Einfügen in Confluence: Einfügen → Quelltext-Editor (Source Editor) ‖ À coller dans Confluence : Insérer → Éditeur de source (Source Editor)
+Open images folder ‖ Otwórz folder z obrazkami ‖ Bilderordner öffnen ‖ Ouvrir le dossier des images
+Images to attach to the page ‖ Obrazki do załączenia na stronie ‖ Bilder zum Anhängen an die Seite ‖ Images à joindre à la page
+Open ‖ Otwórz ‖ Öffnen ‖ Ouvrir
+Save as… ‖ Zapisz jako… ‖ Speichern unter… ‖ Enregistrer sous…
+Open full size ‖ Otwórz w pełnym rozmiarze ‖ In voller Größe öffnen ‖ Ouvrir en taille réelle
+Claude is working · step {0} ‖ Claude pracuje · krok {0} ‖ Claude arbeitet · Schritt {0} ‖ Claude travaille · étape {0}
+Steps in the last answer: {0} (failed: {1}) ‖ Kroki ostatniej odpowiedzi: {0} (nieudane: {1}) ‖ Schritte der letzten Antwort: {0} (fehlgeschlagen: {1}) ‖ Étapes de la dernière réponse : {0} (échecs : {1})
+Steps in the last answer: {0} ‖ Kroki ostatniej odpowiedzi: {0} ‖ Schritte der letzten Antwort: {0} ‖ Étapes de la dernière réponse : {0}
+collapse ‖ zwiń ‖ einklappen ‖ réduire
+expand ‖ rozwiń ‖ aufklappen ‖ développer
+– {0} (stopped) ‖ – {0} (przerwane) ‖ – {0} (abgebrochen) ‖ – {0} (interrompu)
+Go to the end of the conversation ‖ Przejdź na koniec rozmowy ‖ Zum Ende der Unterhaltung ‖ Aller à la fin de la conversation
+File not saved: {0} ‖ Nie zapisano pliku: {0} ‖ Datei nicht gespeichert: {0} ‖ Fichier non enregistré : {0}
+Page code copied. In Confluence, paste it into the source editor and add the images from the folder as attachments. ‖ Skopiowano kod strony: w Confluence wstaw go w edytorze kodu źródłowego, a obrazki z folderu dodaj jako załączniki. ‖ Seitencode kopiert: in Confluence im Quelltext-Editor einfügen und die Bilder aus dem Ordner als Anhänge hinzufügen. ‖ Code de la page copié : dans Confluence, collez-le dans l'éditeur de source et ajoutez les images du dossier en pièces jointes.
+Could not copy the page code: {0} ‖ Nie udało się skopiować kodu strony: {0} ‖ Seitencode konnte nicht kopiert werden: {0} ‖ Impossible de copier le code de la page : {0}
+Could not open the image: {0} ‖ Nie udało się otworzyć obrazka: {0} ‖ Bild konnte nicht geöffnet werden: {0} ‖ Impossible d'ouvrir l'image : {0}
+Language ‖ Język ‖ Sprache ‖ Langue
+4. Language and change approval ‖ 4. Język i zatwierdzanie zmian ‖ 4. Sprache und Freigabe von Änderungen ‖ 4. Langue et validation des modifications
+Language changed, but memory and templates are waiting to be translated by Claude: {0} ‖ Język zmieniony, ale pamięć i szablony czekają na przetłumaczenie przez Claude: {0} ‖ Sprache geändert, aber Gedächtnis und Vorlagen warten auf die Übersetzung durch Claude: {0} ‖ Langue modifiée, mais la mémoire et les modèles attendent d'être traduits par Claude : {0}
+Translating memory and templates into the new language… ‖ Tłumaczenie pamięci i szablonów na nowy język… ‖ Gedächtnis und Vorlagen werden in die neue Sprache übersetzt… ‖ Traduction de la mémoire et des modèles dans la nouvelle langue…
+The language has been changed, but settings, assistant memory and templates are not translated yet. Translation needs a connection to Claude (API key in Settings) and starts automatically once the connection works. ‖ Język został zmieniony, ale ustawienia, pamięć asystenta i szablony nie są jeszcze przetłumaczone. Tłumaczenie wymaga połączenia z Claude (klucz API w Ustawieniach) i rozpocznie się automatycznie, gdy połączenie zacznie działać. ‖ Die Sprache wurde geändert, aber Einstellungen, Gedächtnis des Assistenten und Vorlagen sind noch nicht übersetzt. Die Übersetzung benötigt eine Verbindung zu Claude (API-Schlüssel in den Einstellungen) und startet automatisch, sobald die Verbindung funktioniert. ‖ La langue a été modifiée, mais les paramètres, la mémoire de l'assistant et les modèles ne sont pas encore traduits. La traduction nécessite une connexion à Claude (clé API dans les Paramètres) et démarre automatiquement dès que la connexion fonctionne.
+Translate now ‖ Przetłumacz teraz ‖ Jetzt übersetzen ‖ Traduire maintenant
+Done: the templates are now in the new language; memory was empty. ‖ Gotowe: szablony są w nowym języku, pamięć była pusta. ‖ Fertig: Die Vorlagen sind in der neuen Sprache, das Gedächtnis war leer. ‖ Terminé : les modèles sont dans la nouvelle langue, la mémoire était vide.
+Done: translated templates ({0}) and memory notes ({1}). ‖ Gotowe: przetłumaczono szablony ({0}) i ustalenia w pamięci ({1}). ‖ Fertig: Vorlagen ({0}) und Gedächtniseinträge ({1}) übersetzt. ‖ Terminé : modèles ({0}) et notes de mémoire ({1}) traduits.
+could not create shortcut {0}: {1} ‖ nie udało się utworzyć skrótu {0}: {1} ‖ Verknüpfung {0} konnte nicht erstellt werden: {1} ‖ impossible de créer le raccourci {0} : {1}
+could not create shortcut {0}: the system did not save the file ‖ nie udało się utworzyć skrótu {0}: system nie zapisał pliku ‖ Verknüpfung {0} konnte nicht erstellt werden: das System hat die Datei nicht gespeichert ‖ impossible de créer le raccourci {0} : le système n'a pas enregistré le fichier
+cannot read the system folder ‖ nie można odczytać folderu systemowego ‖ Systemordner kann nicht gelesen werden ‖ impossible de lire le dossier système
+the system did not provide the folder {0} ‖ system nie podał folderu {0} ‖ das System hat den Ordner {0} nicht geliefert ‖ le système n'a pas fourni le dossier {0}
+Creating the program folder… ‖ Tworzenie folderu programu… ‖ Programmordner wird erstellt… ‖ Création du dossier du programme…
+cannot create folder {0} ‖ nie można utworzyć folderu {0} ‖ Ordner {0} kann nicht erstellt werden ‖ impossible de créer le dossier {0}
+Copying {0}… ‖ Kopiowanie pliku {0}… ‖ {0} wird kopiert… ‖ Copie de {0}…
+cannot write {0} (if the application is running, close it and try again) ‖ nie można zapisać {0} (jeśli aplikacja jest uruchomiona, zamknij ją i spróbuj ponownie) ‖ {0} kann nicht geschrieben werden (falls die Anwendung läuft, schließen Sie sie und versuchen Sie es erneut) ‖ impossible d'écrire {0} (si l'application est en cours d'exécution, fermez-la et réessayez)
+Copying the license and changelog… ‖ Kopiowanie licencji i listy zmian… ‖ Lizenz und Änderungsliste werden kopiert… ‖ Copie de la licence et de la liste des modifications…
+Copying the user guide… ‖ Kopiowanie instrukcji użytkownika… ‖ Benutzerhandbuch wird kopiert… ‖ Copie du guide de l'utilisateur…
+Copying the uninstaller… ‖ Kopiowanie programu odinstalowującego… ‖ Deinstallationsprogramm wird kopiert… ‖ Copie du programme de désinstallation…
+Program files: {0} ‖ Pliki programu: {0} ‖ Programmdateien: {0} ‖ Fichiers du programme : {0}
+Saving settings… ‖ Zapisywanie ustawień… ‖ Einstellungen werden gespeichert… ‖ Enregistrement des paramètres…
+User settings: {0} ‖ Ustawienia użytkownika: {0} ‖ Benutzereinstellungen: {0} ‖ Paramètres utilisateur : {0}
+Settings: to be completed in the application, in the "Settings" view ‖ Ustawienia: do uzupełnienia w aplikacji, w widoku „Ustawienia” ‖ Einstellungen: in der Anwendung auf der Registerkarte „Einstellungen“ zu ergänzen ‖ Paramètres : à compléter dans l'application, onglet « Paramètres »
+Creating shortcuts… ‖ Tworzenie skrótów… ‖ Verknüpfungen werden erstellt… ‖ Création des raccourcis…
+User guide.lnk ‖ Instrukcja użytkownika.lnk ‖ Benutzerhandbuch.lnk ‖ Guide de l'utilisateur.lnk
+User guide ‖ Instrukcja użytkownika ‖ Benutzerhandbuch ‖ Guide de l'utilisateur
+Uninstall {0}.lnk ‖ Odinstaluj {0}.lnk ‖ {0} deinstallieren.lnk ‖ Désinstaller {0}.lnk
+Uninstall the application ‖ Odinstalowanie aplikacji ‖ Anwendung deinstallieren ‖ Désinstaller l'application
+Start menu shortcuts ‖ Skróty w menu Start ‖ Verknüpfungen im Startmenü ‖ Raccourcis dans le menu Démarrer
+Desktop shortcut ‖ Skrót na pulpicie ‖ Verknüpfung auf dem Desktop ‖ Raccourci sur le bureau
+Adding the entry to "Programs and Features"… ‖ Rejestrowanie w panelu „Programy i funkcje”… ‖ Eintrag in „Programme und Features“ wird erstellt… ‖ Enregistrement dans « Programmes et fonctionnalités »…
+Entry in "Programs and Features" ‖ Wpis w panelu „Programy i funkcje” ‖ Eintrag in „Programme und Features“ ‖ Entrée dans « Programmes et fonctionnalités »
+the application is not installed in folder {0} ‖ w folderze {0} nie ma zainstalowanej aplikacji ‖ im Ordner {0} ist die Anwendung nicht installiert ‖ l'application n'est pas installée dans le dossier {0}
+Removing shortcuts… ‖ Usuwanie skrótów… ‖ Verknüpfungen werden entfernt… ‖ Suppression des raccourcis…
+Shortcuts removed ‖ Usunięto skróty ‖ Verknüpfungen entfernt ‖ Raccourcis supprimés
+Removing program files… ‖ Usuwanie plików programu… ‖ Programmdateien werden entfernt… ‖ Suppression des fichiers du programme…
+cannot remove {0} (if the application is running, close it and try again) ‖ nie można usunąć {0} (jeśli aplikacja jest uruchomiona, zamknij ją i spróbuj ponownie) ‖ {0} kann nicht entfernt werden (falls die Anwendung läuft, schließen Sie sie und versuchen Sie es erneut) ‖ impossible de supprimer {0} (si l'application est en cours d'exécution, fermez-la et réessayez)
+Program files removed ‖ Usunięto pliki programu ‖ Programmdateien entfernt ‖ Fichiers du programme supprimés
+Cleaning up user data… ‖ Porządkowanie danych użytkownika… ‖ Benutzerdaten werden aufgeräumt… ‖ Nettoyage des données utilisateur…
+cannot remove {0} ‖ nie można usunąć {0} ‖ {0} kann nicht entfernt werden ‖ impossible de supprimer {0}
+Removing the "Programs and Features" entry… ‖ Usuwanie wpisu z panelu „Programy i funkcje”… ‖ Eintrag aus „Programme und Features“ wird entfernt… ‖ Suppression de l'entrée de « Programmes et fonctionnalités »…
+"Programs and Features" entry removed ‖ Usunięto wpis z panelu „Programy i funkcje” ‖ Eintrag aus „Programme und Features“ entfernt ‖ Entrée de « Programmes et fonctionnalités » supprimée
+Finish ‖ Zakończ ‖ Fertigstellen ‖ Terminer
+Next > ‖ Dalej > ‖ Weiter > ‖ Suivant >
+< Back ‖ < Wstecz ‖ < Zurück ‖ < Précédent
+Cancel ‖ Anuluj ‖ Abbrechen ‖ Annuler
+Install ‖ Instaluj ‖ Installieren ‖ Installer
+Uninstall ‖ Odinstaluj ‖ Deinstallieren ‖ Désinstaller
+desktop ‖ pulpit ‖ Desktop ‖ bureau
+Uninstalling ‖ Odinstalowywanie ‖ Deinstallation ‖ Désinstallation
+Installing ‖ Instalowanie ‖ Installation ‖ Installation
+Removing {0} from this computer. ‖ Trwa usuwanie aplikacji {0} z komputera. ‖ {0} wird von diesem Computer entfernt. ‖ Suppression de {0} de cet ordinateur en cours.
+Installing {0}. Please wait. ‖ Trwa instalowanie aplikacji {0}. Poczekaj chwilę. ‖ {0} wird installiert. Bitte warten. ‖ Installation de {0} en cours. Veuillez patienter.
+Done ‖ Gotowe ‖ Fertig ‖ Terminé
+Prerequisites: ‖ Warunki konieczne: ‖ Voraussetzungen: ‖ Prérequis :
+• the EA model is in a PostgreSQL database (file-based models are not supported), ‖ • model EA jest w bazie PostgreSQL (modele w plikach nie są obsługiwane), ‖ • das EA-Modell liegt in einer PostgreSQL-Datenbank (dateibasierte Modelle werden nicht unterstützt), ‖ • le modèle EA est dans une base PostgreSQL (les modèles sous forme de fichier ne sont pas pris en charge),
+• user security is enabled in the model (Enable Security), ‖ • model ma włączone zabezpieczenia użytkowników (Enable Security), ‖ • im Modell ist die Benutzersicherheit aktiviert (Enable Security), ‖ • la sécurité utilisateur est activée dans le modèle (Enable Security),
+• the model has a user account for the assistant (any name). ‖ • w modelu jest konto użytkownika dla asystenta, o dowolnej nazwie. ‖ • im Modell gibt es ein Benutzerkonto für den Assistenten mit beliebigem Namen. ‖ • le modèle contient un compte utilisateur destiné à l'assistant, quel que soit son nom.
+Before installing, have the following ready: ‖ Przed instalacją przygotuj: ‖ Halten Sie vor der Installation bereit: ‖ Avant l'installation, préparez :
+• a Claude API key (Anthropic Console), ‖ • klucz API Claude (konsola Anthropic), ‖ • einen Claude-API-Schlüssel (Anthropic Console), ‖ • une clé API Claude (console Anthropic),
+• database details: server, port, database name, user and password, ‖ • dane bazy: serwer, port, nazwa bazy, konto i hasło, ‖ • Verbindungsdaten der Datenbank: Server, Port, Datenbankname, Konto und Passwort, ‖ • les informations de connexion à la base : serveur, port, nom de la base, compte et mot de passe,
+• the login and password of the assistant's account in the EA model, ‖ • login i hasło konta asystenta w modelu EA, ‖ • Anmeldename und Passwort des Assistentenkontos im EA-Modell, ‖ • l'identifiant et le mot de passe du compte de l'assistant dans le modèle EA,
+• Enterprise Architect, installed and licensed. ‖ • zainstalowany Enterprise Architect z licencją. ‖ • ein installiertes Enterprise Architect mit Lizenz. ‖ • Enterprise Architect installé, avec une licence.
+Click "Next" to continue. ‖ Kliknij „Dalej”, aby kontynuować. ‖ Klicken Sie auf „Weiter“, um fortzufahren. ‖ Cliquez sur « Suivant » pour continuer.
+What's new in version {0} ‖ Co nowego w wersji {0} ‖ Neu in Version {0} ‖ Nouveautés de la version {0}
+Changes since the installed version {0}. ‖ Zmiany od zainstalowanej wersji {0}. ‖ Änderungen seit der installierten Version {0}. ‖ Modifications depuis la version installée {0}.
+Version {0} is already installed; below are the changes in this version. ‖ Zainstalowana jest już wersja {0}; poniżej zmiany w tej wersji. ‖ Version {0} ist bereits installiert; unten sehen Sie die Änderungen dieser Version. ‖ La version {0} est déjà installée ; voici les modifications de cette version.
+The main changes in this version. ‖ Najważniejsze zmiany w tej wersji. ‖ Die wichtigsten Änderungen dieser Version. ‖ Les principales modifications de cette version.
+After installation, the full list of changes is in the application, in the "Changelog" view. ‖ Po instalacji pełna lista zmian jest dostępna w aplikacji, w widoku „Changelog”. ‖ Die vollständige Liste der Änderungen finden Sie nach der Installation in der Anwendung unter „Versionshinweise“. ‖ Après l'installation, la liste complète des modifications se trouve dans l'application, onglet « Nouveautés ».
+License agreement ‖ Umowa licencyjna ‖ Lizenzvereinbarung ‖ Contrat de licence
+Please read the license terms. You must accept them to install the application. ‖ Przeczytaj warunki licencji. Instalacja wymaga ich zaakceptowania. ‖ Lesen Sie die Lizenzbedingungen. Für die Installation müssen Sie sie akzeptieren. ‖ Lisez les conditions de licence. L'installation nécessite de les accepter.
+I accept the terms of the license agreement ‖ Akceptuję warunki umowy licencyjnej ‖ Ich akzeptiere die Bedingungen der Lizenzvereinbarung ‖ J'accepte les conditions du contrat de licence
+I do not accept the terms of the license agreement ‖ Nie akceptuję warunków umowy licencyjnej ‖ Ich akzeptiere die Bedingungen der Lizenzvereinbarung nicht ‖ Je n'accepte pas les conditions du contrat de licence
+Destination folder ‖ Folder docelowy ‖ Zielordner ‖ Dossier de destination
+The application will be installed in the folder below. ‖ Aplikacja zostanie zainstalowana w poniższym folderze. ‖ Die Anwendung wird im folgenden Ordner installiert. ‖ L'application sera installée dans le dossier ci-dessous.
+Browse… ‖ Przeglądaj… ‖ Durchsuchen… ‖ Parcourir…
+Installation folder ‖ Folder instalacji ‖ Installationsordner ‖ Dossier d'installation
+Required disk space: about {0} MB. ‖ Potrzebne miejsce na dysku: około {0} MB. ‖ Benötigter Speicherplatz: etwa {0} MB. ‖ Espace disque nécessaire : environ {0} Mo.
+Shortcuts ‖ Skróty ‖ Verknüpfungen ‖ Raccourcis
+Start menu (application, user guide, uninstall) ‖ Menu Start (aplikacja, instrukcja użytkownika, odinstalowanie) ‖ Startmenü (Anwendung, Benutzerhandbuch, Deinstallation) ‖ Menu Démarrer (application, guide de l'utilisateur, désinstallation)
+Desktop ‖ Pulpit ‖ Desktop ‖ Bureau
+Settings, conversation history and attachments are separate for each user: {0} ‖ Ustawienia, historia rozmów i załączniki są osobne dla każdego użytkownika: {0} ‖ Einstellungen, Unterhaltungsverlauf und Anhänge sind für jeden Benutzer getrennt: {0} ‖ Les paramètres, l'historique des conversations et les pièces jointes sont propres à chaque utilisateur : {0}
+Configuration ‖ Konfiguracja ‖ Konfiguration ‖ Configuration
+Enter the details now ‖ Podam dane teraz ‖ Ich gebe die Daten jetzt ein ‖ Je saisis les données maintenant
+Configure later in the application ("Settings" view) ‖ Skonfiguruję później w aplikacji (widok „Ustawienia”) ‖ Ich konfiguriere später in der Anwendung (Registerkarte „Einstellungen“) ‖ Je configurerai plus tard dans l'application (onglet « Paramètres »)
+Model database (PostgreSQL) ‖ Baza modelu (PostgreSQL) ‖ Modelldatenbank (PostgreSQL) ‖ Base de données du modèle (PostgreSQL)
+Approving changes to the model ‖ Zatwierdzanie zmian w modelu ‖ Freigabe von Änderungen am Modell ‖ Validation des modifications du modèle
+Leave a password or key field empty to keep the previously saved value. You can test the details in the application: Settings → "Save and test…". ‖ Puste pole hasła lub klucza zostawia wartość zapisaną wcześniej. Poprawność danych sprawdzisz w aplikacji: Ustawienia → „Zapisz i sprawdź…”. ‖ Ein leeres Passwort- oder Schlüsselfeld behält den zuvor gespeicherten Wert. Die Daten prüfen Sie in der Anwendung: Einstellungen → „Speichern und … prüfen“. ‖ Un champ de mot de passe ou de clé laissé vide conserve la valeur enregistrée précédemment. Vous pourrez vérifier les données dans l'application : Paramètres → « Enregistrer et tester ».
+Ready to install ‖ Gotowy do instalacji ‖ Bereit zur Installation ‖ Prêt pour l'installation
+Check the settings. Click "Install" to start, or "Back" to change something. ‖ Sprawdź ustawienia. Kliknij „Instaluj”, aby rozpocząć, albo „Wstecz”, aby coś zmienić. ‖ Prüfen Sie die Einstellungen. Klicken Sie auf „Installieren“, um zu beginnen, oder auf „Zurück“, um etwas zu ändern. ‖ Vérifiez les paramètres. Cliquez sur « Installer » pour commencer ou sur « Précédent » pour modifier quelque chose.
+Start menu ‖ menu Start ‖ Startmenü ‖ menu Démarrer
+none ‖ brak ‖ keine ‖ aucun
+Database: {0}@{1}:{2} (user {3}) ‖ Baza: {0}@{1}:{2} (konto {3}) ‖ Datenbank: {0}@{1}:{2} (Konto {3}) ‖ Base : {0}@{1}:{2} (compte {3})
+EA account: {0} ‖ Konto EA: {0} ‖ EA-Konto: {0} ‖ Compte EA : {0}
+Approval mode: {0} ‖ Tryb zatwierdzania: {0} ‖ Freigabemodus: {0} ‖ Mode de validation : {0}
+API key: {0} ‖ Klucz API: {0} ‖ API-Schlüssel: {0} ‖ Clé API : {0}
+unchanged ‖ bez zmian ‖ unverändert ‖ inchangée
+entered ‖ podany ‖ eingegeben ‖ saisie
+Later, in the application's "Settings" view. ‖ Później, w widoku „Ustawienia” aplikacji. ‖ Später, auf der Registerkarte „Einstellungen“ der Anwendung. ‖ Plus tard, dans l'onglet « Paramètres » de l'application.
+Uninstallation complete ‖ Odinstalowanie zakończone ‖ Deinstallation abgeschlossen ‖ Désinstallation terminée
+Installation complete ‖ Instalacja zakończona ‖ Installation abgeschlossen ‖ Installation terminée
+Uninstallation failed ‖ Odinstalowanie nie powiodło się ‖ Deinstallation fehlgeschlagen ‖ Échec de la désinstallation
+Installation failed ‖ Instalacja nie powiodła się ‖ Installation fehlgeschlagen ‖ Échec de l'installation
+The application will be removed from the following folder: ‖ Aplikacja zostanie usunięta z folderu: ‖ Die Anwendung wird aus folgendem Ordner entfernt: ‖ L'application sera supprimée du dossier :
+Your data stays on the computer unless you choose otherwise: ‖ Twoje dane zostają na komputerze, chyba że zaznaczysz inaczej: ‖ Ihre Daten bleiben auf dem Computer, sofern Sie nichts anderes wählen: ‖ Vos données restent sur l'ordinateur, sauf si vous en décidez autrement :
+Close the application before uninstalling. ‖ Przed odinstalowaniem zamknij aplikację. ‖ Schließen Sie die Anwendung vor der Deinstallation. ‖ Fermez l'application avant de la désinstaller.
+plan - asks once per assistant answer ‖ plan – jedno pytanie na odpowiedź asystenta ‖ plan - eine Rückfrage pro Antwort des Assistenten ‖ plan - une demande de validation par réponse de l'assistant
+auto - saves without asking ‖ auto – zapisy bez pytania ‖ auto - Speichern ohne Rückfrage ‖ auto - enregistrement sans validation
+Choose language ‖ Wybierz język ‖ Sprache wählen ‖ Choisir la langue
+Language of the application, the assistant's answers and the default document templates. You can change it later in Settings. ‖ Język aplikacji, odpowiedzi asystenta i domyślnych szablonów dokumentów. Można go później zmienić w Ustawieniach. ‖ Sprache der Anwendung, der Antworten des Assistenten und der Standard-Dokumentvorlagen. Sie können sie später in den Einstellungen ändern. ‖ Langue de l'application, des réponses de l'assistant et des modèles de documents par défaut. Vous pourrez la modifier plus tard dans les Paramètres.
+# Komunikaty, etykiety i błędy pokazywane w aplikacji (uzupełnienie: wszystkie teksty przez i18n)
+A standalone assistant for Enterprise Architect. It reads the model from a PostgreSQL database, saves changes through COM and shows diagrams as images. It uses only the Claude Haiku 5.5 model through the Anthropic API. ‖ Samodzielny asystent do Enterprise Architect. Czyta model z bazy PostgreSQL, zapisuje zmiany przez COM i pokazuje diagramy jako obrazki. Korzysta wyłącznie z modelu Claude Haiku 5.5 przez API Anthropic. ‖ Ein eigenständiger Assistent für Enterprise Architect. Er liest das Modell aus einer PostgreSQL-Datenbank, speichert Änderungen über COM und zeigt Diagramme als Bilder an. Er verwendet ausschließlich das Modell Claude Haiku 5.5 über die Anthropic-API. ‖ Un assistant autonome pour Enterprise Architect. Il lit le modèle depuis une base PostgreSQL, enregistre les modifications via COM et affiche les diagrammes sous forme d'images. Il utilise uniquement le modèle Claude Haiku 5.5 via l'API Anthropic.
+photo.png ‖ zdjecie.png ‖ Foto.png ‖ photo.png
+screenshot_{0}.png ‖ zrzut_{0}.png ‖ Screenshot_{0}.png ‖ capture_{0}.png
+clipboard_{0}.png ‖ schowek_{0}.png ‖ Zwischenablage_{0}.png ‖ presse-papiers_{0}.png
+e.g. 127.0.0.1 ‖ np. 127.0.0.1 ‖ z. B. 127.0.0.1 ‖ p. ex. 127.0.0.1
+Port ‖ Port ‖ Port ‖ Port
+For publishing pages through the assistant. Pages are created without these details too: you copy the code and paste it into the source editor. Confluence on your company's servers (Data Center): the address, e.g. https://confluence.company.com, and a personal access token (Profile → Personal Access Tokens), with the e-mail field left empty. Confluence Cloud: the address https://company.atlassian.net/wiki, the account e-mail and an API token. ‖ Do publikowania stron przez asystenta. Bez tych danych strony i tak powstają: kopiujesz kod i wklejasz go w edytorze źródła. Confluence na serwerach firmy (Data Center): adres, np. https://confluence.firma.pl, i token osobisty (Profil → Personal Access Tokens), pole e-mail puste. Confluence Cloud: adres https://firma.atlassian.net/wiki, e-mail konta i token API. ‖ Zum Veröffentlichen von Seiten durch den Assistenten. Auch ohne diese Angaben entstehen Seiten: Sie kopieren den Code und fügen ihn im Quelltext-Editor ein. Confluence auf den Servern Ihres Unternehmens (Data Center): Adresse, z. B. https://confluence.firma.de, und persönliches Token (Profil → Personal Access Tokens), E-Mail-Feld leer. Confluence Cloud: Adresse https://firma.atlassian.net/wiki, E-Mail des Kontos und API-Token. ‖ Pour la publication de pages par l'assistant. Sans ces données, les pages sont tout de même créées : vous copiez le code et le collez dans l'éditeur de source. Confluence sur les serveurs de votre entreprise (Data Center) : l'adresse, p. ex. https://confluence.societe.fr, et un jeton personnel (Profil → Personal Access Tokens), champ e-mail vide. Confluence Cloud : l'adresse https://societe.atlassian.net/wiki, l'e-mail du compte et un jeton API.
+Token ‖ Token ‖ Token ‖ Jeton
+Describe what happened and what should have happened, and attach screenshots with the problem marked. "Send report" opens a ready-made message to the author ({0}) with the images attached in your mail program: all you have to do is send it. ‖ Opisz, co się stało i co powinno się stać, i dołącz zrzuty ekranu z zaznaczonym błędem. „Wyślij zgłoszenie” otworzy w Twoim programie pocztowym gotową wiadomość do autora ({0}) z dołączonymi zdjęciami: wystarczy ją wysłać. ‖ Beschreiben Sie, was passiert ist und was hätte passieren sollen, und hängen Sie Screenshots mit markierter Fehlerstelle an. „Meldung senden“ öffnet in Ihrem E-Mail-Programm eine fertige Nachricht an den Autor ({0}) mit den angehängten Bildern: Sie müssen sie nur noch senden. ‖ Décrivez ce qui s'est passé et ce qui aurait dû se passer, et joignez des captures d'écran avec le problème entouré. « Envoyer le signalement » ouvre dans votre logiciel de messagerie un message prêt pour l'auteur ({0}) avec les images jointes : il ne reste plus qu'à l'envoyer.
+The assistant fills a template with content from the model and the conversation and turns it into a Confluence page or a Word document. Templates are Markdown files: you can change them, add your own or ask the assistant to make a template from a sample document. ‖ Asystent wypełnia szablon treścią z modelu i rozmowy i robi z niego stronę Confluence albo dokument Word. Szablony to pliki Markdown: możesz je zmieniać, dodawać własne albo poprosić asystenta, żeby zrobił szablon z przykładowego dokumentu. ‖ Der Assistent füllt eine Vorlage mit Inhalten aus dem Modell und der Unterhaltung und macht daraus eine Confluence-Seite oder ein Word-Dokument. Vorlagen sind Markdown-Dateien: Sie können sie ändern, eigene hinzufügen oder den Assistenten bitten, aus einem Beispieldokument eine Vorlage zu erstellen. ‖ L'assistant remplit un modèle avec le contenu du modèle EA et de la conversation, puis en fait une page Confluence ou un document Word. Les modèles sont des fichiers Markdown : vous pouvez les modifier, en ajouter ou demander à l'assistant de créer un modèle à partir d'un document d'exemple.
+Time ‖ Czas ‖ Zeit ‖ Heure
+Result ‖ Wynik ‖ Ergebnis ‖ Résultat
+Database ‖ Baza ‖ Datenbank ‖ Base
+Changes ‖ Zmiany ‖ Änderungen ‖ Modifications
+Created ‖ Utworzone ‖ Erstellt ‖ Créés
+Notes the assistant has remembered and knows in every new conversation. It saves them on its own or at your request ("remember…"). Each note is a Markdown file on this computer. ‖ Ustalenia, które asystent zapamiętał i zna w każdej nowej rozmowie. Zapisuje je sam albo na Twoją prośbę („zapamiętaj…”). Każde ustalenie to plik Markdown na tym komputerze. ‖ Festlegungen, die sich der Assistent gemerkt hat und in jeder neuen Unterhaltung kennt. Er speichert sie selbst oder auf Ihre Bitte („merk dir…“). Jede Festlegung ist eine Markdown-Datei auf diesem Computer. ‖ Les notes que l'assistant a mémorisées et qu'il connaît dans chaque nouvelle conversation. Il les enregistre lui-même ou à votre demande (« retiens… »). Chaque note est un fichier Markdown sur cet ordinateur.
+Checking… ‖ Sprawdzam… ‖ Prüfe… ‖ Vérification…
+Document ‖ Dokument ‖ Dokument ‖ Document
+Workbook ‖ Arkusz ‖ Arbeitsmappe ‖ Classeur
+the model's answer was cut off at the limit of {0} tokens. Increase "Max tokens" in Settings or ask for the diagram to be drawn in smaller parts. ‖ odpowiedź modelu została ucięta na limicie {0} tokenów. Zwiększ „Max tokenów” w Ustawieniach albo poproś o narysowanie diagramu w mniejszych częściach. ‖ die Antwort des Modells wurde beim Limit von {0} Tokens abgeschnitten. Erhöhen Sie „Max. Tokens“ in den Einstellungen oder lassen Sie das Diagramm in kleineren Teilen zeichnen. ‖ la réponse du modèle a été tronquée à la limite de {0} jetons. Augmentez « Jetons max. » dans les Paramètres ou demandez que le diagramme soit dessiné en plusieurs parties plus petites.
+Claude returned an empty translation ‖ Claude zwrócił pusty wynik tłumaczenia ‖ Claude hat eine leere Übersetzung zurückgegeben ‖ Claude a renvoyé une traduction vide
+no Claude API key ‖ brak klucza API Claude ‖ kein Claude-API-Schlüssel ‖ pas de clé API Claude
+reading {0} ‖ odczyt {0} ‖ {0} lesen ‖ lecture de {0}
+installer path ‖ ścieżka instalatora ‖ Pfad des Installationsprogramms ‖ chemin du programme d'installation
+reading the installer ‖ odczyt instalatora ‖ Installationsprogramm lesen ‖ lecture du programme d'installation
+copying the uninstaller ‖ kopia programu odinstalowującego ‖ Deinstallationsprogramm kopieren ‖ copie du programme de désinstallation
+You can enter these details in the wizard or later in the application, on the "Settings" tab. If the application is already installed, the wizard will update it and keep your settings and conversation history. ‖ Te dane możesz podać w kreatorze albo później w aplikacji, w zakładce „Ustawienia”. Jeśli aplikacja jest już zainstalowana, kreator ją zaktualizuje i zachowa Twoje ustawienia oraz historię rozmów. ‖ Diese Daten können Sie im Setup oder später in der Anwendung auf der Registerkarte „Einstellungen“ eingeben. Ist die Anwendung bereits installiert, aktualisiert das Setup sie und behält Ihre Einstellungen und den Unterhaltungsverlauf bei. ‖ Vous pouvez saisir ces données dans l'assistant d'installation ou plus tard dans l'application, onglet « Paramètres ». Si l'application est déjà installée, l'assistant d'installation la met à jour en conservant vos paramètres et l'historique des conversations.
+Windows 11 does not allow installers to pin programs to the taskbar. After installation, start the application, right-click its icon on the taskbar and choose "Pin to taskbar". ‖ Windows 11 nie pozwala instalatorom przypinać programów do paska zadań. Po instalacji uruchom aplikację, kliknij jej ikonę na pasku prawym przyciskiem myszy i wybierz „Przypnij do paska zadań”. ‖ Windows 11 erlaubt Installationsprogrammen nicht, Programme an die Taskleiste anzuheften. Starten Sie nach der Installation die Anwendung, klicken Sie mit der rechten Maustaste auf ihr Symbol in der Taskleiste und wählen Sie „An Taskleiste anheften“. ‖ Windows 11 ne permet pas aux programmes d'installation d'épingler des programmes à la barre des tâches. Après l'installation, lancez l'application, cliquez avec le bouton droit sur son icône dans la barre des tâches et choisissez « Épingler à la barre des tâches ».
+The user guide is in the Start menu and in the installation folder. After the first start, check the details on the "Settings" tab with the "Save and test" buttons. ‖ Instrukcja użytkownika jest w menu Start oraz w folderze instalacji. Po pierwszym uruchomieniu sprawdź dane w zakładce „Ustawienia” przyciskami „Zapisz i sprawdź”. ‖ Das Benutzerhandbuch finden Sie im Startmenü und im Installationsordner. Prüfen Sie nach dem ersten Start die Daten auf der Registerkarte „Einstellungen“ mit den Schaltflächen „Speichern und prüfen“. ‖ Le guide de l'utilisateur se trouve dans le menu Démarrer et dans le dossier d'installation. Après le premier lancement, vérifiez les données dans l'onglet « Paramètres » avec les boutons « Enregistrer et tester ».
+connecting to the Claude API ‖ połączenie z API Claude ‖ Verbindung zur Claude-API ‖ connexion à l'API Claude
+the API response is not JSON ‖ odpowiedź API nie jest JSON-em ‖ die API-Antwort ist kein JSON ‖ la réponse de l'API n'est pas du JSON
+the Claude API returned {0}: {1} ‖ API Claude zwróciło {0}: {1} ‖ die Claude-API hat {0} zurückgegeben: {1} ‖ l'API Claude a renvoyé {0} : {1}
+EA does not know "{0}": {1} ‖ EA nie zna „{0}”: {1} ‖ EA kennt „{0}“ nicht: {1} ‖ EA ne connaît pas « {0} » : {1}
+{0}: EA returned no object ‖ {0}: EA nie zwróciło obiektu ‖ {0}: EA hat kein Objekt zurückgegeben ‖ {0} : EA n'a renvoyé aucun objet
+save failed ({0}): {1} ‖ zapis nieudany ({0}): {1} ‖ Speichern fehlgeschlagen ({0}): {1} ‖ échec de l'enregistrement ({0}) : {1}
+unknown approval mode '{0}' (plan, ask, auto) ‖ tryb zatwierdzania '{0}' nieznany (plan, ask, auto) ‖ unbekannter Freigabemodus '{0}' (plan, ask, auto) ‖ mode de validation « {0} » inconnu (plan, ask, auto)
+cannot read {0} ‖ nie mogę przeczytać {0} ‖ {0} kann nicht gelesen werden ‖ impossible de lire {0}
+settings folder {0} ‖ katalog ustawień {0} ‖ Einstellungsordner {0} ‖ dossier des paramètres {0}
+saving {0} ‖ zapis {0} ‖ {0} speichern ‖ enregistrement de {0}
+secret '{0}' not found in Credential Manager ‖ brak sekretu '{0}' w Menedżerze poświadczeń ‖ Geheimnis '{0}' fehlt in der Anmeldeinformationsverwaltung ‖ secret « {0} » absent du Gestionnaire d'identification
+image-{0} ‖ obrazek-{0} ‖ Bild-{0} ‖ image-{0}
+image "{0}" ‖ obrazek „{0}” ‖ Bild „{0}“ ‖ image « {0} »
+HTTP client ‖ klient HTTP ‖ HTTP-Client ‖ client HTTP
+{0}: no connection to Confluence ‖ {0}: brak połączenia z Confluence ‖ {0}: keine Verbindung zu Confluence ‖ {0} : pas de connexion à Confluence
+{0}: Confluence replied {1}: {2} ‖ {0}: Confluence odpowiedział {1}: {2} ‖ {0}: Confluence antwortete {1}: {2} ‖ {0} : Confluence a répondu {1} : {2}
+checking the space ‖ sprawdzenie przestrzeni ‖ Bereich prüfen ‖ vérification de l'espace
+reading the page ‖ odczyt strony ‖ Seite lesen ‖ lecture de la page
+searching for the page ‖ wyszukanie strony ‖ Seite suchen ‖ recherche de la page
+page without an id ‖ strona bez id ‖ Seite ohne ID ‖ page sans id
+updating the page ‖ aktualizacja strony ‖ Seite aktualisieren ‖ mise à jour de la page
+creating the page ‖ utworzenie strony ‖ Seite erstellen ‖ création de la page
+Confluence did not return a page id ‖ Confluence nie zwrócił id strony ‖ Confluence hat keine Seiten-ID zurückgegeben ‖ Confluence n'a pas renvoyé d'id de page
+reading attachments ‖ odczyt załączników ‖ Anhänge lesen ‖ lecture des pièces jointes
+attachment {0} ‖ załącznik {0} ‖ Anhang {0} ‖ pièce jointe {0}
+PNG image@@error-context ‖ obrazek PNG ‖ PNG-Bild ‖ image PNG
+saving DOCX ‖ zapis DOCX ‖ DOCX speichern ‖ enregistrement DOCX
+empty list of operations ‖ pusta lista operacji ‖ leere Liste von Operationen ‖ liste d'opérations vide
+EA did not respond within {0} s and the operation was stopped. The most common causes: a wrong login or password of the EA account, wrong database details (server, account, password) or no license; EA then opens an invisible window and waits. ‖ EA nie odpowiedział w ciągu {0} s i operacja została przerwana. Najczęstsze przyczyny: błędny login lub hasło konta EA, błędne dane bazy (serwer, konto, hasło) albo brak licencji; EA otwiera wtedy niewidoczne okno i czeka. ‖ EA hat nicht innerhalb von {0} s geantwortet, die Operation wurde abgebrochen. Häufigste Ursachen: falscher Anmeldename oder falsches Passwort des EA-Kontos, falsche Datenbankdaten (Server, Konto, Passwort) oder keine Lizenz; EA öffnet dann ein unsichtbares Fenster und wartet. ‖ EA n'a pas répondu dans les {0} s et l'opération a été interrompue. Causes les plus fréquentes : identifiant ou mot de passe du compte EA erroné, données de la base erronées (serveur, compte, mot de passe) ou absence de licence ; EA ouvre alors une fenêtre invisible et attend.
+the EA thread ended without a response ‖ wątek EA zakończył się bez odpowiedzi ‖ der EA-Thread endete ohne Antwort ‖ le thread EA s'est terminé sans réponse
+unknown error ‖ nieznany błąd ‖ unbekannter Fehler ‖ erreur inconnue
+operation {0} ({1}) failed: {2} ‖ operacja nr {0} ({1}) nie powiodła się: {2} ‖ Operation Nr. {0} ({1}) ist fehlgeschlagen: {2} ‖ l'opération n° {0} ({1}) a échoué : {2}
+The changes were rolled back (the package was deleted); nothing was left in the model. ‖ Zmiany zostały wycofane (pakiet usunięto), w modelu nic nie zostało. ‖ Die Änderungen wurden zurückgenommen (das Paket wurde gelöscht); im Modell ist nichts zurückgeblieben. ‖ Les modifications ont été annulées (le paquetage a été supprimé) ; rien n'est resté dans le modèle.
+{0} objects created before the error remain in the model. ‖ W modelu zostało {0} obiektów utworzonych przed błędem. ‖ Im Modell verbleiben {0} Objekte, die vor dem Fehler erstellt wurden. ‖ {0} objets créés avant l'erreur restent dans le modèle.
+new packages ‖ nowe pakiety ‖ neue Pakete ‖ nouveaux paquetages
+new diagrams ‖ nowe diagramy ‖ neue Diagramme ‖ nouveaux diagrammes
+new elements ‖ nowe elementy ‖ neue Elemente ‖ nouveaux éléments
+new connectors ‖ nowe połączenia ‖ neue Konnektoren ‖ nouveaux connecteurs
+elements placed on diagrams ‖ elementy umieszczone na diagramach ‖ in Diagrammen platzierte Elemente ‖ éléments placés sur des diagrammes
+changed elements ‖ zmienione elementy ‖ geänderte Elemente ‖ éléments modifiés
+objects moved to another package ‖ obiekty przeniesione do innego pakietu ‖ in ein anderes Paket verschobene Objekte ‖ objets déplacés vers un autre paquetage
+navigation cells (links to diagrams) ‖ komórki nawigacyjne (linki do diagramów) ‖ Navigationszellen (Links zu Diagrammen) ‖ cellules de navigation (liens vers des diagrammes)
+objects DELETED from the model ‖ USUNIĘTE z modelu obiekty ‖ aus dem Modell GELÖSCHTE Objekte ‖ objets SUPPRIMÉS du modèle
+changed colors on diagrams ‖ zmienione kolory na diagramach ‖ geänderte Farben in Diagrammen ‖ couleurs modifiées sur des diagrammes
+changed position or size on diagrams ‖ zmienione położenie lub rozmiar na diagramach ‖ geänderte Position oder Größe in Diagrammen ‖ position ou taille modifiée sur des diagrammes
+changed connector line styles on diagrams ‖ zmieniony przebieg linii połączeń na diagramach ‖ geänderter Linienverlauf von Konnektoren in Diagrammen ‖ tracé des lignes de connecteurs modifié sur des diagrammes
+routed connector paths on diagrams ‖ poprowadzone trasy połączeń na diagramach ‖ festgelegte Konnektorverläufe in Diagrammen ‖ tracés de connecteurs définis sur des diagrammes
+changed diagram names or notes ‖ zmienione nazwy lub opisy diagramów ‖ geänderte Namen oder Beschreibungen von Diagrammen ‖ noms ou descriptions de diagrammes modifiés
+connectors hidden or shown on diagrams ‖ ukryte lub pokazane połączenia na diagramach ‖ in Diagrammen aus- oder eingeblendete Konnektoren ‖ connecteurs masqués ou affichés sur des diagrammes
+new attributes ‖ nowe atrybuty ‖ neue Attribute ‖ nouveaux attributs
+diagram legends ‖ legendy diagramów ‖ Diagrammlegenden ‖ légendes de diagrammes
+new operations ‖ nowe operacje ‖ neue Operationen ‖ nouvelles opérations
+package copies (with all contents) ‖ kopie pakietów (z całą zawartością) ‖ Paketkopien (mit gesamtem Inhalt) ‖ copies de paquetages (avec tout leur contenu)
+package baselines (saved versions) ‖ baseline'y pakietów (zapisane wersje) ‖ Paket-Baselines (gespeicherte Versionen) ‖ baselines de paquetages (versions enregistrées)
+elements removed from diagrams (they stay in the model) ‖ elementy zdjęte z diagramów (zostają w modelu) ‖ aus Diagrammen entfernte Elemente (bleiben im Modell) ‖ éléments retirés des diagrammes (ils restent dans le modèle)
+diagram style settings ‖ ustawienia stylu diagramu ‖ Einstellungen des Diagrammstils ‖ paramètres de style du diagramme
+element-to-diagram links ‖ powiązania elementu z diagramem ‖ Verknüpfungen von Elementen mit Diagrammen ‖ liaisons d'éléments avec des diagrammes
+package "{0}" ‖ pakiet „{0}” ‖ Paket „{0}“ ‖ paquetage « {0} »
+diagram "{0}" ({1}) ‖ diagram „{0}” ({1}) ‖ Diagramm „{0}“ ({1}) ‖ diagramme « {0} » ({1})
+other operations ‖ inne operacje ‖ andere Operationen ‖ autres opérations
+Enterprise Architect is not registered in the system (COM): {0} ‖ Enterprise Architect nie jest zarejestrowany w systemie (COM): {0} ‖ Enterprise Architect ist im System nicht registriert (COM): {0} ‖ Enterprise Architect n'est pas enregistré dans le système (COM) : {0}
+could not start EA through COM: {0} ‖ nie udało się uruchomić EA przez COM: {0} ‖ EA konnte nicht über COM gestartet werden: {0} ‖ impossible de démarrer EA via COM : {0}
+could not open the model: {0} ‖ nie udało się otworzyć modelu: {0} ‖ das Modell konnte nicht geöffnet werden: {0} ‖ impossible d'ouvrir le modèle : {0}
+Could not roll back the changes: {0} ‖ Nie udało się wycofać zmian: {0} ‖ Die Änderungen konnten nicht zurückgenommen werden: {0} ‖ Impossible d'annuler les modifications : {0}
+missing field '{0}' (number) ‖ brak pola '{0}' (liczba) ‖ Feld '{0}' fehlt (Zahl) ‖ champ « {0} » manquant (nombre)
+color '{0}' is not in the #RRGGBB format ‖ kolor '{0}' nie ma postaci #RRGGBB ‖ Farbe '{0}' hat nicht das Format #RRGGBB ‖ la couleur « {0} » n'est pas au format #RRGGBB
+invalid color ‖ nieprawidłowy kolor ‖ ungültige Farbe ‖ couleur non valide
+Cannot lock the object ({0} id={1}). It is probably locked by another user. ‖ Nie można zablokować obiektu ({0} id={1}). Prawdopodobnie jest zablokowany przez innego użytkownika. ‖ Das Objekt ({0} id={1}) kann nicht gesperrt werden. Wahrscheinlich ist es von einem anderen Benutzer gesperrt. ‖ Impossible de verrouiller l'objet ({0} id={1}). Il est probablement verrouillé par un autre utilisateur.
+Unknown key '#{0}' (the object was not created earlier in this batch). ‖ Nieznany klucz '#{0}' (obiekt nie został utworzony wcześniej w tym zadaniu). ‖ Unbekannter Schlüssel '#{0}' (das Objekt wurde nicht zuvor in diesem Auftrag erstellt). ‖ Clé « #{0} » inconnue (l'objet n'a pas été créé auparavant dans ce lot).
+Key '#{0}' refers to an object of type '{1}', but '{2}' was expected. ‖ Klucz '#{0}' wskazuje obiekt typu '{1}', a oczekiwano '{2}'. ‖ Schlüssel '#{0}' verweist auf ein Objekt vom Typ '{1}', erwartet wurde '{2}'. ‖ La clé « #{0} » désigne un objet de type « {1} », alors que « {2} » était attendu.
+No reference given: {0}. ‖ Brak wskazania: {0}. ‖ Keine Angabe: {0}. ‖ Aucune référence : {0}.
+Invalid reference {0}: {1} ‖ Nieprawidłowe wskazanie {0}: {1} ‖ Ungültige Angabe {0}: {1} ‖ Référence {0} non valide : {1}
+There is no {0} with id {1}. ‖ Nie ma obiektu {0} o id {1}. ‖ Es gibt kein Objekt {0} mit der ID {1}. ‖ Il n'existe aucun objet {0} avec l'id {1}.
+Legend ‖ Legenda ‖ Legende ‖ Légende
+EA did not create the legend. ‖ EA nie utworzył legendy. ‖ EA hat die Legende nicht erstellt. ‖ EA n'a pas créé la légende.
+legend ‖ legenda ‖ Legende ‖ légende
+EA did not add the legend to the diagram. ‖ EA nie dodał legendy do diagramu. ‖ EA hat die Legende nicht zum Diagramm hinzugefügt. ‖ EA n'a pas ajouté la légende au diagramme.
+legend on the diagram ‖ legenda na diagramie ‖ Legende im Diagramm ‖ légende sur le diagramme
+tagged value ‖ wartość tagu ‖ Tagged Value ‖ valeur étiquetée
+new tagged value ‖ nowy tag ‖ neuer Tagged Value ‖ nouvelle valeur étiquetée
+The 'type' field must be a UML type (e.g. Activity, Event, Decision, Class); the profile name ('{0}') belongs in the 'stereotype' field. ‖ Pole 'type' musi być typem UML (np. Activity, Event, Decision, Class), a nazwa z profilu ('{0}') należy do pola 'stereotype'. ‖ Das Feld 'type' muss ein UML-Typ sein (z. B. Activity, Event, Decision, Class); der Name aus dem Profil ('{0}') gehört in das Feld 'stereotype'. ‖ Le champ 'type' doit être un type UML (p. ex. Activity, Event, Decision, Class) ; le nom issu du profil ('{0}') va dans le champ 'stereotype'.
+EA did not create an object of type '{0}' (no lock on the owner, or unknown type). ‖ EA nie utworzył obiektu typu '{0}' (brak blokady na właścicielu albo nieznany typ). ‖ EA hat kein Objekt vom Typ '{0}' erstellt (keine Sperre auf dem Besitzer oder unbekannter Typ). ‖ EA n'a pas créé d'objet de type « {0} » (pas de verrou sur le propriétaire ou type inconnu).
+Object to delete not found ({0}). ‖ Nie znaleziono obiektu do usunięcia ({0}). ‖ Zu löschendes Objekt nicht gefunden ({0}). ‖ Objet à supprimer introuvable ({0}).
+EA did not delete the object ({0}): no lock, or the object is locked by someone else. ‖ EA nie usunął obiektu ({0}): brak blokady albo obiekt jest zablokowany przez kogoś innego. ‖ EA hat das Objekt ({0}) nicht gelöscht: keine Sperre, oder das Objekt ist von jemand anderem gesperrt. ‖ EA n'a pas supprimé l'objet ({0}) : pas de verrou, ou l'objet est verrouillé par quelqu'un d'autre.
+Cannot lock the contents of package '{0}' before deleting it. ‖ Nie można zablokować zawartości pakietu '{0}' przed usunięciem. ‖ Der Inhalt des Pakets '{0}' kann vor dem Löschen nicht gesperrt werden. ‖ Impossible de verrouiller le contenu du paquetage « {0} » avant sa suppression.
+element "{0}" ‖ element „{0}” ‖ Element „{0}“ ‖ élément « {0} »
+diagram "{0}" ‖ diagram „{0}” ‖ Diagramm „{0}“ ‖ diagramme « {0} »
+Could not read the locks from the model: {0} ‖ Nie udało się odczytać blokad z modelu: {0} ‖ Die Sperren konnten nicht aus dem Modell gelesen werden: {0} ‖ Impossible de lire les verrous du modèle : {0}
+Locks in the model: ‖ Blokady w modelu: ‖ Sperren im Modell: ‖ Verrous dans le modèle :
+account {0} ‖ konto {0} ‖ Konto {0} ‖ compte {0}
+account {0} ({1}) ‖ konto {0} ({1}) ‖ Konto {0} ({1}) ‖ compte {0} ({1})
+the account the assistant logs in with ‖ to konto, którym loguje się asystent ‖ das Konto, mit dem sich der Assistent anmeldet ‖ le compte avec lequel l'assistant se connecte
+group {0} ‖ grupa {0} ‖ Gruppe {0} ‖ groupe {0}
+unknown owner ‖ nieznany właściciel ‖ unbekannter Besitzer ‖ propriétaire inconnu
+{0}, since {1} ‖ {0}, od {1} ‖ {0}, seit {1} ‖ {0}, depuis {1}
+- {0}: not locked ‖ - {0}: bez blokady ‖ - {0}: nicht gesperrt ‖ - {0} : non verrouillé
+- {0}: locked by {1} ‖ - {0}: zablokowany przez {1} ‖ - {0}: gesperrt von {1} ‖ - {0} : verrouillé par {1}
+None of these objects has a lock in the model's lock table, so the refusal comes from EA itself. ‖ Żaden z tych obiektów nie ma blokady w tabeli blokad modelu, więc odmowa pochodzi z samego EA. ‖ Keines dieser Objekte hat eine Sperre in der Sperrtabelle des Modells, die Ablehnung kommt also von EA selbst. ‖ Aucun de ces objets n'a de verrou dans la table des verrous du modèle : le refus vient donc d'EA lui-même.
+EA did not create package '{0}' (no lock on the parent package?). ‖ EA nie utworzył pakietu '{0}' (brak blokady na pakiecie nadrzędnym?). ‖ EA hat das Paket '{0}' nicht erstellt (keine Sperre auf dem übergeordneten Paket?). ‖ EA n'a pas créé le paquetage « {0} » (pas de verrou sur le paquetage parent ?).
+package '{0}' ‖ pakiet '{0}' ‖ Paket '{0}' ‖ paquetage « {0} »
+package notes ‖ opis pakietu ‖ Paketbeschreibung ‖ description du paquetage
+EA did not create diagram '{0}' of type '{1}'. ‖ EA nie utworzył diagramu '{0}' typu '{1}'. ‖ EA hat das Diagramm '{0}' vom Typ '{1}' nicht erstellt. ‖ EA n'a pas créé le diagramme « {0} » de type « {1} ».
+diagram '{0}' ‖ diagram '{0}' ‖ Diagramm '{0}' ‖ diagramme « {0} »
+diagram notes ‖ opis diagramu ‖ Diagrammbeschreibung ‖ description du diagramme
+element '{0}' ‖ element '{0}' ‖ Element '{0}' ‖ élément « {0} »
+element color ‖ kolor elementu ‖ Elementfarbe ‖ couleur de l'élément
+connector '{0}' ‖ połączenie '{0}' ‖ Konnektor '{0}' ‖ connecteur « {0} »
+EA did not add the element to the diagram. ‖ EA nie dodał elementu do diagramu. ‖ EA hat das Element nicht zum Diagramm hinzugefügt. ‖ EA n'a pas ajouté l'élément au diagramme.
+diagram object ‖ obiekt diagramu ‖ Diagrammobjekt ‖ objet du diagramme
+diagram object style ‖ styl obiektu diagramu ‖ Stil des Diagrammobjekts ‖ style de l'objet du diagramme
+diagram style ‖ styl diagramu ‖ Diagrammstil ‖ style du diagramme
+composite diagram of the element ‖ diagram złożony elementu ‖ zusammengesetztes Diagramm des Elements ‖ diagramme composite de l'élément
+element id={0} ‖ element id={0} ‖ Element id={0} ‖ élément id={0}
+moving element id={0} ‖ przeniesienie elementu id={0} ‖ Element id={0} verschieben ‖ déplacement de l'élément id={0}
+moving diagram id={0} ‖ przeniesienie diagramu id={0} ‖ Diagramm id={0} verschieben ‖ déplacement du diagramme id={0}
+A package cannot be moved into itself. ‖ Pakietu nie można przenieść do niego samego. ‖ Ein Paket kann nicht in sich selbst verschoben werden. ‖ Un paquetage ne peut pas être déplacé dans lui-même.
+moving package id={0} ‖ przeniesienie pakietu id={0} ‖ Paket id={0} verschieben ‖ déplacement du paquetage id={0}
+The move operation requires the element, diagram or child_package field. ‖ Operacja move wymaga pola element, diagram albo child_package. ‖ Die Operation move erfordert das Feld element, diagram oder child_package. ‖ L'opération move nécessite le champ element, diagram ou child_package.
+diagram id={0} ‖ diagram id={0} ‖ Diagramm id={0} ‖ diagramme id={0}
+There is no connector with id {0}. ‖ Nie ma połączenia o id {0}. ‖ Es gibt keinen Konnektor mit der ID {0}. ‖ Il n'existe aucun connecteur avec l'id {0}.
+connector id={0} ‖ połączenie id={0} ‖ Konnektor id={0} ‖ connecteur id={0}
+The root package of the model is not deleted. ‖ Nie usuwam pakietu głównego modelu. ‖ Das Stammpaket des Modells wird nicht gelöscht. ‖ Le paquetage racine du modèle n'est pas supprimé.
+The delete operation requires the element, diagram, connector or package field. ‖ Operacja delete wymaga pola element, diagram, connector albo package. ‖ Die Operation delete erfordert das Feld element, diagram, connector oder package. ‖ L'opération delete nécessite le champ element, diagram, connector ou package.
+color on the diagram ‖ kolor na diagramie ‖ Farbe im Diagramm ‖ couleur sur le diagramme
+Element id={0} is not on diagram id={1}. ‖ Elementu id={0} nie ma na diagramie id={1}. ‖ Element id={0} ist nicht im Diagramm id={1}. ‖ L'élément id={0} n'est pas sur le diagramme id={1}.
+attribute '{0}' ‖ atrybut '{0}' ‖ Attribut '{0}' ‖ attribut « {0} »
+operation '{0}' ‖ operacja '{0}' ‖ Operation '{0}' ‖ opération « {0} »
+operation parameter ‖ parametr operacji ‖ Operationsparameter ‖ paramètre d'opération
+EA did not clone the package. ‖ EA nie sklonował pakietu. ‖ EA hat das Paket nicht geklont. ‖ EA n'a pas cloné le paquetage.
+name of the package copy ‖ nazwa kopii pakietu ‖ Name der Paketkopie ‖ nom de la copie du paquetage
+EA did not create a baseline of package '{0}': {1} ‖ EA nie utworzył baseline'u pakietu '{0}': {1} ‖ EA hat keine Baseline des Pakets '{0}' erstellt: {1} ‖ EA n'a pas créé de baseline du paquetage « {0} » : {1}
+Provide a list of connectors (connectors). ‖ Podaj listę połączeń (connectors). ‖ Geben Sie eine Liste von Konnektoren an (connectors). ‖ Indiquez une liste de connecteurs (connectors).
+connector visibility on the diagram ‖ widoczność połączenia na diagramie ‖ Sichtbarkeit des Konnektors im Diagramm ‖ visibilité du connecteur sur le diagramme
+diagram ‖ diagram ‖ Diagramm ‖ diagramme
+Element id={0} (end of connector id={1}) is not on diagram id={2}. ‖ Element id={0} (koniec połączenia id={1}) nie leży na diagramie id={2}. ‖ Element id={0} (Ende des Konnektors id={1}) liegt nicht im Diagramm id={2}. ‖ L'élément id={0} (extrémité du connecteur id={1}) n'est pas sur le diagramme id={2}.
+connector route ‖ trasa połączenia ‖ Verlauf des Konnektors ‖ tracé du connecteur
+Unknown line style '{0}'. Allowed: direct, auto, custom, orthogonal_square, orthogonal_rounded, tree_vertical, tree_horizontal, lateral_vertical, lateral_horizontal. ‖ Nieznany styl linii '{0}'. Dozwolone: direct, auto, custom, orthogonal_square, orthogonal_rounded, tree_vertical, tree_horizontal, lateral_vertical, lateral_horizontal. ‖ Unbekannter Linienstil '{0}'. Zulässig: direct, auto, custom, orthogonal_square, orthogonal_rounded, tree_vertical, tree_horizontal, lateral_vertical, lateral_horizontal. ‖ Style de ligne « {0} » inconnu. Valeurs autorisées : direct, auto, custom, orthogonal_square, orthogonal_rounded, tree_vertical, tree_horizontal, lateral_vertical, lateral_horizontal.
+None of the given connectors joins elements that are on diagram id={0}. ‖ Żadne ze wskazanych połączeń nie łączy elementów leżących na diagramie id={0}. ‖ Keiner der angegebenen Konnektoren verbindet Elemente im Diagramm id={0}. ‖ Aucun des connecteurs indiqués ne relie des éléments présents sur le diagramme id={0}.
+connector line style ‖ styl linii połączenia ‖ Linienstil des Konnektors ‖ style de ligne du connecteur
+Width and height must be greater than zero. ‖ Szerokość i wysokość muszą być większe od zera. ‖ Breite und Höhe müssen größer als null sein. ‖ La largeur et la hauteur doivent être supérieures à zéro.
+position and size on the diagram ‖ położenie i rozmiar na diagramie ‖ Position und Größe im Diagramm ‖ position et taille sur le diagramme
+element id={0} on the diagram ‖ element id={0} na diagramie ‖ Element id={0} im Diagramm ‖ élément id={0} sur le diagramme
+diagram after removing the element ‖ diagram po zdjęciu elementu ‖ Diagramm nach dem Entfernen des Elements ‖ diagramme après le retrait de l'élément
+There is no diagram with id {0}. ‖ Nie ma diagramu o id {0}. ‖ Es gibt kein Diagramm mit der ID {0}. ‖ Il n'existe aucun diagramme avec l'id {0}.
+Unknown operation '{0}'. ‖ Nieznana operacja '{0}'. ‖ Unbekannte Operation '{0}'. ‖ Opération « {0} » inconnue.
+There is no target diagram '{0}'. ‖ Nie ma diagramu docelowego '{0}'. ‖ Es gibt kein Zieldiagramm '{0}'. ‖ Le diagramme cible « {0} » n'existe pas.
+EA did not create the navigation cell (no lock on the diagram's package?). ‖ EA nie utworzył komórki nawigacyjnej (brak blokady na pakiecie diagramu?). ‖ EA hat die Navigationszelle nicht erstellt (keine Sperre auf dem Paket des Diagramms?). ‖ EA n'a pas créé la cellule de navigation (pas de verrou sur le paquetage du diagramme ?).
+navigation cell ‖ komórka nawigacyjna ‖ Navigationszelle ‖ cellule de navigation
+The image field has the form 'list-number', e.g. 2-61. ‖ Pole image ma postać 'lista-numer', np. 2-61. ‖ Das Feld image hat die Form 'Liste-Nummer', z. B. 2-61. ‖ Le champ image a la forme 'liste-numéro', p. ex. 2-61.
+EA did not add the navigation cell to the diagram. ‖ EA nie dodał komórki nawigacyjnej do diagramu. ‖ EA hat die Navigationszelle nicht zum Diagramm hinzugefügt. ‖ EA n'a pas ajouté la cellule de navigation au diagramme.
+navigation cell on the diagram ‖ komórka nawigacyjna na diagramie ‖ Navigationszelle im Diagramm ‖ cellule de navigation sur le diagramme
+navigation cell style ‖ styl komórki nawigacyjnej ‖ Stil der Navigationszelle ‖ style de la cellule de navigation
+EA is not installed ‖ EA nie jest zainstalowane ‖ EA ist nicht installiert ‖ EA n'est pas installé
+no Enterprise Architect window is open ‖ nie ma otwartego okna Enterprise Architect ‖ kein Enterprise-Architect-Fenster geöffnet ‖ aucune fenêtre Enterprise Architect n'est ouverte
+the EA window has no model open ‖ okno EA bez otwartego modelu ‖ im EA-Fenster ist kein Modell geöffnet ‖ aucun modèle n'est ouvert dans la fenêtre EA
+the EA window is not responding (a dialog box may be open) ‖ okno EA nie odpowiada (może ma otwarte okno dialogowe) ‖ das EA-Fenster reagiert nicht (möglicherweise ist ein Dialogfeld geöffnet) ‖ la fenêtre EA ne répond pas (une boîte de dialogue est peut-être ouverte)
+the open EA window shows a different model (connection: {0}), but the assistant works with the database "{1}" ‖ w otwartym oknie EA jest inny model (połączenie: {0}), a asystent pracuje na bazie „{1}” ‖ im geöffneten EA-Fenster ist ein anderes Modell geöffnet (Verbindung: {0}), der Assistent arbeitet aber mit der Datenbank „{1}“ ‖ la fenêtre EA ouverte affiche un autre modèle (connexion : {0}), alors que l'assistant travaille sur la base « {1} »
+version conflict: the file has revision {0}, but the application expected {1}. The conversation was changed elsewhere - load it again. ‖ konflikt wersji: plik ma rewizję {0}, a aplikacja oczekiwała {1}. Sesja została zmieniona gdzie indziej - wczytaj ją ponownie. ‖ Versionskonflikt: Die Datei hat die Revision {0}, die Anwendung hat {1} erwartet. Die Unterhaltung wurde an anderer Stelle geändert – laden Sie sie erneut. ‖ conflit de version : le fichier a la révision {0}, alors que l'application attendait {1}. La conversation a été modifiée ailleurs – rechargez-la.
+history folder ‖ katalog historii ‖ Verlaufsordner ‖ dossier de l'historique
+saving the conversation ‖ zapis sesji ‖ Unterhaltung speichern ‖ enregistrement de la conversation
+replacing the conversation file ‖ podmiana sesji ‖ Unterhaltungsdatei ersetzen ‖ remplacement du fichier de la conversation
+saving the attachment ‖ zapis załącznika ‖ Anhang speichern ‖ enregistrement de la pièce jointe
+file ‖ plik ‖ Datei ‖ fichier
+copying the attachment ‖ kopiowanie załącznika ‖ Anhang kopieren ‖ copie de la pièce jointe
+invalid note name: '{0}' ‖ nieprawidłowa nazwa ustalenia: '{0}' ‖ ungültiger Name der Festlegung: '{0}' ‖ nom de note non valide : « {0} »
+memory folder {0} ‖ katalog pamięci {0} ‖ Gedächtnisordner {0} ‖ dossier de la mémoire {0}
+there is no note '{0}' ‖ nie ma ustalenia '{0}' ‖ es gibt keine Festlegung '{0}' ‖ la note « {0} » n'existe pas
+removing {0} ‖ usunięcie {0} ‖ {0} entfernen ‖ suppression de {0}
+saving the MEMORY.md index ‖ zapis spisu MEMORY.md ‖ Verzeichnis MEMORY.md speichern ‖ enregistrement de l'index MEMORY.md
+invalid SVG ‖ niepoprawny SVG ‖ ungültiges SVG ‖ SVG non valide
+the image has no size ‖ pusty rozmiar obrazka ‖ das Bild hat keine Größe ‖ l'image n'a pas de taille
+image too large ‖ za duży obrazek ‖ Bild zu groß ‖ image trop grande
+the images total {0} MB, but the limit is {1} MB ‖ zdjęcia mają razem {0} MB, a limit to {1} MB ‖ die Bilder sind zusammen {0} MB groß, das Limit liegt bei {1} MB ‖ les images font {0} Mo au total, alors que la limite est de {1} Mo
+Loonar bug report {0} ‖ Loonar zgloszenie {0} ‖ Loonar Fehlermeldung {0} ‖ Loonar signalement {0}
+folder {0} ‖ folder {0} ‖ Ordner {0} ‖ dossier {0}
+mail program ‖ program pocztowy ‖ E-Mail-Programm ‖ logiciel de messagerie
+empty template name ‖ pusta nazwa szablonu ‖ leerer Vorlagenname ‖ nom de modèle vide
+there is no template "{0}" (available: {1}) ‖ nie ma szablonu „{0}” (dostępne: {1}) ‖ es gibt keine Vorlage „{0}“ (verfügbar: {1}) ‖ le modèle « {0} » n'existe pas (disponibles : {1})
+templates folder ‖ folder szablonów ‖ Vorlagenordner ‖ dossier des modèles
+the user rejected this change; nothing was saved ‖ użytkownik odrzucił tę zmianę; nic nie zostało zapisane ‖ der Benutzer hat diese Änderung abgelehnt; es wurde nichts gespeichert ‖ l'utilisateur a refusé cette modification ; rien n'a été enregistré
+the user rejected this operation; nothing was sent ‖ użytkownik odrzucił tę operację; nic nie zostało wysłane ‖ der Benutzer hat diesen Vorgang abgelehnt; es wurde nichts gesendet ‖ l'utilisateur a refusé cette opération ; rien n'a été envoyé
+missing field '{0}' ‖ brak pola '{0}' ‖ Feld '{0}' fehlt ‖ champ « {0} » manquant
+unknown ea_ui action: {0} ‖ nieznana akcja ea_ui: {0} ‖ unbekannte ea_ui-Aktion: {0} ‖ action ea_ui inconnue : {0}
+unknown tool: {0} ‖ nieznane narzędzie: {0} ‖ unbekanntes Werkzeug: {0} ‖ outil inconnu : {0}
+image ‖ obrazek ‖ Bild ‖ image
+attachments folder ‖ katalog załączników ‖ Anhangsordner ‖ dossier des pièces jointes
+saving the image ‖ zapis obrazka ‖ Bild speichern ‖ enregistrement de l'image
+diagram id ‖ id diagramu ‖ Diagramm-ID ‖ id du diagramme
+EA did not save the image of diagram {0} ‖ EA nie zapisał obrazka diagramu {0} ‖ EA hat das Bild von Diagramm {0} nicht gespeichert ‖ EA n'a pas enregistré l'image du diagramme {0}
+image name ‖ nazwa obrazka ‖ Bildname ‖ nom de l'image
+there is no image {0} ‖ nie ma obrazka {0} ‖ es gibt kein Bild {0} ‖ l'image {0} n'existe pas
+unknown image source '{0}' (use diagram:ID or image:FILE_NAME) ‖ nieznane źródło obrazka '{0}' (użyj diagram:ID albo image:NAZWA_PLIKU) ‖ unbekannte Bildquelle '{0}' (verwenden Sie diagram:ID oder image:DATEINAME) ‖ source d'image « {0} » inconnue (utilisez diagram:ID ou image:NOM_DU_FICHIER)
+page images folder ‖ folder obrazków strony ‖ Bilderordner der Seite ‖ dossier des images de la page
+saving the page source ‖ zapis źródła strony ‖ Seitenquelle speichern ‖ enregistrement de la source de la page
+saving the page code ‖ zapis kodu strony ‖ Seitencode speichern ‖ enregistrement du code de la page
+Confluence is not configured: complete Settings → Confluence (address, space, token) ‖ Confluence nie jest skonfigurowany: uzupełnij Ustawienia → Confluence (adres, przestrzeń, token) ‖ Confluence ist nicht konfiguriert: Ergänzen Sie Einstellungen → Confluence (Adresse, Bereich, Token) ‖ Confluence n'est pas configuré : complétez Paramètres → Confluence (adresse, espace, jeton)
+no Confluence token in the settings ‖ brak tokena Confluence w ustawieniach ‖ kein Confluence-Token in den Einstellungen ‖ pas de jeton Confluence dans les paramètres
+missing field 'page' (the .confluence.xml file from create_confluence_page) ‖ brak pola 'page' (plik .confluence.xml z create_confluence_page) ‖ Feld 'page' fehlt (die Datei .confluence.xml aus create_confluence_page) ‖ champ « page » manquant (le fichier .confluence.xml issu de create_confluence_page)
+page file name ‖ nazwa pliku strony ‖ Dateiname der Seite ‖ nom du fichier de la page
+the page source {0} does not exist ‖ nie ma źródła strony {0} ‖ Seitenquelle {0} existiert nicht ‖ la source de la page {0} n'existe pas
+specify the Confluence space (space) or set a default one in the settings ‖ podaj przestrzeń Confluence (space) albo ustaw domyślną w ustawieniach ‖ geben Sie den Confluence-Bereich (space) an oder legen Sie in den Einstellungen einen Standardbereich fest ‖ indiquez l'espace Confluence (space) ou définissez un espace par défaut dans les paramètres
+saving the document ‖ zapis dokumentu ‖ Dokument speichern ‖ enregistrement du document
+missing field 'element' (object_id of the class) ‖ brak pola 'element' (object_id klasy) ‖ Feld 'element' fehlt (object_id der Klasse) ‖ champ « element » manquant (object_id de la classe)
+there is no element with id {0} ‖ nie ma elementu o id {0} ‖ es gibt kein Element mit der ID {0} ‖ il n'existe aucun élément avec l'id {0}
+missing field 'element' (object_id) ‖ brak pola 'element' (object_id) ‖ Feld 'element' fehlt (object_id) ‖ champ « element » manquant (object_id)
+missing list '{0}' ‖ brak listy '{0}' ‖ Liste '{0}' fehlt ‖ liste « {0} » manquante
+saving the workbook ‖ zapis arkusza ‖ Arbeitsmappe speichern ‖ enregistrement du classeur
+there is no diagram with id {0} ‖ nie ma diagramu o id {0} ‖ es gibt kein Diagramm mit der ID {0} ‖ il n'existe aucun diagramme avec l'id {0}
+EA did not save an image of diagram "{0}" (the diagram may be empty) ‖ EA nie zapisał obrazka diagramu „{0}” (diagram może być pusty) ‖ EA hat kein Bild des Diagramms „{0}“ gespeichert (das Diagramm ist möglicherweise leer) ‖ EA n'a pas enregistré d'image du diagramme « {0} » (le diagramme est peut-être vide)
+operation {0} ('{1}') is not allowed. Allowed: {2} ‖ operacja nr {0} ('{1}') nie jest dozwolona. Dozwolone: {2} ‖ Operation Nr. {0} ('{1}') ist nicht zulässig. Zulässig: {2} ‖ l'opération n° {0} ('{1}') n'est pas autorisée. Opérations autorisées : {2}
+Saving to the EA model:\n{0} ‖ Zapis do modelu EA:\n{0} ‖ Speichern im EA-Modell:\n{0} ‖ Enregistrement dans le modèle EA :\n{0}
+expect_unchanged: missing '{0}' ‖ expect_unchanged: brak '{0}' ‖ expect_unchanged: '{0}' fehlt ‖ expect_unchanged : « {0} » manquant
+package ‖ pakiet ‖ Paket ‖ paquetage
+element ‖ element ‖ Element ‖ élément
+expect_unchanged: unknown kind {0} ‖ expect_unchanged: nieznany rodzaj {0} ‖ expect_unchanged: unbekannte Art {0} ‖ expect_unchanged : type {0} inconnu
+{0} with id {1} no longer exists ‖ {0} o id {1} już nie istnieje ‖ {0} mit der ID {1} existiert nicht mehr ‖ {0} avec l'id {1} n'existe plus
+version conflict: {0} with id {1} was changed after you read it (was {2}, now {3}). Read the model again and plan the change once more. Nothing was saved. ‖ konflikt wersji: {0} o id {1} został zmieniony po Twoim odczycie (było {2}, jest {3}). Odczytaj model ponownie i zaplanuj zmianę jeszcze raz. Nic nie zostało zapisane. ‖ Versionskonflikt: {0} mit der ID {1} wurde nach Ihrem Lesen geändert (war {2}, jetzt {3}). Lesen Sie das Modell erneut und planen Sie die Änderung noch einmal. Es wurde nichts gespeichert. ‖ conflit de version : {0} avec l'id {1} a été modifié après votre lecture (avant {2}, maintenant {3}). Relisez le modèle et planifiez de nouveau la modification. Rien n'a été enregistré.
+connecting to the model database ‖ połączenie z bazą modelu ‖ Verbindung zur Modelldatenbank ‖ connexion à la base du modèle
+running the query ‖ wykonanie zapytania ‖ Abfrage ausführen ‖ exécution de la requête
+only SELECT or WITH queries are allowed ‖ dozwolone są wyłącznie zapytania SELECT lub WITH ‖ nur SELECT- oder WITH-Abfragen sind zulässig ‖ seules les requêtes SELECT ou WITH sont autorisées
+one query at a time (no semicolons inside) ‖ jedno zapytanie naraz (bez średników w środku) ‖ nur eine Abfrage auf einmal (keine Semikolons darin) ‖ une seule requête à la fois (sans point-virgule à l'intérieur)
+Could not open the program window: the system provides neither OpenGL 2.0 nor DirectX 12.\n\nThe most common cause: a server or virtual machine without a graphics driver, or a remote desktop with graphics support turned off.\n\nDetails:\n{0}\n\nAlso saved to the file:\n{1} ‖ Nie udało się otworzyć okna programu: system nie udostępnia ani OpenGL 2.0, ani DirectX 12.\n\nNajczęstsza przyczyna: serwer lub maszyna wirtualna bez sterownika grafiki, albo pulpit zdalny z wyłączoną obsługą grafiki.\n\nSzczegóły:\n{0}\n\nZapisano też w pliku:\n{1} ‖ Das Programmfenster konnte nicht geöffnet werden: Das System stellt weder OpenGL 2.0 noch DirectX 12 bereit.\n\nHäufigste Ursache: ein Server oder eine virtuelle Maschine ohne Grafiktreiber oder ein Remotedesktop mit deaktivierter Grafikunterstützung.\n\nDetails:\n{0}\n\nAuch gespeichert in der Datei:\n{1} ‖ Impossible d'ouvrir la fenêtre du programme : le système ne fournit ni OpenGL 2.0 ni DirectX 12.\n\nCause la plus fréquente : un serveur ou une machine virtuelle sans pilote graphique, ou un bureau à distance dont la prise en charge graphique est désactivée.\n\nDétails :\n{0}\n\nÉgalement enregistré dans le fichier :\n{1}
+Sheet{0} ‖ Arkusz{0} ‖ Tabelle{0} ‖ Feuil{0}
+sheet name ‖ nazwa arkusza ‖ Name des Tabellenblatts ‖ nom de la feuille
+saving XLSX ‖ zapis XLSX ‖ XLSX speichern ‖ enregistrement XLSX
+'{0}' is not a Confluence page ID (digits only) ‖ „{0}” nie jest identyfikatorem strony Confluence (tylko cyfry) ‖ „{0}“ ist keine Confluence-Seiten-ID (nur Ziffern) ‖ « {0} » n'est pas un ID de page Confluence (chiffres uniquement)
+'{0}' is not a Confluence space key ‖ „{0}” nie jest kluczem przestrzeni Confluence ‖ „{0}“ ist kein Confluence-Bereichsschlüssel ‖ « {0} » n'est pas une clé d'espace Confluence
+Answers and changes are prepared by an AI model (Claude by Anthropic) and may contain errors. Review them before you approve. ‖ Odpowiedzi i zmiany przygotowuje model AI (Claude firmy Anthropic) i mogą zawierać błędy. Sprawdzaj je przed zatwierdzeniem. ‖ Antworten und Änderungen werden von einem KI-Modell (Claude von Anthropic) erstellt und können Fehler enthalten. Prüfen Sie sie vor der Freigabe. ‖ Les réponses et les modifications sont préparées par un modèle d'IA (Claude d'Anthropic) et peuvent contenir des erreurs. Vérifiez-les avant de les valider.
+COPY package {0} with all its contents ‖ KOPIOWANIE pakietu {0} z całą zawartością ‖ KOPIE des Pakets {0} mit dem gesamten Inhalt ‖ COPIE du paquetage {0} avec tout son contenu
+Connection encryption ‖ Szyfrowanie połączenia ‖ Verschlüsselung der Verbindung ‖ Chiffrement de la connexion
+DELETE {0} {1} ‖ USUNIĘCIE: {0} {1} ‖ LÖSCHEN: {0} {1} ‖ SUPPRESSION : {0} {1}
+Loonar Compass is free, also for commercial use, and it will stay free. If it saves you time, you can support its development with a voluntary contribution. It pays, among other things, for a code-signing certificate, so that Windows recognises the application as coming from a verified publisher. ‖ Loonar Compass jest bezpłatny, także do użytku komercyjnego, i taki pozostanie. Jeśli oszczędza Ci czas, możesz wesprzeć jego rozwój dobrowolną wpłatą. Wpłaty pokrywają m.in. certyfikat do podpisywania kodu, dzięki któremu Windows rozpozna aplikację jako pochodzącą od zweryfikowanego wydawcy. ‖ Loonar Compass ist kostenlos, auch für die kommerzielle Nutzung, und bleibt es. Wenn es Ihnen Zeit spart, können Sie die Weiterentwicklung mit einem freiwilligen Beitrag unterstützen. Damit wird unter anderem ein Codesignaturzertifikat bezahlt, mit dem Windows die Anwendung als Software eines verifizierten Herausgebers erkennt. ‖ Loonar Compass est gratuit, y compris pour un usage commercial, et le restera. S'il vous fait gagner du temps, vous pouvez soutenir son développement par une contribution volontaire. Elle finance notamment un certificat de signature de code, grâce auquel Windows reconnaîtra l'application comme provenant d'un éditeur vérifié.
+Loonar Compass newsletter subscription ‖ Zapis na newsletter Loonar Compass ‖ Anmeldung zum Loonar-Compass-Newsletter ‖ Inscription à la newsletter Loonar Compass
+Loonar Compass {0}\nSystem: {1}\nModel: {2}\nApproval mode: {3}\nLast message: {4} ‖ Loonar Compass {0}\nSystem: {1}\nModel: {2}\nTryb zatwierdzania: {3}\nOstatni komunikat: {4} ‖ Loonar Compass {0}\nSystem: {1}\nModell: {2}\nFreigabemodus: {3}\nLetzte Meldung: {4} ‖ Loonar Compass {0}\nSystème : {1}\nModèle : {2}\nMode de validation : {3}\nDernier message : {4}
+MOVE {0} {1} to package {2} ‖ PRZENIESIENIE: {0} {1} do pakietu {2} ‖ VERSCHIEBEN: {0} {1} in das Paket {2} ‖ DÉPLACEMENT : {0} {1} vers le paquetage {2}
+Notes saved by Loonar Compass. One file per note. ‖ Notatki zapisane przez Loonar Compass. Jeden plik na notatkę. ‖ Von Loonar Compass gespeicherte Notizen. Eine Datei pro Notiz. ‖ Notes enregistrées par Loonar Compass. Un fichier par note.
+Open-source components ‖ Komponenty open source ‖ Open-Source-Komponenten ‖ Composants open source
+Other ways to help ‖ Inne sposoby wsparcia ‖ Weitere Möglichkeiten zu helfen ‖ Autres façons d'aider
+Overwrite the document template "{0}" ‖ Nadpisanie szablonu dokumentu „{0}” ‖ Dokumentvorlage „{0}“ überschreiben ‖ Remplacer le modèle de document « {0} »
+Please send news about new Loonar Compass releases to: {0} ‖ Proszę o przesyłanie informacji o nowych wersjach Loonar Compass na adres: {0} ‖ Bitte senden Sie Informationen zu neuen Versionen von Loonar Compass an: {0} ‖ Merci d'envoyer les informations sur les nouvelles versions de Loonar Compass à : {0}
+Preferred ‖ Preferowane ‖ Bevorzugt ‖ Préféré
+Privacy policy ‖ Polityka prywatności ‖ Datenschutzerklärung ‖ Politique de confidentialité
+Publishing a new page to Confluence:\n"{0}" in space {1} ‖ Publikacja nowej strony w Confluence:\n„{0}” w przestrzeni {1} ‖ Veröffentlichung einer neuen Seite in Confluence:\n„{0}“ im Bereich {1} ‖ Publication d'une nouvelle page dans Confluence :\n« {0} » dans l'espace {1}
+Publishing to Confluence will REPLACE the content of an existing page:\n"{0}" (ID {1}, version {2}) in space {3}.\nThe previous version stays in the page history. ‖ Publikacja w Confluence ZASTĄPI treść istniejącej strony:\n„{0}” (ID {1}, wersja {2}) w przestrzeni {3}.\nPoprzednia wersja zostanie w historii strony. ‖ Die Veröffentlichung in Confluence ERSETZT den Inhalt einer vorhandenen Seite:\n„{0}“ (ID {1}, Version {2}) im Bereich {3}.\nDie vorherige Version bleibt im Seitenverlauf erhalten. ‖ La publication dans Confluence REMPLACERA le contenu d'une page existante :\n« {0} » (ID {1}, version {2}) dans l'espace {3}.\nLa version précédente reste dans l'historique de la page.
+Remove the note "{0}" from the assistant's memory ‖ Usunięcie notatki „{0}” z pamięci asystenta ‖ Notiz „{0}“ aus dem Gedächtnis des Assistenten entfernen ‖ Supprimer la note « {0} » de la mémoire de l'assistant
+Report bugs and ideas (Report a bug), recommend the application to other Enterprise Architect users, or star the project on GitHub. ‖ Zgłaszaj błędy i pomysły (Zgłoś błąd), poleć aplikację innym użytkownikom Enterprise Architect albo daj projektowi gwiazdkę na GitHubie. ‖ Melden Sie Fehler und Ideen (Fehler melden), empfehlen Sie die Anwendung anderen Enterprise-Architect-Nutzern oder geben Sie dem Projekt einen Stern auf GitHub. ‖ Signalez les bugs et les idées (Signaler un bug), recommandez l'application à d'autres utilisateurs d'Enterprise Architect ou donnez une étoile au projet sur GitHub.
+Required ‖ Wymagane ‖ Erforderlich ‖ Obligatoire
+Required, certificate verified ‖ Wymagane, z weryfikacją certyfikatu ‖ Erforderlich, mit Zertifikatsprüfung ‖ Obligatoire, certificat vérifié
+Save a note to the assistant's memory:\n"{0}"\n{1} ‖ Zapis notatki w pamięci asystenta:\n„{0}”\n{1} ‖ Notiz im Gedächtnis des Assistenten speichern:\n„{0}“\n{1} ‖ Enregistrer une note dans la mémoire de l'assistant :\n« {0} »\n{1}
+Show licenses of the components ‖ Pokaż licencje komponentów ‖ Lizenzen der Komponenten anzeigen ‖ Afficher les licences des composants
+Source code on GitHub ‖ Kod źródłowy na GitHubie ‖ Quellcode auf GitHub ‖ Code source sur GitHub
+Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. Atlassian, Confluence and Jira are trademarks of Atlassian. Microsoft, Windows, Word and Excel are trademarks of the Microsoft group of companies. PostgreSQL is a trademark of the PostgreSQL Community Association of Canada. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies. ‖ Sparx Systems i Enterprise Architect są zarejestrowanymi znakami towarowymi Sparx Systems Pty Ltd. Claude i Anthropic są znakami towarowymi Anthropic, PBC. Atlassian, Confluence i Jira są znakami towarowymi Atlassian. Microsoft, Windows, Word i Excel są znakami towarowymi grupy Microsoft. PostgreSQL jest znakiem towarowym PostgreSQL Community Association of Canada. Loonar Compass jest niezależnym produktem, niepowiązanym z tymi firmami, nieautoryzowanym ani niesponsorowanym przez nie. ‖ Sparx Systems und Enterprise Architect sind eingetragene Marken der Sparx Systems Pty Ltd. Claude und Anthropic sind Marken der Anthropic, PBC. Atlassian, Confluence und Jira sind Marken von Atlassian. Microsoft, Windows, Word und Excel sind Marken der Microsoft-Unternehmensgruppe. PostgreSQL ist eine Marke der PostgreSQL Community Association of Canada. Loonar Compass ist ein unabhängiges Produkt, steht in keiner Verbindung zu diesen Unternehmen und wird von ihnen weder unterstützt noch gesponsert. ‖ Sparx Systems et Enterprise Architect sont des marques déposées de Sparx Systems Pty Ltd. Claude et Anthropic sont des marques d'Anthropic, PBC. Atlassian, Confluence et Jira sont des marques d'Atlassian. Microsoft, Windows, Word et Excel sont des marques du groupe Microsoft. PostgreSQL est une marque de la PostgreSQL Community Association of Canada. Loonar Compass est un produit indépendant, sans lien avec ces sociétés, qui ne l'approuvent ni ne le parrainent.
+Support on suppi.pl ‖ Wesprzyj na suppi.pl ‖ Auf suppi.pl unterstützen ‖ Soutenir sur suppi.pl
+Support the project ‖ Wesprzyj projekt ‖ Projekt unterstützen ‖ Soutenir le projet
+TLS for the database connection ‖ TLS dla połączenia z bazą ‖ TLS für die Datenbankverbindung ‖ TLS pour la connexion à la base
+TLS is required and the server certificate is verified against the Windows certificate store (including company certificates), together with the server name. ‖ TLS jest wymagany, a certyfikat serwera jest sprawdzany w magazynie certyfikatów Windows (także firmowych), razem z nazwą serwera. ‖ TLS ist erforderlich, und das Serverzertifikat wird zusammen mit dem Servernamen anhand des Windows-Zertifikatspeichers (einschließlich Unternehmenszertifikaten) geprüft. ‖ TLS est obligatoire et le certificat du serveur est vérifié, avec le nom du serveur, dans le magasin de certificats Windows (y compris les certificats d'entreprise).
+TLS is required: without it the application does not connect. The server certificate is not verified. ‖ TLS jest wymagany: bez niego aplikacja się nie połączy. Certyfikat serwera nie jest sprawdzany. ‖ TLS ist erforderlich: Ohne TLS stellt die Anwendung keine Verbindung her. Das Serverzertifikat wird nicht geprüft. ‖ TLS est obligatoire : sans TLS, l'application ne se connecte pas. Le certificat du serveur n'est pas vérifié.
+TLS when the server offers it, otherwise an unencrypted connection. Administrators can enforce TLS for all clients with hostssl entries in pg_hba.conf. ‖ TLS, gdy serwer go oferuje, w przeciwnym razie połączenie bez szyfrowania. Administrator może wymusić TLS dla wszystkich klientów wpisami hostssl w pg_hba.conf. ‖ TLS, wenn der Server es anbietet, sonst eine unverschlüsselte Verbindung. Administratoren können TLS für alle Clients mit hostssl-Einträgen in pg_hba.conf erzwingen. ‖ TLS si le serveur le propose, sinon une connexion non chiffrée. Les administrateurs peuvent imposer TLS à tous les clients avec des entrées hostssl dans pg_hba.conf.
+The API key has no access to this operation (403): {0} ‖ Klucz API nie ma dostępu do tej operacji (403): {0} ‖ Der API-Schlüssel hat keinen Zugriff auf diesen Vorgang (403): {0} ‖ La clé API n'a pas accès à cette opération (403) : {0}
+The Claude API does not know the model {0} (404): {1} ‖ Claude API nie zna modelu {0} (404): {1} ‖ Die Claude-API kennt das Modell {0} nicht (404): {1} ‖ L'API Claude ne connaît pas le modèle {0} (404) : {1}
+The Claude API is overloaded or temporarily unavailable ({0}). Try again in a moment. ‖ Claude API jest przeciążone lub chwilowo niedostępne ({0}). Spróbuj ponownie za chwilę. ‖ Die Claude-API ist überlastet oder vorübergehend nicht verfügbar ({0}). Versuchen Sie es gleich noch einmal. ‖ L'API Claude est surchargée ou temporairement indisponible ({0}). Réessayez dans un instant.
+The Claude API rate limit was reached (429). Wait a moment and try again. ‖ Osiągnięto limit zapytań Claude API (429). Odczekaj chwilę i spróbuj ponownie. ‖ Das Anfragelimit der Claude-API ist erreicht (429). Warten Sie einen Moment und versuchen Sie es erneut. ‖ La limite de requêtes de l'API Claude est atteinte (429). Patientez un instant et réessayez.
+The Claude API rejected the API key (401). Check the key in Settings → 1. Claude. ‖ Claude API odrzuciło klucz API (401). Sprawdź klucz w Ustawienia → 1. Claude. ‖ Die Claude-API hat den API-Schlüssel abgelehnt (401). Prüfen Sie den Schlüssel unter Einstellungen → 1. Claude. ‖ L'API Claude a refusé la clé API (401). Vérifiez la clé dans Paramètres → 1. Claude.
+The Claude API returned {0} with a response that is not from the API (a proxy or firewall may be blocking api.anthropic.com): {1} ‖ Claude API zwróciło {0} z odpowiedzią, która nie pochodzi z API (dostęp do api.anthropic.com może blokować proxy lub zapora): {1} ‖ Die Claude-API hat {0} mit einer Antwort zurückgegeben, die nicht von der API stammt (möglicherweise blockiert ein Proxy oder eine Firewall api.anthropic.com): {1} ‖ L'API Claude a renvoyé {0} avec une réponse qui ne provient pas de l'API (un proxy ou un pare-feu bloque peut-être api.anthropic.com) : {1}
+The Confluence address must start with https:// ‖ Adres Confluence musi zaczynać się od https:// ‖ Die Confluence-Adresse muss mit https:// beginnen ‖ L'adresse Confluence doit commencer par https://
+The application includes open-source libraries and fonts; each keeps its own license. ‖ Aplikacja zawiera biblioteki i czcionki open source; każda z nich ma własną licencję. ‖ Die Anwendung enthält Open-Source-Bibliotheken und -Schriftarten; jede behält ihre eigene Lizenz. ‖ L'application contient des bibliothèques et des polices open source ; chacune conserve sa propre licence.
+The connection is NOT encrypted: the server does not offer TLS. ‖ Połączenie NIE jest szyfrowane: serwer nie oferuje TLS. ‖ Die Verbindung ist NICHT verschlüsselt: Der Server bietet kein TLS an. ‖ La connexion n'est PAS chiffrée : le serveur ne propose pas TLS.
+The connection is encrypted (TLS). ‖ Połączenie jest szyfrowane (TLS). ‖ Die Verbindung ist verschlüsselt (TLS). ‖ La connexion est chiffrée (TLS).
+The database account is a superuser; a normal account with read and write rights on the model tables is enough and safer. ‖ Konto bazy ma uprawnienia superużytkownika; wystarczy zwykłe konto z prawem odczytu i zapisu tabel modelu i jest ono bezpieczniejsze. ‖ Das Datenbankkonto ist ein Superuser; ein normales Konto mit Lese- und Schreibrechten auf die Modelltabellen genügt und ist sicherer. ‖ Le compte de la base est un superutilisateur ; un compte normal avec des droits de lecture et d'écriture sur les tables du modèle suffit et est plus sûr.
+The database password must not contain a semicolon (;): Enterprise Architect cannot pass it in its connection string. ‖ Hasło do bazy nie może zawierać średnika (;): Enterprise Architect nie przekaże go w swoim ciągu połączenia. ‖ Das Datenbankpasswort darf kein Semikolon (;) enthalten: Enterprise Architect kann es in seiner Verbindungszeichenfolge nicht übergeben. ‖ Le mot de passe de la base ne doit pas contenir de point-virgule (;) : Enterprise Architect ne peut pas le transmettre dans sa chaîne de connexion.
+The model declined to answer this request. Rephrase it or ask about something else. ‖ Model odmówił odpowiedzi na tę prośbę. Sformułuj ją inaczej albo zapytaj o coś innego. ‖ Das Modell hat die Antwort auf diese Anfrage abgelehnt. Formulieren Sie sie um oder fragen Sie nach etwas anderem. ‖ Le modèle a refusé de répondre à cette demande. Reformulez-la ou posez une autre question.
+The program hit an unexpected error and has to close. Your conversations and settings are saved.\n\nPlease report the problem (Report a bug, or mariusz@loonar.eu) and attach the file:\n{0}\n\nDetails:\n{1} ‖ Program napotkał nieoczekiwany błąd i musi zostać zamknięty. Twoje rozmowy i ustawienia są zapisane.\n\nZgłoś problem (Zgłoś błąd albo mariusz@loonar.eu) i dołącz plik:\n{0}\n\nSzczegóły:\n{1} ‖ Das Programm ist auf einen unerwarteten Fehler gestoßen und muss beendet werden. Ihre Unterhaltungen und Einstellungen sind gespeichert.\n\nBitte melden Sie das Problem (Fehler melden oder mariusz@loonar.eu) und hängen Sie die Datei an:\n{0}\n\nDetails:\n{1} ‖ Le programme a rencontré une erreur inattendue et doit se fermer. Vos conversations et paramètres sont enregistrés.\n\nMerci de signaler le problème (Signaler un bug ou mariusz@loonar.eu) en joignant le fichier :\n{0}\n\nDétails :\n{1}
+The report (description, screenshots, optional technical information and your e-mail address) goes to Loonar Mariusz Głowacki and is used only to answer and improve the application; it is kept for up to 2 years after the matter is closed. Remove personal and confidential data from the screenshots before sending. ‖ Zgłoszenie (opis, zrzuty ekranu, opcjonalne informacje techniczne i Twój adres e-mail) trafia do Loonar Mariusz Głowacki i służy wyłącznie do odpowiedzi i poprawy aplikacji; jest przechowywane do 2 lat po zamknięciu sprawy. Przed wysłaniem usuń ze zrzutów dane osobowe i informacje poufne. ‖ Die Meldung (Beschreibung, Screenshots, optionale technische Angaben und Ihre E-Mail-Adresse) geht an Loonar Mariusz Głowacki und wird nur für die Antwort und die Verbesserung der Anwendung verwendet; sie wird bis zu 2 Jahre nach Abschluss der Angelegenheit aufbewahrt. Entfernen Sie vor dem Senden personenbezogene und vertrauliche Daten aus den Screenshots. ‖ Le signalement (description, captures d'écran, informations techniques facultatives et votre adresse e-mail) est envoyé à Loonar Mariusz Głowacki et sert uniquement à vous répondre et à améliorer l'application ; il est conservé jusqu'à 2 ans après la clôture du dossier. Retirez les données personnelles et confidentielles des captures avant l'envoi.
+The request is too large for the Claude API (413): the attachments may be too big. ‖ Zapytanie jest za duże dla Claude API (413): załączniki mogą być zbyt duże. ‖ Die Anfrage ist für die Claude-API zu groß (413): Die Anhänge sind möglicherweise zu groß. ‖ La requête est trop volumineuse pour l'API Claude (413) : les pièces jointes sont peut-être trop grandes.
+The settings file {0} contains an error: {1}. Correct the value and save the card again. ‖ Plik ustawień {0} zawiera błąd: {1}. Popraw wartość i zapisz kartę ponownie. ‖ Die Einstellungsdatei {0} enthält einen Fehler: {1}. Korrigieren Sie den Wert und speichern Sie die Karte erneut. ‖ Le fichier de paramètres {0} contient une erreur : {1}. Corrigez la valeur et enregistrez de nouveau la carte.
+To answer, the app sends the conversation, attachments, remembered notes, templates, model query results and diagram images to Anthropic (Claude API) using your key. Loonar does not receive this data. ‖ Aby odpowiedzieć, aplikacja wysyła do Anthropic (Claude API), z użyciem Twojego klucza, treść rozmowy, załączniki, zapamiętane notatki, szablony, wyniki zapytań do modelu i obrazy diagramów. Loonar nie otrzymuje tych danych. ‖ Um zu antworten, sendet die Anwendung mit Ihrem Schlüssel die Unterhaltung, Anhänge, gespeicherte Notizen, Vorlagen, Ergebnisse von Modellabfragen und Diagrammbilder an Anthropic (Claude-API). Loonar erhält diese Daten nicht. ‖ Pour répondre, l'application envoie à Anthropic (API Claude), avec votre clé, la conversation, les pièces jointes, les notes mémorisées, les modèles, les résultats des requêtes sur le modèle et les images des diagrammes. Loonar ne reçoit pas ces données.
+Unsubscribe from the Loonar Compass newsletter ‖ Rezygnacja z newslettera Loonar Compass ‖ Abmeldung vom Loonar-Compass-Newsletter ‖ Désinscription de la newsletter Loonar Compass
+Your address is used only for news about new versions, based on your consent, until you withdraw it (untick the option and save, or write an e-mail). Controller: Loonar Mariusz Głowacki, mariusz@loonar.eu. ‖ Adres wykorzystamy wyłącznie do informacji o nowych wersjach, na podstawie Twojej zgody, do czasu jej wycofania (odznacz opcję i zapisz albo napisz e-mail). Administrator danych: Loonar Mariusz Głowacki, mariusz@loonar.eu. ‖ Ihre Adresse wird nur für Informationen zu neuen Versionen verwendet, auf Grundlage Ihrer Einwilligung, bis Sie diese widerrufen (Option abwählen und speichern oder eine E-Mail schreiben). Verantwortlicher: Loonar Mariusz Głowacki, mariusz@loonar.eu. ‖ Votre adresse n'est utilisée que pour les informations sur les nouvelles versions, sur la base de votre consentement, jusqu'à son retrait (décochez l'option et enregistrez, ou écrivez un e-mail). Responsable du traitement : Loonar Mariusz Głowacki, mariusz@loonar.eu.
+auto - saves without asking (publishing to Confluence still asks) ‖ auto – zapisy bez pytania (publikacja w Confluence nadal wymaga zgody) ‖ auto - Speichern ohne Rückfrage (Veröffentlichung in Confluence fragt weiterhin) ‖ auto - enregistrement sans validation (la publication dans Confluence demande toujours une validation)
+connector ‖ połączenie ‖ Konnektor ‖ connecteur
+done ‖ gotowe ‖ erledigt ‖ terminé
+file ready ‖ plik gotowy ‖ Datei bereit ‖ fichier prêt
+image ready ‖ obraz gotowy ‖ Bild bereit ‖ image prête
+no rows ‖ brak wierszy ‖ keine Zeilen ‖ aucune ligne
+published in Confluence ‖ opublikowano w Confluence ‖ in Confluence veröffentlicht ‖ publié dans Confluence
+rows: {0} ‖ wiersze: {0} ‖ Zeilen: {0} ‖ lignes : {0}
+saved in the EA model ‖ zapisano w modelu EA ‖ im EA-Modell gespeichert ‖ enregistré dans le modèle EA
+the image is too large ({0} × {1} px; at most {2} px per side) ‖ obraz jest za duży ({0} × {1} px; najwyżej {2} px na bok) ‖ das Bild ist zu groß ({0} × {1} px; höchstens {2} px pro Seite) ‖ l'image est trop grande ({0} × {1} px ; au plus {2} px par côté)
+the query uses a server function that is not allowed ({0}); only reading the model is allowed ‖ zapytanie używa niedozwolonej funkcji serwera ({0}); dozwolony jest tylko odczyt modelu ‖ die Abfrage verwendet eine nicht erlaubte Serverfunktion ({0}); erlaubt ist nur das Lesen des Modells ‖ la requête utilise une fonction serveur non autorisée ({0}) ; seule la lecture du modèle est autorisée
+unknown database encryption mode '{0}' (prefer, require, verify-full) ‖ nieznany tryb szyfrowania bazy „{0}” (prefer, require, verify-full) ‖ unbekannter Verschlüsselungsmodus der Datenbank „{0}“ (prefer, require, verify-full) ‖ mode de chiffrement de la base inconnu « {0} » (prefer, require, verify-full)
+{0} Setup ‖ Instalator {0} ‖ {0} Setup ‖ Installation de {0}
+Uninstall {0} ‖ Odinstalowanie {0} ‖ {0} deinstallieren ‖ Désinstallation de {0}
+Welcome to the {0} Setup Wizard ‖ Witamy w instalatorze {0} ‖ Willkommen beim Setup von {0} ‖ Bienvenue dans l'installation de {0}
+This wizard will install {0} on your computer: an AI assistant for Enterprise Architect that reads the model from a PostgreSQL database, saves changes through COM and shows diagrams in the chat. ‖ Ten kreator zainstaluje na komputerze aplikację {0}: asystenta AI do Enterprise Architect, który czyta model z bazy PostgreSQL, zapisuje zmiany przez COM i pokazuje diagramy na czacie. ‖ Mit diesem Setup wird {0} auf Ihrem Computer installiert: ein KI-Assistent für Enterprise Architect, der das Modell aus einer PostgreSQL-Datenbank liest, Änderungen über COM speichert und Diagramme im Chat anzeigt. ‖ Cet assistant d'installation va installer {0} sur votre ordinateur : un assistant IA pour Enterprise Architect qui lit le modèle depuis une base PostgreSQL, enregistre les modifications via COM et affiche les diagrammes dans le chat.
+Launch {0} ‖ Uruchom {0} ‖ {0} starten ‖ Lancer {0}
+Installation type ‖ Rodzaj instalacji ‖ Installationsart ‖ Type d'installation
+Just for me (recommended, no administrator rights) ‖ Tylko dla mnie (zalecane, bez uprawnień administratora) ‖ Nur für mich (empfohlen, ohne Administratorrechte) ‖ Pour moi uniquement (recommandé, sans droits d'administrateur)
+For all users of this computer (requires administrator rights) ‖ Dla wszystkich użytkowników tego komputera (wymaga uprawnień administratora) ‖ Für alle Benutzer dieses Computers (erfordert Administratorrechte) ‖ Pour tous les utilisateurs de cet ordinateur (nécessite des droits d'administrateur)
+Just for me ‖ Tylko dla mnie ‖ Nur für mich ‖ Pour moi uniquement
+For all users of this computer ‖ Dla wszystkich użytkowników tego komputera ‖ Für alle Benutzer dieses Computers ‖ Pour tous les utilisateurs de cet ordinateur
+Windows will ask for administrator rights when you click "Install". ‖ Po kliknięciu „Instaluj” Windows poprosi o uprawnienia administratora. ‖ Nach einem Klick auf „Installieren“ fragt Windows nach Administratorrechten. ‖ Après un clic sur « Installer », Windows demandera des droits d'administrateur.
+Enter the full path of the installation folder, for example {0}. ‖ Podaj pełną ścieżkę folderu instalacji, na przykład {0}. ‖ Geben Sie den vollständigen Pfad des Installationsordners an, zum Beispiel {0}. ‖ Indiquez le chemin complet du dossier d'installation, par exemple {0}.
+An installation for all users must be in the Program Files folder ({0}), where only administrators can change files. Choose a folder there or choose "Just for me". ‖ Instalacja dla wszystkich użytkowników musi się znajdować w folderze Program Files ({0}), w którym pliki mogą zmieniać tylko administratorzy. Wybierz folder w nim albo opcję „Tylko dla mnie”. ‖ Eine Installation für alle Benutzer muss im Ordner „Programme“ ({0}) liegen, in dem nur Administratoren Dateien ändern können. Wählen Sie dort einen Ordner oder „Nur für mich“. ‖ Une installation pour tous les utilisateurs doit se trouver dans le dossier Programmes ({0}), où seuls les administrateurs peuvent modifier les fichiers. Choisissez un dossier à cet emplacement ou « Pour moi uniquement ».
+This folder can only be changed with administrator rights. Choose "For all users of this computer", or a folder you can write to, for example {0}. ‖ Zmiany w tym folderze wymagają uprawnień administratora. Wybierz opcję „Dla wszystkich użytkowników tego komputera” albo folder, w którym możesz zapisywać pliki, na przykład {0}. ‖ Änderungen in diesem Ordner erfordern Administratorrechte. Wählen Sie „Für alle Benutzer dieses Computers“ oder einen Ordner, in den Sie schreiben dürfen, zum Beispiel {0}. ‖ Ce dossier ne peut être modifié qu'avec des droits d'administrateur. Choisissez « Pour tous les utilisateurs de cet ordinateur » ou un dossier dans lequel vous pouvez écrire, par exemple {0}.
+Administrator rights were not granted, so nothing was installed. To install without them, choose "Just for me". ‖ Nie przyznano uprawnień administratora, więc nic nie zostało zainstalowane. Aby zainstalować aplikację bez nich, wybierz „Tylko dla mnie”. ‖ Es wurden keine Administratorrechte erteilt, daher wurde nichts installiert. Um ohne sie zu installieren, wählen Sie „Nur für mich“. ‖ Les droits d'administrateur n'ont pas été accordés : rien n'a été installé. Pour installer sans ces droits, choisissez « Pour moi uniquement ».
+Administrator rights were not granted, so nothing was removed. ‖ Nie przyznano uprawnień administratora, więc nic nie zostało usunięte. ‖ Es wurden keine Administratorrechte erteilt, daher wurde nichts entfernt. ‖ Les droits d'administrateur n'ont pas été accordés : rien n'a été supprimé.
+administrator rights were not granted ‖ nie przyznano uprawnień administratora ‖ es wurden keine Administratorrechte erteilt ‖ les droits d'administrateur n'ont pas été accordés
+Waiting for administrator rights… ‖ Oczekiwanie na uprawnienia administratora… ‖ Warten auf Administratorrechte… ‖ En attente des droits d'administrateur…
+could not start the setup with administrator rights: {0} ‖ nie udało się uruchomić instalatora z uprawnieniami administratora: {0} ‖ das Setup konnte nicht mit Administratorrechten gestartet werden: {0} ‖ impossible de lancer l'installation avec des droits d'administrateur : {0}
+the part of the setup that runs with administrator rights stopped without a result (details may be in {0}) ‖ część instalatora działająca z uprawnieniami administratora zakończyła się bez wyniku (szczegóły mogą być w pliku {0}) ‖ der mit Administratorrechten ausgeführte Teil des Setups wurde ohne Ergebnis beendet (Details eventuell in {0}) ‖ la partie de l'installation exécutée avec des droits d'administrateur s'est arrêtée sans résultat (détails éventuels dans {0})
+invalid setup instructions file {0} ‖ nieprawidłowy plik z instrukcjami instalacji {0} ‖ ungültige Setup-Anweisungsdatei {0} ‖ fichier d'instructions d'installation non valide : {0}
+this step requires administrator rights ‖ ten krok wymaga uprawnień administratora ‖ dieser Schritt erfordert Administratorrechte ‖ cette étape nécessite des droits d'administrateur
+Remove settings, conversations, attachments, memory, templates and the audit log ‖ Usuń ustawienia, rozmowy, załączniki, pamięć asystenta, szablony dokumentów i dziennik zmian ‖ Einstellungen, Unterhaltungen, Anhänge, Gedächtnis des Assistenten, Dokumentvorlagen und Änderungsprotokoll entfernen ‖ Supprimer les paramètres, les conversations, les pièces jointes, la mémoire de l'assistant, les modèles de documents et le journal des modifications
+This deletes the whole folder {0}. ‖ Spowoduje to usunięcie całego folderu {0}. ‖ Dabei wird der gesamte Ordner {0} gelöscht. ‖ Le dossier {0} est alors supprimé en entier.
+Remove the API key, passwords and tokens from Credential Manager ‖ Usuń klucz API, hasła i tokeny z Menedżera poświadczeń ‖ API-Schlüssel, Passwörter und Tokens aus der Anmeldeinformationsverwaltung entfernen ‖ Supprimer la clé API, les mots de passe et les jetons du Gestionnaire d'identification
+Settings, conversations, attachments, memory, templates and the audit log removed ‖ Usunięto ustawienia, rozmowy, załączniki, pamięć asystenta, szablony dokumentów i dziennik zmian ‖ Einstellungen, Unterhaltungen, Anhänge, Gedächtnis des Assistenten, Dokumentvorlagen und Änderungsprotokoll entfernt ‖ Paramètres, conversations, pièces jointes, mémoire de l'assistant, modèles de documents et journal des modifications supprimés
+API key, passwords and tokens removed from Credential Manager ‖ Usunięto klucz API, hasła i tokeny z Menedżera poświadczeń ‖ API-Schlüssel, Passwörter und Tokens aus der Anmeldeinformationsverwaltung entfernt ‖ Clé API, mots de passe et jetons supprimés du Gestionnaire d'identification
+could not remove {0} from Credential Manager: {1} ‖ nie udało się usunąć {0} z Menedżera poświadczeń: {1} ‖ {0} konnte nicht aus der Anmeldeinformationsverwaltung entfernt werden: {1} ‖ impossible de supprimer {0} du Gestionnaire d'identification : {1}
+This installation is for all users of this computer: Windows will ask for administrator rights. ‖ To instalacja dla wszystkich użytkowników tego komputera: Windows poprosi o uprawnienia administratora. ‖ Dies ist eine Installation für alle Benutzer dieses Computers: Windows fragt nach Administratorrechten. ‖ Cette installation concerne tous les utilisateurs de cet ordinateur : Windows demandera des droits d'administrateur.
+Only your own data is removed; the data of other users stays in their profiles. ‖ Usuwane są tylko Twoje dane; dane innych użytkowników zostają w ich profilach. ‖ Entfernt werden nur Ihre eigenen Daten; die Daten anderer Benutzer bleiben in deren Profilen. ‖ Seules vos propres données sont supprimées ; celles des autres utilisateurs restent dans leur profil.
+An earlier version ({0}) is installed for all users in {1}. It is no longer needed: you can remove it now or later in Settings → Apps. Your settings and conversations are kept. ‖ Wcześniejsza wersja ({0}) jest zainstalowana dla wszystkich użytkowników w folderze {1}. Nie jest już potrzebna: możesz ją usunąć teraz albo później w „Ustawienia → Aplikacje”. Twoje ustawienia i rozmowy zostaną zachowane. ‖ Eine frühere Version ({0}) ist für alle Benutzer in {1} installiert. Sie wird nicht mehr benötigt: Sie können sie jetzt oder später unter „Einstellungen → Apps“ entfernen. Ihre Einstellungen und Unterhaltungen bleiben erhalten. ‖ Une version antérieure ({0}) est installée pour tous les utilisateurs dans {1}. Elle n'est plus nécessaire : vous pouvez la supprimer maintenant ou plus tard dans « Paramètres → Applications ». Vos paramètres et vos conversations sont conservés.
+Remove the old version (administrator rights) ‖ Usuń starą wersję (uprawnienia administratora) ‖ Alte Version entfernen (Administratorrechte) ‖ Supprimer l'ancienne version (droits d'administrateur)
+Removing the earlier version… ‖ Usuwanie wcześniejszej wersji… ‖ Frühere Version wird entfernt… ‖ Suppression de la version antérieure…
+The earlier version has been removed. ‖ Wcześniejsza wersja została usunięta. ‖ Die frühere Version wurde entfernt. ‖ La version antérieure a été supprimée.
+Administrator rights were not granted; the earlier version was not removed. ‖ Nie przyznano uprawnień administratora; wcześniejsza wersja nie została usunięta. ‖ Es wurden keine Administratorrechte erteilt; die frühere Version wurde nicht entfernt. ‖ Les droits d'administrateur n'ont pas été accordés ; la version antérieure n'a pas été supprimée.
+could not start the uninstaller of the earlier version: {0} ‖ nie udało się uruchomić programu odinstalowującego wcześniejszej wersji: {0} ‖ das Deinstallationsprogramm der früheren Version konnte nicht gestartet werden: {0} ‖ impossible de lancer le programme de désinstallation de la version antérieure : {0}
+{0} is also installed for all users in {1}. This installation just for you does not replace it. ‖ {0} jest też zainstalowany dla wszystkich użytkowników w folderze {1}. Ta instalacja tylko dla Ciebie go nie zastępuje. ‖ {0} ist zusätzlich für alle Benutzer in {1} installiert. Diese Installation nur für Sie ersetzt die vorhandene nicht. ‖ {0} est également installé pour tous les utilisateurs dans {1}. Cette installation pour vous uniquement ne le remplace pas.
+Earlier installation removed: {0} ‖ Usunięto wcześniejszą instalację: {0} ‖ Frühere Installation entfernt: {0} ‖ Installation antérieure supprimée : {0}
+The earlier installation in {0} could not be removed completely: {1}. Remove it in Settings → Apps. ‖ Nie udało się całkowicie usunąć wcześniejszej instalacji z folderu {0}: {1}. Usuń ją w „Ustawienia → Aplikacje”. ‖ Die frühere Installation in {0} konnte nicht vollständig entfernt werden: {1}. Entfernen Sie sie unter „Einstellungen → Apps“. ‖ L'installation antérieure dans {0} n'a pas pu être entièrement supprimée : {1}. Supprimez-la dans « Paramètres → Applications ».
+Checking… (starting EA can take up to a minute) ‖ Trwa sprawdzanie… (uruchomienie EA może potrwać do minuty) ‖ Wird geprüft… (der Start von EA kann bis zu einer Minute dauern) ‖ Vérification… (le démarrage d'EA peut prendre jusqu'à une minute)

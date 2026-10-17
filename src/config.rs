@@ -1,0 +1,338 @@
+//! Configuration: `app.properties` (next to the application) and secrets from Windows Credential Manager.
+
+use anyhow::{Context, Result};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+/// The only model the application uses. It is not a user setting.
+pub const CLAUDE_MODEL: &str = "claude-haiku-5-5";
+
+/// Product name: user data folder, window titles, shortcuts.
+pub const APP_NAME: &str = "Loonar Compass";
+/// Product name of the pre-release versions (0.1–0.3): their data and secrets are migrated on first start.
+const LEGACY_APP_NAME: &str = "Loonar EA Assistant";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ApprovalMode {
+    /// The model shows a plan first; you approve it once.
+    Plan,
+    /// Every write requires a separate approval.
+    Ask,
+    /// Writes without asking (publishing to Confluence still asks).
+    Auto,
+}
+
+impl ApprovalMode {
+    pub fn parse(s: &str) -> Result<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "plan" => Ok(Self::Plan),
+            "ask" => Ok(Self::Ask),
+            "auto" => Ok(Self::Auto),
+            other => anyhow::bail!("{}", crate::i18n::fmt("unknown approval mode '{0}' (plan, ask, auto)", &[other.to_string()])),
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Plan => "plan",
+            Self::Ask => "ask",
+            Self::Auto => "auto",
+        }
+    }
+}
+
+/// Encryption of the connection to the model database (`db.sslmode`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SslMode {
+    /// TLS when the server offers it, otherwise unencrypted (works with every server).
+    Prefer,
+    /// TLS required; the certificate is not verified.
+    Require,
+    /// TLS required, the certificate and host name are verified against the Windows certificate store.
+    VerifyFull,
+}
+
+impl SslMode {
+    pub const ALL: [SslMode; 3] = [SslMode::Prefer, SslMode::Require, SslMode::VerifyFull];
+
+    pub fn parse(s: &str) -> Result<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "" | "prefer" => Ok(Self::Prefer),
+            "require" => Ok(Self::Require),
+            "verify-full" => Ok(Self::VerifyFull),
+            other => anyhow::bail!("{}", crate::i18n::fmt("unknown database encryption mode '{0}' (prefer, require, verify-full)", &[other.to_string()])),
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Prefer => "prefer",
+            Self::Require => "require",
+            Self::VerifyFull => "verify-full",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AppConfig {
+    pub base_dir: PathBuf,
+    pub claude_model: String,
+    pub claude_max_tokens: u32,
+    pub db_host: String,
+    pub db_port: u16,
+    pub db_name: String,
+    pub db_user: String,
+    pub db_password: String,
+    pub db_sslmode: SslMode,
+    pub ea_path: PathBuf,
+    pub ea_user: String,
+    pub approval_mode: ApprovalMode,
+    pub history_dir: PathBuf,
+    pub attachments_dir: PathBuf,
+    /// Assistant memory: notes kept between conversations (.md files).
+    pub memory_dir: PathBuf,
+    /// Log of the changes the assistant made to the model (JSON Lines, one record per line).
+    pub audit_file: PathBuf,
+    /// Document templates (.md files) that the assistant fills from the model.
+    pub templates_dir: PathBuf,
+    /// Language of the interface and of the default documents: pl, en, de, fr (no entry = pl, as before version 0.3).
+    pub ui_language: String,
+    /// Confluence: base URL, e-mail (Confluence Cloud only; empty = personal access token, PAT), space and parent page.
+    pub confluence_url: String,
+    pub confluence_user: String,
+    pub confluence_space: String,
+    pub confluence_parent: String,
+    /// Registry of the pages published by the assistant (for refreshing).
+    pub confluence_pages_file: PathBuf,
+}
+
+/// Full path of a Windows program (explorer.exe in the Windows folder, the others in System32). Programs are never
+/// started by a bare name, so a same-named file in the current or download folder cannot be started instead.
+pub fn system_program(name: &str) -> PathBuf {
+    let windows = std::env::var_os("SystemRoot").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(r"C:\Windows"));
+    match name.to_ascii_lowercase().as_str() {
+        "explorer.exe" => windows.join(name),
+        "powershell.exe" => windows.join(r"System32\WindowsPowerShell\v1.0\powershell.exe"),
+        _ => windows.join("System32").join(name),
+    }
+}
+
+fn appdata() -> PathBuf {
+    std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// User data folder (settings, conversation history, attachments) of an installed application:
+/// `%APPDATA%\Loonar Compass`.
+pub fn user_data_dir() -> PathBuf {
+    appdata().join(APP_NAME)
+}
+
+/// Moves the data of the pre-release product name (`%APPDATA%\Loonar EA Assistant`) to the current
+/// folder, once, when the current folder does not exist yet. On failure the old folder stays as it is.
+pub fn migrate_legacy_data_dir() {
+    let current = user_data_dir();
+    let legacy = appdata().join(LEGACY_APP_NAME);
+    if !current.exists() && legacy.is_dir() {
+        let _ = std::fs::rename(&legacy, &current);
+    }
+}
+
+/// Path of a file or folder in `base` that had a Polish name before version 0.3: renames the old one
+/// when only the old one exists, and keeps using the old one if renaming fails.
+fn renamed(base: &Path, legacy: &str, current: &str) -> PathBuf {
+    let (old, new) = (base.join(legacy), base.join(current));
+    if old.exists() && !new.exists() && std::fs::rename(&old, &new).is_err() {
+        return old;
+    }
+    new
+}
+
+/// `key=value` parser (simplified java.util.Properties format): `#`/`!` comments.
+pub fn parse_properties(text: &str) -> HashMap<String, String> {
+    text.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#') && !l.starts_with('!'))
+        .filter_map(|l| {
+            let idx = l.find('=')?;
+            Some((l[..idx].trim().to_string(), l[idx + 1..].trim().to_string()))
+        })
+        .collect()
+}
+
+/// Looks for `app.properties` next to the executable (a portable copy keeps its data there).
+/// Development and test builds also look in the parent folders (running from `target\debug` finds the
+/// file in the project folder); a release build never does, so a stray `app.properties` in a parent
+/// folder cannot take over the configuration.
+pub fn find_properties(start: &Path) -> Option<PathBuf> {
+    let depth = if cfg!(any(debug_assertions, test)) { 4 } else { 1 };
+    start
+        .ancestors()
+        .take(depth)
+        .map(|d| d.join("app.properties"))
+        .find(|p| p.is_file())
+}
+
+impl AppConfig {
+    /// The working folder is the folder containing `app.properties` (history and attachments next to the application).
+    pub fn load(props_path: &Path) -> Result<Self> {
+        let text = std::fs::read_to_string(props_path)
+            .with_context(|| crate::i18n::fmt("cannot read {0}", &[props_path.display().to_string()]))?;
+        let p = parse_properties(&text);
+        let base_dir = props_path.parent().unwrap_or(Path::new(".")).to_path_buf();
+        // Missing keys get default values: settings are saved in groups, so the file may be incomplete.
+        let get_or = |k: &str, d: &str| p.get(k).cloned().unwrap_or_else(|| d.to_string());
+        // Explicit paths from the file win; otherwise the default name, renaming the pre-0.3 Polish one.
+        let path_or = |k: &str, legacy: &str, current: &str| match p.get(k) {
+            Some(v) if !v.is_empty() => base_dir.join(v),
+            _ => renamed(&base_dir, legacy, current),
+        };
+
+        Ok(Self {
+            // The model is fixed: the `claude.model` entry in the file is informational only and does not change the model.
+            claude_model: CLAUDE_MODEL.to_string(),
+            claude_max_tokens: get_or("claude.max_tokens", "10000").parse().context("claude.max_tokens")?,
+            db_host: get_or("db.host", ""),
+            db_port: get_or("db.port", "5432").parse().context("db.port")?,
+            db_name: get_or("db.name", ""),
+            db_user: get_or("db.user", "postgres"),
+            db_password: migrate_db_password(props_path, p.get("db.password").map(String::as_str).unwrap_or("")),
+            db_sslmode: SslMode::parse(&get_or("db.sslmode", "prefer")).context("db.sslmode")?,
+            // Older files have the path stored with doubled backslashes (C:\\Program Files\\...): convert it to a normal one.
+            ea_path: PathBuf::from({
+                let raw = get_or("ea.path", r"C:\Program Files\Sparx Systems\EA\EA.exe");
+                if raw.contains(":\\\\") { raw.replace("\\\\", "\\") } else { raw }
+            }),
+            ea_user: get_or("ea.user", ""),
+            // Package locking on write is always on (no option in the settings).
+            approval_mode: ApprovalMode::parse(&get_or("approval.mode", "ask"))?,
+            history_dir: base_dir.join(get_or("history.dir", "history")),
+            attachments_dir: base_dir.join(get_or("attachments.dir", "attachments")),
+            memory_dir: base_dir.join(get_or("memory.dir", "memory")),
+            audit_file: path_or("audit.file", "dziennik_zmian.jsonl", "audit_log.jsonl"),
+            templates_dir: path_or("templates.dir", "szablony", "templates"),
+            // Settings without a language come from versions before 0.3, which were Polish only.
+            ui_language: get_or("ui.language", "pl"),
+            confluence_url: get_or("confluence.url", ""),
+            confluence_user: get_or("confluence.user", ""),
+            confluence_space: get_or("confluence.space", ""),
+            confluence_parent: get_or("confluence.parent", ""),
+            confluence_pages_file: renamed(&base_dir, "confluence_strony.json", "confluence_pages.json"),
+            base_dir,
+        })
+    }
+}
+
+/// The database password lives in Credential Manager. Versions before 0.3 kept it in `app.properties`:
+/// in an installed application such a password is moved to Credential Manager and removed from the file (it stays
+/// in the file only if Credential Manager refuses it). A portable copy (its own `app.properties` next to the program,
+/// e.g. a test setup) keeps a password from its file, so it never overwrites the installed application's password.
+fn migrate_db_password(props_path: &Path, from_file: &str) -> String {
+    if from_file.is_empty() {
+        return secrets::get(secrets::DB_PASSWORD).unwrap_or_default();
+    }
+    if is_installed(props_path) && secrets::set(secrets::DB_PASSWORD, from_file).is_ok() {
+        let _ = remove_properties(props_path, &["db.password"]);
+    }
+    from_file.to_string()
+}
+
+/// Whether these are the settings of the installed application (in the user profile) rather than of a portable copy.
+pub fn is_installed(props_path: &Path) -> bool {
+    props_path.parent().is_some_and(|dir| dir == user_data_dir())
+}
+
+/// Removes the given keys from `app.properties`; other lines stay unchanged.
+pub fn remove_properties(path: &Path, keys: &[&str]) -> Result<()> {
+    let text = std::fs::read_to_string(path)?;
+    let kept: Vec<&str> = text
+        .lines()
+        .filter(|line| {
+            let t = line.trim_start();
+            !keys.iter().any(|k| t.starts_with(&format!("{k}=")) || t.starts_with(&format!("{k} =")))
+        })
+        .collect();
+    std::fs::write(path, kept.join("\r\n") + "\r\n")
+        .with_context(|| crate::i18n::fmt("saving {0}", &[path.display().to_string()]))?;
+    Ok(())
+}
+
+/// Writes the given keys to `app.properties` (creates the file if it does not exist).
+/// Other lines, including comments, stay unchanged; missing keys are appended at the end.
+pub fn save_properties(path: &Path, updates: &[(&str, String)]) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).with_context(|| crate::i18n::fmt("settings folder {0}", &[parent.display().to_string()]))?;
+    }
+    let text = if path.exists() { std::fs::read_to_string(path)? } else { String::new() };
+    let mut done = vec![false; updates.len()];
+    let mut lines: Vec<String> = text
+        .lines()
+        .map(|line| {
+            let t = line.trim();
+            if !t.starts_with('#') {
+                for (i, (k, v)) in updates.iter().enumerate() {
+                    if t.starts_with(&format!("{k}=")) {
+                        done[i] = true;
+                        return format!("{k}={v}");
+                    }
+                }
+            }
+            line.to_string()
+        })
+        .collect();
+    for (i, (k, v)) in updates.iter().enumerate() {
+        if !done[i] {
+            lines.push(format!("{k}={v}"));
+        }
+    }
+    std::fs::write(path, lines.join("\r\n") + "\r\n")
+        .with_context(|| crate::i18n::fmt("saving {0}", &[path.display().to_string()]))?;
+    Ok(())
+}
+
+/// Secrets in Windows Credential Manager (Claude API key, passwords, Confluence token).
+pub mod secrets {
+    use anyhow::{Context, Result};
+
+    const SERVICE: &str = "loonar-compass";
+    /// Service name of the pre-release versions: secrets found there are moved to `SERVICE`.
+    const LEGACY_SERVICE: &str = "loonar-ea-assistant";
+    pub const CLAUDE_API_KEY: &str = "claude_api_key";
+    pub const EA_PASSWORD: &str = "ea_password";
+    pub const DB_PASSWORD: &str = "db_password";
+    pub const CONFLUENCE_TOKEN: &str = "confluence_token";
+    /// Every secret the application stores (removed together on uninstall).
+    pub const ALL: [&str; 4] = [CLAUDE_API_KEY, EA_PASSWORD, DB_PASSWORD, CONFLUENCE_TOKEN];
+
+    pub fn get(name: &str) -> Result<String> {
+        if let Ok(value) = keyring::Entry::new(SERVICE, name).and_then(|e| e.get_password()) {
+            return Ok(value);
+        }
+        // Copied, not moved: a pre-release version still installed next to this one keeps working.
+        // Uninstalling removes both (see `delete`).
+        let value = keyring::Entry::new(LEGACY_SERVICE, name)?
+            .get_password()
+            .with_context(|| crate::i18n::fmt("secret '{0}' not found in Credential Manager", &[name.to_string()]))?;
+        let _ = set(name, &value);
+        Ok(value)
+    }
+
+    pub fn set(name: &str, value: &str) -> Result<()> {
+        keyring::Entry::new(SERVICE, name)?.set_password(value)?;
+        Ok(())
+    }
+
+    pub fn exists(name: &str) -> bool {
+        get(name).is_ok()
+    }
+
+    /// Removes the secret (also under the pre-release service name); a missing secret is not an error.
+    pub fn delete(name: &str) -> Result<()> {
+        for service in [SERVICE, LEGACY_SERVICE] {
+            match keyring::Entry::new(service, name)?.delete_credential() {
+                Ok(()) | Err(keyring::Error::NoEntry) => {}
+                Err(e) => return Err(e.into()),
+            }
+        }
+        Ok(())
+    }
+}

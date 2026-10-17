@@ -1,0 +1,60 @@
+LICENCJA FREEWARE – Loonar Compass
+
+Licencjodawca: Mariusz Głowacki, prowadzący działalność gospodarczą pod firmą Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard, NIP 8542139307, REGON 320090308, wpisany do Centralnej Ewidencji i Informacji o Działalności Gospodarczej (CEIDG) („Licencjodawca”).
+
+Copyright © 2026 Mariusz Głowacki (Loonar). Wszelkie prawa zastrzeżone.
+
+1. Udzielenie licencji
+Licencjodawca udziela każdemu, kto zgodnie z prawem uzyskał kopię Aplikacji („Użytkownik”), nieodpłatnej, niewyłącznej licencji, na czas nieoznaczony i bez ograniczeń terytorialnych, na korzystanie z Aplikacji w dowolnym celu, także zawodowym i komercyjnym, na dowolnej liczbie komputerów, na następujących polach eksploatacji:
+a) trwałe lub czasowe zwielokrotnianie w całości lub w części w zakresie niezbędnym do instalacji, uruchamiania, wyświetlania, stosowania, przekazywania i przechowywania Aplikacji,
+b) zwielokrotnianie i rozpowszechnianie niezmienionych kopii na warunkach pkt 2.
+„Aplikacja” oznacza program Loonar Compass wraz z instalatorem, dokumentacją, szablonami i grafikami dostarczonymi przez Licencjodawcę.
+
+2. Kopiowanie i przekazywanie
+Aplikację wolno kopiować i przekazywać innym osobom wyłącznie bezpłatnie, w całości i w niezmienionej postaci, razem z plikami LICENSE i THIRD-PARTY-NOTICES. Nie wolno dołączać Aplikacji do płatnych pakietów ani do instalatorów z reklamami lub innym oprogramowaniem, ani sugerować związku z Licencjodawcą. Licencjodawca może cofnąć to uprawnienie wobec konkretnej osoby rozpowszechniającej Aplikację.
+
+3. Zakaz zmian
+Bez pisemnej zgody Licencjodawcy nie wolno:
+a) zmieniać Aplikacji ani tworzyć utworów zależnych na jej podstawie,
+b) dekompilować jej, deasemblować ani w inny sposób odtwarzać jej kodu źródłowego,
+c) usuwać ani zmieniać informacji o Licencjodawcy, nazwy, znaków i oznaczeń Aplikacji,
+d) sprzedawać Aplikacji, wynajmować jej ani pobierać opłat za jej udostępnienie.
+Ograniczenia z lit. a–d nie dotyczą uprawnień, których nie można wyłączyć umową, w szczególności wynikających z art. 75 ust. 2 i 3 ustawy o prawie autorskim i prawach pokrewnych oraz art. 5 i 6 dyrektywy 2009/24/WE (sporządzenie kopii zapasowej, badanie działania programu, dekompilacja w celu zapewnienia współdziałania, poprawianie błędów w zakresie przewidzianym prawem).
+
+4. Własność
+Aplikacja jest licencjonowana, a nie sprzedawana. Wszystkie prawa do Aplikacji, których ta licencja wprost nie udziela, pozostają przy Licencjodawcy.
+
+5. Komponenty open source i usługi innych firm
+a) Aplikacja zawiera komponenty open source (biblioteki i czcionki) wymienione w pliku THIRD-PARTY-NOTICES.txt. Każdy z nich podlega własnej licencji, która w razie sprzeczności ma pierwszeństwo; ograniczenia z pkt 2 i 3 ich nie dotyczą.
+b) Aplikacja współpracuje z Enterprise Architect (Sparx Systems), Claude API (Anthropic), Confluence (Atlassian), PostgreSQL i Microsoft Windows. Korzystanie z nich wymaga odrębnych licencji i kont oraz przestrzegania warunków ich dostawców (dla Claude API m.in. Commercial Terms of Service i Usage Policy firmy Anthropic). Opłaty za te usługi ponosi Użytkownik. Licencjodawca nie odpowiada za ich dostępność ani działanie.
+
+6. Wyniki działania sztucznej inteligencji
+Odpowiedzi, zmiany w modelu, dokumenty, strony i obrazy przygotowuje automatycznie model sztucznej inteligencji. Mogą być niepełne lub błędne, także wtedy, gdy wyglądają wiarygodnie. Użytkownik sprawdza je przed zatwierdzeniem i wykorzystaniem. Tryb „auto” zapisuje zmiany bez osobnego zatwierdzenia i Użytkownik włącza go na własne ryzyko. Wyniki nie stanowią porady profesjonalnej. Przed korzystaniem z Aplikacji Użytkownik wykonuje kopie zapasowe modelu (baseline w EA, kopia bazy danych).
+
+7. Dane
+Licencjodawca nie zbiera danych za pośrednictwem Aplikacji (brak telemetrii). Treść rozmów, załączniki i fragmenty modelu potrzebne do odpowiedzi trafiają bezpośrednio do Anthropic na podstawie umowy Użytkownika lub jego organizacji z Anthropic, a strony Confluence – na serwer wskazany przez Użytkownika. Użytkownik odpowiada za zgodność takiego przekazywania z zasadami swojej organizacji, umowami i przepisami o ochronie danych. Zgłoszenia błędów i zapisy na informacje o nowych wersjach Licencjodawca przetwarza zgodnie z polityką prywatności: https://loonar.eu/pl/privacy/
+
+8. Brak gwarancji
+Aplikacja jest udostępniana nieodpłatnie, w stanie, w jakim jest. Licencjodawca nie zapewnia, że będzie wolna od błędów, że będzie działała bez przerw ani że nada się do określonego celu. Odpowiedzialność z tytułu rękojmi jest wyłączona, z zastrzeżeniem pkt 9 lit. a i c.
+
+9. Odpowiedzialność
+a) Licencjodawca odpowiada bez ograniczeń za szkody wyrządzone umyślnie lub wskutek rażącego niedbalstwa, za szkody na osobie oraz na podstawie przepisów o odpowiedzialności za produkt.
+b) W pozostałym zakresie Licencjodawca nie odpowiada za szkody wynikłe z korzystania z Aplikacji lub z niemożności korzystania z niej, w szczególności za utratę lub uszkodzenie danych i modeli, utracone korzyści, zmiany zapisane po zatwierdzeniu przez Użytkownika lub w trybie „auto” oraz za działanie usług osób trzecich.
+c) Wobec konsumentów ten punkt nie ogranicza uprawnień wynikających z bezwzględnie obowiązujących przepisów państwa ich zwykłego pobytu.
+
+10. Znaki towarowe
+Licencja nie obejmuje prawa do używania oznaczeń Loonar. Wymienione znaki towarowe osób trzecich należą do ich właścicieli; Aplikacja jest niezależnym produktem, niepowiązanym z nimi.
+
+11. Wygaśnięcie
+Licencja wygasa automatycznie w razie naruszenia jej warunków. Po wygaśnięciu należy zaprzestać korzystania z Aplikacji i usunąć jej kopie.
+
+12. Prawo właściwe i sądy
+Licencja podlega prawu polskiemu. Spory z przedsiębiorcami rozstrzyga sąd właściwy dla siedziby Licencjodawcy. Konsument zachowuje ochronę bezwzględnie obowiązujących przepisów państwa swojego zwykłego pobytu i może wnieść powództwo do sądu tego państwa.
+
+13. Wersje językowe
+Wiążąca jest wersja polska; wersje angielska, niemiecka i francuska są tłumaczeniami.
+
+14. Postanowienia końcowe
+Nieważność jednego postanowienia nie wpływa na ważność pozostałych. Nowe wersje Aplikacji mogą być udostępniane na zmienionej licencji; do pobranej wersji stosuje się licencja do niej dołączona.
+
+Kontakt: mariusz@loonar.eu, https://loonar.eu
