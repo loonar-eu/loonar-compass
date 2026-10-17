@@ -92,7 +92,10 @@ graph.batchUpdate(() => {
   // Larger elements first, so frames and subprocesses stay behind their contents.
   const order = [...data.elements].sort((a, b) => b.width * b.height - a.width * a.height);
   for (const el of order) {
-    const v = graph.insertVertex({ parent, id: `e${el.id}`, value: el.name, position: [el.left, el.top], size: [el.width, el.height], style: vertexStyle(el) });
+    const style = vertexStyle(el);
+    const fill = (el.props || {}).bgcolor || (el.props || {}).color;
+    if (fill) style.fillColor = fill;
+    const v = graph.insertVertex({ parent, id: `e${el.id}`, value: el.name, position: [el.left, el.top], size: [el.width, el.height], style });
     cells.set(el.id, v);
     meta.set(v.id, { kind: 'element', ea: el, isNew: false });
     original.set(v.id, { name: el.name, x: el.left, y: el.top, w: el.width, h: el.height });
@@ -278,9 +281,9 @@ function tagsTab(cell) {
 
 function colorRow(label, scope, value, onChange) {
   const picker = el('input', { type: 'color', value: value || '#FFFFFF' });
-  const state = el('span', { class: 'rv' }, value || t.default_color);
+  const state = el('span', { class: 'rv' }, value || '');
   picker.addEventListener('input', () => { state.textContent = picker.value.toUpperCase(); onChange(picker.value.toUpperCase()); });
-  const reset = el('button', { onclick: (ev) => { ev.preventDefault(); state.textContent = t.default_color; onChange(-1); } }, t.default_color);
+  const reset = el('button', { onclick: (ev) => { ev.preventDefault(); state.textContent = ''; picker.value = '#FFFFFF'; onChange(-1); } }, t.default_color);
   return row(label, scope, el('div', { class: 'color' }, picker, state, reset));
 }
 
@@ -292,7 +295,7 @@ function appearanceTab(cell) {
     const shown = (v) => (v === -1 ? '' : v);
     box.append(colorRow(t.fill_diagram, 'diagram', shown(e.bgcolor ?? (m.ea.props || {}).bgcolor), (v) => {
       e.bgcolor = v;
-      graph.setCellStyles('fillColor', v === -1 ? vertexStyle(m.ea).fillColor : v, [cell]);
+      graph.setCellStyles('fillColor', v === -1 ? ((m.ea.props || {}).color || vertexStyle(m.ea).fillColor) : v, [cell]);
     }));
     box.append(colorRow(t.fill_model, 'model', shown(e.fields.color ?? (m.ea.props || {}).color), (v) => { e.fields.color = v; }));
   } else if (m.isNew) {
@@ -304,6 +307,58 @@ function appearanceTab(cell) {
     for (const v of LINE_STYLES) { const o = el('option', { value: v }, t[`ls_${v}`]); if (v === value) o.selected = true; s.append(o); }
     box.append(row(t.line_style, 'diagram', s));
   }
+  return box;
+}
+
+// Class members: a working copy per element; on saving it is compared with what the model has.
+const CLASSIFIERS = ['Class', 'Interface', 'Enumeration', 'DataType', 'Signal', 'Component'];
+const VIS = [['Public', '+'], ['Private', '-'], ['Protected', '#'], ['Package', '~']];
+const members = new Map(); // cell id -> {attributes: [...], operations: [...]}
+function membersOf(cell) {
+  if (!members.has(cell.id)) {
+    const ea = meta.get(cell.id).ea;
+    const copy = (list) => (list || []).map((x) => ({ ...x, orig: { ...x } }));
+    members.set(cell.id, { attributes: copy(ea.attribute_list), operations: copy(ea.operation_list) });
+  }
+  return members.get(cell.id);
+}
+const sign = (v) => (VIS.find((x) => x[0] === v) || VIS[0])[1];
+function relabel(cell) {
+  const ea = meta.get(cell.id).ea;
+  const w = membersOf(cell);
+  ea.attributes = w.attributes.map((a) => `${sign(a.visibility)} ${a.name}${a.type ? `: ${a.type}` : ''}`);
+  ea.operations = w.operations.map((o) => `${sign(o.visibility)} ${o.name}(${o.parameters || ''})${o.type && o.type !== 'void' ? `: ${o.type}` : ''}`);
+  graph.refresh(cell);
+}
+function membersTab(cell) {
+  const w = membersOf(cell);
+  const box = el('div', { class: 'members' });
+  box.append(el('p', { class: 'hint' }, badge('model'), ' ', t.scope_model_hint));
+  const section = (kind, title, list) => {
+    box.append(el('h3', {}, title));
+    if (!list.length) box.append(el('p', { class: 'hint' }, t.none));
+    list.forEach((m, index) => {
+      const vis = el('select', { title: t.visibility, onchange: (ev) => { m.visibility = ev.target.value; relabel(cell); } });
+      for (const [v, s] of VIS) { const o = el('option', { value: v }, s); if (v === (m.visibility || 'Public')) o.selected = true; vis.append(o); }
+      const name = el('input', { type: 'text', value: m.name || '', placeholder: t.f_name, oninput: (ev) => { m.name = ev.target.value; relabel(cell); } });
+      const type = el('input', { type: 'text', value: m.type || '', placeholder: kind === 'attribute' ? t.f_type : t.return_type, oninput: (ev) => { m.type = ev.target.value; relabel(cell); } });
+      const x = el('button', { class: 'x', title: t.remove_member, onclick: (ev) => { ev.preventDefault(); list.splice(index, 1); relabel(cell); render(); } }, '×');
+      box.append(el('div', { class: 'member' }, vis, name, type, x));
+      if (kind === 'operation') {
+        const params = el('input', { type: 'text', value: m.parameters || '', placeholder: t.parameters_hint, oninput: (ev) => { m.parameters = ev.target.value; relabel(cell); } });
+        if (m.id) { params.disabled = true; params.title = t.parameters_existing; }
+        box.append(el('div', { class: 'member params' }, el('span', { class: 'fl' }, t.parameters), params));
+      }
+    });
+    box.append(el('button', { class: 'addm', onclick: (ev) => {
+      ev.preventDefault();
+      list.push({ name: kind === 'attribute' ? t.new_attribute : t.new_operation, type: '', visibility: kind === 'attribute' ? 'Private' : 'Public', parameters: '' });
+      relabel(cell);
+      render();
+    } }, kind === 'attribute' ? t.add_attribute : t.add_operation));
+  };
+  section('attribute', t.attributes, w.attributes);
+  section('operation', t.operations, w.operations);
   return box;
 }
 
@@ -321,12 +376,17 @@ function render() {
   const type = m.ea.stereotype ? `${m.ea.type} «${String(m.ea.stereotype).replace(/^.*::/, '')}»` : m.ea.type;
   panel.append(el('p', { class: 'kind' }, type));
   const tabs = el('div', { class: 'tabs' });
-  for (const [k, label] of [['general', t.tab_general], ['tags', t.tab_tags], ['appearance', t.tab_appearance]]) {
+  const tabList = [['general', t.tab_general]];
+  if (cell.isVertex() && CLASSIFIERS.includes(m.ea.type)) tabList.push(['members', t.tab_members]);
+  tabList.push(['tags', t.tab_tags], ['appearance', t.tab_appearance]);
+  if (!tabList.some(([k]) => k === tab)) tab = 'general';
+  for (const [k, label] of tabList) {
     tabs.append(el('button', { class: k === tab ? 'on' : '', onclick: () => { tab = k; render(); } }, label));
   }
   panel.append(tabs);
   const body = el('div', { class: 'body' });
   if (tab === 'tags') body.append(tagsTab(cell));
+  else if (tab === 'members') body.append(membersTab(cell));
   else if (tab === 'appearance') body.append(appearanceTab(cell));
   else if (cell.isVertex()) {
     body.append(row(t.f_name, 'model', nameInput(cell)));
@@ -359,7 +419,7 @@ for (const tool of data.toolbox) {
     const tr = graph.getView().translate;
     const x = Math.round((container.scrollLeft + container.clientWidth / 2) / s - tr.x - tool.width / 2);
     const y = Math.round((container.scrollTop + container.clientHeight / 2) / s - tr.y - tool.height / 2);
-    const ea = { type: tool.type, stereotype: tool.stereotype || '', attributes: [], operations: [], props: {}, tags: [] };
+    const ea = { type: tool.type, stereotype: tool.stereotype || '', attributes: [], operations: [], props: {}, tags: [], attribute_list: [], operation_list: [] };
     let v;
     graph.batchUpdate(() => {
       v = graph.insertVertex({ parent, id: `n${++counter}`, value: tool.name, position: [x + counter * 10, y + counter * 10], size: [tool.width, tool.height], style: vertexStyle(ea) });
@@ -462,6 +522,27 @@ function changes() {
     if (e.bgcolor !== undefined) out.colors.push({ id: ref, bgcolor: e.bgcolor });
     if (e.line_style && !m.isNew && e.line_style !== (m.ea.props || {}).line_style) out.line_styles.push({ id: ref, style: e.line_style });
   }
+  // Class members: deleted, changed, added.
+  out.members = [];
+  for (const [id, w] of members) {
+    const cell = present[id];
+    const m = meta.get(id);
+    if (!cell || !m) continue;
+    for (const kind of ['attribute', 'operation']) {
+      const now = kind === 'attribute' ? w.attributes : w.operations;
+      const before = (kind === 'attribute' ? m.ea.attribute_list : m.ea.operation_list) || [];
+      for (const b of before) if (!now.some((x) => x.id === b.id)) out.members.push({ kind, action: 'delete', id: b.id });
+      for (const x of now) {
+        if (!x.id) {
+          if (x.name) out.members.push({ kind, action: 'create', element: key(cell), name: x.name, type: x.type, visibility: x.visibility, parameters: x.parameters });
+          continue;
+        }
+        const diff = {};
+        for (const f of ['name', 'type', 'visibility']) if ((x[f] || '') !== (x.orig[f] || '')) diff[f] = x[f] || '';
+        if (Object.keys(diff).length) out.members.push({ kind, action: 'update', id: x.id, ...diff });
+      }
+    }
+  }
   // Renamed existing connectors without other edits in the panel.
   for (const cell of Object.values(present)) {
     const m = meta.get(cell.id);
@@ -477,7 +558,7 @@ document.getElementById('save').addEventListener('click', () => {
   const c = changes();
   const count = c.moved.length + c.renamed.length + c.routed.length + c.created.length + c.connected.length
     + c.removed.length + c.hidden.length + c.deleted.length + c.deleted_connectors.length
-    + c.updated.length + c.updated_connectors.length + c.colors.length + c.line_styles.length;
+    + c.updated.length + c.updated_connectors.length + c.colors.length + c.line_styles.length + c.members.length;
   if (!count) { document.getElementById('status').textContent = t.nothing; return; }
   send(c);
 });
@@ -512,6 +593,22 @@ if (data.selftest === 'props') {
     document.getElementById('status').textContent = JSON.stringify(changes()).slice(0, 300);
     setTimeout(() => document.getElementById('save').click(), 1000);
   }, 1500);
+} else if (data.selftest === 'members') {
+  setTimeout(() => {
+    const cust = Object.values(graph.getDataModel().cells).find((c) => c.isVertex() && c.value === 'Customer');
+    graph.setSelectionCell(cust);
+    tab = 'members';
+    render();
+    const w = membersOf(cust);
+    w.attributes[0].type = 'Text';
+    w.attributes.splice(1, 1);
+    w.attributes.push({ name: 'phone', type: 'String', visibility: 'Private', parameters: '' });
+    w.operations.splice(0, 1);
+    w.operations.push({ name: 'discount', type: 'Money', visibility: 'Public', parameters: 'order: Order, code' });
+    relabel(cust);
+    render();
+    setTimeout(() => document.getElementById('save').click(), 1000);
+  }, 1500);
 } else if (data.selftest) {
   setTimeout(() => {
     const byName = (n) => Object.values(graph.getDataModel().cells).find((c) => c.isVertex() && c.value === n);
@@ -532,3 +629,6 @@ if (data.selftest === 'props') {
     setTimeout(() => document.getElementById('save').click(), 1500);
   }, 1500);
 }
+
+// Handle for scripted checks of the page (screenshots of the panel and dialogs in a browser).
+window.__editor = { graph, render, askDelete, setTab: (k) => { tab = k; render(); } };

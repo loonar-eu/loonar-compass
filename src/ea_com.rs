@@ -918,6 +918,40 @@ impl Job<'_> {
                 let id = operation.int("MethodID")?;
                 self.created.push(json!({ "key": op["key"], "kind": "operation", "id": id, "guid": operation.text("MethodGUID")?, "name": name }));
             }
+            "update_attribute" | "delete_attribute" | "update_operation" | "delete_operation" => {
+                // An existing attribute or operation of a class: its owner element is locked first.
+                let attribute = name.ends_with("_attribute");
+                let (getter, id_property, collection, label) = if attribute {
+                    ("GetAttributeByID", "AttributeID", "Attributes", crate::i18n::tr("attribute"))
+                } else {
+                    ("GetMethodByID", "MethodID", "Methods", crate::i18n::tr("operation"))
+                };
+                let id = int_field(op, if attribute { "attribute" } else { "operation" })?;
+                let member = self
+                    .repo
+                    .call(getter, &[i(id)])
+                    .ok()
+                    .and_then(|v| v.object())
+                    .ok_or_else(|| anyhow!("{}", crate::i18n::fmt("There is no {0} with id {1}.", &[label.to_string(), id.to_string()])))?;
+                let owner = self.element(&json!(member.int("ParentID")?))?;
+                let what = format!("{label} id={id}");
+                if name.starts_with("delete_") {
+                    self.remove_from(&owner.obj(collection)?, id_property, id, &what)?;
+                } else {
+                    let type_property = if attribute { "Type" } else { "ReturnType" };
+                    let type_field = if attribute { "type" } else { "return_type" };
+                    for (field, property) in [("name", "Name"), (type_field, type_property), ("visibility", "Visibility"), ("notes", "Notes"), ("default", "Default")] {
+                        if !op[field].is_null() && (attribute || field != "default") {
+                            member.set(property, s(&text_field(op, field)))?;
+                        }
+                    }
+                    if let Some(is_static) = op["static"].as_bool() {
+                        member.set("IsStatic", b(is_static))?;
+                    }
+                    member.update(&what)?;
+                    owner.obj(collection)?.call("Refresh", &[])?;
+                }
+            }
             "clone_package" => {
                 // Copy of a package with all its contents (elements, diagrams, child packages) next to the original.
                 let package = self.package(&op["package"])?;

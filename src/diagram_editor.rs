@@ -25,6 +25,28 @@ fn visibility(scope: &str) -> &'static str {
     }
 }
 
+/// EA visibility as the write operations take it.
+fn scope_name(scope: &str) -> &'static str {
+    match scope.to_ascii_lowercase().as_str() {
+        "private" => "Private",
+        "protected" => "Protected",
+        "package" => "Package",
+        _ => "Public",
+    }
+}
+
+/// Parameters typed as "name: Type, other: Type" (the type may be left out).
+fn parse_parameters(text: &str) -> Vec<Value> {
+    text.split(',')
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .map(|p| match p.split_once(':') {
+            Some((name, kind)) => json!({ "name": name.trim(), "type": kind.trim() }),
+            None => json!({ "name": p, "type": "" }),
+        })
+        .collect()
+}
+
 /// EA colour (a BGR number, -1 or empty = default) as #RRGGBB, or "" for the default colour.
 fn hex_color(value: &str) -> String {
     match value.trim().parse::<i64>() {
@@ -76,15 +98,32 @@ pub fn model(cfg: &AppConfig, diagram_id: i64) -> Result<Value> {
     let on_diagram = format!("(select object_id from t_diagramobjects where diagram_id = {diagram_id})");
     let int = |s: &str| s.trim().parse::<i64>().unwrap_or(0);
 
+    // Class members: the text shown in the compartments, and the fields the properties panel edits.
     let mut attributes: std::collections::HashMap<i64, Vec<String>> = Default::default();
-    for r in query_rows(cfg, &format!("select object_id, name, coalesce(type, ''), coalesce(scope, '') from t_attribute where object_id in {on_diagram} order by object_id, pos"))? {
+    let mut attribute_list: std::collections::HashMap<i64, Vec<Value>> = Default::default();
+    for r in query_rows(cfg, &format!("select object_id, name, type, scope, id, \"default\", isstatic from t_attribute where object_id in {on_diagram} order by object_id, pos"))? {
         let kind = if r[2].is_empty() { String::new() } else { format!(": {}", r[2]) };
         attributes.entry(int(&r[0])).or_default().push(format!("{} {}{kind}", visibility(&r[3]), r[1]));
+        attribute_list.entry(int(&r[0])).or_default().push(json!({
+            "id": int(&r[4]), "name": r[1], "type": r[2], "visibility": scope_name(&r[3]), "default": r[5], "static": r[6] == "1",
+        }));
+    }
+    let mut parameters: std::collections::HashMap<i64, Vec<String>> = Default::default();
+    for r in query_rows(cfg, &format!(
+        "select operationid, name, type from t_operationparams where operationid in (select operationid from t_operation where object_id in {on_diagram}) order by operationid, pos"
+    ))? {
+        let kind = if r[2].is_empty() { String::new() } else { format!(": {}", r[2]) };
+        parameters.entry(int(&r[0])).or_default().push(format!("{}{kind}", r[1]));
     }
     let mut operations: std::collections::HashMap<i64, Vec<String>> = Default::default();
-    for r in query_rows(cfg, &format!("select object_id, name, coalesce(type, ''), coalesce(scope, '') from t_operation where object_id in {on_diagram} order by object_id, pos"))? {
+    let mut operation_list: std::collections::HashMap<i64, Vec<Value>> = Default::default();
+    for r in query_rows(cfg, &format!("select object_id, name, type, scope, operationid, isstatic from t_operation where object_id in {on_diagram} order by object_id, pos"))? {
         let kind = if r[2].is_empty() || r[2] == "void" { String::new() } else { format!(": {}", r[2]) };
-        operations.entry(int(&r[0])).or_default().push(format!("{} {}(){kind}", visibility(&r[3]), r[1]));
+        let params = parameters.remove(&int(&r[4])).unwrap_or_default().join(", ");
+        operations.entry(int(&r[0])).or_default().push(format!("{} {}({params}){kind}", visibility(&r[3]), r[1]));
+        operation_list.entry(int(&r[0])).or_default().push(json!({
+            "id": int(&r[4]), "name": r[1], "type": r[2], "visibility": scope_name(&r[3]), "parameters": params, "static": r[5] == "1",
+        }));
     }
 
     // Where the elements are used: the other diagrams they are on, and how many relationships they have in the model
@@ -124,6 +163,8 @@ pub fn model(cfg: &AppConfig, diagram_id: i64) -> Result<Value> {
             "left": left, "top": top.min(bottom), "width": (right - left).abs(), "height": (bottom - top).abs(),
             "attributes": attributes.remove(&id).unwrap_or_default(),
             "operations": operations.remove(&id).unwrap_or_default(),
+            "attribute_list": attribute_list.remove(&id).unwrap_or_default(),
+            "operation_list": operation_list.remove(&id).unwrap_or_default(),
             "other_diagrams": other_diagrams(id),
             "relations": relations.get(&id).copied().unwrap_or(0),
             "props": {
@@ -291,6 +332,14 @@ fn texts() -> Value {
         ("ls_tree_vertical", crate::i18n::tr("Tree, vertical")), ("ls_tree_horizontal", crate::i18n::tr("Tree, horizontal")),
         ("ls_lateral_vertical", crate::i18n::tr("Lateral, vertical")), ("ls_lateral_horizontal", crate::i18n::tr("Lateral, horizontal")),
         ("after_save", crate::i18n::tr("Available after the relationship is saved.")),
+        ("tab_members", crate::i18n::tr("Attributes and operations")), ("attributes", crate::i18n::tr("Attributes")),
+        ("operations", crate::i18n::tr("Operations")), ("none", crate::i18n::tr("None.")), ("visibility", crate::i18n::tr("Visibility")),
+        ("return_type", crate::i18n::tr("Return type")), ("parameters", crate::i18n::tr("Parameters")),
+        ("parameters_hint", crate::i18n::tr("name: Type, other: Type")),
+        ("parameters_existing", crate::i18n::tr("Parameters of an existing operation are changed in EA.")),
+        ("add_attribute", crate::i18n::tr("+ Attribute")), ("add_operation", crate::i18n::tr("+ Operation")),
+        ("new_attribute", crate::i18n::tr("newAttribute")), ("new_operation", crate::i18n::tr("newOperation")),
+        ("remove_member", crate::i18n::tr("Delete from the model")),
     ];
     if let Some(o) = out.as_object_mut() {
         o.extend(more.iter().map(|(k, v)| (k.to_string(), json!(v))));
@@ -352,6 +401,40 @@ pub fn to_ops(model: &Value, changes: &Value) -> Vec<Value> {
     for c in list("updated_connectors") {
         ops.extend(with_fields("update_connector", "connector", &c));
     }
+    // Attributes and operations: deleted, changed and added (new ones also on elements created in this save).
+    for c in list("members") {
+        let attribute = c["kind"] == "attribute";
+        let (noun, type_field) = if attribute { ("attribute", "type") } else { ("operation", "return_type") };
+        match c["action"].as_str().unwrap_or("") {
+            "delete" => {
+                let mut op = json!({ "op": format!("delete_{noun}") });
+                op[noun] = c["id"].clone();
+                ops.push(op);
+            }
+            action @ ("update" | "create") => {
+                let mut op = if action == "create" {
+                    json!({ "op": format!("create_{noun}"), "element": c["element"] })
+                } else {
+                    let mut op = json!({ "op": format!("update_{noun}") });
+                    op[noun] = c["id"].clone();
+                    op
+                };
+                for field in ["name", "visibility", "default", "static"] {
+                    if !c[field].is_null() && (attribute || field != "default") {
+                        op[field] = c[field].clone();
+                    }
+                }
+                if !c["type"].is_null() {
+                    op[type_field] = c["type"].clone();
+                }
+                if action == "create" && !attribute {
+                    op["parameters"] = json!(parse_parameters(c["parameters"].as_str().unwrap_or("")));
+                }
+                ops.push(op);
+            }
+            _ => {}
+        }
+    }
     for c in list("colors") {
         ops.push(json!({ "op": "set_color", "diagram": diagram, "element": c["id"], "bgcolor": c["bgcolor"] }));
     }
@@ -375,6 +458,13 @@ pub fn to_ops(model: &Value, changes: &Value) -> Vec<Value> {
     ops
 }
 
+/// The editor page with the diagram and the editor script inlined.
+fn page(model: &Value) -> Result<String> {
+    Ok(HTML
+        .replace("/*DIAGRAM*/", &format!("window.__DIAGRAM__ = {};", serde_json::to_string(model)?.replace("</", "<\\/")))
+        .replace("/*EDITOR_JS*/", &EDITOR_JS.replace("</script", "<\\/script")))
+}
+
 /// Opens the editor window and waits until the user saves or closes it. Returns the changes, or None.
 pub fn run(model: &Value) -> Result<Option<Value>> {
     use std::{cell::RefCell, rc::Rc};
@@ -382,9 +472,7 @@ pub fn run(model: &Value) -> Result<Option<Value>> {
     use tao::event_loop::{ControlFlow, EventLoopBuilder};
     use tao::platform::run_return::EventLoopExtRunReturn;
 
-    let page = HTML
-        .replace("/*DIAGRAM*/", &format!("window.__DIAGRAM__ = {};", serde_json::to_string(model)?.replace("</", "<\\/")))
-        .replace("/*EDITOR_JS*/", &EDITOR_JS.replace("</script", "<\\/script"));
+    let page = page(model)?;
     let mut event_loop = EventLoopBuilder::<String>::with_user_event().build();
     let proxy = event_loop.create_proxy();
     let title = format!("{} – {}", model["diagram"]["name"].as_str().unwrap_or(""), crate::config::APP_NAME);
@@ -488,6 +576,23 @@ mod tests {
     }
 
     #[test]
+    fn class_members_become_ea_operations() {
+        let model = json!({ "diagram": { "id": 8, "package": 11 } });
+        let changes = json!({ "members": [
+            { "element": 24, "kind": "attribute", "action": "create", "name": "email", "type": "String", "visibility": "Private" },
+            { "id": 7, "kind": "attribute", "action": "update", "type": "Text" },
+            { "id": 3, "kind": "operation", "action": "delete" },
+            { "element": "#n1", "kind": "operation", "action": "create", "name": "total", "type": "Money", "parameters": "tax: Rate, discount" },
+        ]});
+        let ops = to_ops(&model, &changes);
+        assert_eq!(ops[0], json!({ "op": "create_attribute", "element": 24, "name": "email", "type": "String", "visibility": "Private" }));
+        assert_eq!(ops[1], json!({ "op": "update_attribute", "attribute": 7, "type": "Text" }));
+        assert_eq!(ops[2], json!({ "op": "delete_operation", "operation": 3 }));
+        assert_eq!(ops[3]["return_type"], "Money");
+        assert_eq!(ops[3]["parameters"], json!([{ "name": "tax", "type": "Rate" }, { "name": "discount", "type": "" }]));
+    }
+
+    #[test]
     fn bend_points_come_with_y_downwards() {
         assert_eq!(parse_path("120:-80;300:-80;"), vec![[120, 80], [300, 80]]);
         assert!(parse_path("").is_empty());
@@ -509,6 +614,10 @@ mod tests {
         println!("connectors: {}", m["connectors"]);
         println!("toolbox: {}", m["toolbox"]);
         assert!(!m["elements"].as_array().unwrap().is_empty());
+        // The page itself, for looking at it in a browser (LOONAR_EDITOR_PAGE = output file).
+        if let Ok(out) = std::env::var("LOONAR_EDITOR_PAGE") {
+            std::fs::write(out, page(&m).unwrap()).unwrap();
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

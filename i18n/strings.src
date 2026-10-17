@@ -887,3 +887,22 @@ changed relationships ‖ zmienione relacje ‖ geänderte Beziehungen ‖ relat
 connector end ‖ koniec relacji ‖ Ende der Beziehung ‖ extrémité de la relation
 model ‖ model ‖ Modell ‖ modèle
 {0} selected ‖ Zaznaczono: {0} ‖ {0} ausgewählt ‖ {0} sélectionnés
++ Attribute ‖ + Atrybut ‖ + Attribut ‖ + Attribut
++ Operation ‖ + Operacja ‖ + Operation ‖ + Opération
+Attributes ‖ Atrybuty ‖ Attribute ‖ Attributs
+Attributes and operations ‖ Atrybuty i operacje ‖ Attribute und Operationen ‖ Attributs et opérations
+None. ‖ Brak. ‖ Keine. ‖ Aucun.
+Operations ‖ Operacje ‖ Operationen ‖ Opérations
+Parameters ‖ Parametry ‖ Parameter ‖ Paramètres
+Parameters of an existing operation are changed in EA. ‖ Parametry istniejącej operacji zmienia się w EA. ‖ Die Parameter einer vorhandenen Operation werden in EA geändert. ‖ Les paramètres d'une opération existante se modifient dans EA.
+Return type ‖ Typ zwracany ‖ Rückgabetyp ‖ Type de retour
+Visibility ‖ Widoczność ‖ Sichtbarkeit ‖ Visibilité
+attribute ‖ atrybut ‖ Attribut ‖ attribut
+attributes DELETED ‖ atrybuty USUNIĘTE ‖ Attribute GELÖSCHT ‖ attributs SUPPRIMÉS
+changed attributes ‖ zmienione atrybuty ‖ geänderte Attribute ‖ attributs modifiés
+changed operations ‖ zmienione operacje ‖ geänderte Operationen ‖ opérations modifiées
+name: Type, other: Type ‖ nazwa: Typ, inna: Typ ‖ name: Typ, anderer: Typ ‖ nom : Type, autre : Type
+newAttribute ‖ nowyAtrybut ‖ neuesAttribut ‖ nouvelAttribut
+newOperation ‖ nowaOperacja ‖ neueOperation ‖ nouvelleOperation
+operation ‖ operacja ‖ Operation ‖ opération
+operations DELETED ‖ operacje USUNIĘTE ‖ Operationen GELÖSCHT ‖ opérations SUPPRIMÉES
