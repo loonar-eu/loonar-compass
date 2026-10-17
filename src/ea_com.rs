@@ -400,12 +400,21 @@ impl Job<'_> {
     fn set_tags(&self, object: &Disp, tags: &Value) -> Result<()> {
         let Some(tags) = tags.as_object() else { return Ok(()) };
         for (name, value) in tags {
+            let collection = object.obj("TaggedValues")?;
+            collection.call("Refresh", &[])?;
+            // null removes the tagged value.
+            if value.is_null() {
+                let items = collection.items()?;
+                if let Some(index) = items.iter().position(|tag| tag.text("Name").ok().as_deref() == Some(name.as_str())) {
+                    collection.call("DeleteAt", &[i(index as i32), b(false)])?;
+                    collection.call("Refresh", &[])?;
+                }
+                continue;
+            }
             let value = match value {
                 Value::String(t) => t.clone(),
                 other => other.to_string(),
             };
-            let collection = object.obj("TaggedValues")?;
-            collection.call("Refresh", &[])?;
             let mut found = None;
             for tag in collection.items()? {
                 if tag.text("Name")? == *name {
@@ -723,13 +732,25 @@ impl Job<'_> {
             }
             "update_element" => {
                 let element = self.element(&op["element"])?;
-                for (field, property) in [("name", "Name"), ("notes", "Notes"), ("alias", "Alias")] {
+                for (field, property) in [
+                    ("name", "Name"),
+                    ("notes", "Notes"),
+                    ("alias", "Alias"),
+                    ("status", "Status"),
+                    ("version", "Version"),
+                    ("author", "Author"),
+                    ("phase", "Phase"),
+                    ("complexity", "Complexity"),
+                ] {
                     if !op[field].is_null() {
                         element.set(property, s(&text_field(op, field)))?;
                     }
                 }
+                if let Some(abstract_) = op["abstract"].as_bool() {
+                    element.set("Abstract", s(if abstract_ { "1" } else { "0" }))?;
+                }
                 let stereotype = text_field(op, "stereotype");
-                if !stereotype.is_empty() {
+                if !stereotype.is_empty() || op["clear_stereotype"].as_bool() == Some(true) {
                     element.set("StereotypeEx", s(&stereotype))?;
                 }
                 element.update(&crate::i18n::fmt("element id={0}", &[element.int("ElementID")?.to_string()]))?;
@@ -739,6 +760,49 @@ impl Job<'_> {
                     element.update(crate::i18n::tr("element color"))?;
                 }
                 self.set_tags(&element, &op["tags"])?;
+            }
+            "update_connector" => {
+                // Properties of an existing relationship: name, stereotype, direction, notes, the multiplicities and roles
+                // of both ends, tagged values. Both end elements are locked, as for deleting a connector.
+                let connector = match is_key(&op["connector"]) {
+                    Some(key) => self.from_key(key, Kind::Connector)?,
+                    None => {
+                        let id = int_field(op, "connector")?;
+                        self.repo
+                            .call("GetConnectorByID", &[i(id)])
+                            .ok()
+                            .and_then(|v| v.object())
+                            .ok_or_else(|| anyhow!("{}", crate::i18n::fmt("There is no connector with id {0}.", &[id.to_string()])))?
+                    }
+                };
+                self.element(&json!(connector.int("ClientID")?))?;
+                self.element(&json!(connector.int("SupplierID")?))?;
+                let id = connector.int("ConnectorID")?;
+                for (field, property) in [("name", "Name"), ("notes", "Notes"), ("direction", "Direction")] {
+                    if !op[field].is_null() {
+                        connector.set(property, s(&text_field(op, field)))?;
+                    }
+                }
+                let stereotype = text_field(op, "stereotype");
+                if !stereotype.is_empty() || op["clear_stereotype"].as_bool() == Some(true) {
+                    connector.set("StereotypeEx", s(&stereotype))?;
+                }
+                connector.update(&crate::i18n::fmt("connector id={0}", &[id.to_string()]))?;
+                for (end, prefix) in [("ClientEnd", "source"), ("SupplierEnd", "target")] {
+                    let (card, role) = (format!("{prefix}_multiplicity"), format!("{prefix}_role"));
+                    if op[&card].is_null() && op[&role].is_null() {
+                        continue;
+                    }
+                    let end = connector.obj(end)?;
+                    if !op[&card].is_null() {
+                        end.set("Cardinality", s(&text_field(op, &card)))?;
+                    }
+                    if !op[&role].is_null() {
+                        end.set("Role", s(&text_field(op, &role)))?;
+                    }
+                    end.update(crate::i18n::tr("connector end"))?;
+                }
+                self.set_tags(&connector, &op["tags"])?;
             }
             "move" => {
                 // Moves an existing object to another package (relationships and positions on diagrams are kept).

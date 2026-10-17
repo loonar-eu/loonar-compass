@@ -25,6 +25,49 @@ fn visibility(scope: &str) -> &'static str {
     }
 }
 
+/// EA colour (a BGR number, -1 or empty = default) as #RRGGBB, or "" for the default colour.
+fn hex_color(value: &str) -> String {
+    match value.trim().parse::<i64>() {
+        Ok(n) if n >= 0 => format!("#{:02X}{:02X}{:02X}", n & 0xFF, (n >> 8) & 0xFF, (n >> 16) & 0xFF),
+        _ => String::new(),
+    }
+}
+
+/// One value of a `key=value;` style string (diagram object and link styles in EA).
+fn style_value<'a>(style: &'a str, key: &str) -> Option<&'a str> {
+    style.split(';').find_map(|p| p.strip_prefix(key)?.strip_prefix('='))
+}
+
+/// The line style name of a diagram link (the names of the `set_line_style` operation).
+fn line_style(style: &str) -> &'static str {
+    match (style_value(style, "Mode").unwrap_or(""), style_value(style, "TREE").unwrap_or("")) {
+        ("1", _) => "direct",
+        ("2", _) => "auto",
+        ("3", "OS") => "orthogonal_square",
+        ("3", "OR") => "orthogonal_rounded",
+        ("3", "V") => "tree_vertical",
+        ("3", "H") => "tree_horizontal",
+        ("3", "LV") => "lateral_vertical",
+        ("3", "LH") => "lateral_horizontal",
+        ("3", _) => "custom",
+        _ => "",
+    }
+}
+
+/// Tagged values of objects, with the allowed values when the profile defines them ("Values: a,b,c" in the notes).
+fn tags(cfg: &AppConfig, sql: &str) -> Result<std::collections::HashMap<i64, Vec<Value>>> {
+    let mut out: std::collections::HashMap<i64, Vec<Value>> = Default::default();
+    for r in query_rows(cfg, sql)? {
+        let values: Vec<String> = r[3]
+            .lines()
+            .find_map(|l| l.trim().strip_prefix("Values:"))
+            .map(|v| v.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect())
+            .unwrap_or_default();
+        out.entry(r[0].trim().parse().unwrap_or(0)).or_default().push(json!({ "name": r[1], "value": r[2], "values": values }));
+    }
+    Ok(out)
+}
+
 /// The diagram as the editor needs it: elements with their boxes (pixels from the top-left corner, Y downwards),
 /// class members, connectors between elements on the diagram with their bend points, and the toolbox.
 pub fn model(cfg: &AppConfig, diagram_id: i64) -> Result<Value> {
@@ -63,11 +106,15 @@ pub fn model(cfg: &AppConfig, diagram_id: i64) -> Result<Value> {
         on_diagrams.get(&id).map(|v| v.iter().filter(|(d, _)| *d != diagram_id).map(|(_, n)| n.clone()).collect()).unwrap_or_default()
     };
 
+    let mut element_tags = tags(cfg, &format!("select object_id, property, value, notes from t_objectproperties where object_id in {on_diagram} order by object_id, property"))?;
     let mut elements = Vec::new();
     let mut bpmn = false;
     for r in query_rows(cfg, &format!(
-        "select o.object_id, o.name, o.object_type, coalesce(o.stereotype, ''), o.parentid, d.rectleft, d.recttop, d.rectright, d.rectbottom \
-         from t_diagramobjects d join t_object o on o.object_id = d.object_id where d.diagram_id = {diagram_id} order by d.sequence"
+        "select o.object_id, o.name, o.object_type, o.stereotype, o.parentid, d.rectleft, d.recttop, d.rectright, d.rectbottom, \
+         o.alias, o.note, o.pdata5, o.status, o.version, o.author, o.phase, o.complexity, o.abstract, o.ea_guid, \
+         o.createddate, o.modifieddate, o.backcolor, d.objectstyle, p.name \
+         from t_diagramobjects d join t_object o on o.object_id = d.object_id left join t_package p on p.package_id = o.package_id \
+         where d.diagram_id = {diagram_id} order by d.sequence"
     ))? {
         let id = int(&r[0]);
         let (left, top, right, bottom) = (int(&r[5]), int(&r[6]).abs(), int(&r[7]), int(&r[8]).abs());
@@ -79,21 +126,36 @@ pub fn model(cfg: &AppConfig, diagram_id: i64) -> Result<Value> {
             "operations": operations.remove(&id).unwrap_or_default(),
             "other_diagrams": other_diagrams(id),
             "relations": relations.get(&id).copied().unwrap_or(0),
+            "props": {
+                "alias": r[9], "notes": r[10], "keywords": r[11], "status": r[12], "version": r[13], "author": r[14],
+                "phase": r[15], "complexity": r[16], "abstract": r[17] == "1", "guid": r[18],
+                "created": r[19].chars().take(19).collect::<String>(), "modified": r[20].chars().take(19).collect::<String>(),
+                "color": hex_color(&r[21]), "bgcolor": style_value(&r[22], "BCol").map(hex_color).unwrap_or_default(),
+                "package": r[23],
+            },
+            "tags": element_tags.remove(&id).unwrap_or_default(),
         }));
     }
 
     let mut hidden = std::collections::HashSet::new();
     let mut paths = std::collections::HashMap::new();
-    for r in query_rows(cfg, &format!("select connectorid, coalesce(path, ''), coalesce(hidden, 0) from t_diagramlinks where diagramid = {diagram_id}"))? {
+    let mut link_styles = std::collections::HashMap::new();
+    for r in query_rows(cfg, &format!("select connectorid, path, hidden, style from t_diagramlinks where diagramid = {diagram_id}"))? {
         if r[2] == "1" || r[2].eq_ignore_ascii_case("true") {
             hidden.insert(int(&r[0]));
         }
         paths.insert(int(&r[0]), r[1].clone());
+        link_styles.insert(int(&r[0]), line_style(&r[3]));
     }
+    let both_ends = format!("start_object_id in {on_diagram} and end_object_id in {on_diagram}");
+    let mut connector_tags = tags(cfg, &format!(
+        "select elementid, property, value, notes from t_connectortag where elementid in (select connector_id from t_connector where {both_ends}) order by elementid, property"
+    ))?;
     let mut connectors = Vec::new();
     for r in query_rows(cfg, &format!(
-        "select connector_id, connector_type, coalesce(stereotype, ''), coalesce(name, ''), start_object_id, end_object_id, coalesce(subtype, '') \
-         from t_connector where start_object_id in {on_diagram} and end_object_id in {on_diagram}"
+        "select connector_id, connector_type, stereotype, name, start_object_id, end_object_id, subtype, \
+         direction, notes, sourcecard, sourcerole, destcard, destrole, ea_guid \
+         from t_connector where {both_ends}"
     ))? {
         let id = int(&r[0]);
         if hidden.contains(&id) {
@@ -106,18 +168,27 @@ pub fn model(cfg: &AppConfig, diagram_id: i64) -> Result<Value> {
             "id": id, "type": r[1], "stereotype": r[2], "name": r[3], "source": source, "target": target, "subtype": r[6],
             "other_diagrams": ends,
             "points": parse_path(paths.get(&id).map(String::as_str).unwrap_or("")),
+            "props": {
+                "direction": r[7], "notes": r[8], "source_multiplicity": r[9], "source_role": r[10],
+                "target_multiplicity": r[11], "target_role": r[12], "guid": r[13],
+                "line_style": link_styles.get(&id).copied().unwrap_or(""),
+            },
+            "tags": connector_tags.remove(&id).unwrap_or_default(),
         }));
     }
 
     let (toolbox, connector_types) = toolbox(&d[2], bpmn);
+    let statuses: Vec<String> = query_rows(cfg, "select status from t_statustypes order by status").unwrap_or_default().into_iter().map(|r| r[0].clone()).collect();
     Ok(json!({
+        "statuses": statuses,
         "diagram": { "id": diagram_id, "name": d[1], "type": d[2], "package": int(&d[3]), "bpmn": bpmn },
         "elements": elements,
         "connectors": connectors,
         "toolbox": toolbox,
         "connector_types": connector_types,
         "texts": texts(),
-        "selftest": cfg!(debug_assertions) && std::env::var("LOONAR_EDITOR_SELFTEST").is_ok(),
+        // Scripted edits in debug builds: LOONAR_EDITOR_SELFTEST=1 (layout and new elements) or =props (the properties panel).
+        "selftest": if cfg!(debug_assertions) { std::env::var("LOONAR_EDITOR_SELFTEST").unwrap_or_default() } else { String::new() },
     }))
 }
 
@@ -176,7 +247,7 @@ fn toolbox(diagram_type: &str, bpmn: bool) -> (Value, Value) {
 
 /// Interface texts of the editor window in the current language.
 fn texts() -> Value {
-    json!({
+    let mut out = json!({
         "add": crate::i18n::tr("Add:"), "connector": crate::i18n::tr("Connector:"), "save": crate::i18n::tr("Save to EA"), "cancel": crate::i18n::tr("Cancel"),
         "hint": crate::i18n::tr("Drag from an element to another to connect them. Double-click to rename."),
         "nothing": crate::i18n::tr("Nothing has changed."), "add_hint": crate::i18n::tr("Adds the element in the middle of the view"),
@@ -190,7 +261,41 @@ fn texts() -> Value {
         "used_on": crate::i18n::tr("Also on {0} other diagrams: {1}"), "used_nowhere": crate::i18n::tr("Not on any other diagram."),
         "relations": crate::i18n::tr("Relationships in the model: {0}"), "cancel_delete": crate::i18n::tr("Cancel"),
         "new_removed": crate::i18n::tr("Removed what was added in the editor."),
-    })
+    });
+    // The rest as a list: one json! of this size exceeds the macro recursion limit.
+    let more: &[(&str, &str)] = &[
+        ("properties", crate::i18n::tr("Properties")), ("tab_general", crate::i18n::tr("General")), ("tab_tags", crate::i18n::tr("Tagged values")),
+        ("tab_appearance", crate::i18n::tr("Appearance")),
+        ("f_name", crate::i18n::tr("Name")), ("f_alias", crate::i18n::tr("Alias")), ("f_stereotype", crate::i18n::tr("Stereotype")),
+        ("f_keywords", crate::i18n::tr("Keywords")), ("f_status", crate::i18n::tr("Status")), ("f_version", crate::i18n::tr("Version")),
+        ("f_author", crate::i18n::tr("Author")), ("f_phase", crate::i18n::tr("Phase")), ("f_complexity", crate::i18n::tr("Complexity")),
+        ("f_abstract", crate::i18n::tr("Abstract")), ("f_notes", crate::i18n::tr("Notes")), ("f_type", crate::i18n::tr("Type")),
+        ("f_package", crate::i18n::tr("Package")), ("f_guid", "GUID"), ("f_created", crate::i18n::tr("Created")), ("f_modified", crate::i18n::tr("Modified")),
+        ("easy", crate::i18n::tr("Easy")), ("medium", crate::i18n::tr("Medium")), ("difficult", crate::i18n::tr("Difficult")),
+        ("f_direction", crate::i18n::tr("Direction")), ("dir_none", crate::i18n::tr("Unspecified")), ("dir_forward", crate::i18n::tr("Source → target")),
+        ("dir_back", crate::i18n::tr("Target → source")), ("dir_both", crate::i18n::tr("Both directions")),
+        ("f_source", crate::i18n::tr("Source")), ("f_target", crate::i18n::tr("Target")),
+        ("f_source_multiplicity", crate::i18n::tr("Source multiplicity")), ("f_source_role", crate::i18n::tr("Source role")),
+        ("f_target_multiplicity", crate::i18n::tr("Target multiplicity")), ("f_target_role", crate::i18n::tr("Target role")),
+        ("nothing_selected", crate::i18n::tr("Select an element or a relationship to see its properties.")),
+        ("selected_many", crate::i18n::tr("{0} selected")),
+        ("scope_model", crate::i18n::tr("model")), ("scope_diagram", crate::i18n::tr("diagram")),
+        ("scope_model_hint", crate::i18n::tr("Changes the model: everywhere the element or relationship is shown.")),
+        ("scope_diagram_hint", crate::i18n::tr("Changes only this diagram.")),
+        ("no_tags", crate::i18n::tr("No tagged values.")), ("tag_name", crate::i18n::tr("Tag name")), ("tag_value", crate::i18n::tr("Value")),
+        ("add_tag", crate::i18n::tr("Add tag")), ("remove_tag", crate::i18n::tr("Remove tag")),
+        ("fill_diagram", crate::i18n::tr("Fill color on this diagram")), ("fill_model", crate::i18n::tr("Default fill color")),
+        ("default_color", crate::i18n::tr("Default")), ("line_style", crate::i18n::tr("Line style on this diagram")),
+        ("ls_direct", crate::i18n::tr("Direct")), ("ls_auto", crate::i18n::tr("Automatic")), ("ls_custom", crate::i18n::tr("Custom")),
+        ("ls_orthogonal_square", crate::i18n::tr("Orthogonal, square")), ("ls_orthogonal_rounded", crate::i18n::tr("Orthogonal, rounded")),
+        ("ls_tree_vertical", crate::i18n::tr("Tree, vertical")), ("ls_tree_horizontal", crate::i18n::tr("Tree, horizontal")),
+        ("ls_lateral_vertical", crate::i18n::tr("Lateral, vertical")), ("ls_lateral_horizontal", crate::i18n::tr("Lateral, horizontal")),
+        ("after_save", crate::i18n::tr("Available after the relationship is saved.")),
+    ];
+    if let Some(o) = out.as_object_mut() {
+        o.extend(more.iter().map(|(k, v)| (k.to_string(), json!(v))));
+    }
+    out
 }
 
 /// Turns the editor's changes into EA operations.
@@ -210,6 +315,9 @@ pub fn to_ops(model: &Value, changes: &Value) -> Vec<Value> {
     }
     for c in list("connected") {
         let mut op = json!({ "op": "create_connector", "source": c["source"], "target": c["target"], "type": c["type"] });
+        if let Some(key) = c["key"].as_str() {
+            op["key"] = json!(key);
+        }
         for field in ["stereotype", "name"] {
             if c[field].as_str().is_some_and(|s| !s.is_empty()) {
                 op[field] = c[field].clone();
@@ -225,6 +333,30 @@ pub fn to_ops(model: &Value, changes: &Value) -> Vec<Value> {
     }
     for c in list("routed") {
         ops.push(json!({ "op": "route_connector", "diagram": diagram, "connector": c["id"], "points": c["points"] }));
+    }
+    // Properties from the panel: fields of the model, then what applies to this diagram only.
+    let with_fields = |op: &str, target: &str, c: &Value| -> Option<Value> {
+        let mut out = json!({ "op": op });
+        out[target] = c["id"].clone();
+        for (k, v) in c["fields"].as_object().into_iter().flatten() {
+            out[k] = v.clone();
+        }
+        if c["tags"].as_object().is_some_and(|t| !t.is_empty()) {
+            out["tags"] = c["tags"].clone();
+        }
+        (out.as_object().map_or(0, |o| o.len()) > 2).then_some(out)
+    };
+    for c in list("updated") {
+        ops.extend(with_fields("update_element", "element", &c));
+    }
+    for c in list("updated_connectors") {
+        ops.extend(with_fields("update_connector", "connector", &c));
+    }
+    for c in list("colors") {
+        ops.push(json!({ "op": "set_color", "diagram": diagram, "element": c["id"], "bgcolor": c["bgcolor"] }));
+    }
+    for c in list("line_styles") {
+        ops.push(json!({ "op": "set_line_style", "diagram": diagram, "connectors": [c["id"]], "style": c["style"] }));
     }
     // Removals last: from this diagram only, or from the model (connectors before elements, which take theirs along).
     for id in list("removed") {

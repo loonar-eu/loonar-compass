@@ -192,6 +192,30 @@ button.primary:hover { background: #0B3B56; }
 .cls .cmp { padding: 3px 6px; min-height: 8px; border-bottom: 1px solid #0E4A6B; }
 .cls .cmp:last-child { border-bottom: none; }
 .cls .row { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+main { flex: 1; display: flex; min-height: 0; }
+#graph { min-width: 0; }
+#props { width: 330px; flex: none; overflow: auto; background: #FFFFFF; border-left: 1px solid #DFE7EE; padding: 12px 14px 20px; box-sizing: border-box; font-size: 13px; }
+#props h2 { font-size: 15px; margin: 0 0 4px; }
+#props .kind { margin: 0 0 10px; color: #55667A; font-size: 12px; }
+#props .hint, #props .legend { color: #55667A; font-size: 12px; margin: 6px 0; line-height: 1.4; }
+#props .tabs { display: flex; gap: 4px; margin-bottom: 10px; border-bottom: 1px solid #DFE7EE; }
+#props .tabs button { border: none; border-radius: 6px 6px 0 0; padding: 6px 10px; background: transparent; color: #55667A; }
+#props .tabs button.on { color: #0E4A6B; font-weight: 650; box-shadow: inset 0 -2px 0 #0E4A6B; }
+#props .f { display: flex; flex-direction: column; gap: 3px; margin-bottom: 9px; }
+#props .fl { font-size: 12px; color: #3B4B59; display: flex; align-items: center; gap: 6px; }
+#props input[type=text], #props textarea, #props select { width: 100%; box-sizing: border-box; font: inherit; font-size: 13px; padding: 5px 7px; border: 1px solid #C9D5DF; border-radius: 6px; background: #FFFFFF; }
+#props textarea { resize: vertical; }
+#props .ro .rv { color: #55667A; font-size: 12px; word-break: break-all; }
+#props .scope { font-size: 10px; padding: 0 6px; border-radius: 8px; line-height: 16px; }
+#props .scope.model { background: #E6F0F6; color: #0E4A6B; }
+#props .scope.diagram { background: #FFF1D6; color: #8A5A00; }
+#props .tag { display: grid; grid-template-columns: 110px 1fr 28px; gap: 6px; align-items: center; margin-bottom: 6px; }
+#props .tag .tn { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#props .tag.removed .tn { text-decoration: line-through; color: #B3261E; }
+#props .tag.add { grid-template-columns: 1fr 1fr auto; margin-top: 12px; }
+#props .tag .x { padding: 2px 0; }
+#props .color { display: flex; gap: 8px; align-items: center; }
+#props .color input { width: 44px; height: 28px; padding: 0; border: 1px solid #C9D5DF; border-radius: 6px; }
 #delete { position: fixed; inset: 0; background: rgba(15, 30, 42, .35); display: grid; place-items: center; z-index: 10; }
 #delete[hidden] { display: none; }
 .d-box { background: #FFFFFF; border-radius: 14px; padding: 20px 22px; width: min(520px, 92vw); box-shadow: 0 24px 60px rgba(8, 44, 65, .25); display: flex; flex-direction: column; gap: 10px; }
@@ -226,7 +250,7 @@ button.primary:hover { background: #0B3B56; }
   <button id="cancel"></button>
   <button id="save" class="primary"></button>
 </header>
-<div id="graph"></div>
+<main><div id="graph"></div><aside id="props"></aside></main>
 <div id="delete" hidden>
   <div class="d-box">
     <h2 class="d-title"></h2>

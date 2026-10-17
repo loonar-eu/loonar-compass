@@ -113,7 +113,8 @@ const remember = (_s, evt) => undo.undoableEditHappened(evt.getProperty('edit'))
 graph.getDataModel().addListener(InternalEvent.UNDO, remember);
 graph.getView().addListener(InternalEvent.UNDO, remember);
 document.addEventListener('keydown', (ev) => {
-  if (graph.isEditing()) return;
+  // Typing in the properties panel is not an editor command.
+  if (graph.isEditing() || ev.target.closest?.('input, textarea, select')) return;
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { undo.undo(); ev.preventDefault(); }
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'y') { undo.redo(); ev.preventDefault(); }
   if (ev.key === 'Delete' || ev.key === 'Backspace') {
@@ -156,6 +157,195 @@ function askDelete(list) {
   };
 }
 
+// --- properties panel: General, tagged values, appearance ---------------------------------------------------------
+// Every field says what it changes: the model (everywhere the object is shown) or only this diagram.
+
+const edits = new Map(); // cell id -> {fields: {...}, tags: {name: value|null}, bgcolor?, line_style?}
+const editOf = (id) => { if (!edits.has(id)) edits.set(id, { fields: {}, tags: {} }); return edits.get(id); };
+const panel = document.getElementById('props');
+let tab = 'general';
+
+const EL_FIELDS = [
+  ['alias', 'f_alias'], ['stereotype', 'f_stereotype'], ['keywords', 'f_keywords'], ['status', 'f_status', 'status'],
+  ['version', 'f_version'], ['author', 'f_author'], ['phase', 'f_phase'], ['complexity', 'f_complexity', 'complexity'],
+  ['abstract', 'f_abstract', 'bool'], ['notes', 'f_notes', 'text'],
+];
+const CONN_FIELDS = [
+  ['stereotype', 'f_stereotype'], ['direction', 'f_direction', 'direction'],
+  ['source_multiplicity', 'f_source_multiplicity', 'multiplicity'], ['source_role', 'f_source_role'],
+  ['target_multiplicity', 'f_target_multiplicity', 'multiplicity'], ['target_role', 'f_target_role'],
+  ['notes', 'f_notes', 'text'],
+];
+const DIRECTIONS = [['Unspecified', 'dir_none'], ['Source -> Destination', 'dir_forward'], ['Destination -> Source', 'dir_back'], ['Bi-Directional', 'dir_both']];
+const LINE_STYLES = ['direct', 'auto', 'custom', 'orthogonal_square', 'orthogonal_rounded', 'tree_vertical', 'tree_horizontal', 'lateral_vertical', 'lateral_horizontal'];
+const MULTIPLICITIES = ['', '0..1', '1', '0..*', '1..*', '*'];
+
+const el = (tag, attrs = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') n.className = v; else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else if (v !== undefined) n.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k !== null && k !== undefined) n.append(k);
+  return n;
+};
+const badge = (scope) => el('span', { class: `scope ${scope}`, title: scope === 'model' ? t.scope_model_hint : t.scope_diagram_hint }, scope === 'model' ? t.scope_model : t.scope_diagram);
+
+// Current value of a field: what the user typed, or what the model has.
+function current(cell, field) {
+  const m = meta.get(cell.id);
+  const e = edits.get(cell.id);
+  if (e && field in e.fields) return e.fields[field];
+  if (field === 'stereotype') return m.ea.stereotype || '';
+  const v = (m.ea.props || {})[field];
+  return field === 'abstract' ? !!v : (v ?? '');
+}
+function setField(cell, field, value) {
+  const m = meta.get(cell.id);
+  const original = field === 'stereotype' ? (m.ea.stereotype || '') : ((m.ea.props || {})[field] ?? (field === 'abstract' ? false : ''));
+  const e = editOf(cell.id);
+  if (value === original) delete e.fields[field]; else e.fields[field] = value;
+}
+
+function input(cell, field, kind) {
+  const value = current(cell, field);
+  const on = (v) => setField(cell, field, v);
+  if (kind === 'text') return el('textarea', { rows: '4', oninput: (ev) => on(ev.target.value) }, String(value));
+  if (kind === 'bool') { const c = el('input', { type: 'checkbox', onchange: (ev) => on(ev.target.checked) }); c.checked = !!value; return c; }
+  const select = (options) => {
+    const s = el('select', { onchange: (ev) => on(ev.target.value) });
+    const values = options.map((o) => o[0]);
+    if (!values.includes(value)) options = [[value, value || '—'], ...options];
+    for (const [v, label] of options) { const o = el('option', { value: v }, label); if (v === value) o.selected = true; s.append(o); }
+    return s;
+  };
+  if (kind === 'status') return select((data.statuses.length ? data.statuses : ['Proposed', 'Approved', 'Implemented', 'Mandatory', 'Validated']).map((s) => [s, s]));
+  if (kind === 'complexity') return select([['1', t.easy], ['2', t.medium], ['3', t.difficult]]);
+  if (kind === 'direction') return select(DIRECTIONS.map(([v, k]) => [v, t[k]]));
+  const i = el('input', { type: 'text', value: String(value), oninput: (ev) => on(ev.target.value) });
+  if (kind === 'multiplicity') {
+    i.setAttribute('list', 'multiplicities');
+  }
+  return i;
+}
+const row = (label, scope, control) => el('label', { class: 'f' }, el('span', { class: 'fl' }, label, scope ? badge(scope) : null), control);
+const readonly = (label, value) => el('div', { class: 'f ro' }, el('span', { class: 'fl' }, label), el('span', { class: 'rv' }, value || '—'));
+
+function nameInput(cell) {
+  return el('input', { type: 'text', value: String(cell.value ?? ''), oninput: (ev) => {
+    graph.getDataModel().setValue(cell, ev.target.value);
+  } });
+}
+
+function tagsTab(cell) {
+  const m = meta.get(cell.id);
+  const e = editOf(cell.id);
+  const list = [...(m.ea.tags || [])];
+  for (const name of Object.keys(e.tags)) if (!list.some((x) => x.name === name)) list.push({ name, value: '', values: [], added: true });
+  const box = el('div', { class: 'tags' });
+  box.append(el('p', { class: 'hint' }, badge('model'), ' ', t.scope_model_hint));
+  if (!list.length) box.append(el('p', { class: 'hint' }, t.no_tags));
+  for (const tag of list) {
+    const removed = e.tags[tag.name] === null;
+    const value = tag.name in e.tags && !removed ? e.tags[tag.name] : (tag.value ?? '');
+    const on = (v) => { if (v === (tag.value ?? '') && !tag.added) delete e.tags[tag.name]; else e.tags[tag.name] = v; };
+    let control;
+    if (tag.values && tag.values.length) {
+      control = el('select', { onchange: (ev) => on(ev.target.value) });
+      const opts = tag.values.includes(value) ? tag.values : [value, ...tag.values];
+      for (const v of opts) { const o = el('option', { value: v }, v || '—'); if (v === value) o.selected = true; control.append(o); }
+    } else {
+      control = el('input', { type: 'text', value: String(value), oninput: (ev) => on(ev.target.value) });
+    }
+    if (removed) control.disabled = true;
+    const x = el('button', { class: 'x', title: t.remove_tag, onclick: (ev) => {
+      ev.preventDefault();
+      if (removed) { if (tag.added) e.tags[tag.name] = ''; else delete e.tags[tag.name]; } else if (tag.added) delete e.tags[tag.name]; else e.tags[tag.name] = null;
+      render();
+    } }, removed ? '↺' : '×');
+    box.append(el('div', { class: `tag${removed ? ' removed' : ''}` }, el('span', { class: 'tn', title: tag.name }, tag.name), control, x));
+  }
+  const name = el('input', { type: 'text', placeholder: t.tag_name });
+  const value = el('input', { type: 'text', placeholder: t.tag_value });
+  box.append(el('div', { class: 'tag add' }, name, value, el('button', { onclick: (ev) => {
+    ev.preventDefault();
+    const n = name.value.trim();
+    if (!n) return;
+    e.tags[n] = value.value;
+    render();
+  } }, t.add_tag)));
+  return box;
+}
+
+function colorRow(label, scope, value, onChange) {
+  const picker = el('input', { type: 'color', value: value || '#FFFFFF' });
+  const state = el('span', { class: 'rv' }, value || t.default_color);
+  picker.addEventListener('input', () => { state.textContent = picker.value.toUpperCase(); onChange(picker.value.toUpperCase()); });
+  const reset = el('button', { onclick: (ev) => { ev.preventDefault(); state.textContent = t.default_color; onChange(-1); } }, t.default_color);
+  return row(label, scope, el('div', { class: 'color' }, picker, state, reset));
+}
+
+function appearanceTab(cell) {
+  const m = meta.get(cell.id);
+  const e = editOf(cell.id);
+  const box = el('div');
+  if (cell.isVertex()) {
+    const shown = (v) => (v === -1 ? '' : v);
+    box.append(colorRow(t.fill_diagram, 'diagram', shown(e.bgcolor ?? (m.ea.props || {}).bgcolor), (v) => {
+      e.bgcolor = v;
+      graph.setCellStyles('fillColor', v === -1 ? vertexStyle(m.ea).fillColor : v, [cell]);
+    }));
+    box.append(colorRow(t.fill_model, 'model', shown(e.fields.color ?? (m.ea.props || {}).color), (v) => { e.fields.color = v; }));
+  } else if (m.isNew) {
+    box.append(el('p', { class: 'hint' }, t.after_save));
+  } else {
+    const s = el('select', { onchange: (ev) => { e.line_style = ev.target.value; } });
+    const value = e.line_style ?? (m.ea.props || {}).line_style ?? '';
+    if (!value) s.append(el('option', { value: '' }, '—'));
+    for (const v of LINE_STYLES) { const o = el('option', { value: v }, t[`ls_${v}`]); if (v === value) o.selected = true; s.append(o); }
+    box.append(row(t.line_style, 'diagram', s));
+  }
+  return box;
+}
+
+function render() {
+  panel.replaceChildren();
+  const sel = graph.getSelectionCells().filter((c) => meta.get(c.id));
+  panel.append(el('h2', {}, t.properties));
+  if (sel.length !== 1) {
+    panel.append(el('p', { class: 'hint' }, sel.length ? t.selected_many.replace('{0}', sel.length) : t.nothing_selected));
+    panel.append(el('p', { class: 'legend' }, badge('model'), ' ', t.scope_model_hint), el('p', { class: 'legend' }, badge('diagram'), ' ', t.scope_diagram_hint));
+    return;
+  }
+  const cell = sel[0];
+  const m = meta.get(cell.id);
+  const type = m.ea.stereotype ? `${m.ea.type} «${String(m.ea.stereotype).replace(/^.*::/, '')}»` : m.ea.type;
+  panel.append(el('p', { class: 'kind' }, type));
+  const tabs = el('div', { class: 'tabs' });
+  for (const [k, label] of [['general', t.tab_general], ['tags', t.tab_tags], ['appearance', t.tab_appearance]]) {
+    tabs.append(el('button', { class: k === tab ? 'on' : '', onclick: () => { tab = k; render(); } }, label));
+  }
+  panel.append(tabs);
+  const body = el('div', { class: 'body' });
+  if (tab === 'tags') body.append(tagsTab(cell));
+  else if (tab === 'appearance') body.append(appearanceTab(cell));
+  else if (cell.isVertex()) {
+    body.append(row(t.f_name, 'model', nameInput(cell)));
+    for (const [field, label, kind] of EL_FIELDS) body.append(row(t[label], 'model', input(cell, field, kind)));
+    const p = m.ea.props || {};
+    body.append(readonly(t.f_package, p.package), readonly(t.f_guid, p.guid), readonly(t.f_created, p.created), readonly(t.f_modified, p.modified));
+  } else {
+    body.append(row(t.f_name, 'model', nameInput(cell)));
+    const ends = (c) => String(c?.value ?? '');
+    body.append(readonly(t.f_source, ends(cell.source)), readonly(t.f_target, ends(cell.target)));
+    for (const [field, label, kind] of CONN_FIELDS) body.append(row(t[label], 'model', input(cell, field, kind)));
+    if ((m.ea.props || {}).guid) body.append(readonly(t.f_guid, m.ea.props.guid));
+  }
+  panel.append(body);
+}
+document.body.append(el('datalist', { id: 'multiplicities' }, MULTIPLICITIES.map((v) => el('option', { value: v }))));
+graph.getSelectionModel().addListener(InternalEvent.CHANGE, () => { if (!graph.isEditing()) render(); });
+render();
+
 // --- toolbox and new connectors ----------------------------------------------------------------------------------
 
 let counter = 0;
@@ -169,7 +359,7 @@ for (const tool of data.toolbox) {
     const tr = graph.getView().translate;
     const x = Math.round((container.scrollLeft + container.clientWidth / 2) / s - tr.x - tool.width / 2);
     const y = Math.round((container.scrollTop + container.clientHeight / 2) / s - tr.y - tool.height / 2);
-    const ea = { type: tool.type, stereotype: tool.stereotype || '', attributes: [], operations: [] };
+    const ea = { type: tool.type, stereotype: tool.stereotype || '', attributes: [], operations: [], props: {}, tags: [] };
     let v;
     graph.batchUpdate(() => {
       v = graph.insertVertex({ parent, id: `n${++counter}`, value: tool.name, position: [x + counter * 10, y + counter * 10], size: [tool.width, tool.height], style: vertexStyle(ea) });
@@ -190,7 +380,7 @@ data.connector_types.forEach((ct, i) => {
 graph.getPlugin('ConnectionHandler').addListener(InternalEvent.CONNECT, (_s, evt) => {
   const edge = evt.getProperty('cell');
   const ct = data.connector_types[Number(connType.value) || 0];
-  const ea = { type: ct.type, stereotype: ct.stereotype || '', name: '' };
+  const ea = { type: ct.type, stereotype: ct.stereotype || '', name: '', props: {}, tags: [] };
   meta.set(edge.id, { kind: 'connector', ea, isNew: true });
   graph.setCellStyle(edgeStyle(ea), [edge]);
 });
@@ -219,7 +409,10 @@ document.querySelectorAll('[data-action]').forEach((b) => b.addEventListener('cl
 
 const round = (n) => Math.round(n);
 function changes() {
-  const out = { action: 'save', moved: [], renamed: [], routed: [], created: [], connected: [], removed: [], hidden: [], deleted: [], deleted_connectors: [] };
+  const out = {
+    action: 'save', moved: [], renamed: [], routed: [], created: [], connected: [], removed: [], hidden: [], deleted: [], deleted_connectors: [],
+    updated: [], updated_connectors: [], colors: [], line_styles: [],
+  };
   // Existing objects that are no longer on the diagram: what the user chose for them (elements removed with them
   // take their connectors off this diagram without any separate operation).
   const present = graph.getDataModel().cells;
@@ -253,8 +446,27 @@ function changes() {
       }
       const o = original.get(cell.id);
       if (JSON.stringify(points) !== o.points) out.routed.push({ id: m.ea.id, points });
-      if (String(cell.value || '') !== o.name) out.renamed_connectors = [...(out.renamed_connectors || []), { id: m.ea.id, name: String(cell.value || '') }];
     }
+  }
+  // Properties from the panel (new objects by their key: they are created first).
+  for (const [id, e] of edits) {
+    const cell = present[id];
+    const m = meta.get(id);
+    if (!cell || !m) continue;
+    const ref = key(cell);
+    const fields = { ...e.fields };
+    if ('stereotype' in fields && fields.stereotype === '') fields.clear_stereotype = true;
+    if (cell.isEdge() && !m.isNew && String(cell.value || '') !== original.get(id).name) fields.name = String(cell.value || '');
+    const tags = { ...e.tags };
+    if (Object.keys(fields).length || Object.keys(tags).length) (cell.isVertex() ? out.updated : out.updated_connectors).push({ id: ref, fields, tags });
+    if (e.bgcolor !== undefined) out.colors.push({ id: ref, bgcolor: e.bgcolor });
+    if (e.line_style && !m.isNew && e.line_style !== (m.ea.props || {}).line_style) out.line_styles.push({ id: ref, style: e.line_style });
+  }
+  // Renamed existing connectors without other edits in the panel.
+  for (const cell of Object.values(present)) {
+    const m = meta.get(cell.id);
+    if (!m || !cell.isEdge() || m.isNew || edits.has(cell.id) || !cell.source || !cell.target) continue;
+    if (String(cell.value || '') !== original.get(cell.id).name) out.updated_connectors.push({ id: m.ea.id, fields: { name: String(cell.value || '') }, tags: {} });
   }
   return out;
 }
@@ -264,7 +476,8 @@ function send(message) {
 document.getElementById('save').addEventListener('click', () => {
   const c = changes();
   const count = c.moved.length + c.renamed.length + c.routed.length + c.created.length + c.connected.length
-    + c.removed.length + c.hidden.length + c.deleted.length + c.deleted_connectors.length;
+    + c.removed.length + c.hidden.length + c.deleted.length + c.deleted_connectors.length
+    + c.updated.length + c.updated_connectors.length + c.colors.length + c.line_styles.length;
   if (!count) { document.getElementById('status').textContent = t.nothing; return; }
   send(c);
 });
@@ -274,7 +487,32 @@ graph.getPlugin('fit')?.fitCenter({ margin: 20 });
 if (graph.getView().scale > 1) graph.zoomActual();
 
 // Development self-test (LOONAR_EDITOR_SELFTEST, debug builds only): scripted edits, then saving.
-if (data.selftest) {
+if (data.selftest === 'props') {
+  setTimeout(() => {
+    const all = Object.values(graph.getDataModel().cells);
+    const cust = all.find((c) => c.isVertex() && c.value === 'Customer');
+    const edge = all.find((c) => c.isEdge() && meta.get(c.id) && !meta.get(c.id).isNew);
+    graph.setSelectionCell(cust);
+    for (const k of ['general', 'tags', 'appearance']) { tab = k; render(); }
+    setField(cust, 'status', 'Approved');
+    setField(cust, 'version', '2.0');
+    setField(cust, 'phase', '2.0');
+    setField(cust, 'abstract', true);
+    setField(cust, 'notes', 'Customer of the shop (selftest).');
+    editOf(cust.id).tags.owner = 'sales';
+    editOf(cust.id).bgcolor = '#FFE599';
+    graph.setSelectionCell(edge);
+    for (const k of ['general', 'tags', 'appearance']) { tab = k; render(); }
+    setField(edge, 'source_multiplicity', '1');
+    setField(edge, 'target_multiplicity', '0..*');
+    setField(edge, 'target_role', 'orders');
+    setField(edge, 'direction', 'Source -> Destination');
+    editOf(edge.id).tags.reviewed = 'yes';
+    editOf(edge.id).line_style = 'orthogonal_square';
+    document.getElementById('status').textContent = JSON.stringify(changes()).slice(0, 300);
+    setTimeout(() => document.getElementById('save').click(), 1000);
+  }, 1500);
+} else if (data.selftest) {
   setTimeout(() => {
     const byName = (n) => Object.values(graph.getDataModel().cells).find((c) => c.isVertex() && c.value === n);
     const cust = byName('Customer');

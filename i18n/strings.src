@@ -829,3 +829,61 @@ Also on {0} other diagrams: {1} ‖ Jest też na {0} innych diagramach: {1} ‖ 
 Not on any other diagram. ‖ Nie ma go na żadnym innym diagramie. ‖ In keinem anderen Diagramm. ‖ Ne figure dans aucun autre diagramme.
 Relationships in the model: {0} ‖ Relacji w modelu: {0} ‖ Beziehungen im Modell: {0} ‖ Relations dans le modèle : {0}
 Removed what was added in the editor. ‖ Usunięto to, co dodano w edytorze. ‖ Im Editor Hinzugefügtes wurde entfernt. ‖ Ce qui a été ajouté dans l'éditeur a été retiré.
+Abstract ‖ Abstrakcyjny ‖ Abstrakt ‖ Abstrait
+Add tag ‖ Dodaj tag ‖ Tag hinzufügen ‖ Ajouter un tag
+Alias ‖ Alias ‖ Alias ‖ Alias
+Appearance ‖ Wygląd ‖ Darstellung ‖ Apparence
+Author ‖ Autor ‖ Autor ‖ Auteur
+Automatic ‖ Automatyczny ‖ Automatisch ‖ Automatique
+Available after the relationship is saved. ‖ Dostępne po zapisaniu relacji. ‖ Verfügbar, nachdem die Beziehung gespeichert wurde. ‖ Disponible après l'enregistrement de la relation.
+Both directions ‖ W obie strony ‖ Beide Richtungen ‖ Dans les deux sens
+Changes only this diagram. ‖ Zmienia tylko ten diagram. ‖ Ändert nur dieses Diagramm. ‖ Modifie uniquement ce diagramme.
+Changes the model: everywhere the element or relationship is shown. ‖ Zmienia model: wszędzie, gdzie element lub relacja jest pokazana. ‖ Ändert das Modell: überall, wo das Element oder die Beziehung angezeigt wird. ‖ Modifie le modèle : partout où l'élément ou la relation apparaît.
+Complexity ‖ Złożoność ‖ Komplexität ‖ Complexité
+Custom ‖ Własny ‖ Benutzerdefiniert ‖ Personnalisé
+Default ‖ Domyślny ‖ Standard ‖ Par défaut
+Default fill color ‖ Domyślny kolor wypełnienia ‖ Standard-Füllfarbe ‖ Couleur de remplissage par défaut
+Difficult ‖ Trudna ‖ Schwierig ‖ Difficile
+Direct ‖ Bezpośredni ‖ Direkt ‖ Direct
+Direction ‖ Kierunek ‖ Richtung ‖ Direction
+Easy ‖ Łatwa ‖ Einfach ‖ Facile
+Fill color on this diagram ‖ Kolor wypełnienia na tym diagramie ‖ Füllfarbe in diesem Diagramm ‖ Couleur de remplissage dans ce diagramme
+General ‖ Ogólne ‖ Allgemein ‖ Général
+Keywords ‖ Słowa kluczowe ‖ Schlüsselwörter ‖ Mots-clés
+Lateral, horizontal ‖ Boczny, poziomy ‖ Seitlich, horizontal ‖ Latéral, horizontal
+Lateral, vertical ‖ Boczny, pionowy ‖ Seitlich, vertikal ‖ Latéral, vertical
+Line style on this diagram ‖ Styl linii na tym diagramie ‖ Linienstil in diesem Diagramm ‖ Style de ligne dans ce diagramme
+Medium ‖ Średnia ‖ Mittel ‖ Moyenne
+Modified ‖ Zmieniony ‖ Geändert ‖ Modifié
+Name ‖ Nazwa ‖ Name ‖ Nom
+No tagged values. ‖ Brak tagów. ‖ Keine Tagged Values. ‖ Aucune valeur étiquetée.
+Notes ‖ Notatki ‖ Notizen ‖ Notes
+Orthogonal, rounded ‖ Ortogonalny, zaokrąglony ‖ Orthogonal, abgerundet ‖ Orthogonal, arrondi
+Orthogonal, square ‖ Ortogonalny, prostokątny ‖ Orthogonal, eckig ‖ Orthogonal, carré
+Package ‖ Pakiet ‖ Paket ‖ Paquetage
+Phase ‖ Faza ‖ Phase ‖ Phase
+Properties ‖ Właściwości ‖ Eigenschaften ‖ Propriétés
+Remove tag ‖ Usuń tag ‖ Tag entfernen ‖ Supprimer le tag
+Select an element or a relationship to see its properties. ‖ Zaznacz element lub relację, żeby zobaczyć ich właściwości. ‖ Wählen Sie ein Element oder eine Beziehung aus, um die Eigenschaften zu sehen. ‖ Sélectionnez un élément ou une relation pour voir ses propriétés.
+Source ‖ Źródło ‖ Quelle ‖ Source
+Source multiplicity ‖ Krotność źródła ‖ Multiplizität der Quelle ‖ Multiplicité de la source
+Source role ‖ Rola źródła ‖ Rolle der Quelle ‖ Rôle de la source
+Source → target ‖ Źródło → cel ‖ Quelle → Ziel ‖ Source → cible
+Status ‖ Status ‖ Status ‖ Statut
+Stereotype ‖ Stereotyp ‖ Stereotyp ‖ Stéréotype
+Tag name ‖ Nazwa tagu ‖ Name des Tags ‖ Nom du tag
+Tagged values ‖ Tagi ‖ Tagged Values ‖ Valeurs étiquetées
+Target ‖ Cel ‖ Ziel ‖ Cible
+Target multiplicity ‖ Krotność celu ‖ Multiplizität des Ziels ‖ Multiplicité de la cible
+Target role ‖ Rola celu ‖ Rolle des Ziels ‖ Rôle de la cible
+Target → source ‖ Cel → źródło ‖ Ziel → Quelle ‖ Cible → source
+Tree, horizontal ‖ Drzewo, poziomo ‖ Baum, horizontal ‖ Arbre, horizontal
+Tree, vertical ‖ Drzewo, pionowo ‖ Baum, vertikal ‖ Arbre, vertical
+Type ‖ Typ ‖ Typ ‖ Type
+Unspecified ‖ Nieokreślony ‖ Nicht angegeben ‖ Non spécifiée
+Value ‖ Wartość ‖ Wert ‖ Valeur
+Version ‖ Wersja ‖ Version ‖ Version
+changed relationships ‖ zmienione relacje ‖ geänderte Beziehungen ‖ relations modifiées
+connector end ‖ koniec relacji ‖ Ende der Beziehung ‖ extrémité de la relation
+model ‖ model ‖ Modell ‖ modèle
+{0} selected ‖ Zaznaczono: {0} ‖ {0} ausgewählt ‖ {0} sélectionnés
