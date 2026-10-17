@@ -2,7 +2,7 @@
 
 Toutes les modifications importantes de l'application Loonar Compass (nommée Loonar EA Assistant jusqu'à la version 0.3).
 
-## Version 0.5 (2026-10-18)
+## Version 0.5 (2026-10-17)
 
 Un modèle par conversation :
 

@@ -2,7 +2,7 @@
 
 Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen Loonar EA Assistant).
 
-## Version 0.5 (2026-10-18)
+## Version 0.5 (2026-10-17)
 
 Ein Modell pro Unterhaltung:
 

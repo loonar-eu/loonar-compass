@@ -2,7 +2,7 @@
 
 All notable changes to Loonar Compass (named Loonar EA Assistant until version 0.3).
 
-## Version 0.5 (2026-10-18)
+## Version 0.5 (2026-10-17)
 
 A model for each conversation:
 
