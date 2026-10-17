@@ -168,7 +168,7 @@
 
 <h2 id="s5">5. Einstellungen und Sprache</h2>
 <p>Die Ansicht <b>Einstellungen</b> hat sechs Karten. Jede speichern Sie einzeln mit der Schaltfläche unter der Karte, und die Anwendung prüft sofort, ob die Daten funktionieren. Das Ergebnis erscheint unter der Schaltfläche: grün mit Beschreibung oder rot mit der Fehlerursache.</p>
-<figure><img src="img/de/settings.png" alt="Ansicht „Einstellungen“ mit den Karten Claude, Modelldatenbank, Enterprise Architect, Sprache und Freigabe, Newsletter und Confluence"><figcaption>Einstellungen: jede Karte mit eigenem Speichern und Test</figcaption></figure>
+<figure><img src="img/en/settings.png" alt="Ansicht „Einstellungen“ mit den Karten Claude, Modelldatenbank, Enterprise Architect, Sprache und Freigabe, Newsletter und Confluence"><figcaption>Einstellungen: jede Karte mit eigenem Speichern und Test</figcaption></figure>
 <table>
   <tr><th style="width: 26%;">Karte</th><th>Felder</th><th style="width: 34%;">Was der Test prüft</th></tr>
   <tr><td>1. Claude</td><td>Modell (nur Anzeige: Claude Haiku 5.5), Max. Tokens (Längenbegrenzung einer einzelnen Antwort des Modells), Claude-API-Schlüssel. Darunter ein Hinweis, was die Anwendung an Anthropic sendet (Kapitel 14).</td><td>„Speichern und Schlüssel prüfen“ sendet eine kurze Anfrage an das Modell</td></tr>
@@ -208,7 +208,7 @@
 </ul>
 
 <h2 id="s6" class="break">6. Unterhaltung mit dem Assistenten</h2>
-<figure><img src="img/de/chat.png" alt="Chat-Ansicht mit einer Unterhaltung, in der ein Diagramm aus Enterprise Architect als Bild angezeigt wird"><figcaption>Eine Unterhaltung mit einem Diagrammbild im Chat: Liste der Unterhaltungen links, Nachrichtenkarte unten</figcaption></figure>
+<figure><img src="img/en/chat.png" alt="Chat-Ansicht mit einer Unterhaltung, in der ein Diagramm aus Enterprise Architect als Bild angezeigt wird"><figcaption>Eine Unterhaltung mit einem Diagrammbild im Chat: Liste der Unterhaltungen links, Nachrichtenkarte unten</figcaption></figure>
 <h3>Schreiben</h3>
 <p>Die Nachricht geben Sie in der <b>Nachrichtenkarte</b> unten im Fenster ein. Die Karte enthält das Textfeld, die Schaltfläche <b>Einfügen</b>, den Namen des Modells und den aktuellen Freigabemodus sowie runde Schaltflächen: <b>Senden</b> und, während der Assistent arbeitet, <b>Abbrechen</b>. Darunter erinnert ein Hinweis daran, dass Antworten und Änderungen von einem KI-Modell erstellt werden und Fehler enthalten können: Prüfen Sie sie vor der Freigabe.</p>
 <table>
@@ -237,7 +237,7 @@
   <li>Die Schaltfläche <b>Abbrechen</b> beendet die Arbeit nach dem aktuellen Schritt. Ein bereits laufender Schritt (zum Beispiel das Speichern in EA) wird zu Ende geführt.</li>
   <li>Eine Antwort umfasst höchstens <b>24 Schritte</b>. Ist der Assistent danach nicht fertig, bricht die Anwendung ab, um eine Endlosschleife zu vermeiden; setzen Sie die Arbeit mit einer neuen Nachricht fort (zum Beispiel „Mach weiter“).</li>
 </ul>
-<figure><img src="img/de/steps.png" alt="Schrittkarte des Assistenten mit den laufenden Schritten, ihrer Dauer und ihren Ergebnissen"><figcaption>Der Assistent bei der Arbeit: Liste der Schritte</figcaption></figure>
+<figure><img src="img/en/steps.png" alt="Schrittkarte des Assistenten mit den laufenden Schritten, ihrer Dauer und ihren Ergebnissen"><figcaption>Der Assistent bei der Arbeit: Liste der Schritte</figcaption></figure>
 <p><b>Was kann der Assistent?</b> Der Assistent kennt die Funktionen der Anwendung aus den Versionshinweisen. Fragen Sie ihn: „Was kannst du in dieser Anwendung?“.</p>
 
 <h2 id="s7" class="break">7. Arbeiten mit dem EA-Modell</h2>
@@ -387,7 +387,7 @@
   <tr><td><b>auto</b></td><td>Nie (die Veröffentlichung in Confluence fragt weiterhin)</td><td>Testmodell oder Arbeit, die sich leicht rückgängig machen lässt</td></tr>
 </table>
 <p>Wenn eine Freigabe nötig ist, erscheint über dem Nachrichtenfeld das Panel <b>„Claude möchte Änderungen im Modell speichern“</b> mit einer Beschreibung der Änderungen (wie viele Pakete, Diagramme, Elemente, Konnektoren, was gelöscht wird) und den Schaltflächen <b>Freigeben</b> und <b>Ablehnen</b>. Beim Löschen, Verschieben und Kopieren nennt es die Objekte mit Namen, zum Beispiel „LÖSCHEN: Paket „Archiv““ oder „KOPIE des Pakets „Onlineshop“ mit dem gesamten Inhalt“. Ein abgelehntes Speichern ändert das Modell nicht; der Assistent erhält die Information über die Ablehnung und kann etwas anderes vorschlagen.</p>
-<figure><img src="img/de/approval.png" alt="Freigabepanel „Claude möchte Änderungen im Modell speichern“ mit der Beschreibung der Änderungen und den Schaltflächen Freigeben und Ablehnen"><figcaption>Freigabepanel für eine Änderung am Modell</figcaption></figure>
+<figure><img src="img/en/approval.png" alt="Freigabepanel „Claude möchte Änderungen im Modell speichern“ mit der Beschreibung der Änderungen und den Schaltflächen Freigeben und Ablehnen"><figcaption>Freigabepanel für eine Änderung am Modell</figcaption></figure>
 <p>Über dasselbe Panel laufen in den Modi <b>ask</b> und <b>plan</b> auch das Speichern einer Festlegung im Gedächtnis des Assistenten (Kapitel 11) und das Überschreiben einer Dokumentvorlage (Kapitel 10). Die Veröffentlichung in Confluence fragt in jedem Modus (Kapitel 9).</p>
 <h3>Änderungsprotokoll</h3>
 <p>Jede Speicherung des Assistenten im EA-Modell, auch eine fehlgeschlagene, wird im Änderungsprotokoll erfasst (Datei <code>audit_log.jsonl</code> im Benutzerdatenordner). Nicht erfasst werden Speicherungen, die Sie abgelehnt haben, und Operationen, die die Anwendung nicht zum Speichern zugelassen hat; auch Gedächtnis, Vorlagen und Veröffentlichungen in Confluence stehen nicht im Protokoll.</p>
@@ -416,7 +416,7 @@
 <h3>Wo Ihre Daten liegen</h3>
 <table>
   <tr><th style="width: 36%;">Was</th><th>Wo</th></tr>
-  <tr><td>Programm</td><td><code>%LOCALAPPDATA%\Programs\Loonar Compass</code> (Installation „Nur für mich“) oder <code>%ProgramFiles%\Loonar Compass</code> (Installation für alle Benutzer): Anwendung, Lizenz, Versionshinweise, <code>THIRD-PARTY-NOTICES.txt</code> und das Benutzerhandbuch als PDF</td></tr>
+  <tr><td>Programm</td><td><code>%LOCALAPPDATA%\Programs\Loonar Compass</code> (Installation „Nur für mich“) oder <code>%ProgramFiles%\Loonar Compass</code> (Installation für alle Benutzer): Anwendung, Lizenz, Versionshinweise, <code>THIRD-PARTY-NOTICES.txt</code>; das Benutzerhandbuch finden Sie auf loonar.eu (Startmenü → Benutzerhandbuch)</td></tr>
   <tr><td>Benutzerdatenordner</td><td><code>%APPDATA%\Loonar Compass</code>, für jeden Benutzer des Computers getrennt. Er enthält: <code>app.properties</code> (Einstellungen, ohne Passwörter), <code>history\</code> (Unterhaltungen), <code>attachments\</code> (Anhänge sowie die erstellten Word-, Excel-, PNG- und Confluence-Dateien, mit den Bilderordnern der Seiten <code>&lt;Seite&gt;_images</code>), <code>memory\</code> (Festlegungen, Übersicht <code>MEMORY.md</code>), <code>templates\</code> (Dokumentvorlagen), <code>audit_log.jsonl</code> (Änderungsprotokoll) und <code>confluence_pages.json</code> (veröffentlichte Confluence-Seiten).</td></tr>
   <tr><td>Claude-API-Schlüssel, Passwort des EA-Kontos, Datenbankpasswort, Confluence-Token</td><td>Windows-Anmeldeinformationsverwaltung (Einträge „loonar-compass“), vom System verschlüsselt. In <code>app.properties</code> steht nichts Geheimes.</td></tr>
   <tr><td>Beschreibung eines unerwarteten Fehlers</td><td><code>%TEMP%\loonar-compass-crash.log</code> (entsteht nur nach einem solchen Fehler)</td></tr>

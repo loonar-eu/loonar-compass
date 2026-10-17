@@ -168,11 +168,10 @@ try {
     # The application is embedded in the installer, so it must be signed before the installer is built.
     Invoke-Sign (Join-Path $payload 'app.exe')
     Copy-Item $notices (Join-Path $payload 'THIRD-PARTY-NOTICES.txt') -Force
-    # License, changelog and user guide in 4 languages (pl = the base files without a language suffix).
+    # License and changelog in 4 languages (pl = the base files without a language suffix); the user guide is on the website.
     foreach ($lang in 'pl', 'en', 'de', 'fr') {
         $suffix = if ($lang -eq 'pl') { '' } else { ".$lang" }
-        $manual = if ($lang -eq 'pl') { 'docs\Instrukcja_uzytkownika.pdf' } else { "docs\Manual.$lang.pdf" }
-        $sources = @{ "LICENSE.$lang.txt" = "LICENSE$suffix.txt"; "CHANGELOG.$lang.md" = "CHANGELOG$suffix.md"; "Manual.$lang.pdf" = $manual }
+        $sources = @{ "LICENSE.$lang.txt" = "LICENSE$suffix.txt"; "CHANGELOG.$lang.md" = "CHANGELOG$suffix.md" }
         foreach ($target in $sources.Keys) {
             $source = Join-Path $root $sources[$target]
             if (-not (Test-Path $source)) { throw "missing $source" }

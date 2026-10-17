@@ -4,7 +4,8 @@
     python -I -B website_src\\build.py   (from the repository root)
 
 Writes into website/: the home page in four languages, the privacy policy and the legal notice per language,
-404.html, robots.txt, sitemap.xml, CNAME, .nojekyll and copies of the licence; then checks the generated HTML.
+the documentation (docs.py: /docs/<version>/<lang>/), 404.html, robots.txt, sitemap.xml, CNAME, .nojekyll and copies
+of the licence; then checks the generated HTML.
 """
 import os, re, json, sys, hashlib, shutil, posixpath
 from html.parser import HTMLParser
@@ -12,6 +13,7 @@ from urllib.parse import urlsplit
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from content import T, ICONS, MARKS, FEATURE_ICONS, SEC_ICONS, FAQ_IDS
 import legal
+import docs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "website")
@@ -24,7 +26,7 @@ OWNER = "Loonar Mariusz Głowacki"
 EMAIL = "mariusz@loonar.eu"
 
 # ---- current release: change these lines for a new version (see website/README.md) ----
-VER = "0.4"
+VER = "0.5"
 # The only link to the installer: a GitHub release asset. The file name and the repository are taken from it.
 SETUP_URL = "https://github.com/loonar-eu/loonar-compass/releases/download/v0.4.0/LoonarCompass-Setup-0.4.exe"
 RELEASE = "2026-10-17"
@@ -40,7 +42,7 @@ GOATCOUNTER = "loonar"   # GoatCounter site code (https://loonar.goatcounter.com
 SUPPORT_URL = "https://suppi.pl/loonar"
 LINKEDIN_URL = "https://pl.linkedin.com/in/glowackimariusz"
 # -----------------------------------------------------------------------------------------
-ASSET_V = "3"  # raise after every change of assets/style.css or assets/site.js (cache busting)
+ASSET_V = "4"  # raise after every change of assets/style.css or assets/site.js (cache busting)
 
 SETUP = SETUP_URL.rsplit("/", 1)[1]
 REPO = SETUP_URL.split("/releases/")[0]
@@ -320,6 +322,7 @@ def header(t, lang, home, switch, nav=True):
   <div class="wrap hdr{'' if nav else ' nonav'}">
     <a class="brand" href="{brand}"><img src="{switch["P"]}assets/img/logo.svg" alt="" width="34" height="34"><span>Loonar <b>Compass</b></span></a>{navhtml}
     {switch["html"]}
+    <a class="hdr-docs" href="{switch["P"]}docs/latest/{lang}/">{docs.T[lang]["docs"]}</a>
     <a class="hdr-gh" href="{REPO}" aria-label="{esc_attr(t["gh_label"])}" title="{esc_attr(t["gh_label"])}">{mark("github")}</a>
     <a class="btn btn-sm" href="{home}#download">{t["nav_dl"]}</a>
   </div>
@@ -336,6 +339,7 @@ def footer(t, lang, P, privacy, legal_href, switch_html, top=True):
   </div>
   <div class="wrap ftr-bottom">
     <nav aria-label="{FOOTNAV[lang]}"><ul class="ftr-links">
+      <li><a href="{P}docs/latest/{lang}/">{docs.T[lang]["docs"]}</a></li>
       <li><a href="{privacy}" data-gc="privacy">{t["f_privacy_link"]}</a></li>
       <li><a href="{legal_href}" data-gc="legal">{t["f_legal_link"]}</a></li>
       <li><a class="ftr-gh" href="{REPO}">{mark("github")}{t["gh_label"]}</a></li>
@@ -609,8 +613,8 @@ def not_found():
 
 # ---------------------------------------------------------------------------- other files
 
-def sitemap():
-    urls = []
+def sitemap(extra=()):
+    urls = [f'  <url>\n    <loc>{u}</loc>\n  </url>' for u in extra]
     for kind in ("home", "privacy", "legal"):
         for l in LANGS:
             alts = ''.join(f'\n    <xhtml:link rel="alternate" hreflang="{a}" href="{SITE + page_dir(kind, a)}"/>' for a in LANGS)
@@ -722,8 +726,9 @@ if __name__ == "__main__":
         home_page(l)
         doc_page("privacy", l)
         doc_page("legal", l)
+    doc_urls = docs.generate(sys.modules[__name__])
     not_found()
-    sitemap()
+    sitemap(doc_urls)
     static_files()
     stale = os.path.join(OUT, ".htaccess")
     if os.path.exists(stale):

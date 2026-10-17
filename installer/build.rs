@@ -10,7 +10,6 @@ fn payload_files() -> Vec<String> {
     for lang in ["pl", "en", "de", "fr"] {
         files.push(format!("LICENSE.{lang}.txt"));
         files.push(format!("CHANGELOG.{lang}.md"));
-        files.push(format!("Manual.{lang}.pdf"));
     }
     files
 }
@@ -24,7 +23,7 @@ fn main() {
         panic!(
             "\n\nMissing installer contents in installer\\payload: {}\n\
              Run build_installer.ps1 in the repository root: it builds the application, generates\n\
-             THIRD-PARTY-NOTICES.txt and copies the application, licenses, changelogs and user guides into the payload.\n\n",
+             THIRD-PARTY-NOTICES.txt and copies the application, licenses and changelogs into the payload.\n\n",
             missing.join(", ")
         );
     }

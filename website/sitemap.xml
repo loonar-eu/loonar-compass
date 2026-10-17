@@ -1,6 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
+    <loc>https://loonar.eu/docs/latest/en/</loc>
+  </url>
+  <url>
+    <loc>https://loonar.eu/docs/latest/en/install.html</loc>
+  </url>
+  <url>
+    <loc>https://loonar.eu/docs/latest/pl/</loc>
+  </url>
+  <url>
+    <loc>https://loonar.eu/docs/latest/pl/install.html</loc>
+  </url>
+  <url>
+    <loc>https://loonar.eu/docs/latest/de/</loc>
+  </url>
+  <url>
+    <loc>https://loonar.eu/docs/latest/de/install.html</loc>
+  </url>
+  <url>
+    <loc>https://loonar.eu/docs/latest/fr/</loc>
+  </url>
+  <url>
+    <loc>https://loonar.eu/docs/latest/fr/install.html</loc>
+  </url>
+  <url>
     <loc>https://loonar.eu/</loc>
     <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/"/>
     <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/pl/"/>

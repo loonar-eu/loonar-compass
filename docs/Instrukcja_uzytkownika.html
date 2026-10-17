@@ -169,7 +169,7 @@
 
 <h2 id="s5">5. Ustawienia i język</h2>
 <p>Widok <b>Ustawienia</b> ma sześć kart: karty 1 i 4 są w lewej kolumnie, karty 2 i 3 w prawej, a karty 5 i 6 pod nimi. Każdą kartę zapisujesz osobno przyciskiem pod nią, a aplikacja od razu sprawdza, czy dane działają. Wynik pojawia się pod przyciskiem: zielony z opisem albo czerwony z przyczyną błędu.</p>
-<figure><img src="img/pl/settings.png" alt="Widok Ustawienia z kartami Claude, Baza modelu, Enterprise Architect oraz Język i zatwierdzanie zmian"><figcaption>Ustawienia: każda karta z własnym zapisem i testem</figcaption></figure>
+<figure><img src="img/en/settings.png" alt="Widok Ustawienia z kartami Claude, Baza modelu, Enterprise Architect oraz Język i zatwierdzanie zmian"><figcaption>Ustawienia: każda karta z własnym zapisem i testem</figcaption></figure>
 <table>
   <tr><th style="width: 24%;">Karta</th><th>Pola</th><th style="width: 36%;">Co sprawdza test</th></tr>
   <tr><td>1. Claude</td><td>Model (tylko do odczytu), Max tokenów (limit długości jednej odpowiedzi modelu), Klucz API Claude. Pod polami jest informacja, co aplikacja wysyła do Anthropic (rozdział 14).</td><td>„Zapisz i sprawdź klucz” wysyła krótkie zapytanie do modelu</td></tr>
@@ -208,7 +208,7 @@
 </ul>
 
 <h2 id="s6" class="break">6. Rozmowa z asystentem</h2>
-<figure><img src="img/pl/chat.png" alt="Okno rozmowy: lista rozmów, odpowiedź asystenta z obrazkiem diagramu i karta wiadomości"><figcaption>Okno rozmowy: lista rozmów po lewej, czat z obrazkiem diagramu, karta wiadomości na dole</figcaption></figure>
+<figure><img src="img/en/chat.png" alt="Okno rozmowy: lista rozmów, odpowiedź asystenta z obrazkiem diagramu i karta wiadomości"><figcaption>Okno rozmowy: lista rozmów po lewej, czat z obrazkiem diagramu, karta wiadomości na dole</figcaption></figure>
 <h3>Pisanie</h3>
 <p>Wiadomość wpisujesz w <b>karcie wiadomości</b> na dole okna. Karta zawiera pole tekstu, przycisk wklejania, nazwę modelu i bieżący tryb zatwierdzania oraz okrągłe przyciski: <b>Wyślij</b>, a w trakcie pracy asystenta <b>Przerwij</b>. Pod kartą jest przypomnienie, że odpowiedzi i zmiany przygotowuje model AI i trzeba je sprawdzać przed zatwierdzeniem.</p>
 <table>
@@ -238,7 +238,7 @@
   <li>Przycisk <b>Przerwij</b> zatrzymuje pracę po bieżącym kroku. Krok, który już trwa (na przykład zapis do EA), dobiega końca.</li>
   <li>Jedna odpowiedź może mieć najwyżej 24 kroki. Jeśli asystent nie zdąży w tym limicie, przerywa pracę z komunikatem, że wykonał maksymalną liczbę kroków; poproś go wtedy w nowej wiadomości, żeby kontynuował.</li>
 </ul>
-<figure><img src="img/pl/steps.png" alt="Asystent w trakcie pracy: karta kroków z godziną, czasem trwania i wynikiem każdego kroku"><figcaption>Kroki asystenta w trakcie pracy</figcaption></figure>
+<figure><img src="img/en/steps.png" alt="Asystent w trakcie pracy: karta kroków z godziną, czasem trwania i wynikiem każdego kroku"><figcaption>Kroki asystenta w trakcie pracy</figcaption></figure>
 <p><b>Co potrafi asystent?</b> Asystent zna funkcje aplikacji z changelogu. Zapytaj go: „Co potrafisz w tej aplikacji?”.</p>
 
 <h2 id="s7" class="break">7. Praca z modelem Enterprise Architect</h2>
@@ -389,7 +389,7 @@
   <tr><td><b>auto</b></td><td>Nigdy (wyjątek: publikacja w Confluence)</td><td>Model testowy albo praca, którą łatwo cofnąć</td></tr>
 </table>
 <p>Gdy potrzebna jest zgoda, nad kartą wiadomości pojawia się panel <b>„Claude chce zapisać zmiany w modelu”</b> z opisem zmian i przyciskami <b>Zatwierdź</b> oraz <b>Odrzuć</b>. Opis podaje, ile pakietów, diagramów, elementów i połączeń powstanie albo się zmieni, nazwy nowych pakietów i diagramów, a przy usuwaniu, przenoszeniu i kopiowaniu także osobne wiersze z nazwami tych obiektów (USUNIĘCIE, PRZENIESIENIE, KOPIOWANIE). Ten sam panel pyta o zgodę na zapis ustalenia w pamięci, nadpisanie szablonu i publikację w Confluence. Odrzucony zapis niczego nie zmienia, a asystent dostaje informację o odrzuceniu i może zaproponować coś innego.</p>
-<figure><img src="img/pl/approval.png" alt="Panel zatwierdzania nad kartą wiadomości: opis zapisu do modelu EA z przyciskami Zatwierdź i Odrzuć"><figcaption>Panel zgody na zapis zmian w modelu</figcaption></figure>
+<figure><img src="img/en/approval.png" alt="Panel zatwierdzania nad kartą wiadomości: opis zapisu do modelu EA z przyciskami Zatwierdź i Odrzuć"><figcaption>Panel zgody na zapis zmian w modelu</figcaption></figure>
 <h3>Dziennik zmian</h3>
 <p>Każdy zapis asystenta do modelu EA, także nieudany, trafia do dziennika zmian (plik <code>audit_log.jsonl</code> w folderze danych). Nie ma w nim zapisów odrzuconych przez Ciebie ani operacji, których aplikacja nie dopuściła do zapisu; dziennik nie obejmuje też pamięci, szablonów ani publikacji w Confluence.</p>
 <p>Widok <b>Dziennik zmian</b> (ikona „Dziennik zmian w modelu”) pokazuje 200 ostatnich zapisów, od najnowszych: wynik (OK albo BŁĄD), czas, konto EA i bazę, opis zmian oraz treść błędu. Przycisk <b>Eksportuj do Excela</b> zapisuje cały dziennik jako arkusz XLSX (kolumny: Czas, Wynik, Konto EA, Baza, Tryb, Zmiany, Utworzone, Błąd), na przykład do przeglądu zmian w zespole. Przycisk <b>Otwórz plik dziennika</b> otwiera plik dziennika w Notatniku.</p>
@@ -417,7 +417,7 @@
 <h3>Gdzie są Twoje dane</h3>
 <table>
   <tr><th style="width: 34%;">Co</th><th>Gdzie</th></tr>
-  <tr><td>Program</td><td><code>%LOCALAPPDATA%\Programs\Loonar Compass</code> (instalacja „Tylko dla mnie”) albo <code>%ProgramFiles%\Loonar Compass</code> (instalacja dla wszystkich użytkowników): aplikacja, licencja, lista zmian, <code>THIRD-PARTY-NOTICES.txt</code> i instrukcja użytkownika w PDF</td></tr>
+  <tr><td>Program</td><td><code>%LOCALAPPDATA%\Programs\Loonar Compass</code> (instalacja „Tylko dla mnie”) albo <code>%ProgramFiles%\Loonar Compass</code> (instalacja dla wszystkich użytkowników): aplikacja, licencja, lista zmian, <code>THIRD-PARTY-NOTICES.txt</code>; instrukcja użytkownika jest na loonar.eu (menu Start → Instrukcja użytkownika)</td></tr>
   <tr><td>Folder danych użytkownika</td><td><code>%APPDATA%\Loonar Compass</code>, osobny dla każdego użytkownika komputera:
     <ul style="margin: 3pt 0 0 0;">
       <li><code>app.properties</code>: ustawienia, bez haseł, kluczy i tokenów,</li>

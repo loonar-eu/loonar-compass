@@ -56,7 +56,7 @@ fn system_prompt(cfg: &AppConfig) -> String {
     format!(
         "{SYSTEM_PROMPT}\n\n{MODEL_STORE}\n\n{LANGUAGE_RULE}\n\n{MEMORY_RULES}\n\n{memories}\n\n{DOC_RULES}\n\n{templates}\n\n\
          You are running inside the {app} application, version {version} (a desktop AI assistant for Enterprise Architect). \
-         Application owner: {OWNER}, {OWNER_ADDRESS}, {OWNER_CONTACT}. Language model: {model}. \
+         Application owner: {OWNER}, {OWNER_ADDRESS}, {OWNER_CONTACT}. Language model: {model}. User guide of this version: {docs}. \
          Answer questions about yourself, this application, its features and limitations based on the changelog below \
          (newest version first; \"Prerequisites\" lists requirements on the EA model without which the application does not work, \
          \"Known limitations\" lists things the application cannot do). \
@@ -65,6 +65,7 @@ fn system_prompt(cfg: &AppConfig) -> String {
         app = config::APP_NAME,
         version = app_version(),
         model = config::CLAUDE_MODEL,
+        docs = docs_url(),
         memories = memory::prompt_section(&cfg.memory_dir, &cfg.model_label()),
         MODEL_STORE = format!("{} The model of this conversation: {}.", if cfg.uses_file() { MODEL_IN_FILE } else { MODEL_IN_POSTGRES }, cfg.model_label()),
         LANGUAGE_RULE = format!("Response language: {} (the language selected in the application). Answer in it unless the user writes to you in a different language; then answer in the user's language. Create documents, pages and images in the response language unless the user asks for a different one.", i18n::current().english_name()),
@@ -384,6 +385,8 @@ fn info_ui(ui: &mut egui::Ui) {
     ui.add(egui::Label::new(crate::i18n::tr("A standalone assistant for Enterprise Architect. It reads the model from a PostgreSQL database or an EA file (.qea, .qeax), saves changes through COM and shows diagrams as images. It uses only the Claude Haiku 5.5 model through the Anthropic API.")).wrap());
     ui.add_space(8.0);
     ui.horizontal_wrapped(|ui| {
+        ui.hyperlink_to(crate::i18n::tr("User guide"), docs_url());
+        ui.label("·");
         ui.hyperlink_to(crate::i18n::tr("Privacy policy"), privacy_url());
         ui.label("·");
         ui.hyperlink_to(crate::i18n::tr("Source code on GitHub"), SOURCE_URL);
@@ -463,6 +466,11 @@ fn open_in_explorer(path: &Path) -> std::io::Result<std::process::Child> {
 }
 
 /// Privacy policy on loonar.eu in the current UI language.
+/// The user guide of this version on the website, in the interface language.
+fn docs_url() -> String {
+    format!("https://loonar.eu/docs/{}/{}/", app_version(), i18n::current().code())
+}
+
 fn privacy_url() -> &'static str {
     match i18n::current() {
         i18n::Lang::Pl => "https://loonar.eu/pl/privacy/",

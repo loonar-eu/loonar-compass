@@ -451,3 +451,55 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   .dg-wrap { overflow-x: auto; }
   .dg { min-width: 560px; }
 }
+
+/* ---------------------------------------------------------------- documentation (/docs/) */
+.hdr-docs { flex: none; font-weight: 600; font-size: .92rem; color: var(--ink); text-decoration: none; padding: 6px 10px; border-radius: 999px; }
+.hdr-docs:hover { background: var(--navy-50); color: var(--navy); }
+.docs-main { padding: 32px 0 80px; }
+.docs-grid { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 44px; align-items: start; }
+.docs-side { position: sticky; top: 84px; max-height: calc(100vh - 100px); overflow: auto; font-size: .92rem; padding-right: 4px; }
+.docs-kicker { color: var(--muted); font-size: .82rem; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; }
+.docs-tabs { display: flex; gap: 4px; margin-top: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+.docs-tabs a { flex: 1; text-align: center; padding: 6px 8px; font-size: .86rem; line-height: 1.25; border-radius: 999px; color: var(--muted); font-weight: 600; text-decoration: none; }
+.docs-tabs a[aria-current="page"] { background: var(--navy); color: #fff; }
+.docs-ver { margin-top: 12px; }
+.docs-ver summary { cursor: pointer; color: var(--text); font-weight: 600; }
+.docs-ver ul { list-style: none; margin: 6px 0 0; padding: 0 0 0 10px; }
+.docs-ver a[aria-current="page"] { font-weight: 700; color: var(--ink); }
+.docs-toc-h { margin-top: 18px; font-weight: 650; color: var(--ink); }
+.docs-toc { margin: 6px 0 0; padding-left: 0; list-style: none; }
+.docs-toc li { margin: 2px 0; }
+.docs-toc a { display: block; padding: 3px 8px; border-radius: 8px; color: var(--text); text-decoration: none; }
+.docs-toc a:hover { background: var(--navy-50); color: var(--navy); }
+.docs-toc-other a { color: var(--muted); }
+.docs-pdf { margin-top: 16px; }
+.docs-body { min-width: 0; }
+.docs-body h1 { font-size: clamp(1.9rem, 1.4rem + 1.6vw, 2.5rem); font-weight: 750; letter-spacing: -.02em; }
+.docs-body h2 { margin-top: 44px; padding-bottom: 6px; border-bottom: 1px solid var(--line); font-size: 1.45rem; font-weight: 650; scroll-margin-top: 84px; }
+.docs-body h3 { margin-top: 26px; font-size: 1.12rem; font-weight: 650; }
+.docs-body p, .docs-body ul, .docs-body ol, .docs-body table, .docs-body figure, .docs-body .note, .docs-body .prompt { margin-top: 12px; }
+.docs-body ul, .docs-body ol { padding-left: 22px; }
+.docs-body ul { list-style: disc; }
+.docs-body ol { list-style: decimal; }
+.docs-body li { margin: 4px 0; }
+.docs-body table { width: 100%; border-collapse: collapse; font-size: .95rem; display: block; overflow-x: auto; }
+.docs-body th, .docs-body td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+.docs-body th { background: var(--navy-50); color: var(--navy-900); }
+.docs-body code, .docs-body .key { font-family: Consolas, "Cascadia Mono", ui-monospace, monospace; font-size: .9em; background: var(--navy-50); padding: 1px 5px; border-radius: 5px; overflow-wrap: anywhere; }
+.docs-body .key { border: 1px solid var(--navy-100); }
+.docs-body .prompt { background: var(--beige); border-left: 3px solid var(--navy); padding: 9px 14px; border-radius: 0 10px 10px 0; font-style: italic; }
+.docs-body .note { background: #FFF8E5; border: 1px solid #E3C770; padding: 10px 14px; border-radius: 10px; }
+.docs-body figure { text-align: center; }
+.docs-body figure img { max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
+.docs-body figure.small img { max-width: min(560px, 100%); }
+.docs-body figcaption { margin-top: 6px; font-size: .88rem; color: var(--muted); }
+.docs-old { background: var(--beige); border: 1px solid var(--line); padding: 10px 14px; border-radius: 10px; margin-bottom: 18px; }
+.docs-langs { display: flex; flex-wrap: wrap; gap: 10px; list-style: none; padding: 0; margin-top: 16px; }
+.docs-older { margin-top: 10px; }
+.c-orange { color: #d97706; }
+.c-green { color: #1e7a3e; }
+@media (max-width: 900px) {
+  .docs-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .docs-side { position: static; max-height: none; }
+  .hdr-docs { display: none; }
+}

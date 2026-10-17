@@ -167,7 +167,7 @@
 
 <h2 id="s5">5. Paramètres et langue</h2>
 <p>La vue <b>Paramètres</b> comporte six cartes. Vous enregistrez chacune séparément avec le bouton situé sous la carte, et l'application teste aussitôt les données saisies. Le résultat apparaît sous le bouton : en vert avec une description ou en rouge avec la cause de l'erreur.</p>
-<figure><img src="img/fr/settings.png" alt="Vue Paramètres avec les cartes Claude, base de données du modèle, Enterprise Architect, langue et validation des modifications"><figcaption>Paramètres : chaque carte avec son propre enregistrement et son test</figcaption></figure>
+<figure><img src="img/en/settings.png" alt="Vue Paramètres avec les cartes Claude, base de données du modèle, Enterprise Architect, langue et validation des modifications"><figcaption>Paramètres : chaque carte avec son propre enregistrement et son test</figcaption></figure>
 <table>
   <tr><th style="width: 26%;">Carte</th><th>Champs</th><th style="width: 34%;">Ce que vérifie le test</th></tr>
   <tr><td>1. Claude</td><td>Jetons max. (limite de longueur d'une réponse du modèle) et clé API Claude ; le modèle utilisé est affiché en lecture seule. Sous les champs, une note indique ce qui est envoyé à Anthropic (chapitre 14).</td><td>Envoie une courte requête au modèle</td></tr>
@@ -208,7 +208,7 @@
   <li>Le réglage concerne la lecture du modèle par l'assistant. La connexion d'Enterprise Architect lui-même à la base (lors des enregistrements) suit les paramètres d'EA.</li>
 </ul>
 <h2 id="s6" class="break">6. Conversation avec l'assistant</h2>
-<figure><img src="img/fr/chat.png" alt="Fenêtre de conversation avec l'image d'un diagramme EA dans le chat"><figcaption>Une conversation avec l'image d'un diagramme : la liste des conversations à gauche, le chat à droite, la carte de message en bas</figcaption></figure>
+<figure><img src="img/en/chat.png" alt="Fenêtre de conversation avec l'image d'un diagramme EA dans le chat"><figcaption>Une conversation avec l'image d'un diagramme : la liste des conversations à gauche, le chat à droite, la carte de message en bas</figcaption></figure>
 <h3>Écrire</h3>
 <p>Vous saisissez votre message dans la <b>carte de message</b> en bas de la fenêtre. La carte contient le champ de texte, le bouton de collage, le nom du modèle et le mode de validation actuel, ainsi que des boutons ronds : <b>Envoyer</b> et, pendant que l'assistant travaille, <b>Arrêter</b>.</p>
 <table>
@@ -237,7 +237,7 @@
   <li>Le bouton <b>Arrêter</b> interrompt le travail après l'étape en cours. Une étape déjà commencée (par exemple un enregistrement dans EA) va jusqu'à son terme.</li>
   <li>Une réponse compte <b>au plus 24 étapes</b>. Si l'assistant n'a pas terminé, il s'arrête pour éviter une boucle sans fin ; poursuivez dans un nouveau message.</li>
 </ul>
-<figure><img src="img/fr/steps.png" alt="Carte des étapes de l'assistant pendant son travail, avec la durée et le résultat de chaque étape"><figcaption>Les étapes de l'assistant pendant son travail</figcaption></figure>
+<figure><img src="img/en/steps.png" alt="Carte des étapes de l'assistant pendant son travail, avec la durée et le résultat de chaque étape"><figcaption>Les étapes de l'assistant pendant son travail</figcaption></figure>
 <p><b>Que sait faire l'assistant ?</b> L'assistant connaît les fonctionnalités de l'application grâce à la liste des nouveautés. Demandez-lui : « Que sais-tu faire dans cette application ? ».</p>
 
 <h2 id="s7" class="break">7. Travail avec le modèle Enterprise Architect</h2>
@@ -386,7 +386,7 @@
   <tr><td><b>auto</b></td><td>Jamais (exception : publication dans Confluence)</td><td>Modèle de test ou travail facile à annuler</td></tr>
 </table>
 <p>Lorsqu'un accord est nécessaire, le panneau <b>« Claude veut enregistrer des modifications dans le modèle »</b> apparaît au-dessus du champ de message, avec une description des modifications (combien de paquetages, diagrammes, éléments, connecteurs, ce qui est supprimé) et les boutons <b>Valider</b> et <b>Refuser</b>. Pour une suppression, un déplacement ou une copie de paquetage, le panneau donne le nom de chaque objet concerné (lignes SUPPRESSION, DÉPLACEMENT et COPIE). Un enregistrement refusé ne modifie pas le modèle ; l'assistant est informé du refus et peut proposer autre chose.</p>
-<figure><img src="img/fr/approval.png" alt="Panneau de validation d'une modification du modèle avec la description des modifications et les boutons Valider et Refuser"><figcaption>Le panneau de validation : vérifiez la description des modifications avant de cliquer sur Valider</figcaption></figure>
+<figure><img src="img/en/approval.png" alt="Panneau de validation d'une modification du modèle avec la description des modifications et les boutons Valider et Refuser"><figcaption>Le panneau de validation : vérifiez la description des modifications avant de cliquer sur Valider</figcaption></figure>
 <h3>Journal des modifications</h3>
 <p>Chaque enregistrement de l'assistant dans le modèle, y compris en cas d'échec, est consigné dans le journal des modifications (fichier <code>audit_log.jsonl</code>). Les enregistrements que vous refusez, ainsi que ceux rejetés avant l'envoi à EA (par exemple en cas de conflit de version), n'y figurent pas. La vue <b>Journal des modifications du modèle</b> affiche les 200 dernières entrées, de la plus récente à la plus ancienne : résultat, heure, compte EA, base et description des modifications. Le bouton <b>Exporter vers Excel</b> enregistre l'ensemble du journal sous forme de classeur XLSX, par exemple pour une revue des modifications en équipe ; <b>Ouvrir le fichier journal</b> ouvre le fichier dans le Bloc-notes.</p>
 

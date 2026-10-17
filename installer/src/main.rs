@@ -97,7 +97,7 @@ fn app_version() -> &'static str {
 const PAYLOAD_APP: &[u8] = include_bytes!("../payload/app.exe");
 const PAYLOAD_NOTICES: &[u8] = include_bytes!("../payload/THIRD-PARTY-NOTICES.txt");
 
-/// License, changelog and user guide in four languages.
+/// License and changelog in four languages (the user guide is on the website).
 fn payload_license(lang: Lang) -> &'static [u8] {
     match lang {
         Lang::Pl => include_bytes!("../payload/LICENSE.pl.txt"),
@@ -116,16 +116,12 @@ fn payload_changelog(lang: Lang) -> &'static [u8] {
     }
 }
 
-fn payload_manual(lang: Lang) -> &'static [u8] {
-    match lang {
-        Lang::Pl => include_bytes!("../payload/Manual.pl.pdf"),
-        Lang::En => include_bytes!("../payload/Manual.en.pdf"),
-        Lang::De => include_bytes!("../payload/Manual.de.pdf"),
-        Lang::Fr => include_bytes!("../payload/Manual.fr.pdf"),
-    }
+/// The user guide of this version on the website, in the installation language.
+fn docs_url(lang: Lang) -> String {
+    format!("https://loonar.eu/docs/{}/{}/", display_version(app_version()), lang.code())
 }
 
-/// File name of the user guide in the program folder (in the installation language).
+/// File name of the user guide PDF that versions before 0.5 put into the program folder (removed on update).
 fn manual_file(lang: Lang) -> String {
     format!("{}.pdf", i18n::tr_in(lang, "User guide"))
 }
@@ -940,7 +936,7 @@ fn create_shortcut(link: &Path, target: &Path, arguments: &str, description: &st
 
 /// Start menu and desktop shortcuts as chosen in the wizard. Shortcuts of an earlier installation (possibly in
 /// another language, or no longer wanted) are removed first.
-fn update_shortcuts(plan: &ProgramPlan, app: &Path, manual: &Path, uninstaller: &Path) -> Result<Vec<String>> {
+fn update_shortcuts(plan: &ProgramPlan, app: &Path, uninstaller: &Path) -> Result<Vec<String>> {
     let mut done = Vec::new();
     let folder = plan.scope.start_menu()?;
     if folder.file_name().is_some_and(|n| n == APP_NAME) && folder.is_dir() {
@@ -948,7 +944,10 @@ fn update_shortcuts(plan: &ProgramPlan, app: &Path, manual: &Path, uninstaller: 
     }
     if plan.start_menu {
         create_shortcut(&folder.join(format!("{APP_NAME}.lnk")), app, "", crate::i18n::tr("AI assistant for Enterprise Architect"))?;
-        create_shortcut(&folder.join(crate::i18n::tr("User guide.lnk")), manual, "", crate::i18n::tr("User guide"))?;
+        // An Internet shortcut to the user guide of this version on the website.
+        let guide = folder.join(format!("{}.url", crate::i18n::tr("User guide")));
+        std::fs::write(&guide, format!("[InternetShortcut]\r\nURL={}\r\n", docs_url(plan.lang)))
+            .with_context(|| crate::i18n::fmt("saving {0}", &[guide.display().to_string()]))?;
         create_shortcut(&folder.join(crate::i18n::fmt("Uninstall {0}.lnk", &[APP_NAME.to_string()])), uninstaller, UNINSTALL_ARG, crate::i18n::tr("Uninstall the application"))?;
         done.push(crate::i18n::tr("Start menu shortcuts").to_string());
     }
@@ -1023,13 +1022,10 @@ fn install_program(plan: &ProgramPlan, progress: &Progress) -> Result<Vec<String
     }
     write_file(&dir.join(CHANGELOG_FILE), payload_changelog(plan.lang))?;
     write_file(&dir.join(NOTICES_FILE), PAYLOAD_NOTICES)?;
-    // User guide in the installation language; guides in other languages from earlier installations are removed.
-    for other in Lang::ALL.into_iter().filter(|l| *l != plan.lang) {
-        let _ = std::fs::remove_file(dir.join(manual_file(other)));
+    // The user guide is on the website now: PDFs left by earlier versions are removed.
+    for lang in Lang::ALL {
+        let _ = std::fs::remove_file(dir.join(manual_file(lang)));
     }
-    let manual = dir.join(manual_file(plan.lang));
-    write_with_progress(&manual, payload_manual(plan.lang), progress, 0.66, 0.72, crate::i18n::tr("Copying the user guide…"))
-        .with_context(|| crate::i18n::fmt("saving {0}", &[manual.display().to_string()]))?;
     progress.set(0.74, crate::i18n::tr("Copying the uninstaller…"));
     let uninstaller = dir.join(UNINSTALL_EXE);
     let me = std::env::current_exe().context(crate::i18n::tr("installer path"))?;
@@ -1049,7 +1045,7 @@ fn install_program(plan: &ProgramPlan, progress: &Progress) -> Result<Vec<String
     done.push(crate::i18n::fmt("Program files: {0}", &[(dir.display()).to_string()]));
 
     progress.set(0.86, crate::i18n::tr("Creating shortcuts…"));
-    done.extend(update_shortcuts(plan, &app, &manual, &uninstaller)?);
+    done.extend(update_shortcuts(plan, &app, &uninstaller)?);
 
     progress.set(0.94, crate::i18n::tr("Adding the entry to \"Programs and Features\"…"));
     register(plan, &app, &uninstaller)?;
@@ -1618,8 +1614,7 @@ fn required_mb() -> u64 {
     static MB: OnceLock<u64> = OnceLock::new();
     *MB.get_or_init(|| {
         let setup = std::env::current_exe().and_then(std::fs::metadata).map(|m| m.len()).unwrap_or(PAYLOAD_APP.len() as u64);
-        let manual = Lang::ALL.into_iter().map(|l| payload_manual(l).len()).max().unwrap_or(0) as u64;
-        (PAYLOAD_APP.len() as u64 + setup + manual + PAYLOAD_NOTICES.len() as u64 + 256 * 1024).div_ceil(1_048_576)
+        (PAYLOAD_APP.len() as u64 + setup + PAYLOAD_NOTICES.len() as u64 + 256 * 1024).div_ceil(1_048_576)
     })
 }
 
@@ -2436,7 +2431,7 @@ impl Setup {
                     ui.add_space(14.0);
                     ui.checkbox(&mut self.run_after, crate::i18n::fmt("Launch {0}", &[APP_NAME.to_string()]));
                     ui.add_space(6.0);
-                    ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("The user guide is in the Start menu and in the installation folder. After the first start, check the details on the \"Settings\" tab with the \"Save and test\" buttons.")).color(theme::MUTED)).wrap());
+                    ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("The user guide is on loonar.eu: in the Start menu, choose \"User guide\". After the first start, check the details on the \"Settings\" tab with the \"Save and test\" buttons.")).color(theme::MUTED)).wrap());
                 }
             }
             Some(Err(error)) => {

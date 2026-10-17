@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Loonar Compass 0.3 - Benutzerhandbuch</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+  body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1f1e1b; }
+  h1 { font-size: 26pt; color: #0d355c; margin: 0 0 4pt 0; }
+  h2 { font-size: 16pt; color: #0d355c; border-bottom: 1.5pt solid #0d355c; padding-bottom: 3pt; margin: 22pt 0 8pt 0; page-break-after: avoid; }
+  h3 { font-size: 12pt; color: #0d355c; margin: 14pt 0 4pt 0; page-break-after: avoid; }
+  p { margin: 0 0 7pt 0; }
+  ul, ol { margin: 0 0 8pt 0; padding-left: 18pt; }
+  li { margin-bottom: 2.5pt; }
+  table { border-collapse: collapse; width: 100%; margin: 6pt 0 10pt 0; page-break-inside: avoid; }
+  th, td { border: 0.75pt solid #c9c5b9; padding: 4pt 6pt; text-align: left; vertical-align: top; }
+  th { background: #eef2f7; color: #0d355c; }
+  code, .key { font-family: Consolas, monospace; font-size: 9.5pt; background: #f1efe9; padding: 0 3pt; border-radius: 2pt; }
+  .key { border: 0.75pt solid #c9c5b9; }
+  .prompt { background: #f6f5f1; border-left: 3pt solid #0d355c; padding: 5pt 9pt; margin: 4pt 0 8pt 0; font-style: italic; page-break-inside: avoid; }
+  .note { background: #fff8e5; border: 0.75pt solid #e3c770; padding: 6pt 9pt; margin: 6pt 0 10pt 0; page-break-inside: avoid; }
+  figure { margin: 8pt 0 12pt 0; text-align: center; page-break-inside: avoid; }
+  figure img { max-width: 100%; border: 0.75pt solid #c9c5b9; }
+  figure.small img { max-width: 72%; }
+  figcaption { font-size: 9pt; color: #706d64; margin-top: 3pt; }
+  .cover { text-align: center; padding-top: 60mm; page-break-after: always; }
+  .cover img { width: 46mm; border-radius: 6mm; }
+  .cover .sub { font-size: 14pt; color: #706d64; margin-top: 4pt; }
+  .cover .owner { margin-top: 70mm; font-size: 10pt; color: #706d64; }
+  .toc { page-break-after: always; }
+  .toc ol { line-height: 1.9; font-size: 11.5pt; }
+  .break { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <img src="img/logo.png" alt="Logo von Loonar Compass">
+  <h1 style="margin-top: 10mm;">Loonar Compass</h1>
+  <div class="sub">Benutzerhandbuch</div>
+  <div class="sub" style="font-size: 11pt;">Version 0.3 &middot; Oktober 2026</div>
+  <div class="owner">
+    Loonar Mariusz Głowacki<br>
+    ul. Gombrowicza 12, 73-110 Stargard<br>
+    loonar.eu &middot; mariusz@loonar.eu
+  </div>
+</div>
+
+<div class="toc">
+  <h2 style="margin-top: 0;">Inhalt</h2>
+  <ol>
+    <li><a href="#s1">Was ist Loonar Compass</a></li>
+    <li><a href="#s2">Voraussetzungen</a></li>
+    <li><a href="#s3">Installation</a></li>
+    <li><a href="#s4">Fenster und Navigation</a></li>
+    <li><a href="#s5">Einstellungen und Sprache</a></li>
+    <li><a href="#s6">Unterhaltung mit dem Assistenten</a></li>
+    <li><a href="#s7">Arbeiten mit dem EA-Modell</a></li>
+    <li><a href="#s8">Arbeiten mit dem geöffneten EA-Fenster</a></li>
+    <li><a href="#s9">Dokumente (Word, Excel, PNG, Confluence)</a></li>
+    <li><a href="#s10">Dokumentvorlagen</a></li>
+    <li><a href="#s11">Gedächtnis des Assistenten</a></li>
+    <li><a href="#s12">Freigabe von Änderungen und Änderungsprotokoll</a></li>
+    <li><a href="#s13">Unterhaltungen</a></li>
+    <li><a href="#s14">Daten, Sicherheit und Datenschutz</a></li>
+    <li><a href="#s15">Fehlerbehebung</a></li>
+    <li><a href="#s16">Fehlermeldungen und Neuigkeiten</a></li>
+    <li><a href="#s17">Aktualisierung und Deinstallation</a></li>
+    <li><a href="#s18">Lizenz, Marken und Kontakt</a></li>
+  </ol>
+</div>
+
+<h2 id="s1" style="margin-top: 0;">1. Was ist Loonar Compass</h2>
+<p>Loonar Compass ist eine eigenständige Desktop-Anwendung für Windows: ein KI-Assistent für die Arbeit mit einem Enterprise-Architect-Modell (Sparx Systems). Sie schreiben ihm in natürlicher Sprache, und er:</p>
+<ul>
+  <li><b>liest das Modell</b> (Pakete, Elemente, Diagramme, Konnektoren, Attribute und Operationen, Tagged Values und Schlüsselwörter) und beschreibt, was darin enthalten ist,</li>
+  <li><b>analysiert das Modell</b>: Auswirkungen der Änderung eines Elements auf den Rest des Modells, Verwendungsstellen von Operationen, Elemente ohne Konnektoren,</li>
+  <li><b>ändert das Modell</b>: legt Pakete, Diagramme, Elemente und Konnektoren an, ergänzt Attribute und Operationen von Klassen, setzt Tagged Values und Schlüsselwörter, ordnet Elemente in Diagrammen an, verschiebt und löscht sie, entfernt ein Element aus einem Diagramm (es bleibt im Modell), färbt Elemente ein, fügt Legenden hinzu, kopiert Pakete und erstellt Baselines davon,</li>
+  <li><b>zeichnet</b> Diagramme nach einer Beschreibung, einem Foto, einer Skizze oder einer angehängten Datei,</li>
+  <li><b>zeigt Diagramme</b> als Bilder im Chat, so wie Enterprise Architect sie zeichnet,</li>
+  <li><b>erstellt Dokumente</b> aus den Inhalten des Modells: Word, Excel, PNG-Bilder und Confluence-Seiten, auch nach Vorlagen,</li>
+  <li><b>merkt sich Festlegungen</b> über Unterhaltungen hinweg (Modellierungskonventionen, Präferenzen, Korrekturen),</li>
+  <li><b>arbeitet mit Ihrem geöffneten EA-Fenster zusammen</b>: Er weiß, was Sie ausgewählt haben, und öffnet Diagramme (Kapitel 8).</li>
+</ul>
+<p>Die Anwendung nutzt das Sprachmodell Claude Haiku 5.5 (Anthropic) über das Internet. Mit dem EA-Modell verbindet sie sich auf zwei Wegen: Sie liest es direkt aus der PostgreSQL-Datenbank und schreibt über Enterprise Architect, das im Hintergrund läuft, mit dem in den Einstellungen angegebenen Benutzerkonto des Modells.</p>
+<p>Die Oberfläche und die Antworten des Assistenten sind in vier Sprachen verfügbar: Polnisch, Englisch, Deutsch und Französisch (Kapitel 5). Die Anwendung ist kostenlos, auch für die kommerzielle Nutzung (Kapitel 18).</p>
+
+<h2 id="s2">2. Voraussetzungen</h2>
+<div class="note">
+  <b>Notwendige Bedingungen.</b> Unterstützt wird die Anwendung nur, wenn alle drei erfüllt sind:
+  <ol style="margin: 4pt 0 0 0;">
+    <li><b>Das Modell liegt in einer PostgreSQL-Datenbank.</b> Modelle in Dateien (.qea, .qeax, .eap, .eapx, .feap) sowie in anderen Datenbanken werden nicht unterstützt.</li>
+    <li><b>Im Modell ist die Benutzersicherheit aktiviert</b> (in Enterprise Architect: Settings → Security → Enable Security), im Modus „Require User Lock to Edit“. Die Anwendung meldet sich als bestimmter Benutzer am Modell an und sperrt beim Speichern die geänderten Objekte. Ohne Benutzersicherheit setzt sie keine Sperren; diese Konfiguration wird nicht unterstützt.</li>
+    <li><b>Im Modell gibt es ein Benutzerkonto für den Assistenten</b> (Settings → Security → Users), mit Passwort und Bearbeitungsrechten. Der Kontoname ist beliebig, zum Beispiel <code>claude</code> oder <code>assistent</code>, aber das Konto muss existieren. Anmeldename und Passwort geben Sie in den Einstellungen der Anwendung ein.</li>
+  </ol>
+</div>
+<table>
+  <tr><th style="width: 32%;">Was</th><th>Details</th></tr>
+  <tr><td>System</td><td>Windows 10 oder Windows 11 (64 Bit)</td></tr>
+  <tr><td>Enterprise Architect</td><td>Auf demselben Computer installiert, mit gültiger Lizenz. Die Anwendung startet es im Hintergrund; währenddessen belegt es einen Lizenzplatz.</td></tr>
+  <tr><td>EA-Modell</td><td>Repository in einer PostgreSQL-Datenbank, mit aktivierter Benutzersicherheit. Benötigt werden: Server, Port, Datenbankname sowie Konto und Passwort der Datenbank.</td></tr>
+  <tr><td>Benutzerkonto des Modells</td><td>Anmeldename und Passwort eines im EA-Modell definierten Benutzers. Am besten ein eigenes Konto nur für den Assistenten, damit seine Änderungen und Sperren getrennt sichtbar sind und nicht mit Ihren kollidieren.</td></tr>
+  <tr><td>Claude-API-Schlüssel</td><td>Ein Schlüssel aus der Anthropic Console.</td></tr>
+  <tr><td>Internet</td><td>Verbindung zu api.anthropic.com über HTTPS, direkt oder über einen Proxy (Kapitel 14).</td></tr>
+  <tr><td>Confluence (optional)</td><td>Confluence Cloud oder Data Center, nur zum Veröffentlichen von Seiten durch den Assistenten: Confluence-Adresse, Token und Bereichsschlüssel (Kapitel 9). Auch ohne diese Angaben entstehen Seiten, den Code fügen Sie dann selbst ein.</td></tr>
+  <tr><td>E-Mail-Programm (optional)</td><td>Zum Melden von Fehlern und zum Anmelden für Informationen über neue Versionen: ein in Windows als Standard eingerichtetes E-Mail-Programm, zum Beispiel Outlook.</td></tr>
+</table>
+<div class="note"><b>Kosten.</b> Die Anwendung selbst ist kostenlos. Für die Nutzung des Claude-Modells zahlen Sie Anthropic nach Verbrauch, über das Konto, zu dem der API-Schlüssel gehört.</div>
+
+<h2 id="s3">3. Installation</h2>
+<p>Starten Sie die Datei <code>LoonarCompass-Setup-0.3.exe</code>. Standardmäßig installieren Sie die Anwendung nur für sich selbst, ohne Administratorrechte; Windows fragt nur dann nach Administratorrechten, wenn Sie die Installation für alle Benutzer des Computers wählen. Der Installationsassistent führt Sie mit den Schaltflächen <b>Weiter</b> und <b>Zurück</b> durch die einzelnen Schritte.</p>
+<div class="note"><b>Warnung von Windows SmartScreen.</b> Das Installationsprogramm ist noch nicht digital signiert, daher kann Windows beim ersten Start die Meldung „Der Computer wurde durch Windows geschützt“ anzeigen. Klicken Sie auf <b>Weitere Informationen</b> und dann auf <b>Trotzdem ausführen</b>. Ist auf dem Computer die <b>Intelligente App-Steuerung</b> (Smart App Control) aktiviert, blockiert Windows nicht signierte Anwendungen ohne Möglichkeit, sie zu starten; warten Sie in diesem Fall auf die signierte Version. Laden Sie das Installationsprogramm nur von loonar.eu oder aus den Releases des Projekts auf GitHub herunter.</div>
+<figure class="small"><img src="img/en/installer-language.png" alt="Installationsassistent: Seite „Sprache wählen“ mit Polnisch, Englisch, Deutsch und Französisch"><figcaption>Die erste Seite des Installationsassistenten: Auswahl der Sprache</figcaption></figure>
+<ol>
+  <li><b>Sprache.</b> Zu Beginn fragt das Installationsprogramm nach der Sprache: Polnisch, Englisch, Deutsch oder Französisch. Bei einer Neuinstallation ist Englisch ausgewählt, bei einer Aktualisierung die in Ihren Einstellungen gespeicherte Sprache. Die gewählte Sprache gilt für den Installationsassistenten, die Anwendung, die Antworten des Assistenten und die Standard-Dokumentvorlagen; später ändern Sie sie in den Einstellungen (Kapitel 5).</li>
+  <li><b>Begrüßung.</b> Die Voraussetzungen und eine Liste der Dinge, die Sie vor der Installation bereithalten sollten.</li>
+  <li><b>Neu in Version 0.3.</b> Bei einer Aktualisierung: die Änderungen seit der installierten Version. Bei einer Neuinstallation: die wichtigsten Änderungen der aktuellen Version.</li>
+  <li><b>Lizenzvereinbarung.</b> Wählen Sie „Ich akzeptiere die Bedingungen der Lizenzvereinbarung“.</li>
+  <li><b>Zielordner.</b> Die Installationsart (siehe unten), der Installationsordner und die Verknüpfungen: Startmenü (Anwendung, Benutzerhandbuch, Deinstallation) und Desktop.</li>
+  <li><b>Konfiguration.</b> Sie können die Daten sofort eingeben („Ich gebe die Daten jetzt ein“) oder „Ich konfiguriere später in der Anwendung“ wählen. Die Seite enthält den Claude-API-Schlüssel (mit einem Hinweis, was an Anthropic gesendet wird), die Modelldatenbank (Server, Port, Datenbankname, Datenbankkonto, Datenbankpasswort), Enterprise Architect (Pfad zu <code>EA.exe</code>, den Sie mit der Schaltfläche <b>…</b> in einem Dateiauswahlfenster wählen, EA-Benutzerkonto und Passwort des EA-Kontos) sowie den Freigabemodus.</li>
+  <li><b>Bereit zur Installation.</b> Eine Zusammenfassung; mit <b>Installieren</b> beginnt die Installation. Der Fortschrittsbalken zeigt den Prozentsatz und den aktuellen Schritt.</li>
+  <li><b>Installation abgeschlossen.</b> Ist „Loonar Compass starten“ ausgewählt, öffnet sich die Anwendung nach einem Klick auf <b>Fertigstellen</b>.</li>
+</ol>
+<figure class="small"><img src="img/en/installer-config.png" alt="Installationsassistent: Seite „Konfiguration“ mit Feldern für Claude, Modelldatenbank, Enterprise Architect und Freigabemodus"><figcaption>Die Konfiguration im Installationsassistenten ist optional: Dieselben Daten können Sie später in der Ansicht „Einstellungen“ eingeben</figcaption></figure>
+<h3>Installationsart</h3>
+<p>Auf der Seite „Zielordner“ wählen Sie, für wen Sie die Anwendung installieren:</p>
+<ul>
+  <li><b>„Nur für mich (empfohlen, ohne Administratorrechte)“</b>: Die Anwendung wird in <code>%LOCALAPPDATA%\Programs\Loonar Compass</code> installiert und steht nur Ihrem Windows-Konto zur Verfügung.</li>
+  <li><b>„Für alle Benutzer dieses Computers (erfordert Administratorrechte)“</b>: Die Anwendung wird in <code>%ProgramFiles%\Loonar Compass</code> installiert. Nach einem Klick auf <b>Installieren</b> fragt Windows nach Administratorrechten; werden sie nicht erteilt, wird nichts installiert. Der Ordner muss im Ordner „Programme“ liegen, in dem nur Administratoren Dateien ändern können.</li>
+</ul>
+<p>Unabhängig von der Installationsart werden Einstellungen und Passwörter immer für den Benutzer gespeichert, der den Installationsassistenten gestartet hat: im Benutzerprofil (<code>%APPDATA%\Loonar Compass</code>) und in seiner Windows-Anmeldeinformationsverwaltung, auch wenn eine andere Person die Administratorrechte bestätigt. Bei einer Installation für alle Benutzer hat jeder Benutzer eigene Einstellungen, Unterhaltungen und Passwörter.</p>
+<figure class="small"><img src="img/en/installer-type.png" alt="Installationsassistent: Seite „Zielordner“ mit der Auswahl der Installationsart, dem Installationsordner und den Verknüpfungen"><figcaption>Installationsart, Installationsordner und Verknüpfungen</figcaption></figure>
+<div class="note"><b>Taskleiste.</b> Windows 11 erlaubt Installationsprogrammen nicht, Programme an die Taskleiste anzuheften. Starten Sie die Anwendung, klicken Sie mit der rechten Maustaste auf ihr Symbol in der Taskleiste und wählen Sie „An Taskleiste anheften“.</div>
+<h3>Aktualisierung von einer früheren Version</h3>
+<p>Loonar Compass ist der neue Name von Loonar EA Assistant: Einstellungen, Unterhaltungen, Gedächtnis, Vorlagen und Passwörter der früheren Version übernimmt die Anwendung beim ersten Start automatisch.</p>
+<ul>
+  <li>Eine frühere Version, die nur für Sie installiert war, entfernt das Setup während der Installation (Programmdateien, Verknüpfungen und Eintrag in den Windows-Einstellungen); Ihre Daten bleiben erhalten.</li>
+  <li>Ist die frühere Version für alle Benutzer installiert (zum Beispiel unter Program Files), zeigt die Seite „Bereit zur Installation“ einen Hinweis mit der Schaltfläche <b>Alte Version entfernen (Administratorrechte)</b>. Sie können sie auch später unter <b>Einstellungen → Apps</b> entfernen; Ihre Einstellungen und Unterhaltungen bleiben in beiden Fällen erhalten.</li>
+  <li>Auf der ersten Seite wählt das Setup die in Ihren Einstellungen gespeicherte Sprache vor (Einstellungen ohne gespeicherte Sprache stammen aus den rein polnischen Versionen 0.1 und 0.2 und bedeuten Polnisch), ohne Einstellungen Englisch. Prüfen Sie diese Auswahl, bevor Sie auf <b>Weiter</b> klicken.</li>
+  <li>Ein Sprachwechsel im Setup übersetzt weder das Gedächtnis noch die Vorlagen. Wenn Sie diese in die neue Sprache übertragen möchten, behalten Sie im Setup die bisherige Sprache bei und ändern Sie sie nach der Installation auf Karte 4 der Einstellungen (Kapitel 5).</li>
+  <li>Ein Datenbankpasswort, das ältere Versionen in der Einstellungsdatei gespeichert haben, wird in die Windows-Anmeldeinformationsverwaltung übertragen, und Dateien und Ordner mit polnischen Namen im Datenordner erhalten englische Namen (zum Beispiel <code>audit_log.jsonl</code> und <code>templates</code>).</li>
+</ul>
+
+<h2 id="s4" class="break">4. Fenster und Navigation</h2>
+<p>Links im Fenster befindet sich eine dunkelblaue <b>Navigationsleiste</b> mit Symbolen. Wenn Sie mit der Maus auf ein Symbol zeigen, erscheint sein Name. Ein Klick wechselt die Ansicht.</p>
+<table>
+  <tr><th style="width: 26%;">Symbol</th><th>Inhalt</th></tr>
+  <tr><td><b>Chat</b></td><td>Liste der Unterhaltungen und die Unterhaltung mit dem Assistenten (Kapitel 6 und 13)</td></tr>
+  <tr><td><b>Einstellungen</b></td><td>Claude, Modelldatenbank, Enterprise Architect, Sprache und Freigabemodus, neue Versionen, Confluence (Kapitel 5)</td></tr>
+  <tr><td><b>Gedächtnis des Assistenten</b></td><td>Festlegungen, die sich der Assistent über Unterhaltungen hinweg gemerkt hat (Kapitel 11)</td></tr>
+  <tr><td><b>Dokumentvorlagen</b></td><td>Vorlagen, die der Assistent mit Inhalten aus dem Modell füllt (Kapitel 10)</td></tr>
+  <tr><td><b>Änderungsprotokoll des Modells</b></td><td>Alle Speicherungen des Assistenten im Modell, mit Export nach Excel (Kapitel 12)</td></tr>
+  <tr><td><b>Versionshinweise</b></td><td>Liste der Funktionen und bekannten Einschränkungen jeder Version</td></tr>
+  <tr><td><b>Fehler melden</b></td><td>Formular für eine Fehlermeldung mit Bildern (Kapitel 16)</td></tr>
+  <tr><td><b>Projekt unterstützen</b> (Herzsymbol, unten über „Info“)</td><td>Freiwillige Unterstützung der Weiterentwicklung über suppi.pl sowie Links zu GitHub und loonar.eu</td></tr>
+  <tr><td><b>Info</b> (unten in der Leiste)</td><td>Version, Eigentümer, Links, Markenhinweis, Lizenz und Open-Source-Komponenten (Kapitel 18)</td></tr>
+</table>
+<p>Ein orangefarbenes <b>„!“</b> auf den Symbolen „Einstellungen“, „Gedächtnis des Assistenten“ und „Dokumentvorlagen“ bedeutet, dass die Übersetzung nach einem Sprachwechsel noch nicht abgeschlossen ist (Kapitel 5).</p>
+<p><b>Projekt unterstützen.</b> Loonar Compass ist kostenlos, auch für die kommerzielle Nutzung, und bleibt es. Die Schaltfläche <b>Auf suppi.pl unterstützen</b> öffnet die Seite <code>https://suppi.pl/loonar</code>, auf der Sie die Weiterentwicklung mit einem freiwilligen Beitrag unterstützen können; damit wird unter anderem ein Codesignaturzertifikat bezahlt. Unter „Weitere Möglichkeiten zu helfen“ finden Sie die Links „Quellcode auf GitHub“ und loonar.eu: Sie können Fehler und Ideen melden, die Anwendung anderen Enterprise-Architect-Nutzern empfehlen oder dem Projekt auf GitHub einen Stern geben.</p>
+<h3>Chat-Ansicht</h3>
+<ul>
+  <li><b>Die Liste der Unterhaltungen</b> links ist in „Heute“, „Gestern“, „Letzte 7 Tage“ und „Älter“ gruppiert. Eine neue Unterhaltung beginnen Sie mit der Schaltfläche <b>+</b>. Die ausgewählte Unterhaltung ist hervorgehoben.</li>
+  <li><b>Die Kopfzeile der Unterhaltung</b> zeigt ihren Titel und, während der Assistent arbeitet, die Anzeige „Claude arbeitet“.</li>
+  <li><b>Nachrichten:</b> Ihre eigenen erscheinen in einer beigen Sprechblase, die Antworten des Assistenten tragen das Symbol der Anwendung. Bei jeder Nachricht steht die Uhrzeit (bei älteren auch das Datum).</li>
+  <li><b>Der Bildschirm einer neuen Unterhaltung</b> zeigt das Logo und einen Hinweis, was Sie tun können.</li>
+  <li><b>Die Nachrichtenkarte</b> unten: Textfeld, Schaltfläche <b>Einfügen</b>, Modell und Freigabemodus sowie runde Schaltflächen zum Senden und Abbrechen (Kapitel 6). Unter der Karte steht der Hinweis „Antworten und Änderungen werden von einem KI-Modell (Claude von Anthropic) erstellt und können Fehler enthalten. Prüfen Sie sie vor der Freigabe.“</li>
+</ul>
+
+<h2 id="s5">5. Einstellungen und Sprache</h2>
+<p>Die Ansicht <b>Einstellungen</b> hat sechs Karten. Jede speichern Sie einzeln mit der Schaltfläche unter der Karte, und die Anwendung prüft sofort, ob die Daten funktionieren. Das Ergebnis erscheint unter der Schaltfläche: grün mit Beschreibung oder rot mit der Fehlerursache.</p>
+<figure><img src="img/de/settings.png" alt="Ansicht „Einstellungen“ mit den Karten Claude, Modelldatenbank, Enterprise Architect, Sprache und Freigabe, Newsletter und Confluence"><figcaption>Einstellungen: jede Karte mit eigenem Speichern und Test</figcaption></figure>
+<table>
+  <tr><th style="width: 26%;">Karte</th><th>Felder</th><th style="width: 34%;">Was der Test prüft</th></tr>
+  <tr><td>1. Claude</td><td>Modell (nur Anzeige: Claude Haiku 5.5), Max. Tokens (Längenbegrenzung einer einzelnen Antwort des Modells), Claude-API-Schlüssel. Darunter ein Hinweis, was die Anwendung an Anthropic sendet (Kapitel 14).</td><td>„Speichern und Schlüssel prüfen“ sendet eine kurze Anfrage an das Modell</td></tr>
+  <tr><td>2. Modelldatenbank (PostgreSQL)</td><td>Server, Port, Datenbankname, Datenbankkonto, Datenbankpasswort (in der Windows-Anmeldeinformationsverwaltung gespeichert), Verschlüsselung der Verbindung (siehe unten)</td><td>„Speichern und Verbindung prüfen“ verbindet sich mit der Datenbank, zählt Pakete, Elemente und Diagramme, meldet, ob die Verbindung verschlüsselt ist, und warnt vor einem Superuser-Konto</td></tr>
+  <tr><td>3. Enterprise Architect</td><td>Pfad zu EA.exe (die Schaltfläche <b>…</b> öffnet die Dateiauswahl), EA-Benutzerkonto, Passwort des EA-Kontos</td><td>„Speichern und EA-Anmeldung prüfen“ startet EA im Hintergrund und meldet das angegebene Konto an (beim ersten Mal einige bis über zehn Sekunden)</td></tr>
+  <tr><td>4. Sprache und Freigabe von Änderungen</td><td>Sprache der Anwendung; Modus: plan, ask oder auto (Kapitel 12)</td><td>Nur Speichern; nach einem Sprachwechsel bei Bedarf „Jetzt übersetzen“</td></tr>
+  <tr><td>5. Neue Versionen (Newsletter)</td><td>E-Mail-Adresse und „Ich möchte über neue Versionen informiert werden“, mit einem Hinweis zur Einwilligung und dem Link „Datenschutzerklärung“ (Kapitel 16)</td><td>Bereitet eine Nachricht im E-Mail-Programm vor</td></tr>
+  <tr><td>6. Confluence</td><td>Confluence-Adresse (muss mit <code>https://</code> beginnen; <code>http://</code> nur für einen Server auf demselben Computer), E-Mail (nur Cloud), Token, Bereich (Schlüssel), Übergeordnete Seite (ID) (Kapitel 9)</td><td>„Speichern und Confluence-Verbindung prüfen“ verbindet sich mit dem Token und prüft, ob der Bereich verfügbar ist</td></tr>
+</table>
+<p>Ein leeres Passwort- oder Schlüsselfeld bedeutet „keine Änderung“. Der Hinweis <b>gespeichert</b> neben einem Feld zeigt an, dass der Wert bereits gespeichert ist. Alle Passwörter, der API-Schlüssel und das Confluence-Token liegen in der Windows-Anmeldeinformationsverwaltung, nicht in der Einstellungsdatei. Das Datenbankpasswort darf kein Semikolon (<code>;</code>) enthalten, da Enterprise Architect es sonst nicht in seiner Verbindungszeichenfolge übergeben kann.</p>
+<p><b>Standardwerte.</b> Solange noch keine Einstellungen vorhanden sind, gilt: Server, Datenbankname, EA-Benutzerkonto und Passwörter sind leer (beim Server zeigt ein grauer Hinweis „z. B. 127.0.0.1“), der Port ist 5432, das Datenbankkonto „postgres“, der Pfad zu EA.exe <code>C:\Program Files\Sparx Systems\EA\EA.exe</code>, der Freigabemodus ask, Max. Tokens 10000 und die Verschlüsselung „Bevorzugt“. Bestehende Einstellungen ändern weder das Setup noch die Anwendung.</p>
+<p><b>Max. Tokens.</b> Wenn der Assistent die Arbeit mit einer Meldung über eine abgeschnittene Antwort abbricht, erhöhen Sie diesen Wert (zum Beispiel auf 20000). Die Begrenzung selbst kostet nichts: Sie zahlen für den tatsächlich erzeugten Text.</p>
+<p><b>Das Sperren von Paketen</b> beim Speichern ist immer aktiviert und deshalb nicht in den Einstellungen enthalten.</p>
+<h3>Sprache ändern</h3>
+<p>Die Anwendung arbeitet in vier Sprachen: <b>Polnisch, Englisch, Deutsch und Französisch</b>. Die Sprache wählen Sie im Installationsprogramm (standardmäßig Englisch) und ändern sie auf der Karte <b>„4. Sprache und Freigabe von Änderungen“</b>:</p>
+<ol>
+  <li>Wählen Sie eine Sprache aus der Liste <b>Sprache</b>.</li>
+  <li>Klicken Sie auf <b>Speichern</b>. Die Oberfläche wechselt sofort in die neue Sprache, und der Assistent antwortet ab der nächsten Nachricht in ihr (schreiben Sie ihm in einer anderen Sprache, antwortet er in Ihrer).</li>
+  <li>Die Anwendung überträgt Ihre Inhalte in die neue Sprache: Unveränderte Standardvorlagen ersetzt sie durch die Versionen in der neuen Sprache, und <b>das Gedächtnis des Assistenten sowie eigene und geänderte Vorlagen übersetzt Claude</b>.</li>
+</ol>
+<p>Übersetzt werden nur das Gedächtnis und die Vorlagen. <b>Der Unterhaltungsverlauf wird nie übersetzt</b>: Unterhaltungen bleiben in der Sprache, in der Sie sie geführt haben.</p>
+<div class="note"><b>Keine Verbindung zu Claude.</b> Die Übersetzung erfordert einen funktionierenden API-Schlüssel. Besteht keine Verbindung, erscheint auf den Symbolen <b>Einstellungen</b>, <b>Gedächtnis des Assistenten</b> und <b>Dokumentvorlagen</b> ein orangefarbenes <b>„!“</b>, und der Tooltip erklärt, dass die Inhalte noch nicht übersetzt sind. Die Übersetzung wird beim nächsten Start der Anwendung fortgesetzt oder sofort nach einem Klick auf <b>Jetzt übersetzen</b> auf Karte 4. Das Speichern anderer Karten setzt sie nicht fort.</div>
+<h3>Verschlüsselung der Datenbankverbindung</h3>
+<p>Das Feld <b>Verschlüsselung der Verbindung</b> auf der Karte „2. Modelldatenbank (PostgreSQL)“ legt fest, ob der Assistent das Modell über TLS liest:</p>
+<table>
+  <tr><th style="width: 34%;">Einstellung</th><th>Wirkung</th></tr>
+  <tr><td><b>Bevorzugt</b> (Standard)</td><td>TLS, wenn der Server es anbietet, sonst eine unverschlüsselte Verbindung. Funktioniert mit jedem Server.</td></tr>
+  <tr><td><b>Erforderlich</b></td><td>TLS ist erforderlich: Ohne TLS stellt die Anwendung keine Verbindung her. Das Serverzertifikat wird nicht geprüft.</td></tr>
+  <tr><td><b>Erforderlich, mit Zertifikatsprüfung</b></td><td>TLS ist erforderlich, und das Serverzertifikat wird zusammen mit dem Servernamen anhand des Windows-Zertifikatspeichers geprüft, einschließlich der Zertifikate Ihres Unternehmens (eigene Zertifizierungsstellen).</td></tr>
+</table>
+<ul>
+  <li>Der Verbindungstest meldet, ob die Verbindung verschlüsselt ist: „Die Verbindung ist verschlüsselt (TLS).“ oder „Die Verbindung ist NICHT verschlüsselt: Der Server bietet kein TLS an.“</li>
+  <li>Bei der Zertifikatsprüfung muss der Name im Feld <b>Server</b> mit dem Namen im Serverzertifikat übereinstimmen.</li>
+  <li>Ist das Datenbankkonto ein Superuser, warnt der Test davor. Superuser-Rechte sind nicht nötig: Es genügt ein normales Konto mit Lese- und Schreibrechten auf die Tabellen des Modells (der Assistent liest die Datenbank nur, aber Enterprise Architect speichert die Änderungen mit demselben Konto).</li>
+  <li>Der Datenbankadministrator kann TLS für alle Clients mit <code>hostssl</code>-Einträgen in der Datei <code>pg_hba.conf</code> erzwingen.</li>
+  <li>Die Einstellung gilt für das Lesen des Modells durch den Assistenten. Die Verbindung von Enterprise Architect selbst zur Datenbank (beim Speichern) richtet sich nach den Einstellungen in EA.</li>
+</ul>
+
+<h2 id="s6" class="break">6. Unterhaltung mit dem Assistenten</h2>
+<figure><img src="img/de/chat.png" alt="Chat-Ansicht mit einer Unterhaltung, in der ein Diagramm aus Enterprise Architect als Bild angezeigt wird"><figcaption>Eine Unterhaltung mit einem Diagrammbild im Chat: Liste der Unterhaltungen links, Nachrichtenkarte unten</figcaption></figure>
+<h3>Schreiben</h3>
+<p>Die Nachricht geben Sie in der <b>Nachrichtenkarte</b> unten im Fenster ein. Die Karte enthält das Textfeld, die Schaltfläche <b>Einfügen</b>, den Namen des Modells und den aktuellen Freigabemodus sowie runde Schaltflächen: <b>Senden</b> und, während der Assistent arbeitet, <b>Abbrechen</b>. Darunter erinnert ein Hinweis daran, dass Antworten und Änderungen von einem KI-Modell erstellt werden und Fehler enthalten können: Prüfen Sie sie vor der Freigabe.</p>
+<table>
+  <tr><th style="width: 34%;">Taste</th><th>Wirkung</th></tr>
+  <tr><td><span class="key">Eingabe</span></td><td>Sendet die Nachricht</td></tr>
+  <tr><td><span class="key">Umschalt</span> + <span class="key">Eingabe</span></td><td>Neue Zeile in der Nachricht</td></tr>
+  <tr><td><span class="key">↑</span> in einem leeren Feld</td><td>Ruft Ihre letzte Nachricht aus dieser Unterhaltung ab; weiteres Drücken geht zu früheren zurück, <span class="key">↓</span> wieder vorwärts</td></tr>
+  <tr><td><span class="key">Strg</span> + <span class="key">V</span></td><td>Fügt Text ein; enthält die Zwischenablage ein Bild oder Dateien, werden sie als Anhänge hinzugefügt</td></tr>
+</table>
+<p>Das Nachrichtenfeld wächst mit dem Text. Rechtschreibfehler werden mit dem Windows-Systemwörterbuch rot unterstrichen, in der Sprache aus den Systemeinstellungen.</p>
+<h3>Anhänge</h3>
+<p>An eine Nachricht können Sie bis zu 5 Dateien mit je bis zu 10 MB anhängen. Möglichkeiten: Dateien in das Fenster ziehen (aus dem Explorer oder aus einem Browser), aus der Zwischenablage einfügen (<span class="key">Strg</span> + <span class="key">V</span>) oder die Schaltfläche <b>Einfügen</b> in der Nachrichtenkarte verwenden.</p>
+<table>
+  <tr><th style="width: 34%;">Dateityp</th><th>Was der Assistent sieht</th></tr>
+  <tr><td>Bilder (PNG, JPG, GIF, WebP)</td><td>Das Bild: Foto eines Whiteboards, Skizze, Screenshot. GIF und WebP erscheinen im Chat als Dateikarte, nicht als Bild.</td></tr>
+  <tr><td>PDF</td><td>Das gesamte Dokument</td></tr>
+  <tr><td>DOCX</td><td>Den Text des Dokuments</td></tr>
+  <tr><td>Textdateien (BPMN, XML, CSV, JSON, Code…)</td><td>Den Inhalt der Datei. Textdateien müssen UTF-8-codiert sein.</td></tr>
+  <tr><td>ZIP</td><td>Die enthaltenen Dateien, jede entsprechend ihrem Typ: höchstens 20 Dateien und 30 MB insgesamt (je Datei bis zu 10 MB). Ein ZIP-Archiv innerhalb eines ZIP-Archivs wird nicht entpackt.</td></tr>
+  <tr><td>XLSX, PPTX, DOC</td><td>Werden nicht gelesen. Speichern Sie den Inhalt zum Beispiel als PDF, DOCX oder CSV.</td></tr>
+</table>
+<h3>Während der Assistent arbeitet</h3>
+<ul>
+  <li>Unter den Nachrichten sehen Sie die <b>Schrittkarte</b>: was der Assistent gerade tut, wie lange es dauert und welches Ergebnis jeder Schritt hatte. In der deutschen Oberfläche zeigt die Karte kurze übersetzte Ergebnisse, zum Beispiel „Zeilen: 12“, „im EA-Modell gespeichert“, „Datei bereit“ oder „erledigt“; die vollständigen technischen Details zeigt nur die englische Oberfläche. Während der Arbeit ist die Karte aufgeklappt, nach Abschluss wird sie auf eine Zeile eingeklappt; ein Klick auf die Kopfzeile der Karte klappt sie wieder auf.</li>
+  <li>Sie können <b>weiterschreiben</b>: Die nächste Nachricht kommt in eine Warteschlange, und der Assistent berücksichtigt sie beim nächsten Schritt, ohne die Arbeit zu unterbrechen.</li>
+  <li>Die Schaltfläche <b>Abbrechen</b> beendet die Arbeit nach dem aktuellen Schritt. Ein bereits laufender Schritt (zum Beispiel das Speichern in EA) wird zu Ende geführt.</li>
+  <li>Eine Antwort umfasst höchstens <b>24 Schritte</b>. Ist der Assistent danach nicht fertig, bricht die Anwendung ab, um eine Endlosschleife zu vermeiden; setzen Sie die Arbeit mit einer neuen Nachricht fort (zum Beispiel „Mach weiter“).</li>
+</ul>
+<figure><img src="img/de/steps.png" alt="Schrittkarte des Assistenten mit den laufenden Schritten, ihrer Dauer und ihren Ergebnissen"><figcaption>Der Assistent bei der Arbeit: Liste der Schritte</figcaption></figure>
+<p><b>Was kann der Assistent?</b> Der Assistent kennt die Funktionen der Anwendung aus den Versionshinweisen. Fragen Sie ihn: „Was kannst du in dieser Anwendung?“.</p>
+
+<h2 id="s7" class="break">7. Arbeiten mit dem EA-Modell</h2>
+<p>Schreiben Sie so, wie Sie einem Kollegen schreiben würden, der EA kennt. Nennen Sie Pakete und Diagramme beim Namen. Der Assistent bezeichnet Modellobjekte mit Namen, Paket und GUID. Nachfolgend Beispiele für Anfragen.</p>
+<h3>Lesen</h3>
+<div class="prompt">Welche Pakete gibt es im Modell und wie viele Diagramme enthält jedes davon?</div>
+<div class="prompt">Beschreibe, was das Diagramm „Bestellprozess“ darstellt, und nenne die Elemente ohne Konnektoren.</div>
+<div class="prompt">Zeige das Diagramm „Anwendungsfälle Onlineshop“.</div>
+<div class="prompt">Liste die Attribute und Operationen der Klasse „Bestellung“ samt Parametern auf.</div>
+<p>Das angezeigte Diagramm erscheint im Chat als Bild. Darunter befinden sich die Schaltflächen <b>Speichern unter…</b> und <b>In voller Größe öffnen</b>.</p>
+<h3>Auswirkungsanalyse einer Änderung</h3>
+<p>Der Assistent geht vom angegebenen Element entlang der Beziehungen in die Tiefe des Modells (bis zu 6 Ebenen, in eine oder beide Richtungen, optional nur entlang ausgewählter Beziehungstypen). Für jedes betroffene Element nennt er die Beziehung, über die die Auswirkung ankommt, den Pfad vom Ausgangselement und die Diagramme, auf denen das Element liegt. Das Ergebnis erhalten Sie als Beschreibung, Bild, Word-Dokument oder Excel-Arbeitsmappe.</p>
+<div class="prompt">Was ändert sich, wenn wir die Komponente „Zahlungsabwicklung“ ändern? Prüfe 3 Ebenen in beide Richtungen und gib das Ergebnis in Excel aus.</div>
+<h3>Wo Operationen verwendet werden</h3>
+<p>Für eine Klasse, eine Komponente oder eine Schnittstelle findet der Assistent, wo ihre Operationen (Services) aufgerufen werden: in Sequenzdiagrammen (Nachrichten an das Element oder seine Lebenslinie) und Aktivitätsdiagrammen (Aktionen, die die Operation aufrufen), mit Paket und Aufrufer. Er nennt auch die Operationen, die in keinem Diagramm verwendet werden.</p>
+<div class="prompt">Wo werden die Operationen der Schnittstelle „Bestell-API“ verwendet? Welche werden nirgends verwendet?</div>
+<h3>Zeichnen</h3>
+<div class="prompt">Lege das Paket „Onlineshop“ unter dem Paket „Model“ an und zeichne darin ein Anwendungsfalldiagramm: Der Kunde durchsucht den Katalog, legt ein Produkt in den Warenkorb, gibt eine Bestellung auf und bezahlt. Füge Akteure und kurze Beschreibungen der Anwendungsfälle hinzu.</div>
+<div class="prompt">Zeichne den Prozess vom angehängten Foto als BPMN-Diagramm im Paket „Prozesse“ nach.</div>
+<div class="prompt">Entnimm dem angehängten Dokument die Anforderungen, lege sie im Paket „Anforderungen“ an und zeige sie in einem Anforderungsdiagramm.</div>
+<h3>BPMN-Teilprozesse</h3>
+<ul>
+  <li><b>Eingebettet (embedded):</b> Die Schritte des Teilprozesses sind seine Kindelemente und werden in seinem Rechteck im selben Diagramm gezeichnet.</li>
+  <li><b>Eingeklappt (collapsed):</b> Die Schritte liegen in einem separaten Diagramm, und ein Doppelklick auf den Teilprozess öffnet dieses Diagramm. Der Assistent kann einen Teilprozess (oder ein anderes Element) auch als Composite-Diagramm mit einem bestehenden Diagramm verknüpfen.</li>
+  <li>Einem bestehenden Teilprozess fügt der Assistent neue Schritte hinzu.</li>
+</ul>
+<div class="prompt">Ersetze im Prozess „Reklamationsbearbeitung“ die Aufgabe „Prüfung“ durch einen eingebetteten Teilprozess mit drei Schritten: Dokumente prüfen, Garantie prüfen, Entscheidung treffen.</div>
+<h3>Änderungen an einem bestehenden Modell</h3>
+<div class="prompt">Verschiebe die Anforderungen FR01–FR05 in das Paket „Katalog und Warenkorb“.</div>
+<div class="prompt">Färbe im Diagramm „Bestellprozess“ die vom System ausgeführten Aufgaben grün und die manuellen gelb ein.</div>
+<div class="prompt">Entferne aus dem Diagramm „Start“ die Zelle, die zum Diagramm „Archiv“ führt.</div>
+<div class="prompt">Füge ein Diagramm „Start“ mit Link-Kacheln (navigation cells) zu allen Anwendungsfalldiagrammen hinzu, vier pro Zeile.</div>
+<div class="prompt">Benenne das Diagramm „Entwurf“ in „Rückgabeprozess“ um und füge eine kurze Beschreibung hinzu.</div>
+<div class="prompt">Vergrößere den Pool „Lager“ im Diagramm „Versandprozess“, sodass alle Aufgaben hineinpassen.</div>
+<p>Der Assistent ändert auch Position und Größe eines Elements im Diagramm, ohne es zu entfernen (die Konnektoren bleiben erhalten), sowie Name, Beschreibung und Stereotyp eines bestehenden Diagramms. Ein Element kann er aus einem einzelnen Diagramm entfernen, ohne es aus dem Modell zu löschen.</p>
+<h3>Schlüsselwörter und Legenden</h3>
+<p>Der Assistent setzt <b>Schlüsselwörter</b> von Elementen (Feld Keywords in EA) und Tagged Values und erstellt eine <b>Diagrammlegende mit automatischer Einfärbung</b> wie in EA: Elemente (nach Schlüsselwort, Stereotyp, Status oder Typ) oder Konnektoren (zum Beispiel nach Stereotyp) erhalten eine Farbe aus der Legende, und die Legende zeigt Wert, Farbe und Beschriftung.</p>
+<div class="prompt">Kennzeichne die Anforderungen mit dem Schlüsselwort „MVP“ oder „später“ und füge dem Diagramm eine Legende hinzu, die sie nach diesem Schlüsselwort einfärbt.</div>
+<h3>Konnektorlinien</h3>
+<ul>
+  <li><b>Linienverlauf</b> (wie Line Style in EA): direkt, automatisch, benutzerdefiniert, orthogonal eckig, orthogonal abgerundet, Baum und lateral; für ausgewählte Konnektoren oder alle im Diagramm.</li>
+  <li><b>Route eines Konnektors:</b> Der Assistent führt die Linie durch angegebene Knickpunkte und Berührungspunkte mit den Seiten der Elemente, zum Beispiel nach einer Skizze auf einem Screenshot.</li>
+  <li><b>Ausblenden von Konnektoren</b> in einem einzelnen Diagramm (und erneutes Einblenden): Die Beziehung bleibt im Modell und in anderen Diagrammen erhalten, sodass Sie ein dichtes Diagramm entlasten, ohne Beziehungen zu löschen.</li>
+</ul>
+<div class="prompt">Stelle im Diagramm „Architektur“ alle Konnektoren auf orthogonal und blende die Abhängigkeiten zur Komponente „Anmeldung“ aus.</div>
+<h3>Paketkopie und Baseline</h3>
+<ul>
+  <li><b>Die Paketkopie</b> erstellt ein Duplikat des Pakets mit dem gesamten Inhalt.</li>
+  <li><b>Eine Baseline</b> ist eine gespeicherte Version eines Pakets in EA. Der Assistent ist angewiesen, vor dem Löschen oder einem größeren Umbau eines bestehenden Pakets eine Baseline zu erstellen. Das ist jedoch keine erzwungene Sperre: Bitten Sie bei wichtigen Paketen ausdrücklich um eine Baseline und verwenden Sie den Modus <b>ask</b>.</li>
+  <li><b>Die Wiederherstellung</b> führen Sie in Enterprise Architect durch: Klicken Sie mit der rechten Maustaste auf das Paket, wählen Sie <b>Manage Baselines</b>, markieren Sie die Baseline und verwenden Sie <b>Compare/Restore</b>. Der Assistent stellt Baselines nicht selbst wieder her, da die Wiederherstellung per Automatisierung EA zum Hängen bringt.</li>
+</ul>
+<div class="prompt">Erstelle eine Baseline des Pakets „Onlineshop“ und baue danach den Bestellprozess in zwei Teilprozesse um.</div>
+<h3>Gut zu wissen</h3>
+<ul>
+  <li><b>Der erste Aufruf von EA dauert einige bis über zehn Sekunden</b>, weil die Anwendung Enterprise Architect im Hintergrund startet und das Modell öffnet. Weitere Speicherungen und Diagrammabrufe dauern dann weniger als eine Sekunde. Nach 10 Minuten ohne Aufrufe schließt sich EA im Hintergrund und gibt die Lizenz frei. Auch das Schließen der Anwendung schließt ihre EA-Sitzung.</li>
+  <li><b>Sperren.</b> In einem Modell mit aktivierter Sicherheit sperrt der Assistent ein Objekt für die Dauer des Speicherns auf sein Konto und hebt die Sperre danach auf. Ein von einem anderen Benutzer gesperrtes Objekt ändert er nicht; die Meldung nennt, wer das Element sperrt (Konto oder Gruppe, seit wann), sein Paket und Diagramm.</li>
+  <li><b>Löschen ist endgültig.</b> Das Löschen eines Pakets löscht seinen gesamten Inhalt. Verwenden Sie bei wichtigen Modellen den Modus <b>ask</b> (Kapitel 12), lassen Sie Baselines erstellen und sichern Sie die Datenbank.</li>
+  <li><b>Teilweise Speicherung.</b> Ein Speichervorgang kann mehrere Operationen umfassen. Schlägt eine davon fehl, bleiben die vorherigen Operationen desselben Vorgangs im Modell; die Meldung nennt, was gespeichert wurde.</li>
+  <li><b>Prüfen Sie das Ergebnis.</b> Der Assistent kann sich irren: ein Foto falsch lesen, einen anderen Elementtyp wählen oder ein Diagramm unübersichtlich anordnen. Lassen Sie sich das Diagramm nach den Änderungen anzeigen und bitten Sie bei Bedarf um Korrekturen.</li>
+  <li><b>Große Diagramme</b> speichert der Assistent in mehreren Schritten. Das ist normal.</li>
+</ul>
+
+<h2 id="s8" class="break">8. Arbeiten mit dem geöffneten EA-Fenster</h2>
+<p>Wenn Sie in Enterprise Architect <b>dasselbe Modell</b> geöffnet haben, arbeitet der Assistent mit Ihrem EA-Fenster zusammen:</p>
+<ul>
+  <li><b>er weiß, was Sie geöffnet und ausgewählt haben</b>: welches Diagramm geöffnet ist und welche Elemente im Diagramm oder im Projekt-Browser ausgewählt sind. Sie können also „dieses Element“ oder „die ausgewählten Aufgaben“ schreiben,</li>
+  <li><b>er öffnet Diagramme</b> in Ihrem EA-Fenster und <b>zeigt Elemente</b> im Projekt-Browser an,</li>
+  <li><b>nach dem Speichern aktualisiert er</b> die geänderten Diagramme und Pakete in Ihrem Fenster selbst, ohne dass Sie <span class="key">F5</span> drücken müssen.</li>
+</ul>
+<div class="prompt">Beschreibe das Element, das ich ausgewählt habe, und zeige, in welchen Diagrammen es noch vorkommt.</div>
+<div class="prompt">Öffne in meinem EA das Diagramm „Bestellprozess“ und zeige im Browser das Paket „Anforderungen“ an.</div>
+<p>Nur wenn das EA-Fenster nicht geöffnet ist oder ein anderes Modell zeigt, arbeitet der Assistent ohne diese Zusammenarbeit, und Sie sehen die Änderungen nach dem Aktualisieren des Pakets in EA (<span class="key">F5</span>). Anmeldedaten aus der Verbindung Ihres EA-Fensters (Konto, Passwort) gehen nie an das Modell.</p>
+
+<h2 id="s9" class="break">9. Dokumente (Word, Excel, PNG, Confluence)</h2>
+<p>Der Assistent erstellt Dokumente aus den Inhalten des Modells und der Unterhaltung. Die fertige Datei erscheint im Chat als Karte mit Schaltflächen.</p>
+<table>
+  <tr><th style="width: 22%;">Art</th><th>Inhalt</th><th style="width: 30%;">Schaltflächen im Chat</th></tr>
+  <tr><td>Word (DOCX)</td><td>Überschriften, Absätze, Listen, Tabellen, Diagramme aus EA und zuvor in der Unterhaltung gezeichnete Bilder</td><td><b>Öffnen</b>, <b>Speichern unter…</b></td></tr>
+  <tr><td>Excel (XLSX)</td><td>Mehrere Tabellenblätter, Kopfzeilen mit Filter und fixierter erster Zeile, Zahlen als Zahlen; zum Beispiel eine Elementliste, eine Matrix, das Ergebnis einer Auswirkungsanalyse</td><td><b>Öffnen</b>, <b>Speichern unter…</b></td></tr>
+  <tr><td>Bild (PNG)</td><td>Eine Matrix (zum Beispiel aus Anwendungsfällen und Anforderungen), Tabelle, Grafik, Schema. Der Assistent sieht das Ergebnis und kann es korrigieren.</td><td><b>Speichern unter…</b>, <b>In voller Größe öffnen</b></td></tr>
+  <tr><td>Confluence-Seite</td><td>Seitencode für den Quelltext-Editor sowie Diagramme und Bilder als Dateien</td><td><b>Seitencode kopieren</b>, <b>Bilderordner öffnen</b>, <b>Speichern unter…</b></td></tr>
+</table>
+<div class="prompt">Erstelle ein Word-Dokument mit einer Beschreibung des Pakets „Onlineshop“: Liste der Anwendungsfälle mit Beschreibungen und das Anwendungsfalldiagramm.</div>
+<div class="prompt">Zeichne eine Matrix aus Anwendungsfällen und Anforderungen aus dem Paket „Onlineshop“ als Bild.</div>
+<h3>Confluence-Seiten</h3>
+<p>Der Assistent erstellt eine Seite im Format des Confluence-Quelltext-Editors (Storage-XHTML): Überschriften, Tabellen, Listen, Inhaltsverzeichnis, Panels (Info, Hinweis, Warnung, Tipp, aufklappbarer Abschnitt), Status, Jira-Vorgänge, Erwähnungen von Personen und Codeblöcke. Diagramme aus EA und Bilder werden als Anhänge beigefügt.</p>
+<p><b>Manuelles Einfügen</b> (ohne Confluence-Einstellungen):</p>
+<ol>
+  <li>Klicken Sie auf der Seitenkarte auf <b>Seitencode kopieren</b>.</li>
+  <li>Öffnen Sie in Confluence die Seite zum Bearbeiten und den Quelltext-Editor (Source Editor), fügen Sie den Code ein und bestätigen Sie.</li>
+  <li>Klicken Sie auf <b>Bilderordner öffnen</b> und fügen Sie die Bilder der Seite als Anhänge hinzu.</li>
+</ol>
+<p><b>Veröffentlichung durch den Assistenten.</b> Nachdem Sie die Karte <b>„6. Confluence“</b> ausgefüllt haben, veröffentlicht der Assistent die Seite auf Ihre Bitte über die REST-API: Er legt eine neue Seite unter der übergeordneten Seite an oder aktualisiert eine bestehende (angegeben per ID oder Titel). Bilder werden als Anhänge hochgeladen; bestehende erhalten eine neue Version. Diagramme werden bei jeder Veröffentlichung neu aus EA exportiert, sodass eine erneute Veröffentlichung die Seite nach Änderungen im Modell aktualisiert. Der Assistent merkt sich die Seiten, die er veröffentlicht hat. Die Verbindung zu Confluence läuft ausschließlich über HTTPS.</p>
+<div class="note"><b>Eine Veröffentlichung erfordert immer eine Freigabe</b>, auch im Modus <b>auto</b>. Bevor die Seite an Confluence gesendet wird, erscheint ein Panel mit den Schaltflächen <b>Freigeben</b> und <b>Ablehnen</b>. Gibt es im Bereich bereits eine Seite mit demselben Titel oder der angegebenen ID, sagt das Panel ausdrücklich, dass die Veröffentlichung ihren Inhalt <b>ERSETZT</b>; die vorherige Version bleibt im Seitenverlauf erhalten.</div>
+<table>
+  <tr><th style="width: 30%;">Feld der Karte „6. Confluence“</th><th>Was einzutragen ist</th></tr>
+  <tr><td>Confluence-Adresse</td><td>Auf Firmenservern (Data Center) zum Beispiel <code>https://confluence.firma.de</code>; in Confluence Cloud <code>https://firma.atlassian.net/wiki</code>. Die Adresse muss mit <code>https://</code> beginnen.</td></tr>
+  <tr><td>E-Mail (nur Cloud)</td><td>Für Confluence Cloud: die E-Mail des Kontos. Für Data Center leer lassen.</td></tr>
+  <tr><td>Token</td><td>Data Center: persönliches Zugriffstoken (Profil → Personal Access Tokens). Cloud: API-Token des Kontos.</td></tr>
+  <tr><td>Bereich (Schlüssel)</td><td>Der Bereichsschlüssel, zum Beispiel <code>ARCH</code></td></tr>
+  <tr><td>Übergeordnete Seite (ID)</td><td>Optional: die ID der Seite, unter der neue Seiten angelegt werden</td></tr>
+</table>
+<p>Speichern Sie die Karte mit der Schaltfläche <b>Speichern und Confluence-Verbindung prüfen</b>.</p>
+<div class="prompt">Erstelle eine Confluence-Seite mit einer Beschreibung des Prozesses „Reklamationsbearbeitung“ samt Diagramm und veröffentliche sie im Bereich.</div>
+
+<h2 id="s10" class="break">10. Dokumentvorlagen</h2>
+<p>Eine Vorlage sagt dem Assistenten, wie er ein Dokument aufbauen soll: welche Abschnitte es haben soll und was darin stehen soll. Der Assistent füllt sie mit Inhalten aus dem Modell und der Unterhaltung und erstellt daraus eine Confluence-Seite oder ein Word-Dokument.</p>
+<p>Nach der Installation stehen folgende Standardvorlagen in der gewählten Sprache zur Verfügung:</p>
+<ul>
+  <li><b>Vorläufige Machbarkeitsanalyse</b>,</li>
+  <li><b>BRD - Geschäftsanforderungen</b>,</li>
+  <li><b>Beschreibung der Systemänderungen</b>,</li>
+  <li><b>Prozessbeschreibung</b>.</li>
+</ul>
+<h3>Die Ansicht „Dokumentvorlagen“</h3>
+<ul>
+  <li>Liste der Vorlagen mit kurzer Beschreibung.</li>
+  <li><b>Verwenden</b> fügt im Chat eine Anfrage ein, nach der Vorlage ein Dokument zu erstellen (standardmäßig eine Confluence-Seite). Ergänzen Sie sie, zum Beispiel um den Namen eines Pakets oder Prozesses, und senden Sie sie. Möchten Sie stattdessen ein Word-Dokument, schreiben Sie das in die Anfrage.</li>
+  <li><b>Bearbeiten</b> öffnet die Vorlagendatei im Windows-Editor.</li>
+  <li><b>Vorlagenordner öffnen</b> öffnet den Ordner <code>templates</code> im Explorer (ältere Installationen verwenden möglicherweise noch den Ordner <code>szablony</code>).</li>
+</ul>
+<h3>Eigene Vorlagen</h3>
+<p>Vorlagen sind Markdown-Dateien mit Hinweisen für den Assistenten. Die erste Zeile hat die Form <code>&gt; Vorlage: Beschreibung</code>; die Beschreibung erscheint in der Liste. Weitere Zeilen, die mit <code>&gt;</code> beginnen, sind Hinweise für den Assistenten. Sie können bestehende Vorlagen ändern, eigene Dateien in den Vorlagenordner legen oder den Assistenten bitten, eine Vorlage aus einem Beispieldokument zu erstellen:</p>
+<div class="prompt">Erstelle eine Vorlage aus dem angehängten Dokument: Behalte die Gliederung der Abschnitte bei und ergänze, was in jedem stehen soll.</div>
+<p>Speichert oder überschreibt der Assistent eine Vorlage, fragt er in den Modi <b>ask</b> und <b>plan</b> vorher nach Ihrer Freigabe („Dokumentvorlage „…“ überschreiben“).</p>
+
+<h2 id="s11">11. Gedächtnis des Assistenten</h2>
+<p>Der Assistent merkt sich Festlegungen über Unterhaltungen hinweg: Modellierungskonventionen, Ihre Präferenzen, Korrekturen und Fakten zu Projekten. Er kennt sie in jeder neuen Unterhaltung. Eine Festlegung zum selben Thema wird aktualisiert statt verdoppelt, veraltete werden entfernt.</p>
+<p>Der Assistent speichert Festlegungen selbst, wenn er etwas Dauerhaftes erfährt (und sagt das in einem Satz), oder auf Ihre Bitte, zum Beispiel mit „merk dir…“:</p>
+<div class="prompt">Merk dir: Anforderungen nummerieren wir FR01, FR02… und legen sie im Paket „Anforderungen“ ab.</div>
+<div class="prompt">Merk dir, dass wir in BPMN-Diagrammen Systemaufgaben grün einfärben.</div>
+<p>In den Modi <b>ask</b> und <b>plan</b> fragt die Anwendung vor dem Speichern einer Festlegung nach Ihrer Freigabe („Notiz im Gedächtnis des Assistenten speichern“). Das Speichern unterbricht die Arbeit des Assistenten an der aktuellen Aufgabe nicht. Der gesamte Inhalt des Gedächtnisses geht mit jeder Anfrage an Anthropic (Kapitel 14): Speichern Sie dort keine Passwörter oder vertraulichen Daten.</p>
+<h3>Die Ansicht „Gedächtnis des Assistenten“</h3>
+<ul>
+  <li>Liste der Festlegungen mit Datum.</li>
+  <li><b>Entfernen</b> löscht die ausgewählte Festlegung.</li>
+  <li><b>Gedächtnisordner öffnen</b> öffnet den Ordner <code>memory</code> im Explorer. Die Festlegungen sind darin Markdown-Dateien, die Übersicht steht in der Datei <code>MEMORY.md</code>.</li>
+</ul>
+
+<h2 id="s12" class="break">12. Freigabe von Änderungen und Änderungsprotokoll</h2>
+<p>Den Modus stellen Sie in der Ansicht <b>Einstellungen</b> auf Karte 4 ein. Er bestimmt, ob und wann die Anwendung vor dem Speichern in EA um Freigabe bittet. Das Lesen des Modells und das Anzeigen von Diagrammen erfordern nie eine Freigabe. Der aktuelle Modus ist auch in der Nachrichtenkarte zu sehen.</p>
+<table>
+  <tr><th style="width: 12%;">Modus</th><th style="width: 44%;">Wann er um Freigabe bittet</th><th>Für wen</th></tr>
+  <tr><td><b>ask</b></td><td>Vor jedem Speichern</td><td>Arbeit an einem wichtigen Modell; volle Kontrolle</td></tr>
+  <tr><td><b>plan</b></td><td>Einmal, vor dem ersten Speichern in einer Antwort des Assistenten; weitere Speicherungen dieser Antwort erfolgen ohne Rückfrage. <b>Ausnahme:</b> Löschen und Verschieben von Objekten (Elementen, Diagrammen, Konnektoren, Paketen) sowie das Kopieren von Paketen fragen immer erneut, und das Panel nennt die Namen der betroffenen Objekte.</td><td>Größere Aufgaben, bei denen das erste Speichern die Richtung zeigt</td></tr>
+  <tr><td><b>auto</b></td><td>Nie (die Veröffentlichung in Confluence fragt weiterhin)</td><td>Testmodell oder Arbeit, die sich leicht rückgängig machen lässt</td></tr>
+</table>
+<p>Wenn eine Freigabe nötig ist, erscheint über dem Nachrichtenfeld das Panel <b>„Claude möchte Änderungen im Modell speichern“</b> mit einer Beschreibung der Änderungen (wie viele Pakete, Diagramme, Elemente, Konnektoren, was gelöscht wird) und den Schaltflächen <b>Freigeben</b> und <b>Ablehnen</b>. Beim Löschen, Verschieben und Kopieren nennt es die Objekte mit Namen, zum Beispiel „LÖSCHEN: Paket „Archiv““ oder „KOPIE des Pakets „Onlineshop“ mit dem gesamten Inhalt“. Ein abgelehntes Speichern ändert das Modell nicht; der Assistent erhält die Information über die Ablehnung und kann etwas anderes vorschlagen.</p>
+<figure><img src="img/de/approval.png" alt="Freigabepanel „Claude möchte Änderungen im Modell speichern“ mit der Beschreibung der Änderungen und den Schaltflächen Freigeben und Ablehnen"><figcaption>Freigabepanel für eine Änderung am Modell</figcaption></figure>
+<p>Über dasselbe Panel laufen in den Modi <b>ask</b> und <b>plan</b> auch das Speichern einer Festlegung im Gedächtnis des Assistenten (Kapitel 11) und das Überschreiben einer Dokumentvorlage (Kapitel 10). Die Veröffentlichung in Confluence fragt in jedem Modus (Kapitel 9).</p>
+<h3>Änderungsprotokoll</h3>
+<p>Jede Speicherung des Assistenten im EA-Modell, auch eine fehlgeschlagene, wird im Änderungsprotokoll erfasst (Datei <code>audit_log.jsonl</code> im Benutzerdatenordner). Nicht erfasst werden Speicherungen, die Sie abgelehnt haben, und Operationen, die die Anwendung nicht zum Speichern zugelassen hat; auch Gedächtnis, Vorlagen und Veröffentlichungen in Confluence stehen nicht im Protokoll.</p>
+<p>Die Ansicht <b>Änderungsprotokoll</b> (Symbol „Änderungsprotokoll des Modells“) zeigt die letzten 200 Einträge, die neuesten zuerst: Ergebnis (OK oder FEHLER), Zeit, EA-Konto und Datenbank, die Beschreibung der Änderungen und gegebenenfalls den Fehlertext. Die Schaltfläche <b>Nach Excel exportieren</b> speichert das gesamte Protokoll als XLSX-Arbeitsmappe (Spalten: Zeit, Ergebnis, EA-Konto, Datenbank, Modus, Änderungen, Erstellt, Fehler), zum Beispiel für eine Durchsicht der Änderungen im Team. <b>Protokolldatei öffnen</b> öffnet die Protokolldatei im Windows-Editor.</p>
+
+<h2 id="s13">13. Unterhaltungen</h2>
+<ul>
+  <li><b>Neue Unterhaltung:</b> die Schaltfläche <b>+</b> über der Liste der Unterhaltungen. Jede Unterhaltung wird gespeichert und ist nach einem Neustart der Anwendung wieder da.</li>
+  <li><b>Gruppen:</b> Die Unterhaltungen sind in „Heute“, „Gestern“, „Letzte 7 Tage“ und „Älter“ gruppiert.</li>
+  <li><b>Suche:</b> Das Feld „Unterhaltungen durchsuchen…“ filtert die Liste nach Titel und nach Nachrichteninhalt.</li>
+  <li><b>Umbenennen:</b> Klicken Sie auf den Stift neben der ausgewählten Unterhaltung, geben Sie einen Namen ein; <span class="key">Eingabe</span> speichert, <span class="key">Esc</span> bricht ab.</li>
+  <li><b>Löschen:</b> In der Anwendung lassen sich Unterhaltungen nicht löschen. Bei Bedarf löschen Sie die Datei der Unterhaltung im Ordner <code>history</code> des Benutzerdatenordners (Kapitel 14).</li>
+  <li><b>Mehrere Unterhaltungen gleichzeitig:</b> Während der Assistent arbeitet, können Sie eine neue Unterhaltung beginnen oder zu einer anderen wechseln. Die begonnene Arbeit läuft im Hintergrund weiter.</li>
+</ul>
+<table>
+  <tr><th style="width: 30%;">Punkt neben einer Unterhaltung</th><th>Bedeutung</th></tr>
+  <tr><td style="color: #d97706;"><b>● orange</b></td><td>Der Assistent arbeitet in dieser Unterhaltung (oder wartet auf Ihre Freigabe zum Speichern)</td></tr>
+  <tr><td style="color: #1e7a3e;"><b>● grün</b></td><td>Der Assistent hat die Arbeit im Hintergrund beendet, und Sie haben sich das Ergebnis noch nicht angesehen</td></tr>
+</table>
+<p>Speicherungen in EA aus verschiedenen Unterhaltungen werden nacheinander ausgeführt, nicht gleichzeitig. Wenn der Chat nach oben gescrollt ist, bringt Sie der Kreis mit dem Pfeil über dem Nachrichtenfeld zum Ende der Unterhaltung.</p>
+
+<h2 id="s14" class="break">14. Daten, Sicherheit und Datenschutz</h2>
+<h3>Wo Ihre Daten liegen</h3>
+<table>
+  <tr><th style="width: 36%;">Was</th><th>Wo</th></tr>
+  <tr><td>Programm</td><td><code>%LOCALAPPDATA%\Programs\Loonar Compass</code> (Installation „Nur für mich“) oder <code>%ProgramFiles%\Loonar Compass</code> (Installation für alle Benutzer): Anwendung, Lizenz, Versionshinweise, <code>THIRD-PARTY-NOTICES.txt</code> und das Benutzerhandbuch als PDF</td></tr>
+  <tr><td>Benutzerdatenordner</td><td><code>%APPDATA%\Loonar Compass</code>, für jeden Benutzer des Computers getrennt. Er enthält: <code>app.properties</code> (Einstellungen, ohne Passwörter), <code>history\</code> (Unterhaltungen), <code>attachments\</code> (Anhänge sowie die erstellten Word-, Excel-, PNG- und Confluence-Dateien, mit den Bilderordnern der Seiten <code>&lt;Seite&gt;_images</code>), <code>memory\</code> (Festlegungen, Übersicht <code>MEMORY.md</code>), <code>templates\</code> (Dokumentvorlagen), <code>audit_log.jsonl</code> (Änderungsprotokoll) und <code>confluence_pages.json</code> (veröffentlichte Confluence-Seiten).</td></tr>
+  <tr><td>Claude-API-Schlüssel, Passwort des EA-Kontos, Datenbankpasswort, Confluence-Token</td><td>Windows-Anmeldeinformationsverwaltung (Einträge „loonar-compass“), vom System verschlüsselt. In <code>app.properties</code> steht nichts Geheimes.</td></tr>
+  <tr><td>Beschreibung eines unerwarteten Fehlers</td><td><code>%TEMP%\loonar-compass-crash.log</code> (entsteht nur nach einem solchen Fehler)</td></tr>
+</table>
+<p>Der Unterhaltungsverlauf wird als normale Dateien in Ihrem Windows-Profil gespeichert. Er ist durch Ihr Windows-Konto geschützt, wird von der Anwendung aber nicht zusätzlich verschlüsselt. Schützen Sie den Zugang zu Ihrem Konto und geben Sie den Datenordner nicht weiter.</p>
+<h3>Was an Anthropic gesendet wird</h3>
+<p>Damit der Assistent antworten kann, sendet die Anwendung mit Ihrem Schlüssel bei jeder Anfrage an den Dienst Claude (Anthropic): die Unterhaltung, die angehängten Dateien, <b>den gesamten Inhalt des Gedächtnisses des Assistenten</b>, die Liste der Vorlagen mit ihren Beschreibungen sowie das, was der Assistent in der jeweiligen Unterhaltung aus dem Modell gelesen hat, also die Ergebnisse seiner Datenbankabfragen (Namen und Beschreibungen von Paketen, Elementen, Diagrammen) und Bilder der angezeigten Diagramme. Es wird nicht die gesamte Datenbank gesendet, sondern nur das, wonach der Assistent gefragt hat. Den Inhalt einer Vorlage erhält Claude, wenn der Assistent sie verwendet, und nach einem Sprachwechsel gehen auch die zu übersetzenden Inhalte von Gedächtnis und Vorlagen an Claude.</p>
+<p>Die Daten gehen mit Ihrem API-Schlüssel direkt an Anthropic. Loonar erhält sie nicht, und die Anwendung erfasst keine Nutzungsdaten (keine Telemetrie).</p>
+<div class="note"><b>Bevor Sie die Anwendung mit einem Firmenmodell verwenden</b>, prüfen Sie, ob die Regeln Ihrer Organisation und die Verträge mit Ihren Kunden die Weitergabe von Modellinhalten an einen externen KI-Dienst erlauben und welche Bedingungen für die Datenverarbeitung in Ihrem Anthropic-Konto gelten. Wie Loonar mit Fehlermeldungen und Newsletter-Anmeldungen umgeht, beschreibt die Datenschutzerklärung: <code>https://loonar.eu/de/privacy/</code>.</div>
+<h3>Berechtigungen des Assistenten</h3>
+<ul>
+  <li>Die Datenbank liest der Assistent in einer schreibgeschützten Sitzung, ausschließlich mit SELECT- und WITH-Abfragen, mit einem Zeitlimit für Abfragen und ohne Serverfunktionen, die Dateien lesen oder andere Sitzungen beeinflussen. Alle Änderungen laufen über Enterprise Architect, mit dem in den Einstellungen angegebenen Konto, sodass für sie die Berechtigungen und Sperren dieses Kontos gelten.</li>
+  <li>In Confluence arbeitet der Assistent mit den Berechtigungen des Tokens von Karte 6 und veröffentlicht nur nach Ihrer Freigabe.</li>
+  <li>Der Assistent hat keinen Zugriff auf Dateien auf der Festplatte außer denen, die Sie ihm selbst anhängen, und außer seinen Gedächtnis- und Vorlagenordnern. Bilder, die der Assistent zeichnet, können keine Dateien von der Festplatte oder aus dem Netz laden.</li>
+  <li>Inhalte von Anhängen, Dokumenten, Seiten und dem Modell behandelt der Assistent als Daten, nicht als Anweisungen: Er führt dort gefundene Anweisungen nicht aus und sendet keine Daten an Stellen, die solche Inhalte nennen.</li>
+  <li>Anmeldedaten aus der Verbindung des geöffneten EA-Fensters gehen nie an das Modell.</li>
+</ul>
+<h3>Netzwerk und Verschlüsselung</h3>
+<ul>
+  <li>Die Claude-API und Confluence werden ausschließlich über HTTPS angesprochen.</li>
+  <li>Die Verbindung zur Modelldatenbank unterstützt TLS (Karte 2, Kapitel 5). Administratoren können TLS für alle Clients mit <code>hostssl</code>-Einträgen in <code>pg_hba.conf</code> erzwingen. Die Verbindung von Enterprise Architect selbst zur Datenbank richtet sich nach den Einstellungen in EA.</li>
+  <li>Die Anwendung verwendet den Proxy aus den Windows-Interneteinstellungen sowie die Umgebungsvariablen <code>HTTPS_PROXY</code> und <code>ALL_PROXY</code>. Proxy-Skripte (PAC) und die NTLM-/Kerberos-Authentifizierung am Proxy werden nicht unterstützt.</li>
+  <li>Vorübergehende Fehler der Claude-API (Überlastung 529 oder andere 5xx-Fehler, Anfragelimit 429) wiederholt die Anwendung automatisch.</li>
+</ul>
+
+<h2 id="s15">15. Fehlerbehebung</h2>
+<table>
+  <tr><th style="width: 38%;">Symptom</th><th>Was zu tun ist</th></tr>
+  <tr><td>Windows SmartScreen warnt vor dem Installationsprogramm („Der Computer wurde durch Windows geschützt“)</td><td>Das Installationsprogramm ist noch nicht digital signiert. Klicken Sie auf „Weitere Informationen“ und dann auf „Trotzdem ausführen“.</td></tr>
+  <tr><td>Windows blockiert das Installationsprogramm ohne Möglichkeit, es zu starten</td><td>Die Intelligente App-Steuerung (Smart App Control) ist aktiviert und blockiert nicht signierte Anwendungen. Warten Sie auf die digital signierte Version.</td></tr>
+  <tr><td>Die Anwendung öffnet sich in der Ansicht „Einstellungen“</td><td>Es fehlen Einstellungen, ein Passwort oder ein Schlüssel; die Statuszeile nennt, was zu ergänzen ist. Füllen Sie die Karten aus und speichern Sie jede mit ihrer Schaltfläche „Speichern und … prüfen“.</td></tr>
+  <tr><td>„Die Einstellungsdatei … enthält einen Fehler“</td><td>Die Meldung nennt den fehlerhaften Wert. Korrigieren Sie ihn auf der entsprechenden Karte und speichern Sie die Karte erneut.</td></tr>
+  <tr><td>„Das Programm ist auf einen unerwarteten Fehler gestoßen und muss beendet werden“</td><td>Ihre Unterhaltungen und Einstellungen sind gespeichert. Melden Sie das Problem (Ansicht „Fehler melden“ oder mariusz@loonar.eu) und hängen Sie die Datei <code>%TEMP%\loonar-compass-crash.log</code> an.</td></tr>
+  <tr><td>„Die Claude-API hat den API-Schlüssel abgelehnt (401)“</td><td>Der Schlüssel ist falsch oder wurde widerrufen. Fügen Sie auf Karte 1 den aktuellen Schlüssel aus der Anthropic Console ein.</td></tr>
+  <tr><td>„… mit einer Antwort zurückgegeben, die nicht von der API stammt (möglicherweise blockiert ein Proxy oder eine Firewall api.anthropic.com)“</td><td>Ein Proxy oder eine Firewall zwischen Ihrem Computer und dem Internet blockiert die Verbindung. Bitten Sie Ihre IT-Abteilung, <code>api.anthropic.com</code> freizugeben. Proxy-Skripte (PAC) und NTLM-/Kerberos-Authentifizierung werden nicht unterstützt; ein Proxy lässt sich auch mit <code>HTTPS_PROXY</code> angeben.</td></tr>
+  <tr><td>„Das Anfragelimit der Claude-API ist erreicht (429)“ oder „Die Claude-API ist überlastet oder vorübergehend nicht verfügbar“</td><td>Die Anwendung wiederholt solche Anfragen bereits automatisch. Bleibt der Fehler, warten Sie einen Moment und senden Sie die Nachricht erneut.</td></tr>
+  <tr><td>Datenbanktest: keine Verbindung</td><td>Prüfen Sie Server, Port, Datenbankname, Konto und Passwort sowie, ob der PostgreSQL-Server Verbindungen von diesem Computer annimmt.</td></tr>
+  <tr><td>„Die Verbindung ist NICHT verschlüsselt: Der Server bietet kein TLS an.“ oder keine Verbindung bei der Einstellung „Erforderlich“</td><td>Der Datenbankserver bietet kein TLS an. Bitten Sie den Datenbankadministrator, TLS zu aktivieren, oder wählen Sie „Bevorzugt“ (die Verbindung ist dann nicht verschlüsselt).</td></tr>
+  <tr><td>Die Zertifikatsprüfung schlägt fehl („Erforderlich, mit Zertifikatsprüfung“)</td><td>Das Serverzertifikat (oder das Zertifikat der ausstellenden Stelle) muss im Windows-Zertifikatspeicher liegen, und der Name im Feld „Server“ muss mit dem Namen im Zertifikat übereinstimmen. Bitten Sie den Administrator um das Zertifikat oder wählen Sie „Erforderlich“ (ohne Zertifikatsprüfung).</td></tr>
+  <tr><td>Der Datenbanktest warnt, dass das Konto ein Superuser ist</td><td>Superuser-Rechte sind nicht nötig. Bitten Sie den Administrator um ein normales Konto mit Lese- und Schreibrechten auf die Tabellen des Modells: Der Assistent liest die Datenbank nur, aber Enterprise Architect speichert die Änderungen mit demselben Konto.</td></tr>
+  <tr><td>„Das Datenbankpasswort darf kein Semikolon (;) enthalten“</td><td>Legen Sie für das Datenbankkonto ein Passwort ohne Semikolon fest: Enterprise Architect kann es sonst nicht in seiner Verbindungszeichenfolge übergeben.</td></tr>
+  <tr><td>„EA hat nicht innerhalb von … s geantwortet“</td><td>Meist ein falsches Konto oder Passwort des Modellbenutzers (EA wartet dann an einem unsichtbaren Anmeldefenster), falsche Datenbankdaten oder keine freie Lizenz. Korrigieren Sie die Daten auf den Karten 2 und 3 und verwenden Sie „Speichern und EA-Anmeldung prüfen“.</td></tr>
+  <tr><td>Das erste Speichern oder das erste Diagramm dauert lange</td><td>Das ist der Start von Enterprise Architect im Hintergrund (einige bis über zehn Sekunden). Weitere Aufrufe sind schnell.</td></tr>
+  <tr><td>„Die Antwort des Modells wurde beim Limit von … Tokens abgeschnitten“</td><td>Erhöhen Sie „Max. Tokens“ auf Karte 1 oder bitten Sie darum, die Aufgabe in kleineren Teilen zu erledigen.</td></tr>
+  <tr><td>„Der Assistent hat 24 Schritte ausgeführt und ist nicht fertig geworden“</td><td>Die Anwendung hat die Antwort abgebrochen, um eine Endlosschleife zu vermeiden. Setzen Sie die Arbeit mit einer neuen Nachricht fort, zum Beispiel „Mach weiter“, oder teilen Sie die Aufgabe auf.</td></tr>
+  <tr><td>Änderungen sind in Enterprise Architect nicht zu sehen</td><td>Ist in EA dasselbe Modell geöffnet, aktualisiert der Assistent es selbst. Andernfalls aktualisieren Sie das Paket im Projekt-Browser (<span class="key">F5</span>) oder öffnen das Diagramm erneut.</td></tr>
+  <tr><td>„Objekt kann nicht gesperrt werden“</td><td>Das Objekt ist von einem anderen Benutzer des Modells gesperrt; die Meldung nennt, von wem. Heben Sie die Sperre in EA auf oder bitten Sie ihren Inhaber darum.</td></tr>
+  <tr><td>Orangefarbenes „!“ auf den Symbolen „Einstellungen“, „Gedächtnis des Assistenten“, „Dokumentvorlagen“</td><td>Nach einem Sprachwechsel wartet die Übersetzung auf eine Verbindung zu Claude. Prüfen Sie den API-Schlüssel auf Karte 1 und klicken Sie auf Karte 4 auf „Jetzt übersetzen“.</td></tr>
+  <tr><td>Die Veröffentlichung in Confluence schlägt fehl</td><td>Prüfen Sie Karte 6 mit der Schaltfläche „Speichern und Confluence-Verbindung prüfen“: Adresse (mit <code>https://</code>), Token, Bereichsschlüssel und bei Cloud auch die E-Mail. Sie können die Seite auch manuell mit der Schaltfläche „Seitencode kopieren“ einfügen.</td></tr>
+  <tr><td>Nach einer Baseline muss zu einer früheren Version des Pakets zurückgekehrt werden</td><td>In EA: Rechtsklick auf das Paket → Manage Baselines → Compare/Restore.</td></tr>
+  <tr><td>Der Assistent behauptet, etwas nicht zu können</td><td>Fragen Sie: „Was kannst du in dieser Anwendung?“. Steht die Funktion auf der Liste in der Ansicht „Versionshinweise“, sagen Sie ihm das ausdrücklich und bitten Sie um einen erneuten Versuch.</td></tr>
+  <tr><td>Dateien lassen sich nicht in das Fenster ziehen</td><td>Die Anwendung wurde als Administrator gestartet. Schließen Sie sie und starten Sie sie über die normale Verknüpfung.</td></tr>
+</table>
+
+<h2 id="s16" class="break">16. Fehlermeldungen und Neuigkeiten</h2>
+<h3>Fehler melden</h3>
+<ol>
+  <li>Klicken Sie in der Navigationsleiste auf das Symbol <b>Fehler melden</b>.</li>
+  <li>Geben Sie Betreff und Beschreibung ein: was Sie getan haben, was Sie erwartet haben, was passiert ist. Die Beschreibung ist erforderlich; Sie können darin den Fehlertext aus dem Chat einfügen.</li>
+  <li>Fügen Sie Bilder hinzu, zum Beispiel Screenshots: Ziehen Sie sie in das Fenster, fügen Sie sie aus der Zwischenablage ein (<span class="key">Strg</span> + <span class="key">V</span>) oder wählen Sie sie mit <b>+ Bild hinzufügen</b> von der Festplatte. Hinzugefügte Bilder werden als Miniaturansichten angezeigt; zusammen dürfen sie höchstens 15 MB groß sein.</li>
+  <li>Geben Sie optional die E-Mail-Adresse an, an die ich antworten soll. Die Option „Technische Informationen anhängen“ (Anwendungsversion, System, Modell, Freigabemodus, letzte Meldung; ohne Passwörter und Schlüssel) ist standardmäßig aktiviert; Sie können sie abwählen.</li>
+  <li>Klicken Sie auf <b>Meldung senden</b>. Im Windows-E-Mail-Programm öffnet sich eine fertige Nachricht an den Autor (mariusz@loonar.eu) mit den Bildern als Anhängen. Prüfen Sie sie und senden Sie sie.</li>
+</ol>
+<p>Ein Hinweis im Formular erklärt, wofür die Meldung verwendet wird (nur für die Antwort und die Verbesserung der Anwendung, Aufbewahrung bis zu 2 Jahre nach Abschluss der Angelegenheit), mit einem Link zur Datenschutzerklärung. Entfernen Sie vor dem Senden personenbezogene und vertrauliche Daten aus den Screenshots.</p>
+<p>Die Anwendung legt für das E-Mail-Programm temporäre Kopien der Bilder an und löscht sie, sobald das E-Mail-Programm sie übernommen hat. Nimmt das E-Mail-Programm keine Anhänge von anderen Anwendungen an, öffnet sich eine Nachricht ohne Bilder sowie der Ordner mit den Bildern: Ziehen Sie sie in die Nachricht. Nur in diesem Fall bleiben die Kopien im Ordner.</p>
+<h3>Neue Versionen (Newsletter)</h3>
+<p>Geben Sie auf der Karte <b>„5. Neue Versionen (Newsletter)“</b> in den Einstellungen Ihre E-Mail-Adresse ein, aktivieren Sie das Kontrollkästchen „Ich möchte über neue Versionen informiert werden“ und klicken Sie auf <b>Speichern</b>. Sie erhalten dann eine kurze E-Mail, wenn eine neue Version erscheint, mit einer Beschreibung der Änderungen und der Angabe, wo Sie sie herunterladen können; keine Werbung. Ihre Wahl wird in den Einstellungen gespeichert, An- und Abmeldung gehen als Nachricht aus dem E-Mail-Programm an den Autor.</p>
+<p>Ihre Adresse wird nur für Informationen zu neuen Versionen verwendet, auf Grundlage Ihrer Einwilligung, bis Sie diese widerrufen: Entfernen Sie das Häkchen und speichern Sie, oder schreiben Sie eine E-Mail an mariusz@loonar.eu. Verantwortlicher ist Loonar Mariusz Głowacki; Einzelheiten stehen in der Datenschutzerklärung, die auf der Karte verlinkt ist.</p>
+
+<h2 id="s17">17. Aktualisierung und Deinstallation</h2>
+<p><b>Aktualisierung.</b> Schließen Sie die Anwendung und starten Sie das Installationsprogramm der neueren Version. Der Installationsassistent zeigt die Seite „Neu in Version …“ mit den Änderungen seit der installierten Version, übernimmt die Installationsart und den Ordner der bestehenden Installation und behält Ihre Einstellungen, den Unterhaltungsverlauf, die Anhänge, das Gedächtnis, die Vorlagen und das Änderungsprotokoll. Zur Aktualisierung von einer Version vor 0.3 siehe Kapitel 3.</p>
+<p><b>Schließen der Anwendung.</b> Das Schließen des Fensters schließt auch die von der Anwendung im Hintergrund gestartete Enterprise-Architect-Sitzung, sodass die EA-Lizenz sofort freigegeben wird.</p>
+<p><b>Deinstallation.</b> Schließen Sie die Anwendung. Verwenden Sie die Verknüpfung „Loonar Compass deinstallieren“ im Startmenü oder den Eintrag „Loonar Compass“ unter <b>Einstellungen → Apps → Installierte Apps</b>. Bei einer Installation für alle Benutzer fragt Windows nach Administratorrechten. Das Deinstallationsprogramm entfernt die Programmdateien, die Verknüpfungen und den Systemeintrag und zeigt den Fortschritt in einem Balken an. Ihre Daten bleiben erhalten, es sei denn, Sie wählen:</p>
+<ul>
+  <li>„Einstellungen, Unterhaltungen, Anhänge, Gedächtnis des Assistenten, Dokumentvorlagen und Änderungsprotokoll entfernen“: Dabei wird der gesamte Benutzerdatenordner <code>%APPDATA%\Loonar Compass</code> gelöscht,</li>
+  <li>„API-Schlüssel, Passwörter und Tokens aus der Anmeldeinformationsverwaltung entfernen“: alle Geheimnisse der Anwendung, auch das Confluence-Token und das Datenbankpasswort.</li>
+</ul>
+<p>Entfernt werden nur die Daten des Benutzers, der die Deinstallation gestartet hat; die Daten anderer Benutzer bleiben in deren Profilen.</p>
+
+<h2 id="s18">18. Lizenz, Marken und Kontakt</h2>
+<p><b>Lizenz.</b> Loonar Compass ist Freeware. Kurz zusammengefasst:</p>
+<ul>
+  <li>Die Nutzung ist kostenlos, auch beruflich und kommerziell, auf beliebig vielen Computern und ohne zeitliche oder räumliche Beschränkung.</li>
+  <li>Kopieren und an andere weitergeben dürfen Sie die Anwendung nur unentgeltlich, vollständig und unverändert, zusammen mit den Dateien LICENSE und THIRD-PARTY-NOTICES.</li>
+  <li>Ohne schriftliche Zustimmung des Lizenzgebers ist es nicht gestattet, die Anwendung zu ändern, zu dekompilieren, zu verkaufen oder zu vermieten (ausgenommen Rechte, die vertraglich nicht ausgeschlossen werden können).</li>
+  <li>Antworten, Modelländerungen und Dokumente erstellt ein KI-Modell: Prüfen Sie sie vor der Freigabe, den Modus auto aktivieren Sie auf eigenes Risiko, und sichern Sie das Modell, bevor Sie mit der Anwendung arbeiten.</li>
+  <li>Die Anwendung erhebt keine Daten (keine Telemetrie); die für eine Antwort nötigen Inhalte gehen direkt an Anthropic, auf Grundlage Ihres Vertrags mit Anthropic.</li>
+  <li>Enterprise Architect, die Claude-API, Confluence und andere Dienste erfordern eigene Lizenzen und Konten ihrer Anbieter; deren Entgelte tragen Sie.</li>
+</ul>
+<p>Verbindlich ist die polnische Fassung der Lizenz; die englische, deutsche und französische Fassung sind Übersetzungen. Der vollständige Text befindet sich in der Ansicht <b>Info</b> sowie in der Datei <code>LICENSE.txt</code> im Installationsordner (die verbindliche polnische Fassung in <code>LICENSE.pl.txt</code>). Die Liste der Funktionen und bekannten Einschränkungen dieser Version finden Sie in der Ansicht <b>Versionshinweise</b>.</p>
+<p><b>Datenschutz und Impressum.</b> Datenschutzerklärung: <code>https://loonar.eu/de/privacy/</code>. Impressum: <code>https://loonar.eu/de/legal/</code>. Den Link zur Datenschutzerklärung finden Sie auch in der Ansicht <b>Info</b>, im Formular zum Melden von Fehlern und auf der Newsletter-Karte.</p>
+<p><b>Quellcode und Open-Source-Komponenten.</b> Der Quellcode der Anwendung ist öffentlich: <code>https://github.com/loonar-eu/loonar-compass</code>. Die Anwendung enthält Open-Source-Bibliotheken und -Schriftarten; jede behält ihre eigene Lizenz. Die Liste steht in der Datei <code>THIRD-PARTY-NOTICES.txt</code> im Installationsordner; in der Ansicht <b>Info</b> öffnet sie die Schaltfläche <b>Lizenzen der Komponenten anzeigen</b> im Abschnitt „Open-Source-Komponenten“.</p>
+<p><b>Marken.</b> Sparx Systems und Enterprise Architect sind eingetragene Marken der Sparx Systems Pty Ltd. Claude und Anthropic sind Marken der Anthropic, PBC. Atlassian, Confluence und Jira sind Marken von Atlassian. Microsoft, Windows, Word und Excel sind Marken der Microsoft-Unternehmensgruppe. PostgreSQL ist eine Marke der PostgreSQL Community Association of Canada. Loonar Compass ist ein unabhängiges Produkt, steht in keiner Verbindung zu diesen Unternehmen und wird von ihnen weder unterstützt noch gesponsert.</p>
+<p><b>Eigentümer und Kontakt.</b> Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard.<br>E-Mail: mariusz@loonar.eu, Website: <code>https://loonar.eu</code> (mit Fragen und Antworten). Fehler melden Sie am bequemsten über die Ansicht <b>Fehler melden</b> (Kapitel 16). Sicherheitsprobleme melden Sie bitte vertraulich per E-Mail an mariusz@loonar.eu mit dem Betreff „Security: Loonar Compass“, nicht in einem öffentlichen Issue auf GitHub.</p>
+<p><b>Projekt unterstützen.</b> Die Weiterentwicklung der Anwendung können Sie freiwillig unter <code>https://suppi.pl/loonar</code> unterstützen (Ansicht <b>Projekt unterstützen</b>, Kapitel 4).</p>
+<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.3 &middot; © 2026 Loonar Mariusz Głowacki. Alle Rechte vorbehalten.</p>
+
+</body>
+</html>
