@@ -42,7 +42,7 @@ GOATCOUNTER = "loonar"   # GoatCounter site code (https://loonar.goatcounter.com
 SUPPORT_URL = "https://suppi.pl/loonar"
 LINKEDIN_URL = "https://pl.linkedin.com/in/glowackimariusz"
 # -----------------------------------------------------------------------------------------
-ASSET_V = "4"  # raise after every change of assets/style.css or assets/site.js (cache busting)
+ASSET_V = "5"  # raise after every change of assets/style.css or assets/site.js (cache busting)
 
 SETUP = SETUP_URL.rsplit("/", 1)[1]
 REPO = SETUP_URL.split("/releases/")[0]
@@ -322,7 +322,7 @@ def header(t, lang, home, switch, nav=True):
   <div class="wrap hdr{'' if nav else ' nonav'}">
     <a class="brand" href="{brand}"><img src="{switch["P"]}assets/img/logo.svg" alt="" width="34" height="34"><span>Loonar <b>Compass</b></span></a>{navhtml}
     {switch["html"]}
-    <a class="hdr-docs" href="{switch["P"]}docs/latest/{lang}/">{docs.T[lang]["docs"]}</a>
+    <a class="hdr-docs" href="{switch["P"]}docs/latest/{lang}/" aria-label="{esc_attr(docs.T[lang]["docs"])}">{mark("book")}<span>{docs.T[lang]["docs"]}</span></a>
     <a class="hdr-gh" href="{REPO}" aria-label="{esc_attr(t["gh_label"])}" title="{esc_attr(t["gh_label"])}">{mark("github")}</a>
     <a class="btn btn-sm" href="{home}#download">{t["nav_dl"]}</a>
   </div>

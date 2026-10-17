@@ -222,3 +222,7 @@ def index_page(b, vers, current):
 </html>
 '''
     b.write(d + "index.html", html)
+    # /docs/latest/ without a language: to the language choice.
+    b.write(d + "latest/index.html", '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex">'
+            '<meta http-equiv="refresh" content="0; url=../"><title>' + T["en"]["docs"] + '</title></head>'
+            '<body><a href="../">' + T["en"]["docs"] + '</a></body></html>\n')
