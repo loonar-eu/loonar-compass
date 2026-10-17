@@ -59,7 +59,7 @@ T["en"] = dict(
   ("Create and change","Packages, elements, diagrams and connectors; class attributes and operations with parameters; keywords, colours, position and size. Move, rename, delete — or copy a whole package with its contents."),
   ("BPMN the way EA expects it","Proper BPMN 2.0 types with stereotypes and tags: tasks, events, gateways, flows, collapsed and embedded subprocesses. Drawn from a BPMN file, a photo, a sketch or just a description."),
   ("Diagrams that read well","Legends with automatic colouring, line styles and connector routing along a path you give, connectors hidden on one diagram only, navigation cells that link to other diagrams."),
-  ("Written by EA itself","Changes go through EA’s own automation interface (COM) under an EA user account, so model security, permissions and locks apply. Before a bigger restructuring the assistant takes a baseline."),
+  ("Written by EA itself","Changes go through EA’s own automation interface (COM) under an EA user account, so model security, permissions and locks apply. Before a bigger restructuring the assistant is instructed to take a baseline first."),
   ("You approve every change","Three approval modes: ask, plan and auto. Every save, failed ones included, lands in the Audit log with time, account and result — and exports to Excel."),
   ("Impact analysis","Follow relationships from an element up to six levels deep, with paths and the diagrams affected. See where a service operation is used on sequence and activity diagrams — and which operations are used nowhere."),
   ("Works with your open EA","Knows which diagram is open and what is selected, opens diagrams, highlights elements in the Project Browser and refreshes whatever it changed — no F5 needed."),
@@ -82,7 +82,7 @@ T["en"] = dict(
   ("Runs locally","A desktop application for Windows, installed for your user account. Settings, conversation history, memory and the Audit log are stored in your user profile."),
   ("Secrets stay in Windows","The Claude API key, the EA account password, the database password and the Confluence token are kept in Windows Credential Manager — never in plain text in the settings file."),
   ("Encrypted connections","The Claude API and Confluence are used only over HTTPS. The connection to PostgreSQL can be encrypted with TLS — preferred, required, or required with the server certificate checked against the Windows certificate store."),
-  ("Writes only through EA","The database session is read-only. Every change is made by Enterprise Architect under the EA account you set up — with that account’s permissions and locks. Content of attachments, documents and the model is treated as data, never as instructions."),
+  ("Writes only through EA","The database session is read-only. Every change is made by Enterprise Architect under the EA account you set up — with that account’s permissions and locks. Content of attachments, documents and the model is treated as data, not as instructions."),
   ("What is sent to Anthropic","To answer, Claude receives the conversation, your attachments, remembered notes, templates in use, the results of the assistant’s queries and the diagram images it shows — not the whole database. Check your organisation’s rules before using it on company models."),
   ("Your own API key","The app uses your Claude API key from the Anthropic Console. The app itself is free; Anthropic bills Claude usage to the account the key belongs to."),
  ],
@@ -128,12 +128,12 @@ T["en"] = dict(
    '<p>It saves only what you allow, and only in the way Enterprise Architect allows:</p>'
    '<ul><li><strong>Approval modes:</strong> ask — you approve every save; plan — one approval per answer; auto — no questions, for test models. Publishing to Confluence always needs your approval, and the request says explicitly when an existing page will be replaced.</li>'
    '<li><strong>Writes only through EA:</strong> the database is read in a read-only session; every change is made by Enterprise Architect under the assistant’s EA account, with that account’s permissions and locks. Objects locked by other users are left alone.</li>'
-   '<li><strong>Instructions only from you:</strong> the assistant treats the content of attachments, documents and the model as data, never as instructions to follow.</li>'
+   '<li><strong>Instructions only from you:</strong> the assistant is instructed to treat the content of attachments, documents and the model as data, not as instructions to follow.</li>'
    '<li><strong>Audit log:</strong> every save, failed ones included, is recorded with time, account and result, and can be exported to Excel.</li>'
    '<li><strong>Baselines:</strong> before deleting or substantially restructuring an existing package, the assistant is instructed to save a baseline of it first; you restore it in EA (Manage Baselines → Compare/Restore).</li></ul>'
    '<p>Still, deleting is permanent and AI can make mistakes — the application reminds you of this, so review the proposed changes before you approve them. For important models use ask mode and keep database backups — the application comes without warranty.</p>'),
   ("What data leaves my computer, and where does it go?",
-   '<p>To answer, the assistant sends Anthropic’s Claude API (api.anthropic.com) only what it needs: your messages and attachments, remembered notes, the templates in use, and what it has read from the model in that conversation — the results of its database queries (names and descriptions of packages, elements, diagrams) and images of the diagrams it showed. Not the whole database. After a language change, memory and templates are also sent for translation.</p>'
+   '<p>To answer, the assistant sends only what it needs to Anthropic’s Claude API (api.anthropic.com): your messages and attachments, remembered notes, the templates in use, and what it has read from the model in that conversation — the results of its database queries (names and descriptions of packages, elements, diagrams) and images of the diagrams it showed. Not the whole database. After a language change, memory and templates are also sent for translation.</p>'
    '<p>Beyond that, data goes only where you send it: published pages to your Confluence; bug reports and newsletter sign-ups are e-mails you check and send yourself from your mail program. The application sends nothing to Loonar on its own. Before using it on company models, check your organisation’s rules and the data terms of your Anthropic account.</p>'),
   ("Where are my settings, conversations and passwords stored?",
    '<p>On your computer, in your Windows user profile — every user of the computer has their own:</p>'
@@ -163,7 +163,7 @@ T["en"] = dict(
    '<li>“Remove the API key, passwords and tokens from Credential Manager” — the Claude API key, the EA account and database passwords and the Confluence token.</li></ul>'
    '<p>Your EA model, files you saved elsewhere and pages published to Confluence are not affected.</p>'),
   ("How do I report a bug or hear about new versions?",
-   '<p>In the application, open “Report a bug” in the navigation bar, describe what happened, add screenshots and click “Send report”: a ready e-mail to mariusz@loonar.eu opens in your default mail program, where you check it and send it. Technical information (application version, system, model, approval mode, last message — no passwords or keys) is added only while that option is ticked (it is by default).</p>'
+   '<p>In the application, open “Report a bug” in the navigation bar, describe what happened, add screenshots and click “Send report”: a ready e-mail to mariusz@loonar.eu opens in your default mail program, where you check it and send it. Technical information (application version, Windows version, AI model, approval mode, last message — no passwords or keys) is added only while that option is ticked (it is by default).</p>'
    '<p>For release news, enter your e-mail on the “5. New releases (newsletter)” card in Settings and tick the consent. Or simply write to <a href="mailto:mariusz@loonar.eu">mariusz@loonar.eu</a>.</p>'),
  ],
  d_h="Download", d_sub="Free for everyone — download, install, connect your model.",
@@ -190,8 +190,8 @@ T["en"] = dict(
  ab_li="Mariusz Głowacki on LinkedIn",
  c_h="Contact", c_text='Questions, ideas or a bug? Write to <a href="mailto:mariusz@loonar.eu">mariusz@loonar.eu</a> — or use “Report a bug” in the app.',
  f_addr="ul. Gombrowicza 12, 73-110 Stargard, Poland",
- f_tm="Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. Atlassian and Confluence are trademarks of Atlassian. Microsoft, Windows, Word, Excel, GitHub and LinkedIn are trademarks of the Microsoft group of companies. PostgreSQL is a trademark of the PostgreSQL Community Association of Canada. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.",
- f_stats="No cookies. Anonymous visit statistics (GoatCounter) that store no personal data. Your language choice is remembered in your browser.",
+ f_tm="Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. Atlassian and Confluence are trademarks of Atlassian. Microsoft, Windows, Word, Excel, GitHub and LinkedIn are trademarks of the Microsoft group of companies. PostgreSQL is a registered trademark of the PostgreSQL Community Association. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.",
+ f_stats="No cookies. Anonymous visit statistics (GoatCounter) that keep no personal data. Your language choice is remembered in your browser.",
  f_privacy_link="Privacy", f_legal_link="Legal notice",
  f_top="Back to top",
  # privacy policy / legal notice pages
@@ -206,11 +206,11 @@ T["en"] = dict(
  m_user="Draw the order process of our online shop as BPMN in the <b>Sales</b> package. Make payment an embedded subprocess.",
  m_steps_h="Steps in the last answer: 3",
  m_steps=["Claude is analyzing and planning (step 1)","Reading the model database: package Sales","Saving to EA, 14 operations: diagram Order process"],
- m_bot="Done. The <b>Sales</b> package has a new BPMN diagram <b>Order process</b>: 5 tasks, a gateway and the embedded subprocess <b>Payment</b> with 3 steps. I have opened it in your EA window.",
+ m_bot="Done. The <b>Sales</b> package has a new BPMN diagram <b>Order process</b>: 3 tasks, a gateway and the embedded subprocess <b>Payment</b> with 3 steps. I have opened it in your EA window.",
  m_ph="Write a message, drag in files or paste an image (Ctrl+V)…",
  m_mode="claude-haiku-5-5 · mode ask",
  m_appr_h="Claude wants to save changes to the model",
- m_appr=["New BPMN diagram “Order process” in Sales","5 tasks, 1 gateway, start and end events","Embedded subprocess “Payment” with 3 steps","12 sequence flows"],
+ m_appr=["New BPMN diagram “Order process” in Sales","3 tasks, 1 gateway, start and end events","Embedded subprocess “Payment” with 3 steps","9 sequence flows"],
  m_approve="Approve", m_reject="Reject",
  m_saveas="Save as…", m_full="Open full size", m_png="Order process.png",
  d_recv=["Receive","order"], d_gw="In stock?", d_pay="Payment",
@@ -242,7 +242,7 @@ T["pl"] = dict(
   ("Twórz i zmieniaj","Pakiety, elementy, diagramy i połączenia; atrybuty i operacje klas z parametrami; słowa kluczowe, kolory, położenie i rozmiar. Przenoszenie, zmiana nazwy, usuwanie — i kopiowanie całego pakietu z zawartością."),
   ("BPMN tak, jak oczekuje EA","Poprawne typy BPMN 2.0 ze stereotypami i tagami: zadania, zdarzenia, bramki, przepływy, podprocesy zwinięte i osadzone. Z pliku BPMN, ze zdjęcia, ze szkicu albo z samego opisu."),
   ("Czytelne diagramy","Legendy z automatycznym kolorowaniem, style linii i prowadzenie połączeń po zadanej trasie, ukrywanie połączeń tylko na jednym diagramie, kafelki nawigacyjne do innych diagramów."),
-  ("Zapisuje sam EA","Zmiany idą przez interfejs automatyzacji EA (COM) na koncie użytkownika modelu, więc obowiązują zabezpieczenia, uprawnienia i blokady. Przed większą przebudową asystent robi baseline pakietu."),
+  ("Zapisuje sam EA","Zmiany idą przez interfejs automatyzacji EA (COM) na koncie użytkownika modelu, więc obowiązują zabezpieczenia, uprawnienia i blokady. Przed większą przebudową asystent ma polecenie zrobić baseline pakietu."),
   ("Każdą zmianę zatwierdzasz","Trzy tryby zatwierdzania: ask, plan i auto. Każdy zapis, także nieudany, trafia do dziennika zmian z czasem, kontem i wynikiem — z eksportem do Excela."),
   ("Analiza wpływu","Od elementu wzdłuż relacji do sześciu poziomów w głąb, ze ścieżkami i diagramami, na których leżą dotknięte elementy. Gdzie używana jest operacja usługi na diagramach sekwencji i aktywności — i które operacje nie są używane nigdzie."),
   ("Współpracuje z otwartym EA","Wie, który diagram masz otwarty i co jest zaznaczone, otwiera diagramy, podświetla elementy w przeglądarce projektu i sam odświeża to, co zmienił — bez F5."),
@@ -265,7 +265,7 @@ T["pl"] = dict(
   ("Działa lokalnie","Aplikacja desktopowa dla Windows, instalowana na Twoim koncie użytkownika. Ustawienia, historia rozmów, pamięć i dziennik zmian są w Twoim profilu użytkownika."),
   ("Sekrety zostają w Windows","Klucz API Claude, hasło konta EA, hasło do bazy i token Confluence są w Menedżerze poświadczeń Windows — nigdy zwykłym tekstem w pliku ustawień."),
   ("Szyfrowane połączenia","Z Claude API i Confluence aplikacja łączy się wyłącznie przez HTTPS. Połączenie z PostgreSQL może być szyfrowane TLS — preferowane, wymagane albo wymagane z weryfikacją certyfikatu serwera w magazynie certyfikatów Windows."),
-  ("Zapis tylko przez EA","Sesja bazy jest tylko do odczytu. Każdą zmianę wykonuje Enterprise Architect na skonfigurowanym koncie EA — z jego uprawnieniami i blokadami. Treść załączników, dokumentów i modelu to dla asystenta dane, nigdy polecenia."),
+  ("Zapis tylko przez EA","Sesja bazy jest tylko do odczytu. Każdą zmianę wykonuje Enterprise Architect na skonfigurowanym koncie EA — z jego uprawnieniami i blokadami. Treść załączników, dokumentów i modelu asystent ma traktować jako dane, a nie polecenia."),
   ("Co trafia do Anthropic","Żeby odpowiedzieć, Claude dostaje treść rozmowy, załączniki, zapamiętane ustalenia, użyte szablony, wyniki zapytań asystenta do bazy i pokazane obrazki diagramów — nie całą bazę. Przed użyciem na modelu firmowym sprawdź zasady swojej organizacji."),
   ("Twój własny klucz API","Aplikacja korzysta z Twojego klucza API Claude z konsoli Anthropic. Sama aplikacja jest bezpłatna; za użycie Claude Anthropic rozlicza konto, do którego należy klucz."),
  ],
@@ -311,7 +311,7 @@ T["pl"] = dict(
    '<p>Zapisuje tylko to, na co pozwolisz, i tylko tak, jak pozwala Enterprise Architect:</p>'
    '<ul><li><strong>Tryby zatwierdzania:</strong> ask — zatwierdzasz każdy zapis; plan — jedno zatwierdzenie na odpowiedź; auto — bez pytania, do modeli testowych. Publikacja w Confluence zawsze wymaga zatwierdzenia, a prośba wyraźnie mówi, kiedy istniejąca strona zostanie zastąpiona.</li>'
    '<li><strong>Zapis tylko przez EA:</strong> bazę asystent czyta w sesji tylko do odczytu, a każdą zmianę wykonuje Enterprise Architect na koncie EA asystenta — z jego uprawnieniami i blokadami. Obiektów zablokowanych przez innych użytkowników nie zmieni.</li>'
-   '<li><strong>Polecenia tylko od Ciebie:</strong> treść załączników, dokumentów i modelu asystent traktuje jako dane, nigdy jako polecenia do wykonania.</li>'
+   '<li><strong>Polecenia tylko od Ciebie:</strong> treść załączników, dokumentów i modelu asystent ma traktować jako dane, a nie jako polecenia do wykonania.</li>'
    '<li><strong>Dziennik zmian:</strong> każdy zapis, także nieudany, trafia do dziennika z czasem, kontem i wynikiem; dziennik wyeksportujesz do Excela.</li>'
    '<li><strong>Baseline:</strong> przed usunięciem albo większą przebudową istniejącego pakietu asystent ma polecenie najpierw zapisać jego baseline; przywracasz go w EA (Manage Baselines → Compare/Restore).</li></ul>'
    '<p>Mimo to usuwanie jest nieodwracalne, a AI może się mylić — aplikacja o tym przypomina, więc przed zatwierdzeniem przejrzyj proponowane zmiany. Przy ważnych modelach używaj trybu ask i rób kopie zapasowe bazy — aplikacja jest dostarczana bez gwarancji.</p>'),
@@ -346,7 +346,7 @@ T["pl"] = dict(
    '<li>„Usuń klucz API, hasła i tokeny z Menedżera poświadczeń” — klucz API Claude, hasła konta EA i bazy oraz token Confluence.</li></ul>'
    '<p>Twój model EA, pliki zapisane gdzie indziej i strony opublikowane w Confluence pozostają bez zmian.</p>'),
   ("Jak zgłosić błąd albo dostawać informacje o nowych wersjach?",
-   '<p>W aplikacji otwórz „Zgłoś błąd” na pasku nawigacji, opisz, co się stało, dodaj zrzuty ekranu i kliknij „Wyślij zgłoszenie”: w domyślnym programie pocztowym otworzy się gotowa wiadomość do mariusz@loonar.eu, którą sprawdzasz i wysyłasz. Informacje techniczne (wersja aplikacji, system, model, tryb zatwierdzania, ostatni komunikat — bez haseł i kluczy) są dołączane tylko wtedy, gdy ta opcja jest zaznaczona (domyślnie jest).</p>'
+   '<p>W aplikacji otwórz „Zgłoś błąd” na pasku nawigacji, opisz, co się stało, dodaj zrzuty ekranu i kliknij „Wyślij zgłoszenie”: w domyślnym programie pocztowym otworzy się gotowa wiadomość do mariusz@loonar.eu, którą sprawdzasz i wysyłasz. Informacje techniczne (wersja aplikacji, wersja Windows, model AI, tryb zatwierdzania, ostatni komunikat — bez haseł i kluczy) są dołączane tylko wtedy, gdy ta opcja jest zaznaczona (domyślnie jest).</p>'
    '<p>Informacje o nowych wydaniach: wpisz e-mail na karcie „5. Nowe wydania (newsletter)” w Ustawieniach i zaznacz zgodę. Możesz też po prostu napisać na <a href="mailto:mariusz@loonar.eu">mariusz@loonar.eu</a>.</p>'),
  ],
  d_h="Pobierz", d_sub="Bezpłatnie dla każdego — pobierz, zainstaluj, podłącz swój model.",
@@ -369,12 +369,12 @@ T["pl"] = dict(
  ab_name="Kompas daje orientację. Logo to konstelacja węzłów: jak nawigator, który odnajduje drogę po gwiazdach, asystent pomaga odnaleźć się w dużym modelu architektury.",
  ab_role="Principal Technical Product Manager · trener inżynierii wymagań (IREB CPRE)",
  ab_me_h="Kto za tym stoi",
- ab_me="Jestem Principal Technical Product Managerem ze Stargardu. Od lat tworzę produkty cyfrowe — od strategii produktu, badań rynku, analizy klientów i wymagań po wdrożenie — dla usług chmurowych i telekomunikacyjnych, w tym integracji AWS, Azure i Google Cloud z systemami on-premise. Jestem absolwentem informatyki Politechniki Szczecińskiej i trenerem inżynierii wymagań (IREB CPRE). Nie jestem programistą: Loonar Compass powstał z pomocą asystentów AI do programowania — ja decyduję, co aplikacja ma robić i jak ma działać dla architektów, a kod napisała AI. To jej mocna strona: tworzy ją ktoś, kto na co dzień pracuje z modelami w Enterprise Architect i wie, czego potrzebują architekci.",
+ ab_me="Jestem Principal Technical Product Managerem ze Stargardu. Od lat tworzę produkty cyfrowe — od strategii produktu, badań rynku, analizy klientów i wymagań po wdrożenie — dla usług chmurowych i telekomunikacyjnych, w tym integracji AWS, Azure i Google Cloud z systemami on-premise. Jestem absolwentem informatyki Politechniki Szczecińskiej i trenerem inżynierii wymagań (IREB CPRE). Nie jestem programistą: Loonar Compass powstał z pomocą asystentów AI do programowania — ja decyduję, co aplikacja ma robić i jak ma działać dla architektów, a kod napisała AI. To mocna strona aplikacji: tworzy ją ktoś, kto na co dzień pracuje z modelami w Enterprise Architect i wie, czego potrzebują architekci.",
  ab_li="Mariusz Głowacki na LinkedIn",
  c_h="Kontakt", c_text='Pytanie, pomysł, błąd? Napisz na <a href="mailto:mariusz@loonar.eu">mariusz@loonar.eu</a> albo użyj „Zgłoś błąd” w aplikacji.',
  f_addr="ul. Gombrowicza 12, 73-110 Stargard",
- f_tm="Sparx Systems i Enterprise Architect są zarejestrowanymi znakami towarowymi Sparx Systems Pty Ltd. Claude i Anthropic są znakami towarowymi Anthropic, PBC. Atlassian i Confluence są znakami towarowymi Atlassian. Microsoft, Windows, Word, Excel, GitHub i LinkedIn są znakami towarowymi grupy Microsoft. PostgreSQL jest znakiem towarowym PostgreSQL Community Association of Canada. Loonar Compass jest niezależnym produktem, niepowiązanym z tymi firmami, nieautoryzowanym ani niesponsorowanym przez nie.",
- f_stats="Bez plików cookie. Anonimowe statystyki odwiedzin (GoatCounter), które nie zapisują danych osobowych. Wybór języka zapamiętuje Twoja przeglądarka.",
+ f_tm="Sparx Systems i Enterprise Architect są zarejestrowanymi znakami towarowymi Sparx Systems Pty Ltd. Claude i Anthropic są znakami towarowymi Anthropic, PBC. Atlassian i Confluence są znakami towarowymi Atlassian. Microsoft, Windows, Word, Excel, GitHub i LinkedIn są znakami towarowymi grupy Microsoft. PostgreSQL jest zarejestrowanym znakiem towarowym PostgreSQL Community Association. Loonar Compass jest niezależnym produktem, niepowiązanym z tymi firmami, nieautoryzowanym ani niesponsorowanym przez nie.",
+ f_stats="Bez plików cookie. Anonimowe statystyki odwiedzin (GoatCounter), które nie przechowują danych osobowych. Wybór języka zapamiętuje Twoja przeglądarka.",
  f_privacy_link="Prywatność", f_legal_link="Nota prawna",
  f_top="Do góry",
  doc_updated="Ostatnia aktualizacja:", doc_home="Wróć na stronę główną",
@@ -386,11 +386,11 @@ T["pl"] = dict(
  m_user="Narysuj proces zamówienia w naszym sklepie internetowym jako BPMN w pakiecie <b>Sprzedaż</b>. Płatność zrób jako podproces osadzony.",
  m_steps_h="Kroki ostatniej odpowiedzi: 3",
  m_steps=["Claude analizuje i planuje (krok 1)","Odczyt z bazy modelu: pakiet Sprzedaż","Zapis do EA (operacje: 14): diagram Proces zamówienia"],
- m_bot="Gotowe. W pakiecie <b>Sprzedaż</b> jest nowy diagram BPMN <b>Proces zamówienia</b>: 5 zadań, bramka i podproces osadzony <b>Płatność</b> z 3 krokami. Otworzyłem go w Twoim oknie EA.",
+ m_bot="Gotowe. W pakiecie <b>Sprzedaż</b> jest nowy diagram BPMN <b>Proces zamówienia</b>: 3 zadania, bramka i podproces osadzony <b>Płatność</b> z 3 krokami. Otworzyłem go w Twoim oknie EA.",
  m_ph="Napisz wiadomość, przeciągnij pliki albo wklej obraz (Ctrl+V)…",
  m_mode="claude-haiku-5-5 · tryb ask",
  m_appr_h="Claude chce zapisać zmiany w modelu",
- m_appr=["Nowy diagram BPMN „Proces zamówienia” w pakiecie Sprzedaż","5 zadań, 1 bramka, zdarzenie początkowe i końcowe","Podproces osadzony „Płatność” z 3 krokami","12 przepływów sekwencji"],
+ m_appr=["Nowy diagram BPMN „Proces zamówienia” w pakiecie Sprzedaż","3 zadania, 1 bramka, zdarzenie początkowe i końcowe","Podproces osadzony „Płatność” z 3 krokami","9 przepływów sekwencji"],
  m_approve="Zatwierdź", m_reject="Odrzuć",
  m_saveas="Zapisz jako…", m_full="Otwórz w pełnym rozmiarze", m_png="Proces zamówienia.png",
  d_recv=["Przyjmij","zamówienie"], d_gw="Na stanie?", d_pay="Płatność",
@@ -406,7 +406,7 @@ T["de"] = dict(
  locale="de_DE", name_lang="Deutsch",
  title="Loonar Compass – KI-Assistent für Sparx Enterprise Architect",
  desc="Kostenlose Windows-App: Sprechen Sie mit Ihrem Sparx-Enterprise-Architect-Modell. Fragen stellen, Diagramme über EA anlegen und ändern, jede Änderung selbst freigeben. Nutzt die Claude-API von Anthropic mit Ihrem eigenen API-Schlüssel.",
- og_desc="Sprechen Sie mit Ihrem Enterprise-Architect-Modell: fragen, zeichnen, dokumentieren – jede Änderung schreibt EA, freigeben tun Sie.",
+ og_desc="Sprechen Sie mit Ihrem Enterprise-Architect-Modell: fragen, zeichnen, dokumentieren – EA schreibt jede Änderung, Sie geben sie frei.",
  skip="Zum Inhalt springen", lang_label="Sprache",
  nav=["Funktionen","So funktioniert’s","Sicherheit","Voraussetzungen","FAQ","Unterstützen"], nav_dl="Download",
  eyebrow="Freeware · Windows · Sparx Enterprise Architect",
@@ -421,7 +421,7 @@ T["de"] = dict(
   ("Anlegen und ändern","Pakete, Elemente, Diagramme und Konnektoren; Attribute und Operationen von Klassen mit Parametern; Schlüsselwörter, Farben, Position und Größe. Verschieben, umbenennen, löschen – oder ein ganzes Paket samt Inhalt kopieren."),
   ("BPMN, wie EA es erwartet","Korrekte BPMN-2.0-Typen mit Stereotypen und Tags: Tasks, Ereignisse, Gateways, Flüsse, zugeklappte und eingebettete Teilprozesse. Aus einer BPMN-Datei, einem Foto, einer Skizze oder nur einer Beschreibung."),
   ("Gut lesbare Diagramme","Legenden mit automatischer Einfärbung, Linienstile und Konnektorführung entlang eines vorgegebenen Pfads, Konnektoren nur auf einem Diagramm ausblenden, Navigationskacheln zu anderen Diagrammen."),
-  ("EA schreibt selbst","Änderungen laufen über die Automatisierungsschnittstelle von EA (COM) unter einem EA-Benutzerkonto – Modellsicherheit, Berechtigungen und Sperren gelten. Vor größeren Umbauten legt der Assistent eine Baseline an."),
+  ("EA schreibt selbst","Änderungen laufen über die Automatisierungsschnittstelle von EA (COM) unter einem EA-Benutzerkonto – Modellsicherheit, Berechtigungen und Sperren gelten. Vor größeren Umbauten ist der Assistent angewiesen, eine Baseline anzulegen."),
   ("Jede Änderung geben Sie frei","Drei Freigabemodi: ask, plan und auto. Jede Speicherung, auch eine fehlgeschlagene, steht im Änderungsprotokoll mit Zeit, Konto und Ergebnis – exportierbar nach Excel."),
   ("Auswirkungsanalyse","Von einem Element entlang der Beziehungen bis zu sechs Ebenen tief, mit Pfaden und betroffenen Diagrammen. Wo eine Service-Operation in Sequenz- und Aktivitätsdiagrammen verwendet wird – und welche nirgends."),
   ("Arbeitet mit Ihrem offenen EA","Kennt das geöffnete Diagramm und die Auswahl, öffnet Diagramme, hebt Elemente im Projekt-Browser hervor und aktualisiert Geändertes selbst – ganz ohne F5."),
@@ -444,7 +444,7 @@ T["de"] = dict(
   ("Läuft lokal","Eine Desktop-Anwendung für Windows, installiert für Ihr Benutzerkonto. Einstellungen, Gesprächsverlauf, Gedächtnis und Änderungsprotokoll liegen in Ihrem Benutzerprofil."),
   ("Geheimnisse bleiben in Windows","API-Schlüssel für Claude, Passwort des EA-Kontos, Datenbankpasswort und Confluence-Token liegen in der Windows-Anmeldeinformationsverwaltung – nie im Klartext in der Einstellungsdatei."),
   ("Verschlüsselte Verbindungen","Claude-API und Confluence werden nur über HTTPS angesprochen. Die Verbindung zu PostgreSQL lässt sich mit TLS verschlüsseln – bevorzugt, erforderlich oder erforderlich mit Prüfung des Serverzertifikats gegen den Windows-Zertifikatspeicher."),
-  ("Schreiben nur über EA","Die Datenbanksitzung ist nur lesend. Jede Änderung führt Enterprise Architect unter dem eingerichteten EA-Konto aus – mit dessen Berechtigungen und Sperren. Inhalte von Anhängen, Dokumenten und Modell behandelt der Assistent als Daten, nie als Anweisungen."),
+  ("Schreiben nur über EA","Die Datenbanksitzung ist nur lesend. Jede Änderung führt Enterprise Architect unter dem eingerichteten EA-Konto aus – mit dessen Berechtigungen und Sperren. Inhalte von Anhängen, Dokumenten und Modell soll der Assistent als Daten behandeln, nicht als Anweisungen."),
   ("Was an Anthropic geht","Für die Antwort erhält Claude das Gespräch, Ihre Anhänge, gemerkte Vereinbarungen, verwendete Vorlagen, die Ergebnisse der Abfragen des Assistenten und die gezeigten Diagrammbilder – nicht die ganze Datenbank. Prüfen Sie vor dem Einsatz an Firmenmodellen die Regeln Ihrer Organisation."),
   ("Ihr eigener API-Schlüssel","Die App nutzt Ihren Claude-API-Schlüssel aus der Anthropic Console. Die App selbst ist kostenlos; die Nutzung von Claude rechnet Anthropic mit dem Konto ab, zu dem der Schlüssel gehört."),
  ],
@@ -464,7 +464,7 @@ T["de"] = dict(
  faq_h="Häufige Fragen", faq_sub="Klare Antworten zu Kosten, Voraussetzungen, Sicherheit und Datenschutz.",
  faq=[
   ("Ist das wirklich kostenlos? Darf ich es beruflich nutzen?",
-   '<p>Ja. Loonar Compass ist Freeware: kostenlos für jeden Zweck, auch beruflich und kommerziell, auf beliebig vielen Computern. Sie dürfen die Anwendung auch weitergeben – kostenlos, vollständig, unverändert und zusammen mit der Lizenzdatei.</p>'
+   '<p>Ja. Loonar Compass ist Freeware: kostenlos für jeden Zweck, auch beruflich und kommerziell, auf beliebig vielen Computern. Sie dürfen die Anwendung auch weitergeben – kostenlos, vollständig, unverändert und zusammen mit den Dateien LICENSE und THIRD-PARTY-NOTICES.</p>'
    '<p>Der Quellcode ist auf <a href="{repo}">GitHub</a> öffentlich, sodass Sie genau sehen, was die Anwendung mit Ihrem Modell macht. Er ist einsehbar (Source-available), aber nicht Open Source: Nicht erlaubt sind Änderungen an der Anwendung und abgeleitete Werke sowie Verkauf oder Vermietung. <a href="{lic}">Lizenz lesen</a>.</p>'),
   ("Was kostet der Betrieb, und welches Claude-Modell wird verwendet?",
    '<p>Die Anwendung selbst ist kostenlos. Der Assistent arbeitet mit Ihrem eigenen Claude-API-Schlüssel aus der Anthropic Console; Anthropic rechnet die Nutzung mit dem Konto ab, zu dem der Schlüssel gehört – nach Verbrauch, also nach der Textmenge, die das Modell liest und schreibt. Aktuelle Preise finden Sie auf der <a href="https://claude.com/pricing#api">Preisseite von Anthropic</a>.</p>'
@@ -490,10 +490,10 @@ T["de"] = dict(
    '<p>Er speichert nur, was Sie zulassen, und nur so, wie Enterprise Architect es erlaubt:</p>'
    '<ul><li><strong>Freigabemodi:</strong> ask – Sie geben jede Speicherung frei; plan – eine Freigabe pro Antwort; auto – ohne Rückfrage, für Testmodelle. Veröffentlichungen in Confluence brauchen immer Ihre Freigabe, und die Anfrage sagt ausdrücklich, wenn eine bestehende Seite ersetzt wird.</li>'
    '<li><strong>Schreiben nur über EA:</strong> Die Datenbank wird in einer schreibgeschützten Sitzung gelesen; jede Änderung führt Enterprise Architect unter dem EA-Konto des Assistenten aus, mit dessen Berechtigungen und Sperren. Objekte, die andere Benutzer gesperrt haben, bleiben unangetastet.</li>'
-   '<li><strong>Anweisungen nur von Ihnen:</strong> Inhalte von Anhängen, Dokumenten und Modell behandelt der Assistent als Daten, nie als auszuführende Anweisungen.</li>'
+   '<li><strong>Anweisungen nur von Ihnen:</strong> Inhalte von Anhängen, Dokumenten und Modell soll der Assistent als Daten behandeln, nicht als auszuführende Anweisungen.</li>'
    '<li><strong>Änderungsprotokoll:</strong> Jede Speicherung, auch eine fehlgeschlagene, wird mit Zeit, Konto und Ergebnis festgehalten und lässt sich nach Excel exportieren.</li>'
    '<li><strong>Baselines:</strong> Vor dem Löschen oder größeren Umbau eines bestehenden Pakets ist der Assistent angewiesen, zuerst eine Baseline davon anzulegen; wiederhergestellt wird sie in EA (Manage Baselines → Compare/Restore).</li></ul>'
-   '<p>Trotzdem: Löschen ist endgültig, und KI kann sich irren – die Anwendung weist darauf hin; prüfen Sie die vorgeschlagenen Änderungen daher vor der Freigabe. Nutzen Sie bei wichtigen Modellen den Modus ask und sichern Sie die Datenbank – die Anwendung wird ohne Gewährleistung bereitgestellt.</p>'),
+   '<p>Trotzdem: Löschen ist endgültig, und KI kann sich irren – die Anwendung weist darauf hin; prüfen Sie die vorgeschlagenen Änderungen daher vor der Freigabe. Nutzen Sie bei wichtigen Modellen den Modus ask und sichern Sie die Datenbank – die Anwendung wird unentgeltlich und im vorliegenden Zustand bereitgestellt (Einzelheiten in der Lizenz).</p>'),
   ("Welche Daten verlassen meinen Computer, und wohin gehen sie?",
    '<p>Für eine Antwort sendet der Assistent an die Claude-API von Anthropic (api.anthropic.com) nur, was er braucht: Ihre Nachrichten und Anhänge, gemerkte Vereinbarungen, verwendete Vorlagen und das, was er in dieser Unterhaltung aus dem Modell gelesen hat – die Ergebnisse seiner Datenbankabfragen (Namen und Beschreibungen von Paketen, Elementen, Diagrammen) und Bilder der gezeigten Diagramme. Nicht die ganze Datenbank. Nach einem Sprachwechsel gehen auch Gedächtnis und Vorlagen zur Übersetzung dorthin.</p>'
    '<p>Darüber hinaus gehen Daten nur dorthin, wohin Sie sie schicken: veröffentlichte Seiten in Ihr Confluence; Fehlermeldungen und die Newsletter-Anmeldung sind E-Mails, die Sie in Ihrem E-Mail-Programm prüfen und selbst senden. Von sich aus sendet die Anwendung nichts an Loonar. Prüfen Sie vor dem Einsatz an Firmenmodellen die Regeln Ihrer Organisation und die Datenverarbeitungsbedingungen Ihres Anthropic-Kontos.</p>'),
@@ -525,7 +525,7 @@ T["de"] = dict(
    '<li>„API-Schlüssel, Passwörter und Tokens aus der Anmeldeinformationsverwaltung entfernen“ – Claude-API-Schlüssel, Passwörter des EA-Kontos und der Datenbank sowie Confluence-Token.</li></ul>'
    '<p>Ihr EA-Modell, anderswo gespeicherte Dateien und in Confluence veröffentlichte Seiten bleiben unberührt.</p>'),
   ("Wie melde ich einen Fehler, und wie erfahre ich von neuen Versionen?",
-   '<p>Öffnen Sie in der Anwendung „Fehler melden“ in der Navigationsleiste, beschreiben Sie, was passiert ist, fügen Sie Screenshots hinzu und klicken Sie auf „Meldung senden“: In Ihrem Standard-E-Mail-Programm öffnet sich eine fertige Nachricht an mariusz@loonar.eu, die Sie prüfen und senden. Technische Informationen (Anwendungsversion, System, Modell, Freigabemodus, letzte Meldung – ohne Passwörter und Schlüssel) werden nur angehängt, solange diese Option aktiviert ist (standardmäßig ja).</p>'
+   '<p>Öffnen Sie in der Anwendung „Fehler melden“ in der Navigationsleiste, beschreiben Sie, was passiert ist, fügen Sie Screenshots hinzu und klicken Sie auf „Meldung senden“: In Ihrem Standard-E-Mail-Programm öffnet sich eine fertige Nachricht an mariusz@loonar.eu, die Sie prüfen und senden. Technische Informationen (Anwendungsversion, Windows-Version, KI-Modell, Freigabemodus, letzte Meldung – ohne Passwörter und Schlüssel) werden nur angehängt, solange diese Option aktiviert ist (standardmäßig ja).</p>'
    '<p>Neuigkeiten zu Versionen: E-Mail-Adresse auf der Karte „5. Neue Versionen (Newsletter)“ in den Einstellungen eintragen und die Einwilligung ankreuzen. Oder schreiben Sie einfach an <a href="mailto:mariusz@loonar.eu">mariusz@loonar.eu</a>.</p>'),
  ],
  d_h="Download", d_sub="Kostenlos für alle – herunterladen, installieren, Modell verbinden.",
@@ -552,8 +552,8 @@ T["de"] = dict(
  ab_li="Mariusz Głowacki auf LinkedIn",
  c_h="Kontakt", c_text='Fragen, Ideen oder einen Fehler gefunden? Schreiben Sie an <a href="mailto:mariusz@loonar.eu">mariusz@loonar.eu</a> – oder nutzen Sie „Fehler melden“ in der App.',
  f_addr="ul. Gombrowicza 12, 73-110 Stargard, Polen",
- f_tm="Sparx Systems und Enterprise Architect sind eingetragene Marken der Sparx Systems Pty Ltd. Claude und Anthropic sind Marken der Anthropic, PBC. Atlassian und Confluence sind Marken von Atlassian. Microsoft, Windows, Word, Excel, GitHub und LinkedIn sind Marken der Microsoft-Unternehmensgruppe. PostgreSQL ist eine Marke der PostgreSQL Community Association of Canada. Loonar Compass ist ein unabhängiges Produkt, steht in keiner Verbindung zu diesen Unternehmen und wird von ihnen weder unterstützt noch gesponsert.",
- f_stats="Keine Cookies. Anonyme Besuchsstatistik (GoatCounter), die keine personenbezogenen Daten speichert. Ihre Sprachwahl merkt sich Ihr Browser.",
+ f_tm="Sparx Systems und Enterprise Architect sind eingetragene Marken der Sparx Systems Pty Ltd. Claude und Anthropic sind Marken der Anthropic, PBC. Atlassian und Confluence sind Marken von Atlassian. Microsoft, Windows, Word, Excel, GitHub und LinkedIn sind Marken der Microsoft-Unternehmensgruppe. PostgreSQL ist eine eingetragene Marke der PostgreSQL Community Association. Loonar Compass ist ein unabhängiges Produkt, steht in keiner Verbindung zu diesen Unternehmen und wird von ihnen weder unterstützt noch gesponsert.",
+ f_stats="Keine Cookies. Anonyme Besuchsstatistik (GoatCounter), die keine personenbezogenen Daten dauerhaft speichert. Ihre Sprachwahl merkt sich Ihr Browser.",
  f_privacy_link="Datenschutz", f_legal_link="Impressum",
  f_top="Nach oben",
  doc_updated="Stand:", doc_home="Zur Startseite",
@@ -565,11 +565,11 @@ T["de"] = dict(
  m_user="Zeichne den Bestellprozess unseres Onlineshops als BPMN im Paket <b>Vertrieb</b>. Die Zahlung bitte als eingebetteten Teilprozess.",
  m_steps_h="Schritte der letzten Antwort: 3",
  m_steps=["Claude analysiert und plant (Schritt 1)","Lesen der Modelldatenbank: Paket Vertrieb","Speichern in EA, 14 Operationen: Diagramm Bestellprozess"],
- m_bot="Fertig. Im Paket <b>Vertrieb</b> gibt es ein neues BPMN-Diagramm <b>Bestellprozess</b>: 5 Tasks, ein Gateway und den eingebetteten Teilprozess <b>Zahlung</b> mit 3 Schritten. Ich habe es in Ihrem EA-Fenster geöffnet.",
+ m_bot="Fertig. Im Paket <b>Vertrieb</b> gibt es ein neues BPMN-Diagramm <b>Bestellprozess</b>: 3 Tasks, ein Gateway und den eingebetteten Teilprozess <b>Zahlung</b> mit 3 Schritten. Ich habe es in Ihrem EA-Fenster geöffnet.",
  m_ph="Nachricht schreiben, Dateien hineinziehen oder Bild einfügen (Strg+V)…",
  m_mode="claude-haiku-5-5 · Modus ask",
  m_appr_h="Claude möchte Änderungen im Modell speichern",
- m_appr=["Neues BPMN-Diagramm „Bestellprozess“ im Paket Vertrieb","5 Tasks, 1 Gateway, Start- und Endereignis","Eingebetteter Teilprozess „Zahlung“ mit 3 Schritten","12 Sequenzflüsse"],
+ m_appr=["Neues BPMN-Diagramm „Bestellprozess“ im Paket Vertrieb","3 Tasks, 1 Gateway, Start- und Endereignis","Eingebetteter Teilprozess „Zahlung“ mit 3 Schritten","9 Sequenzflüsse"],
  m_approve="Freigeben", m_reject="Ablehnen",
  m_saveas="Speichern unter…", m_full="In voller Größe öffnen", m_png="Bestellprozess.png",
  d_recv=["Bestellung","annehmen"], d_gw="Auf Lager?", d_pay="Zahlung",
@@ -600,7 +600,7 @@ T["fr"] = dict(
   ("Créez et modifiez","Paquetages, éléments, diagrammes et connecteurs ; attributs et opérations de classes avec paramètres ; mots-clés, couleurs, position et taille. Déplacer, renommer, supprimer — ou copier un paquetage entier avec son contenu."),
   ("Du BPMN comme EA l’attend","De vrais types BPMN 2.0 avec stéréotypes et tags : tâches, événements, passerelles, flux, sous-processus réduits ou intégrés. À partir d’un fichier BPMN, d’une photo, d’un croquis ou d’une simple description."),
   ("Des diagrammes lisibles","Légendes avec coloration automatique, styles de ligne et tracé des connecteurs selon un chemin donné, connecteurs masqués sur un seul diagramme, tuiles de navigation vers d’autres diagrammes."),
-  ("C’est EA qui enregistre","Les modifications passent par l’interface d’automatisation d’EA (COM) avec un compte utilisateur EA : la sécurité du modèle, les droits et les verrous s’appliquent. Avant une restructuration importante, l’assistant crée une baseline."),
+  ("C’est EA qui enregistre","Les modifications passent par l’interface d’automatisation d’EA (COM) avec un compte utilisateur EA : la sécurité du modèle, les droits et les verrous s’appliquent. Avant une restructuration importante, l’assistant a pour consigne de créer une baseline."),
   ("Vous validez chaque modification","Trois modes de validation : ask, plan et auto. Chaque enregistrement, même en échec, figure dans le journal des modifications avec l’heure, le compte et le résultat — exportable vers Excel."),
   ("Analyse d’impact","Depuis un élément, le long des relations jusqu’à six niveaux, avec les chemins et les diagrammes concernés. Où une opération de service est utilisée dans les diagrammes de séquence et d’activité — et lesquelles ne le sont nulle part."),
   ("Travaille avec votre EA ouvert","Connaît le diagramme ouvert et la sélection, ouvre des diagrammes, met en évidence les éléments dans le navigateur de projet et rafraîchit ce qu’il a modifié — sans F5."),
@@ -623,14 +623,14 @@ T["fr"] = dict(
   ("Fonctionne en local","Une application de bureau pour Windows, installée pour votre compte utilisateur. Paramètres, historique des conversations, mémoire et journal des modifications sont stockés dans votre profil utilisateur."),
   ("Les secrets restent dans Windows","La clé API Claude, le mot de passe du compte EA, le mot de passe de la base et le jeton Confluence sont conservés dans le Gestionnaire d’identification Windows — jamais en clair dans le fichier de paramètres."),
   ("Connexions chiffrées","L’API Claude et Confluence ne sont utilisés qu’en HTTPS. La connexion à PostgreSQL peut être chiffrée en TLS — de préférence, obligatoirement, ou obligatoirement avec vérification du certificat du serveur dans le magasin de certificats Windows."),
-  ("Écriture uniquement via EA","La session de base de données est en lecture seule. Chaque modification est effectuée par Enterprise Architect avec le compte EA configuré — avec ses droits et ses verrous. Le contenu des pièces jointes, des documents et du modèle est traité comme des données, jamais comme des instructions."),
+  ("Écriture uniquement via EA","La session de base de données est en lecture seule. Chaque modification est effectuée par Enterprise Architect avec le compte EA configuré — avec ses droits et ses verrous. Le contenu des pièces jointes, des documents et du modèle est traité comme des données, et non comme des instructions."),
   ("Ce qui est envoyé à Anthropic","Pour répondre, Claude reçoit la conversation, vos pièces jointes, les notes mémorisées, les modèles utilisés, les résultats des requêtes de l’assistant et les images de diagrammes affichées — pas toute la base. Vérifiez les règles de votre organisation avant de l’utiliser sur des modèles d’entreprise."),
   ("Votre propre clé API","L’application utilise votre clé API Claude issue de la console Anthropic. L’application est gratuite ; Anthropic facture l’utilisation de Claude au compte auquel appartient la clé."),
  ],
  r_h="Prérequis", r_need="Indispensable", r_opt="Facultatif",
  req=[
   "Windows 10 ou 11 (64 bits)",
-  "Sparx Enterprise Architect avec licence — l’assistant lance EA en arrière-plan, qui occupe alors un poste de licence",
+  "Sparx Enterprise Architect avec licence — l’assistant lance EA en arrière-plan ; EA occupe alors une place de licence",
   "Un modèle EA dans une base PostgreSQL, avec la sécurité activée (« Require User Lock to Edit »)",
   "Un compte utilisateur EA pour l’assistant, avec droits de modification, et l’accès à la base (serveur, port, nom, compte)",
   "Une clé API Claude de la console Anthropic et une connexion Internet",
@@ -669,7 +669,7 @@ T["fr"] = dict(
    '<p>Il n’enregistre que ce que vous autorisez, et uniquement de la manière permise par Enterprise Architect :</p>'
    '<ul><li><strong>Modes de validation :</strong> ask — vous validez chaque enregistrement ; plan — une validation par réponse ; auto — sans question, pour les modèles de test. La publication dans Confluence demande toujours votre validation, et la demande indique explicitement quand une page existante sera remplacée.</li>'
    '<li><strong>Écriture uniquement via EA :</strong> la base est lue dans une session en lecture seule ; chaque modification est effectuée par Enterprise Architect avec le compte EA de l’assistant, ses droits et ses verrous. Les objets verrouillés par d’autres utilisateurs ne sont pas touchés.</li>'
-   '<li><strong>Vos instructions uniquement :</strong> l’assistant traite le contenu des pièces jointes, des documents et du modèle comme des données, jamais comme des instructions à suivre.</li>'
+   '<li><strong>Vos instructions uniquement :</strong> l’assistant a pour consigne de traiter le contenu des pièces jointes, des documents et du modèle comme des données, et non comme des instructions à suivre.</li>'
    '<li><strong>Journal des modifications :</strong> chaque enregistrement, même en échec, y figure avec l’heure, le compte et le résultat, et peut être exporté vers Excel.</li>'
    '<li><strong>Baselines :</strong> avant de supprimer ou de restructurer en profondeur un paquetage existant, l’assistant a pour consigne d’en créer d’abord une baseline ; vous la restaurez dans EA (Manage Baselines → Compare/Restore).</li></ul>'
    '<p>Cela dit, une suppression est définitive et l’IA peut se tromper — l’application le rappelle : relisez donc les modifications proposées avant de les valider. Pour les modèles importants, utilisez le mode ask et sauvegardez la base — l’application est fournie sans garantie.</p>'),
@@ -704,7 +704,7 @@ T["fr"] = dict(
    '<li>« Supprimer la clé API, les mots de passe et les jetons du Gestionnaire d’identification » — la clé API Claude, les mots de passe du compte EA et de la base, et le jeton Confluence.</li></ul>'
    '<p>Votre modèle EA, les fichiers enregistrés ailleurs et les pages publiées dans Confluence ne sont pas touchés.</p>'),
   ("Comment signaler un bug ou être informé des nouvelles versions ?",
-   '<p>Dans l’application, ouvrez « Signaler un bug » dans la barre de navigation, décrivez ce qui s’est passé, ajoutez des captures d’écran et cliquez sur « Envoyer le signalement » : un message prêt à partir vers mariusz@loonar.eu s’ouvre dans votre messagerie par défaut ; vous le vérifiez et l’envoyez. Les informations techniques (version de l’application, système, modèle, mode de validation, dernier message — sans mots de passe ni clés) ne sont jointes que si cette option reste cochée (elle l’est par défaut).</p>'
+   '<p>Dans l’application, ouvrez « Signaler un bug » dans la barre de navigation, décrivez ce qui s’est passé, ajoutez des captures d’écran et cliquez sur « Envoyer le signalement » : un message prêt à partir vers mariusz@loonar.eu s’ouvre dans votre messagerie par défaut ; vous le vérifiez et l’envoyez. Les informations techniques (version de l’application, version de Windows, modèle d’IA, mode de validation, dernier message — sans mots de passe ni clés) ne sont jointes que si cette option reste cochée (elle l’est par défaut).</p>'
    '<p>Pour les nouvelles versions, saisissez votre e-mail sur la carte « 5. Nouvelles versions (newsletter) » des Paramètres et cochez le consentement. Ou écrivez simplement à <a href="mailto:mariusz@loonar.eu">mariusz@loonar.eu</a>.</p>'),
  ],
  d_h="Télécharger", d_sub="Gratuit pour tous — téléchargez, installez, connectez votre modèle.",
@@ -731,8 +731,8 @@ T["fr"] = dict(
  ab_li="Mariusz Głowacki sur LinkedIn",
  c_h="Contact", c_text='Une question, une idée, un bug ? Écrivez à <a href="mailto:mariusz@loonar.eu">mariusz@loonar.eu</a> — ou utilisez « Signaler un bug » dans l’application.',
  f_addr="ul. Gombrowicza 12, 73-110 Stargard, Pologne",
- f_tm="Sparx Systems et Enterprise Architect sont des marques déposées de Sparx Systems Pty Ltd. Claude et Anthropic sont des marques d’Anthropic, PBC. Atlassian et Confluence sont des marques d’Atlassian. Microsoft, Windows, Word, Excel, GitHub et LinkedIn sont des marques du groupe Microsoft. PostgreSQL est une marque de la PostgreSQL Community Association of Canada. Loonar Compass est un produit indépendant, sans lien avec ces sociétés, qui ne l’approuvent ni ne le parrainent.",
- f_stats="Pas de cookies. Statistiques de visite anonymes (GoatCounter), qui n’enregistrent aucune donnée personnelle. Votre choix de langue est mémorisé par votre navigateur.",
+ f_tm="Sparx Systems et Enterprise Architect sont des marques déposées de Sparx Systems Pty Ltd. Claude et Anthropic sont des marques d’Anthropic, PBC. Atlassian et Confluence sont des marques d’Atlassian. Microsoft, Windows, Word, Excel, GitHub et LinkedIn sont des marques du groupe Microsoft. PostgreSQL est une marque déposée de la PostgreSQL Community Association. Loonar Compass est un produit indépendant, sans lien avec ces sociétés, qui ne l’approuvent ni ne le parrainent.",
+ f_stats="Pas de cookies. Statistiques de visite anonymes (GoatCounter), qui ne conservent aucune donnée personnelle. Votre choix de langue est mémorisé par votre navigateur.",
  f_privacy_link="Confidentialité", f_legal_link="Mentions légales",
  f_top="Haut de page",
  doc_updated="Dernière mise à jour :", doc_home="Retour à la page d’accueil",
@@ -744,11 +744,11 @@ T["fr"] = dict(
  m_user="Dessine le processus de commande de notre boutique en ligne en BPMN dans le paquetage <b>Ventes</b>. Le paiement doit être un sous-processus intégré.",
  m_steps_h="Étapes de la dernière réponse : 3",
  m_steps=["Claude analyse et planifie (étape 1)","Lecture de la base de données du modèle : paquetage Ventes","Enregistrement dans EA, 14 opérations : diagramme Processus de commande"],
- m_bot="C’est fait. Le paquetage <b>Ventes</b> contient un nouveau diagramme BPMN <b>Processus de commande</b> : 5 tâches, une passerelle et le sous-processus intégré <b>Paiement</b> en 3 étapes. Je l’ai ouvert dans votre fenêtre EA.",
+ m_bot="C’est fait. Le paquetage <b>Ventes</b> contient un nouveau diagramme BPMN <b>Processus de commande</b> : 3 tâches, une passerelle et le sous-processus intégré <b>Paiement</b> en 3 étapes. Je l’ai ouvert dans votre fenêtre EA.",
  m_ph="Écrivez un message, glissez des fichiers ou collez une image (Ctrl+V)…",
  m_mode="claude-haiku-5-5 · mode ask",
  m_appr_h="Claude veut enregistrer des modifications dans le modèle",
- m_appr=["Nouveau diagramme BPMN « Processus de commande » dans Ventes","5 tâches, 1 passerelle, événements de début et de fin","Sous-processus intégré « Paiement » en 3 étapes","12 flux de séquence"],
+ m_appr=["Nouveau diagramme BPMN « Processus de commande » dans Ventes","3 tâches, 1 passerelle, événements de début et de fin","Sous-processus intégré « Paiement » en 3 étapes","9 flux de séquence"],
  m_approve="Valider", m_reject="Refuser",
  m_saveas="Enregistrer sous…", m_full="Ouvrir en taille réelle", m_png="Processus de commande.png",
  d_recv=["Recevoir la","commande"], d_gw="En stock ?", d_pay="Paiement",

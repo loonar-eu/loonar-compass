@@ -5,11 +5,6 @@ GitHub) pod domeną **loonar.eu**, publikowana z publicznego repozytorium **gith
 przez GitHub Actions. Bez PHP, bez cookies, bez zewnętrznych skryptów i czcionek. Statystyki: GoatCounter
 (bez cookies, bez danych osobowych). Instalator jest pobierany z **GitHub Releases**.
 
-> **TODO przed publikacją:** w `dist\` nie ma jeszcze `LoonarCompass-Setup-0.3.exe`. Strona pokazuje na razie
-> rozmiar `SIZE_MB = 28` i sumę `SHA256` ze starego instalatora 0.3 (LoonarEaAssistant) – **ta suma nie będzie
-> pasować do nowego pliku**. Zbuduj instalator, uruchom `build.py` (sam sprawdzi sumę i poda właściwą, jeśli się
-> różni), popraw `SHA256` i wygeneruj stronę ponownie. `build.py` wypisuje o tym ostrzeżenie przy każdym uruchomieniu.
-
 **Wszystkie pliki HTML, `sitemap.xml`, `robots.txt`, `CNAME`, `.nojekyll` i kopie licencji są generowane**
 skryptem `website_src\build.py`. Nie poprawiaj ich ręcznie – zmiana zniknie przy następnym generowaniu.
 Ręcznie zmieniasz tylko `assets/style.css` i `assets/site.js` (potem podnieś `ASSET_V` w `build.py`).
