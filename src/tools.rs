@@ -321,7 +321,8 @@ so update existing notes instead of creating similar ones. You receive the saved
                 "properties": {
                     "name": { "type": "string", "description": "Short name of the note, e.g. \"Line style in BPMN\"." },
                     "description": { "type": "string", "description": "One sentence: what it is about (for the index)." },
-                    "content": { "type": "string", "description": "Content of the note, concise, with the reasoning when it is known." }
+                    "content": { "type": "string", "description": "Content of the note, concise, with the reasoning when it is known." },
+                    "only_this_model": { "type": "boolean", "description": "Notes are shared by all models. Set true ONLY when the user explicitly asks to remember something just for this model (this file or database); the note is then shown only in conversations with this model." }
                 },
                 "required": ["name", "description", "content"]
             }
@@ -373,8 +374,10 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             let content = input["content"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["content".to_string()]))?;
             // Memory goes into every later conversation, so saving it follows the approval mode like a model change.
             ctx.approver.confirm(&crate::i18n::fmt("Save a note to the assistant's memory:\n\"{0}\"\n{1}", &[name.to_string(), shorten_for_dialog(content)]))?;
-            let file = memory::save(&ctx.cfg.memory_dir, name, input["description"].as_str().unwrap_or(""), content)?;
-            Ok(format!("Saved note '{name}' to memory (file {file}).").into())
+            let model = if input["only_this_model"] == true { ctx.cfg.model_label() } else { String::new() };
+            let file = memory::save(&ctx.cfg.memory_dir, name, input["description"].as_str().unwrap_or(""), content, &model)?;
+            let scope = if model.is_empty() { "for all models".to_string() } else { format!("only for the model {model}") };
+            Ok(format!("Saved note '{name}' to memory (file {file}), {scope}.").into())
         }
         "memory_delete" => {
             let name = input["name"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["name".to_string()]))?;

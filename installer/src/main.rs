@@ -1315,6 +1315,8 @@ fn uninstall(target: &Installed, remove_data: bool, remove_secrets: bool, hwnd: 
     };
     let mut warnings = Vec::new();
     progress.set(0.85, crate::i18n::tr("Cleaning up user data…"));
+    // Read before the data folder goes: the names of the secrets saved for conversation connections.
+    let connection_secrets = secrets::connection_names(&config::user_data_dir());
     if remove_data {
         let data = config::user_data_dir();
         match std::fs::remove_dir_all(&data) {
@@ -1325,7 +1327,9 @@ fn uninstall(target: &Installed, remove_data: bool, remove_secrets: bool, hwnd: 
     if remove_secrets {
         let failed: Vec<String> = secrets::ALL
             .iter()
-            .filter_map(|name| secrets::delete(name).err().map(|e| crate::i18n::fmt("could not remove {0} from Credential Manager: {1}", &[name.to_string(), format!("{e:#}")])))
+            .map(|name| name.to_string())
+            .chain(connection_secrets)
+            .filter_map(|name| secrets::delete(&name).err().map(|e| crate::i18n::fmt("could not remove {0} from Credential Manager: {1}", &[name.to_string(), format!("{e:#}")])))
             .collect();
         if failed.is_empty() {
             done.push(crate::i18n::tr("API key, passwords and tokens removed from Credential Manager").to_string());

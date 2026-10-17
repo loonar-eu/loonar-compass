@@ -2,6 +2,17 @@
 
 Toutes les modifications importantes de l'application Loonar Compass (nommée Loonar EA Assistant jusqu'à la version 0.3).
 
+## Version 0.5 (2026-10-18)
+
+Un modèle par conversation :
+
+- Chaque conversation a son propre modèle. L'en-tête de la conversation l'affiche (« Modèle : … ») ; un clic ouvre le modèle de la conversation, où vous pouvez le vérifier ou le modifier.
+- Une nouvelle conversation indique quel modèle elle utilisera : celui par défaut des paramètres. « Choisir un autre modèle… » permet de choisir une autre base PostgreSQL (serveur, port, base, compte, mot de passe, chiffrement) ou un fichier EA (.qea, .qeax), avec son compte EA, et de tester la connexion.
+- Les mots de passe d'une connexion différente de celle des paramètres sont conservés dans le Gestionnaire d'identification Windows ; la désinstallation les supprime avec les autres secrets si vous le choisissez.
+- Déposer un fichier .qea ou .qeax sur la fenêtre en fait le modèle de la conversation (dans une conversation qui contient des messages, une nouvelle conversation commence).
+- Les conversations existantes reçoivent une copie du modèle des paramètres et continuent donc à l'utiliser même si les paramètres changent plus tard.
+- La mémoire de l'assistant reste commune à tous les modèles. Une note ne concerne un seul modèle que si vous le demandez (« retiens cela uniquement pour ce modèle »).
+
 ## Version 0.4 (2026-10-17)
 
 Modèles dans des fichiers :

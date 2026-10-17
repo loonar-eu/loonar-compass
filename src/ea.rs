@@ -184,7 +184,7 @@ pub fn run_batch(cfg: &AppConfig, ops: &[Value], options: &BatchOptions) -> Resu
             // Tests and development builds may use a separate EA account of the test model (never in a release build).
             match std::env::var("LOONAR_TEST_EA_PASSWORD") {
                 Ok(password) if cfg!(any(test, debug_assertions)) => password,
-                _ => secrets::get(secrets::EA_PASSWORD)?,
+                _ => secrets::get(&cfg.ea_password_key)?,
             }
         },
         ea_exe: cfg.ea_path.clone(),

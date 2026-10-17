@@ -111,7 +111,7 @@ pub fn run(cfg: &AppConfig, props: &Path, from: Lang, to: Lang) -> Result<String
             }
         }
         let content = body.join("\n");
-        memory::save(&cfg.memory_dir, &name, &description, content.trim())?;
+        memory::save(&cfg.memory_dir, &name, &description, content.trim(), &entry.model)?;
         if memory::slug(&name) != memory::slug(&entry.name) {
             let _ = memory::delete(&cfg.memory_dir, &entry.name);
         }

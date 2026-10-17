@@ -13,6 +13,128 @@ pub struct Message {
     pub created: String,          // RFC 3339
 }
 
+/// The EA model a conversation works with. A conversation keeps its model: choosing another one starts a new conversation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum ModelChoice {
+    /// An EA project file (`.qea`/`.qeax`); `ea_user` only for a file with user security.
+    File {
+        path: String,
+        #[serde(default)]
+        ea_user: String,
+    },
+    /// A model in a PostgreSQL database. Passwords are not stored here: the settings' passwords when the connection is
+    /// the one from the settings, otherwise Credential Manager entries named after the connection.
+    Database {
+        name: String,
+        host: String,
+        port: u16,
+        #[serde(default)]
+        user: String,
+        #[serde(default)]
+        sslmode: String,
+        #[serde(default)]
+        ea_user: String,
+    },
+}
+
+impl ModelChoice {
+    /// The model the settings point to (for new conversations and conversations from before version 0.5).
+    pub fn of(cfg: &crate::config::AppConfig) -> Self {
+        if cfg.uses_file() {
+            Self::File { path: cfg.model_file.display().to_string(), ea_user: cfg.ea_user.clone() }
+        } else {
+            Self::Database {
+                name: cfg.db_name.clone(),
+                host: cfg.db_host.clone(),
+                port: cfg.db_port,
+                user: cfg.db_user.clone(),
+                sslmode: cfg.db_sslmode.as_str().to_string(),
+                ea_user: cfg.ea_user.clone(),
+            }
+        }
+    }
+
+    /// The EA account of this model (empty for a file without security).
+    pub fn ea_user(&self) -> &str {
+        match self {
+            Self::File { ea_user, .. } | Self::Database { ea_user, .. } => ea_user,
+        }
+    }
+
+    /// Credential Manager entry with the database password of a connection that differs from the settings.
+    pub fn db_secret_name(&self) -> Option<String> {
+        match self {
+            Self::Database { name, host, port, user, .. } => Some(format!("db_password:{user}@{host}:{port}/{name}")),
+            Self::File { .. } => None,
+        }
+    }
+
+    /// Credential Manager entry with the EA account password of a model that differs from the settings.
+    pub fn ea_secret_name(&self) -> String {
+        format!("ea_password:{}@{}", self.ea_user(), self.describe())
+    }
+
+    /// Whether the database connection is the one from the settings (then the settings' password is used).
+    pub fn uses_settings_database(&self, base: &crate::config::AppConfig) -> bool {
+        matches!(self, Self::Database { name, host, port, user, .. }
+            if !base.uses_file() && &base.db_name == name && &base.db_host == host && base.db_port == *port && &base.db_user == user)
+    }
+
+    /// Whether the EA account is the settings' account for the settings' model (then the settings' password is used).
+    pub fn uses_settings_ea_account(&self, base: &crate::config::AppConfig) -> bool {
+        self.ea_user() == base.ea_user && (self.uses_settings_database(base) || *self == Self::of(base))
+    }
+
+    /// Short name: the file name or the database name.
+    pub fn label(&self) -> String {
+        match self {
+            Self::File { path, .. } => Path::new(path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path.clone()),
+            Self::Database { name, .. } => name.clone(),
+        }
+    }
+
+    /// Full description for a tooltip: the file path, or database@server:port.
+    pub fn describe(&self) -> String {
+        match self {
+            Self::File { path, .. } => path.clone(),
+            Self::Database { name, host, port, .. } => format!("{name}@{host}:{port}"),
+        }
+    }
+
+    /// The settings for working in this conversation: the application settings with this conversation's model.
+    pub fn apply(&self, base: &crate::config::AppConfig) -> Result<crate::config::AppConfig> {
+        let mut cfg = base.clone();
+        match self {
+            Self::File { path, .. } => {
+                let file = PathBuf::from(path);
+                if !file.is_file() {
+                    anyhow::bail!("{}", crate::i18n::fmt("The model file of this conversation no longer exists: {0}. Choose another model in the conversation header.", &[path.clone()]));
+                }
+                cfg.model_source = crate::config::ModelSource::File;
+                cfg.model_file = file;
+            }
+            Self::Database { name, host, port, user, sslmode, .. } => {
+                cfg.model_source = crate::config::ModelSource::Postgres;
+                cfg.db_name = name.clone();
+                cfg.db_host = host.clone();
+                cfg.db_port = *port;
+                cfg.db_user = user.clone();
+                cfg.db_sslmode = crate::config::SslMode::parse(sslmode)?;
+                if !self.uses_settings_database(base) {
+                    let key = self.db_secret_name().unwrap_or_default();
+                    cfg.db_password = crate::config::secrets::get(&key).unwrap_or_default();
+                }
+            }
+        }
+        cfg.ea_user = self.ea_user().to_string();
+        if !self.uses_settings_ea_account(base) {
+            cfg.ea_password_key = self.ea_secret_name();
+        }
+        Ok(cfg)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     pub id: String,
@@ -21,6 +143,9 @@ pub struct Session {
     /// Optimistic locking: incremented on every save. A save with an outdated revision is rejected.
     #[serde(default)]
     pub revision: u64,
+    /// The model of this conversation (empty in a new conversation until it is chosen or the first message is sent).
+    #[serde(default)]
+    pub model: Option<ModelChoice>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -43,6 +168,7 @@ impl Session {
             title: crate::i18n::tr("New conversation").into(),
             messages: Vec::new(),
             revision: 0,
+            model: None,
         }
     }
 
@@ -135,4 +261,51 @@ fn sanitize(s: &str) -> String {
         .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
         .take(40)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn settings(text: &str) -> crate::config::AppConfig {
+        let dir = std::env::temp_dir().join(format!("loonar-model-choice-{}-{}", std::process::id(), text.len()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("app.properties"), text).unwrap();
+        crate::config::AppConfig::load(&dir.join("app.properties")).unwrap()
+    }
+
+    /// A conversation keeps its own model: the settings' database, another database, or a file.
+    #[test]
+    fn conversation_model_overrides_the_settings() {
+        let base = settings("db.host=srv\r\ndb.port=5432\r\ndb.name=ea\r\ndb.user=reader\r\ndb.password=secret\r\nea.user=claude\r\n");
+        let default = ModelChoice::of(&base);
+        assert!(default.uses_settings_database(&base) && default.uses_settings_ea_account(&base));
+        let same = default.apply(&base).unwrap();
+        assert_eq!((same.db_name.as_str(), same.db_password.as_str(), same.ea_password_key.as_str()), ("ea", "secret", crate::config::secrets::EA_PASSWORD));
+
+        let other = ModelChoice::Database { name: "ea2".into(), host: "srv".into(), port: 5432, user: "reader".into(), sslmode: "require".into(), ea_user: "claude".into() };
+        assert!(!other.uses_settings_database(&base));
+        let cfg = other.apply(&base).unwrap();
+        assert_eq!(cfg.db_name, "ea2");
+        assert_eq!(cfg.db_sslmode, crate::config::SslMode::Require);
+        assert_eq!(other.db_secret_name().unwrap(), "db_password:reader@srv:5432/ea2");
+        assert_eq!(cfg.ea_password_key, "ea_password:claude@ea2@srv:5432", "another model has its own EA password entry");
+
+        let file = std::env::temp_dir().join(format!("loonar-model-choice-{}.qea", std::process::id()));
+        std::fs::write(&file, b"x").unwrap();
+        let in_file = ModelChoice::File { path: file.display().to_string(), ea_user: String::new() };
+        let cfg = in_file.apply(&base).unwrap();
+        assert!(cfg.uses_file() && cfg.model_file == file && cfg.ea_user.is_empty());
+        assert_eq!(in_file.label(), file.file_name().unwrap().to_string_lossy());
+        std::fs::remove_file(&file).unwrap();
+        assert!(in_file.apply(&base).is_err(), "a missing file is reported");
+
+        // Saved in the conversation file and read back.
+        let mut session = Session::new();
+        session.model = Some(other.clone());
+        let back: Session = serde_json::from_str(&serde_json::to_string(&session).unwrap()).unwrap();
+        assert_eq!(back.model, Some(other));
+        let old: Session = serde_json::from_str(r#"{"id":"x","title":"t","messages":[]}"#).unwrap();
+        assert_eq!(old.model, None, "conversations from before 0.5 have no model yet");
+    }
 }

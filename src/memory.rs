@@ -17,6 +17,9 @@ pub struct Entry {
     pub description: String,
     pub content: String,
     pub modified: String,
+    /// Model the note is limited to (the name of the file or database); empty = all models. Notes are shared by
+    /// default; a limit is set only when the user asks for it.
+    pub model: String,
 }
 
 /// File name from the note name: lowercase letters, digits and hyphens (Polish letters converted to Latin ones).
@@ -64,7 +67,7 @@ pub fn list(dir: &Path) -> Vec<Entry> {
 
 fn parse(stem: &str, text: &str, modified: std::time::SystemTime) -> Entry {
     let text = text.trim_start_matches('\u{feff}');
-    let (mut name, mut description, mut content) = (stem.to_string(), String::new(), text.trim().to_string());
+    let (mut name, mut description, mut content, mut model) = (stem.to_string(), String::new(), text.trim().to_string(), String::new());
     if let Some(rest) = text.strip_prefix("---") {
         if let Some(end) = rest.find("\n---") {
             for line in rest[..end].lines() {
@@ -72,21 +75,25 @@ fn parse(stem: &str, text: &str, modified: std::time::SystemTime) -> Entry {
                     name = v.trim().to_string();
                 } else if let Some(v) = line.strip_prefix("description:") {
                     description = v.trim().to_string();
+                } else if let Some(v) = line.strip_prefix("model:") {
+                    model = v.trim().to_string();
                 }
             }
             content = rest[end + 4..].trim().to_string();
         }
     }
     let modified = chrono::DateTime::<chrono::Local>::from(modified).format("%Y-%m-%d %H:%M").to_string();
-    Entry { name, description, content, modified }
+    Entry { name, description, content, modified, model }
 }
 
-/// Saves (or overwrites) a note and refreshes the index. Returns the file name.
-pub fn save(dir: &Path, name: &str, description: &str, content: &str) -> Result<String> {
+/// Saves (or overwrites) a note and refreshes the index. `model` limits the note to one model (empty = all models).
+/// Returns the file name.
+pub fn save(dir: &Path, name: &str, description: &str, content: &str, model: &str) -> Result<String> {
     let path = path_of(dir, name)?;
     std::fs::create_dir_all(dir).with_context(|| crate::i18n::fmt("memory folder {0}", &[dir.display().to_string()]))?;
     let description = description.replace('\n', " ");
-    let text = format!("---\nname: {}\ndescription: {}\n---\n\n{}\n", name.trim(), description.trim(), content.trim());
+    let model_line = if model.trim().is_empty() { String::new() } else { format!("model: {}\n", model.trim().replace('\n', " ")) };
+    let text = format!("---\nname: {}\ndescription: {}\n{model_line}---\n\n{}\n", name.trim(), description.trim(), content.trim());
     std::fs::write(&path, text).with_context(|| crate::i18n::fmt("saving {0}", &[path.display().to_string()]))?;
     write_index(dir)?;
     Ok(path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default())
@@ -119,8 +126,9 @@ fn write_index(dir: &Path) -> Result<()> {
 }
 
 /// Part of the model instructions with the notes: the full content, or only the index when there is too much of it.
-pub fn prompt_section(dir: &Path) -> String {
-    let entries = list(dir);
+/// Notes limited to another model are left out; `model` is the name of the conversation's model.
+pub fn prompt_section(dir: &Path, model: &str) -> String {
+    let entries: Vec<Entry> = list(dir).into_iter().filter(|e| e.model.is_empty() || e.model.eq_ignore_ascii_case(model)).collect();
     if entries.is_empty() {
         return "<memory>\nNo saved notes.\n</memory>".to_string();
     }
@@ -128,7 +136,8 @@ pub fn prompt_section(dir: &Path) -> String {
     let mut text = String::from("<memory>\n");
     for e in &entries {
         if full <= PROMPT_LIMIT {
-            text.push_str(&format!("## {} ({})\n{}\nSaved: {}\n\n{}\n\n", e.name, slug(&e.name), e.description, e.modified, e.content));
+            let only = if e.model.is_empty() { String::new() } else { format!("\nOnly for the model {}.", e.model) };
+            text.push_str(&format!("## {} ({})\n{}\nSaved: {}{only}\n\n{}\n\n", e.name, slug(&e.name), e.description, e.modified, e.content));
         } else {
             text.push_str(&format!("- {} ({}): {} [saved {}]\n", e.name, slug(&e.name), e.description, e.modified));
         }
@@ -148,14 +157,19 @@ mod tests {
     fn save_list_delete_roundtrip() {
         let dir = std::env::temp_dir().join(format!("loonar-memory-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        save(&dir, "Nazewnictwo podprocesów", "how to name subprocesses", "Embedded BPMN subprocesses, names start with a capital letter.").unwrap();
-        save(&dir, "Nazewnictwo podprocesów", "how to name subprocesses", "Changed note.").unwrap();
+        save(&dir, "Nazewnictwo podprocesów", "how to name subprocesses", "Embedded BPMN subprocesses, names start with a capital letter.", "").unwrap();
+        save(&dir, "Nazewnictwo podprocesów", "how to name subprocesses", "Changed note.", "").unwrap();
         let entries = list(&dir);
         assert_eq!(entries.len(), 1, "the same name overwrites the file");
         assert_eq!(entries[0].content, "Changed note.");
         assert!(dir.join("nazewnictwo-podprocesow.md").is_file());
         assert!(std::fs::read_to_string(dir.join(INDEX_FILE)).unwrap().contains("nazewnictwo-podprocesow.md"));
-        assert!(prompt_section(&dir).contains("Changed note."));
+        assert!(prompt_section(&dir, "Shop.qea").contains("Changed note."));
+        save(&dir, "Colours", "colours of this model", "Payments in green.", "Shop.qea").unwrap();
+        assert!(prompt_section(&dir, "shop.qea").contains("Payments in green."), "a note for this model is shown");
+        assert!(!prompt_section(&dir, "Other.qea").contains("Payments in green."), "a note for another model is left out");
+        assert_eq!(list(&dir).iter().find(|e| e.name == "Colours").unwrap().model, "Shop.qea");
+        delete(&dir, "Colours").unwrap();
         delete(&dir, "nazewnictwo-podprocesow").unwrap();
         assert!(list(&dir).is_empty());
         let _ = std::fs::remove_dir_all(&dir);

@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<title>Loonar Compass 0.4 - Guide de l'utilisateur</title>
+<title>Loonar Compass 0.5 - Guide de l'utilisateur</title>
 <style>
   @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
   body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1f1e1b; }
@@ -38,7 +38,7 @@
   <img src="img/logo.png" alt="Logo de Loonar Compass">
   <h1 style="margin-top: 10mm;">Loonar Compass</h1>
   <div class="sub">Guide de l'utilisateur</div>
-  <div class="sub" style="font-size: 11pt;">version 0.4 &middot; octobre 2026</div>
+  <div class="sub" style="font-size: 11pt;">version 0.5 &middot; octobre 2026</div>
   <div class="owner">
     Loonar Mariusz Głowacki<br>
     ul. Gombrowicza 12, 73-110 Stargard<br>
@@ -107,7 +107,7 @@
 <div class="note"><b>Coûts.</b> L'application elle-même est gratuite. L'utilisation du modèle Claude est facturée par Anthropic selon la consommation, sur le compte auquel appartient la clé API.</div>
 
 <h2 id="s3">3. Installation</h2>
-<p>Lancez le fichier <code>LoonarCompass-Setup-0.4.exe</code>. L'assistant d'installation vous guide à travers les étapes avec les boutons <b>Suivant</b> et <b>Précédent</b>. Des droits d'administrateur ne sont nécessaires que si vous installez l'application pour tous les utilisateurs de l'ordinateur.</p>
+<p>Lancez le fichier <code>LoonarCompass-Setup-0.5.exe</code>. L'assistant d'installation vous guide à travers les étapes avec les boutons <b>Suivant</b> et <b>Précédent</b>. Des droits d'administrateur ne sont nécessaires que si vous installez l'application pour tous les utilisateurs de l'ordinateur.</p>
 <div class="note"><b>Avertissement Windows SmartScreen.</b> Le programme d'installation n'est pas encore signé numériquement. Si Windows affiche « Windows a protégé votre ordinateur », cliquez sur <b>Informations complémentaires</b>, puis sur <b>Exécuter quand même</b>. Lorsque le contrôle intelligent des applications (Smart App Control) est activé, Windows bloque les applications non signées : attendez alors la version signée.</div>
 <figure class="small"><img src="img/en/installer-language.png" alt="Assistant d'installation : page de choix de la langue avec le polonais, l'anglais, l'allemand et le français"><figcaption>La première page de l'assistant d'installation : le choix de la langue</figcaption></figure>
 <ol>
@@ -159,9 +159,9 @@
 <h3>Vue du chat</h3>
 <ul>
   <li><b>La liste des conversations</b> à gauche est regroupée en « Aujourd'hui », « Hier », « 7 derniers jours » et « Plus ancien ». Vous commencez une nouvelle conversation avec le bouton <b>+</b>. La conversation sélectionnée est mise en surbrillance.</li>
-  <li><b>L'en-tête de la conversation</b> affiche son titre et, pendant que l'assistant travaille, l'indicateur « Claude travaille ».</li>
+  <li><b>L'en-tête de la conversation</b> affiche son titre, le bouton <b>Modèle : …</b> avec le modèle de la conversation (chapitre 13) et, pendant que l'assistant travaille, l'indicateur « Claude travaille ».</li>
   <li><b>Messages :</b> les vôtres sont dans une bulle beige, les réponses de l'assistant portent l'icône de l'application. Chaque message indique l'heure (les plus anciens aussi la date).</li>
-  <li><b>L'écran d'une nouvelle conversation</b> affiche le logo et une indication de ce que vous pouvez faire.</li>
+  <li><b>L'écran d'une nouvelle conversation</b> affiche le logo, une indication de ce que vous pouvez faire et le modèle qu'utilisera la conversation, avec le bouton <b>Choisir un autre modèle…</b>.</li>
   <li><b>La carte de message</b> en bas : le champ de texte, le bouton de collage, le modèle et le mode de validation, ainsi que les boutons ronds d'envoi et d'arrêt (chapitre 6). Sous la carte, un rappel : « Les réponses et les modifications sont préparées par un modèle d'IA (Claude d'Anthropic) et peuvent contenir des erreurs. Vérifiez-les avant de les valider. »</li>
 </ul>
 
@@ -368,6 +368,7 @@
 <p>L'assistant enregistre lui-même les points importants et le signale en une phrase dans sa réponse. Vous pouvez aussi le lui demander explicitement en commençant par « retiens… » :</p>
 <div class="prompt">Retiens : nous numérotons les exigences FR01, FR02… et les gardons dans le paquetage « Exigences ».</div>
 <div class="prompt">Retiens que, sur les diagrammes BPMN, nous colorons les tâches système en vert.</div>
+<p>Les points retenus sont communs à tous les modèles. Si vous voulez qu'un point ne s'applique qu'à un seul modèle, précisez-le, par exemple « retiens cela uniquement pour ce modèle » : le point n'est alors utilisé que dans les conversations avec ce modèle, et la vue « Mémoire de l'assistant » l'indique par la mention « Uniquement pour le modèle … ».</p>
 <p>En mode ask ou plan, l'enregistrement d'un point passe par la validation, comme une modification du modèle (chapitre 12). L'enregistrement n'interrompt pas le travail de l'assistant sur la tâche en cours. Le contenu complet de la mémoire est envoyé à Claude avec chaque requête (chapitre 14).</p>
 <h3>La vue « Mémoire de l'assistant »</h3>
 <ul>
@@ -397,13 +398,16 @@
   <li><b>Renommer :</b> cliquez sur le crayon à côté de la conversation sélectionnée, saisissez un nom ; <span class="key">Entrée</span> enregistre, <span class="key">Échap</span> annule.</li>
   <li><b>Supprimer :</b> les conversations ne peuvent pas être supprimées dans l'application. Si nécessaire, supprimez le fichier de la conversation dans le dossier <code>history</code> (chapitre 14).</li>
   <li><b>Plusieurs conversations à la fois :</b> pendant que l'assistant travaille, vous pouvez commencer une nouvelle conversation ou passer à une autre. Le travail commencé se poursuit en arrière-plan.</li>
+  <li><b>Modèle de la conversation :</b> chaque conversation travaille avec son propre modèle. Une nouvelle conversation utilise le modèle par défaut défini dans les paramètres (l'écran d'une nouvelle conversation indique lequel) ; le bouton <b>Choisir un autre modèle…</b> ou le bouton <b>Modèle : …</b> de l'en-tête ouvre la fenêtre « Modèle de cette conversation ». Vous y choisissez <b>Par défaut, depuis les paramètres</b> ou <b>Autre modèle</b> : <b>Base PostgreSQL</b> (serveur, port, nom de la base, compte de la base, mot de passe, chiffrement de la connexion) ou <b>Fichier EA (.qea, .qeax)</b>, ainsi que le compte EA. <b>Tester la connexion</b> ouvre le modèle et compte les paquetages, éléments et diagrammes ; <b>Enregistrer</b> l'attribue à la conversation. Les mots de passe d'une connexion différente de celle des paramètres sont conservés dans le Gestionnaire d'identification Windows. Si vous changez le modèle d'une conversation qui contient déjà des messages, le changement s'applique aux messages suivants ; les réponses précédentes concernent l'ancien modèle.</li>
+  <li><b>Fichier EA déposé sur la fenêtre :</b> un fichier .qea ou .qeax déposé sur le chat devient le modèle de la conversation au lieu d'une pièce jointe ; dans une conversation qui contient déjà des messages, une nouvelle conversation commence avec ce fichier.</li>
+  <li><b>Conversations des versions précédentes :</b> au premier démarrage de la version 0.5, elles reçoivent une copie du modèle défini dans les paramètres ; elles continuent donc à travailler avec ce modèle même si les paramètres changent par la suite. Le survol d'une conversation dans la liste affiche son modèle.</li>
 </ul>
 <table>
   <tr><th style="width: 30%;">Point à côté d'une conversation</th><th>Signification</th></tr>
   <tr><td style="color: #d97706;"><b>● orange</b></td><td>L'assistant travaille dans cette conversation (ou attend votre accord pour enregistrer)</td></tr>
   <tr><td style="color: #1e7a3e;"><b>● vert</b></td><td>L'assistant a terminé son travail en arrière-plan, et vous n'avez pas encore consulté le résultat</td></tr>
 </table>
-<p>Les enregistrements dans EA provenant de différentes conversations s'exécutent les uns après les autres, pas simultanément. Lorsque le chat a défilé vers le haut, le cercle avec une flèche au-dessus du champ de message vous ramène à la fin de la conversation.</p>
+<p>Les enregistrements dans EA provenant de différentes conversations s'exécutent les uns après les autres, pas simultanément. EA en arrière-plan ne garde qu'un seul modèle ouvert à la fois : passer d'une conversation à une autre qui utilise un modèle différent le rouvre, ce qui prend de quelques secondes à environ 25 secondes. Lorsque le chat a défilé vers le haut, le cercle avec une flèche au-dessus du champ de message vous ramène à la fin de la conversation.</p>
 
 <h2 id="s14" class="break">14. Données, sécurité et confidentialité</h2>
 <h3>Où se trouvent vos données</h3>
@@ -490,7 +494,7 @@
 <p><b>Composants open source.</b> L'application contient des bibliothèques et des polices open source ; chacune conserve sa propre licence. Leur liste se trouve dans le fichier <code>THIRD-PARTY-NOTICES.txt</code> du dossier d'installation ; dans la vue <b>À propos</b>, le bouton <b>Afficher les licences des composants</b> ouvre ce fichier.</p>
 <p><b>Soutien.</b> Si l'application vous est utile, vous pouvez soutenir son développement par une contribution volontaire : vue <b>Soutenir le projet</b> ou <a href="https://suppi.pl/loonar">https://suppi.pl/loonar</a>.</p>
 <p><b>Contact.</b> Propriétaire de l'application : Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard. E-mail : mariusz@loonar.eu, site : <a href="https://loonar.eu">https://loonar.eu</a>, code source : <a href="https://github.com/loonar-eu/loonar-compass">https://github.com/loonar-eu/loonar-compass</a>. Le plus simple pour signaler un bug est d'utiliser la vue <b>Signaler un bug</b>.</p>
-<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.4. Sparx Systems et Enterprise Architect sont des marques déposées de Sparx Systems Pty Ltd. Claude et Anthropic sont des marques d'Anthropic, PBC. Atlassian, Confluence et Jira sont des marques d'Atlassian. Microsoft, Windows, Word et Excel sont des marques du groupe Microsoft. PostgreSQL est une marque déposée de la PostgreSQL Community Association. Loonar Compass est un produit indépendant, sans lien avec ces sociétés, qui ne l'approuvent ni ne le parrainent.</p>
+<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.5. Sparx Systems et Enterprise Architect sont des marques déposées de Sparx Systems Pty Ltd. Claude et Anthropic sont des marques d'Anthropic, PBC. Atlassian, Confluence et Jira sont des marques d'Atlassian. Microsoft, Windows, Word et Excel sont des marques du groupe Microsoft. PostgreSQL est une marque déposée de la PostgreSQL Community Association. Loonar Compass est un produit indépendant, sans lien avec ces sociétés, qui ne l'approuvent ni ne le parrainent.</p>
 
 </body>
 </html>

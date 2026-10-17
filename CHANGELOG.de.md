@@ -2,6 +2,17 @@
 
 Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen Loonar EA Assistant).
 
+## Version 0.5 (2026-10-18)
+
+Ein Modell pro Unterhaltung:
+
+- Jede Unterhaltung hat ihr eigenes Modell. Der Kopf der Unterhaltung zeigt es an („Modell: …“); ein Klick öffnet das Modell der Unterhaltung, das Sie dort prüfen oder ändern können.
+- Eine neue Unterhaltung zeigt, welches Modell sie verwendet: das Standardmodell aus den Einstellungen. Mit „Anderes Modell wählen…“ wählen Sie eine andere PostgreSQL-Datenbank (Server, Port, Datenbank, Konto, Passwort, Verschlüsselung) oder eine EA-Datei (.qea, .qeax) mit ihrem EA-Konto und prüfen die Verbindung.
+- Passwörter einer Verbindung, die von den Einstellungen abweicht, liegen in der Windows-Anmeldeinformationsverwaltung; die Deinstallation entfernt sie zusammen mit den übrigen Geheimnissen, wenn Sie das wählen.
+- Wenn Sie eine .qea- oder .qeax-Datei auf das Fenster ziehen, wird sie zum Modell der Unterhaltung (in einer Unterhaltung mit Nachrichten beginnt eine neue Unterhaltung).
+- Bestehende Unterhaltungen erhalten eine Kopie des Modells aus den Einstellungen und arbeiten so auch nach einer späteren Änderung der Einstellungen damit weiter.
+- Das Gedächtnis des Assistenten bleibt für alle Modelle gemeinsam. Eine Notiz gilt nur dann für ein einzelnes Modell, wenn Sie darum bitten („merke dir das nur für dieses Modell“).
+
 ## Version 0.4 (2026-10-17)
 
 Modelle in Dateien:

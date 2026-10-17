@@ -27,7 +27,7 @@ mod window;
 use anyhow::{bail, Context};
 use config::{secrets, AppConfig, ApprovalMode};
 use eframe::egui;
-use history::{Message, Session};
+use history::{Message, ModelChoice, Session};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::Read;
@@ -65,8 +65,8 @@ fn system_prompt(cfg: &AppConfig) -> String {
         app = config::APP_NAME,
         version = app_version(),
         model = config::CLAUDE_MODEL,
-        memories = memory::prompt_section(&cfg.memory_dir),
-        MODEL_STORE = if cfg.uses_file() { MODEL_IN_FILE } else { MODEL_IN_POSTGRES },
+        memories = memory::prompt_section(&cfg.memory_dir, &cfg.model_label()),
+        MODEL_STORE = format!("{} The model of this conversation: {}.", if cfg.uses_file() { MODEL_IN_FILE } else { MODEL_IN_POSTGRES }, cfg.model_label()),
         LANGUAGE_RULE = format!("Response language: {} (the language selected in the application). Answer in it unless the user writes to you in a different language; then answer in the user's language. Create documents, pages and images in the response language unless the user asks for a different one.", i18n::current().english_name()),
         templates = templates::prompt_section(&cfg.templates_dir),
     )
@@ -707,6 +707,8 @@ struct App {
     /// Channel through which settings tests (run in the background) return their result: group number and message.
     settings_tx: mpsc::Sender<(usize, Result<String, String>)>,
     settings_rx: mpsc::Receiver<(usize, Result<String, String>)>,
+    /// Window with the model of the current conversation (opened from the header or the new-conversation card).
+    conn: Option<ConnEditor>,
 }
 
 /// State of one conversation in which the assistant works in the background (meanwhile the window shows another conversation).
@@ -808,9 +810,23 @@ impl App {
             (View::Chat, crate::i18n::tr("Ready.").to_string())
         };
 
+        // Conversations from before version 0.5 get a copy of the model from the settings, so they keep working with it
+        // when the settings change later.
         let sessions = cfg
             .as_ref()
-            .map(|c| Session::list(&c.history_dir).into_iter().map(|(_, s)| s).collect())
+            .map(|c| {
+                let default = ModelChoice::of(c);
+                Session::list(&c.history_dir)
+                    .into_iter()
+                    .map(|(_, mut s)| {
+                        if s.model.is_none() && !s.messages.is_empty() {
+                            s.model = Some(default.clone());
+                            let _ = s.save(&c.history_dir);
+                        }
+                        s
+                    })
+                    .collect()
+            })
             .unwrap_or_default();
         let (settings_tx, settings_rx) = mpsc::channel();
         Self {
@@ -825,6 +841,7 @@ impl App {
             view,
             session: Session::new(),
             sessions,
+            conn: None,
             pending: Vec::new(),
             input: String::new(),
             status,
@@ -907,6 +924,200 @@ impl App {
         if args.iter().any(|a| a == "--open-last") {
             if let Some(last) = self.sessions.first() {
                 self.session = last.clone();
+            }
+        }
+    }
+
+    /// Sets the model of the current conversation; a conversation with messages is saved at once.
+    fn set_session_model(&mut self, choice: ModelChoice) {
+        let label = choice.label();
+        self.session.model = Some(choice);
+        if let (Some(cfg), false) = (self.cfg.clone(), self.session.messages.is_empty()) {
+            if let Err(e) = self.session.save(&cfg.history_dir) {
+                self.status = crate::i18n::fmt("Could not save the conversation: {0}", &[e.to_string()]);
+                return;
+            }
+            self.sessions = Session::list(&cfg.history_dir).into_iter().map(|(_, s)| s).collect();
+        }
+        self.status = crate::i18n::fmt("Model of this conversation: {0}", &[label]);
+    }
+
+    /// An EA file dropped on the window: the model of an empty conversation, otherwise a new conversation with this file.
+    fn use_model_file(&mut self, path: &Path) {
+        let choice = ModelChoice::File { path: path.display().to_string(), ea_user: String::new() };
+        if !self.session.messages.is_empty() {
+            self.switch_to(Session::new());
+            self.pending.clear();
+        }
+        self.set_session_model(choice);
+    }
+
+    /// Opens the window with the model of the current conversation.
+    fn open_conn_editor(&mut self) {
+        let Some(base) = &self.cfg else { return };
+        let default = ModelChoice::of(base);
+        let current = self.session.model.clone().unwrap_or_else(|| default.clone());
+        self.conn = Some(ConnEditor::new(&current, &default));
+    }
+
+    /// The window with the model of the current conversation: the default from the settings, or another database or file.
+    fn conn_window(&mut self, ctx: &egui::Context) {
+        let Some(base) = self.cfg.clone() else { return };
+        let Some(editor) = self.conn.as_mut() else { return };
+        if let Some(result) = editor.test.as_ref().and_then(|rx| rx.try_recv().ok()) {
+            editor.status = match result {
+                Ok(message) => GroupStatus::Passed(message),
+                Err(message) => GroupStatus::Failed(message),
+            };
+            editor.test = None;
+        }
+        let default = ModelChoice::of(&base);
+        let has_messages = !self.session.messages.is_empty();
+        let mut open = true;
+        let mut action = "";
+        egui::Window::new(crate::i18n::tr("Model of this conversation"))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .title_bar(false)
+            .frame(egui::Frame::window(&ctx.style()).fill(theme::SURFACE).inner_margin(egui::Margin::same(18.0)).rounding(10.0))
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .default_width(SETTINGS_LABEL_WIDTH + SETTINGS_FIELD_WIDTH + 30.0)
+            .show(ctx, |ui| {
+                ui.label(egui::RichText::new(crate::i18n::tr("Model of this conversation")).font(egui::FontId::new(17.0, egui::FontFamily::Name(markdown::BOLD_FAMILY.into()))));
+                ui.add_space(8.0);
+                if has_messages {
+                    ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Earlier answers in this conversation refer to the model it used then; a change applies to the next messages.")).small().color(theme::WORKING)).wrap());
+                    ui.add_space(4.0);
+                }
+                ui.radio_value(&mut editor.use_default, true, crate::i18n::fmt("Default from the settings: {0}", &[default.label()])).on_hover_text(default.describe());
+                ui.radio_value(&mut editor.use_default, false, crate::i18n::tr("Another model"));
+                if !editor.use_default {
+                    ui.add_space(4.0);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.radio_value(&mut editor.source, "postgres".to_string(), crate::i18n::tr("PostgreSQL database"));
+                        ui.radio_value(&mut editor.source, "file".to_string(), crate::i18n::tr("EA file (.qea, .qeax)"));
+                    });
+                    let chosen = editor.choice(&default).ok();
+                    egui::Grid::new("conn_fields").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
+                        if editor.source == "file" {
+                            label_cell(ui, crate::i18n::tr("Model file"));
+                            ui.horizontal(|ui| {
+                                ui.add(egui::TextEdit::singleline(&mut editor.file).desired_width(SETTINGS_FIELD_WIDTH - 44.0));
+                                if ui.button("…").on_hover_text(crate::i18n::tr("Choose the model file")).clicked() {
+                                    if let Some(file) = rfd::FileDialog::new()
+                                        .set_title(crate::i18n::tr("Choose the model file"))
+                                        .add_filter(crate::i18n::tr("Enterprise Architect project"), &config::MODEL_FILE_EXTENSIONS)
+                                        .pick_file()
+                                    {
+                                        editor.file = file.display().to_string();
+                                    }
+                                }
+                            });
+                            ui.end_row();
+                            row_hint(ui, crate::i18n::tr("EA user account"), &mut editor.ea_user, crate::i18n::tr("only if the file has security enabled"));
+                        } else {
+                            row_hint(ui, crate::i18n::tr("Server"), &mut editor.host, crate::i18n::tr("e.g. 127.0.0.1"));
+                            row(ui, crate::i18n::tr("Port"), &mut editor.port);
+                            row(ui, crate::i18n::tr("Database name"), &mut editor.name);
+                            row(ui, crate::i18n::tr("Database user"), &mut editor.user);
+                            match chosen.as_ref().filter(|c| !c.uses_settings_database(&base)) {
+                                Some(c) => {
+                                    let stored = c.db_secret_name().is_some_and(|k| secrets::exists(&k));
+                                    row_secret(ui, crate::i18n::tr("Database password"), &mut editor.password, stored);
+                                }
+                                None => {
+                                    label_cell(ui, crate::i18n::tr("Database password"));
+                                    ui.label(egui::RichText::new(crate::i18n::tr("as in the settings")).color(theme::MUTED));
+                                    ui.end_row();
+                                }
+                            }
+                            label_cell(ui, crate::i18n::tr("Connection encryption"));
+                            egui::ComboBox::from_id_salt("conn_sslmode")
+                                .width(SETTINGS_FIELD_WIDTH)
+                                .selected_text(sslmode_label(&editor.sslmode))
+                                .show_ui(ui, |ui| {
+                                    for mode in config::SslMode::ALL {
+                                        ui.selectable_value(&mut editor.sslmode, mode.as_str().to_string(), sslmode_label(mode.as_str()));
+                                    }
+                                });
+                            ui.end_row();
+                            row(ui, crate::i18n::tr("EA user account"), &mut editor.ea_user);
+                        }
+                        if !editor.ea_user.trim().is_empty() {
+                            match chosen.as_ref().filter(|c| !c.uses_settings_ea_account(&base)) {
+                                Some(c) => row_secret(ui, crate::i18n::tr("EA account password"), &mut editor.ea_password, secrets::exists(&c.ea_secret_name())),
+                                None => {
+                                    label_cell(ui, crate::i18n::tr("EA account password"));
+                                    ui.label(egui::RichText::new(crate::i18n::tr("as in the settings")).color(theme::MUTED));
+                                    ui.end_row();
+                                }
+                            }
+                        }
+                    });
+                }
+                ui.add_space(6.0);
+                match &editor.status {
+                    GroupStatus::Idle => {}
+                    GroupStatus::Working => {
+                        ui.label(egui::RichText::new(crate::i18n::tr("Checking…")).small().color(theme::WORKING));
+                    }
+                    GroupStatus::Passed(m) => {
+                        ui.add(egui::Label::new(egui::RichText::new(format!("✓ {m}")).small().color(theme::SUCCESS)).wrap());
+                    }
+                    GroupStatus::Failed(m) => {
+                        ui.add(egui::Label::new(egui::RichText::new(m).small().color(theme::ERROR)).wrap());
+                    }
+                }
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    if ui.button(crate::i18n::tr("Save")).clicked() {
+                        action = "save";
+                    }
+                    if ui.add_enabled(editor.test.is_none(), egui::Button::new(crate::i18n::tr("Test the connection"))).clicked() {
+                        action = "test";
+                    }
+                    if ui.button(crate::i18n::tr("Cancel")).clicked() {
+                        action = "cancel";
+                    }
+                });
+            });
+        if !open || action == "cancel" {
+            self.conn = None;
+            return;
+        }
+        if action == "test" {
+            let editor = self.conn.as_mut().expect("editor");
+            let tested = editor.choice(&default).and_then(|choice| {
+                let mut cfg = choice.apply(&base)?;
+                if !editor.password.is_empty() {
+                    cfg.db_password = editor.password.clone();
+                }
+                Ok(cfg)
+            });
+            match tested {
+                Ok(cfg) => {
+                    let (tx, rx) = mpsc::channel();
+                    let wake = ctx.clone();
+                    std::thread::spawn(move || {
+                        let _ = tx.send(check_model(&cfg).map_err(|e| format!("{e:#}")));
+                        wake.request_repaint();
+                    });
+                    editor.test = Some(rx);
+                    editor.status = GroupStatus::Working;
+                }
+                Err(e) => editor.status = GroupStatus::Failed(format!("{e:#}")),
+            }
+        }
+        if action == "save" {
+            let editor = self.conn.as_ref().expect("editor");
+            let saved = editor.choice(&default).and_then(|choice| editor.save_secrets(&choice, &base).map(|()| choice));
+            match saved {
+                Ok(choice) => {
+                    self.conn = None;
+                    self.set_session_model(choice);
+                }
+                Err(e) => self.conn.as_mut().expect("editor").status = GroupStatus::Failed(format!("{e:#}")),
             }
         }
     }
@@ -1453,6 +1664,11 @@ impl App {
     fn accept_dropped(&mut self, ctx: &egui::Context, cfg: &AppConfig) {
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
         for f in dropped {
+            // An EA project file becomes the model of the conversation instead of an attachment.
+            if let Some(path) = f.path.as_ref().filter(|p| config::is_model_file(p)) {
+                self.use_model_file(path);
+                continue;
+            }
             if self.pending.len() >= MAX_FILES {
                 self.status = crate::i18n::fmt("You can attach up to {0} files per message.", &[(MAX_FILES).to_string()]);
                 break;
@@ -1509,6 +1725,9 @@ impl App {
             self.view = View::Settings;
             return;
         };
+        if self.session.model.is_none() {
+            self.session.model = Some(ModelChoice::of(&cfg));
+        }
         let title_hint = if text.trim().is_empty() { crate::i18n::tr("Attachment").to_string() } else { text.clone() };
         let message = Message { role: "user".into(), text, attachments, created: chrono::Utc::now().to_rfc3339() };
         self.session.messages.push(message.clone());
@@ -1531,7 +1750,15 @@ impl App {
 
     /// Starts the worker thread for the current conversation (the latest user messages are waiting for a response).
     fn start_turn(&mut self, ctx: &egui::Context) {
-        let Some(cfg) = self.cfg.clone() else { return };
+        let Some(base) = self.cfg.clone() else { return };
+        let choice = self.session.model.clone().unwrap_or_else(|| ModelChoice::of(&base));
+        let cfg = match choice.apply(&base) {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                self.status = format!("{e:#}");
+                return;
+            }
+        };
         self.queued = 0;
         self.consumed = 0;
 
@@ -2215,6 +2442,9 @@ impl App {
                     if !e.description.is_empty() {
                         ui.label(egui::RichText::new(&e.description).color(theme::MUTED));
                     }
+                    if !e.model.is_empty() {
+                        ui.label(egui::RichText::new(crate::i18n::fmt("Only for the model {0}", &[e.model.clone()])).small().color(theme::WORKING));
+                    }
                     ui.add_space(4.0);
                     markdown::show(ui, &e.content, &format!("memory_{}", e.name));
                 });
@@ -2274,6 +2504,109 @@ const GROUP_EA: usize = 2;
 const GROUP_APPROVAL: usize = 3;
 const GROUP_CONFLUENCE: usize = 4;
 
+/// Fields of the window with the model of the current conversation. Passwords are typed only for a connection that
+/// differs from the settings, and are saved in Credential Manager.
+struct ConnEditor {
+    use_default: bool,
+    source: String,
+    file: String,
+    host: String,
+    port: String,
+    name: String,
+    user: String,
+    password: String,
+    sslmode: String,
+    ea_user: String,
+    ea_password: String,
+    status: GroupStatus,
+    test: Option<mpsc::Receiver<Result<String, String>>>,
+}
+
+impl ConnEditor {
+    fn new(current: &ModelChoice, default: &ModelChoice) -> Self {
+        let mut editor = Self {
+            use_default: current == default,
+            source: "postgres".into(),
+            file: String::new(),
+            host: String::new(),
+            port: "5432".into(),
+            name: String::new(),
+            user: "postgres".into(),
+            password: String::new(),
+            sslmode: "prefer".into(),
+            ea_user: current.ea_user().to_string(),
+            ea_password: String::new(),
+            status: GroupStatus::Idle,
+            test: None,
+        };
+        match current {
+            ModelChoice::File { path, .. } => {
+                editor.source = "file".into();
+                editor.file = path.clone();
+            }
+            ModelChoice::Database { name, host, port, user, sslmode, .. } => {
+                editor.host = host.clone();
+                editor.port = port.to_string();
+                editor.name = name.clone();
+                editor.user = user.clone();
+                if !sslmode.is_empty() {
+                    editor.sslmode = sslmode.clone();
+                }
+            }
+        }
+        editor
+    }
+
+    /// The model chosen in the window (checked, without saving passwords).
+    fn choice(&self, default: &ModelChoice) -> anyhow::Result<ModelChoice> {
+        if self.use_default {
+            return Ok(default.clone());
+        }
+        let ea_user = self.ea_user.trim().to_string();
+        if self.source == "file" {
+            let path = PathBuf::from(self.file.trim().trim_matches('"'));
+            if !config::is_model_file(&path) {
+                bail!("{}", crate::i18n::tr("Choose an Enterprise Architect project file .qea or .qeax"));
+            }
+            if !path.is_file() {
+                bail!("{}", crate::i18n::fmt("file {0} does not exist", &[path.display().to_string()]));
+            }
+            return Ok(ModelChoice::File { path: path.display().to_string(), ea_user });
+        }
+        let port: u16 = self.port.trim().parse().context(crate::i18n::tr("Database port: enter a number"))?;
+        if self.name.trim().is_empty() || self.user.trim().is_empty() {
+            bail!("{}", crate::i18n::fmt("Database name and database user are required", &[]));
+        }
+        if ea_user.is_empty() {
+            bail!("{}", crate::i18n::fmt("EA user account is required", &[]));
+        }
+        Ok(ModelChoice::Database {
+            name: self.name.trim().to_string(),
+            host: self.host.trim().to_string(),
+            port,
+            user: self.user.trim().to_string(),
+            sslmode: config::SslMode::parse(&self.sslmode)?.as_str().to_string(),
+            ea_user,
+        })
+    }
+
+    /// Saves the typed passwords of a connection that differs from the settings in Credential Manager.
+    fn save_secrets(&self, choice: &ModelChoice, base: &AppConfig) -> anyhow::Result<()> {
+        if !self.password.is_empty() && !choice.uses_settings_database(base) {
+            if self.password.contains(';') {
+                bail!("{}", crate::i18n::tr("The database password must not contain a semicolon (;): Enterprise Architect cannot pass it in its connection string."));
+            }
+            if let Some(key) = choice.db_secret_name() {
+                secrets::set_for_connection(&base.base_dir, &key, &self.password)?;
+            }
+        }
+        if !self.ea_password.is_empty() && !choice.ea_user().is_empty() && !choice.uses_settings_ea_account(base) {
+            secrets::set_for_connection(&base.base_dir, &choice.ea_secret_name(), &self.ea_password)?;
+        }
+        Ok(())
+    }
+}
+
 /// Result of the last save and test of a settings group.
 #[derive(Default)]
 enum GroupStatus {
@@ -2282,6 +2615,33 @@ enum GroupStatus {
     Working,
     Passed(String),
     Failed(String),
+}
+
+/// Opens the model (database or file) and counts its packages, elements and diagrams; for a database also says whether
+/// the connection is encrypted and warns about a superuser account.
+fn check_model(cfg: &AppConfig) -> anyhow::Result<String> {
+    if cfg.uses_file() {
+        let rows = tools::query_rows(cfg, "select (select count(*) from t_package), (select count(*) from t_object), (select count(*) from t_diagram)")
+            .context(crate::i18n::tr("this does not look like an Enterprise Architect model file"))?;
+        let row = rows.first().context(crate::i18n::tr("the file returned no result"))?;
+        return Ok(crate::i18n::fmt("Opened the model file {0}: {1} packages, {2} elements, {3} diagrams.", &[cfg.model_label(), row[0].to_string(), row[1].to_string(), row[2].to_string()]));
+    }
+    let rows = tools::query_rows(
+        cfg,
+        "select (select count(*) from t_package), (select count(*) from t_object), (select count(*) from t_diagram), \
+         coalesce((select ssl::text from pg_stat_ssl where pid = pg_backend_pid()), 'false'), \
+         (select rolsuper::text from pg_roles where rolname = current_user)",
+    )
+    .context(crate::i18n::tr("this does not look like an EA model database, or the connection does not work"))?;
+    let row = rows.first().context(crate::i18n::tr("the database returned no result"))?;
+    let mut message = crate::i18n::fmt("Connected to database {0}: {1} packages, {2} elements, {3} diagrams.", &[(cfg.db_name).to_string(), (row[0]).to_string(), (row[1]).to_string(), (row[2]).to_string()]);
+    message.push(' ');
+    message.push_str(if row[3] == "true" { crate::i18n::tr("The connection is encrypted (TLS).") } else { crate::i18n::tr("The connection is NOT encrypted: the server does not offer TLS.") });
+    if row[4] == "true" {
+        message.push(' ');
+        message.push_str(crate::i18n::tr("The database account is a superuser; a normal account with read and write rights on the model tables is enough and safer."));
+    }
+    Ok(message)
 }
 
 /// Tests a saved settings group in action. Called in a worker thread (the EA test takes several dozen seconds).
@@ -2293,30 +2653,7 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
             let response = client.send_value("Answer in one word.", &[json!({ "role": "user", "content": "ping" })], None)?;
             Ok(crate::i18n::fmt("Saved. The key works: model {0} replied.", &[(response["model"].as_str().unwrap_or(config::CLAUDE_MODEL)).to_string()]))
         }
-        GROUP_DB if cfg.uses_file() => {
-            let rows = tools::query_rows(cfg, "select (select count(*) from t_package), (select count(*) from t_object), (select count(*) from t_diagram)")
-                .context(crate::i18n::tr("this does not look like an Enterprise Architect model file"))?;
-            let row = rows.first().context(crate::i18n::tr("the file returned no result"))?;
-            Ok(crate::i18n::fmt("Saved. Opened the model file {0}: {1} packages, {2} elements, {3} diagrams.", &[cfg.model_label(), row[0].to_string(), row[1].to_string(), row[2].to_string()]))
-        }
-        GROUP_DB => {
-            let rows = tools::query_rows(
-                cfg,
-                "select (select count(*) from t_package), (select count(*) from t_object), (select count(*) from t_diagram), \
-                 coalesce((select ssl::text from pg_stat_ssl where pid = pg_backend_pid()), 'false'), \
-                 (select rolsuper::text from pg_roles where rolname = current_user)",
-            )
-            .context(crate::i18n::tr("this does not look like an EA model database, or the connection does not work"))?;
-            let row = rows.first().context(crate::i18n::tr("the database returned no result"))?;
-            let mut message = crate::i18n::fmt("Saved. Connected to database {0}: {1} packages, {2} elements, {3} diagrams.", &[(cfg.db_name).to_string(), (row[0]).to_string(), (row[1]).to_string(), (row[2]).to_string()]);
-            message.push(' ');
-            message.push_str(if row[3] == "true" { crate::i18n::tr("The connection is encrypted (TLS).") } else { crate::i18n::tr("The connection is NOT encrypted: the server does not offer TLS.") });
-            if row[4] == "true" {
-                message.push(' ');
-                message.push_str(crate::i18n::tr("The database account is a superuser; a normal account with read and write rights on the model tables is enough and safer."));
-            }
-            Ok(message)
-        }
+        GROUP_DB => check_model(cfg).map(|message| crate::i18n::fmt("Saved. {0}", &[message])),
         GROUP_CONFLUENCE => {
             if cfg.confluence_url.trim().is_empty() {
                 return Ok(crate::i18n::tr("Saved. Without a Confluence address, pages are prepared for you to paste into the source editor.").into());
@@ -3188,7 +3525,12 @@ impl eframe::App for App {
                             let row_width = if selected { width - 32.0 } else { width };
                             ui.horizontal(|ui| {
                                 ui.spacing_mut().item_spacing.x = 2.0;
-                                if conversation_row(ui, shown_title(&s.title), dot, selected, row_width).clicked() {
+                                let row = conversation_row(ui, shown_title(&s.title), dot, selected, row_width);
+                                let row = match &s.model {
+                                    Some(model) => row.on_hover_text(crate::i18n::fmt("Model: {0}", &[model.describe()])),
+                                    None => row,
+                                };
+                                if row.clicked() {
                                     open = Some(s.clone());
                                 }
                                 if selected && icon_button(ui, icons::EDIT, "✎", crate::i18n::tr("Rename conversation")).clicked() {
@@ -3293,7 +3635,9 @@ impl eframe::App for App {
                 }
                 let hovering = ctx.input(|i| !i.raw.hovered_files.is_empty());
 
-                // Conversation header: the title and, while the assistant is working, a "working" badge.
+                // Conversation header: the title, the model of the conversation and, while the assistant is working, a "working" badge.
+                let mut open_conn = false;
+                self.conn_window(ctx);
                 egui::TopBottomPanel::top("chat_header")
                     .show_separator_line(false)
                     .frame(egui::Frame::none().fill(theme::BACKGROUND).inner_margin(egui::Margin::symmetric(22.0, 12.0)))
@@ -3304,8 +3648,17 @@ impl eframe::App for App {
                                 egui::Label::new(egui::RichText::new(title).font(egui::FontId::new(16.0, egui::FontFamily::Name(markdown::BOLD_FAMILY.into()))))
                                     .truncate(),
                             );
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if let Some(base) = &self.cfg {
+                                    let choice = self.session.model.clone().unwrap_or_else(|| ModelChoice::of(base));
+                                    let chip = ui
+                                        .button(egui::RichText::new(crate::i18n::fmt("Model: {0}", &[choice.label()])).small())
+                                        .on_hover_text(crate::i18n::fmt("{0}\nClick to see or change the model of this conversation.", &[choice.describe()]));
+                                    if chip.clicked() {
+                                        open_conn = true;
+                                    }
+                                }
                             if busy {
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                     egui::Frame::none()
                                         .fill(egui::Color32::from_rgb(253, 240, 220))
                                         .rounding(10.0)
@@ -3313,13 +3666,16 @@ impl eframe::App for App {
                                         .show(ui, |ui| {
                                             ui.label(egui::RichText::new(crate::i18n::tr("Claude is working")).small().color(egui::Color32::from_rgb(133, 79, 11)));
                                         });
-                                });
                             }
+                            });
                         });
                         // Thin line under the header.
                         let rect = ui.max_rect();
                         ui.painter().hline(rect.x_range(), rect.bottom() + 11.5, egui::Stroke::new(1.0_f32, theme::BORDER));
                     });
+                if open_conn {
+                    self.open_conn_editor();
+                }
 
                 egui::TopBottomPanel::bottom("input")
                     .show_separator_line(false)
@@ -3549,6 +3905,7 @@ impl eframe::App for App {
                 let mut copy_page_request: Option<String> = None;
                 let mut page_folder_request: Option<String> = None;
 
+                let mut open_conn_empty = false;
                 egui::CentralPanel::default()
                     .frame(egui::Frame::none().fill(theme::BACKGROUND).inner_margin(egui::Margin { left: 22.0, right: 8.0, top: 10.0, bottom: 0.0 }))
                     .show(ctx, |ui| {
@@ -3564,6 +3921,22 @@ impl eframe::App for App {
                                 egui::RichText::new(crate::i18n::tr("Ask about the Enterprise Architect model, request a diagram, or attach a file, photo or sketch."))
                                     .color(theme::MUTED),
                             );
+                            // The model of the new conversation: the default from the settings unless another one is chosen.
+                            if let Some(base) = &self.cfg {
+                                let default = ModelChoice::of(base);
+                                let choice = self.session.model.clone().unwrap_or_else(|| default.clone());
+                                ui.add_space(18.0);
+                                let text = if choice == default {
+                                    crate::i18n::fmt("This conversation will use the default model from the settings: {0}", &[choice.label()])
+                                } else {
+                                    crate::i18n::fmt("This conversation will use the model {0}", &[choice.label()])
+                                };
+                                ui.label(egui::RichText::new(text).color(theme::TEXT)).on_hover_text(choice.describe());
+                                ui.add_space(4.0);
+                                if ui.button(crate::i18n::tr("Choose another model…")).clicked() {
+                                    open_conn_empty = true;
+                                }
+                            }
                         });
                         return;
                     }
@@ -3806,6 +4179,9 @@ impl eframe::App for App {
                         }
                     }
                 });
+                if open_conn_empty {
+                    self.open_conn_editor();
+                }
 
                 // Saving and previewing an image: after the panel is drawn, because the file dialog blocks drawing.
                 if let Some(dir) = attachments_dir.as_deref() {

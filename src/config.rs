@@ -126,6 +126,8 @@ pub struct AppConfig {
     pub db_sslmode: SslMode,
     pub ea_path: PathBuf,
     pub ea_user: String,
+    /// Credential Manager entry with the EA account password (the settings' account, or a conversation's own account).
+    pub ea_password_key: String,
     pub approval_mode: ApprovalMode,
     pub history_dir: PathBuf,
     pub attachments_dir: PathBuf,
@@ -259,6 +261,7 @@ impl AppConfig {
                 if raw.contains(":\\\\") { raw.replace("\\\\", "\\") } else { raw }
             }),
             ea_user: get_or("ea.user", ""),
+            ea_password_key: secrets::EA_PASSWORD.to_string(),
             // Package locking on write is always on (no option in the settings).
             approval_mode: ApprovalMode::parse(&get_or("approval.mode", "ask"))?,
             history_dir: base_dir.join(get_or("history.dir", "history")),
@@ -379,6 +382,27 @@ pub mod secrets {
 
     pub fn exists(name: &str) -> bool {
         get(name).is_ok()
+    }
+
+    /// File in the user data folder with the names of the secrets saved for conversation connections (their names
+    /// are built from the connection), so that uninstalling can remove them too.
+    pub const CONNECTION_LIST: &str = "connection_secrets.txt";
+
+    /// Saves a secret of a conversation connection and records its name in `CONNECTION_LIST` in `data_dir`.
+    pub fn set_for_connection(data_dir: &std::path::Path, name: &str, value: &str) -> Result<()> {
+        set(name, value)?;
+        let list = data_dir.join(CONNECTION_LIST);
+        let known = std::fs::read_to_string(&list).unwrap_or_default();
+        if !known.lines().any(|l| l == name) {
+            let _ = std::fs::create_dir_all(data_dir);
+            std::fs::write(&list, format!("{known}{name}\n")).with_context(|| crate::i18n::fmt("saving {0}", &[list.display().to_string()]))?;
+        }
+        Ok(())
+    }
+
+    /// Names of the conversation connection secrets recorded in `data_dir`.
+    pub fn connection_names(data_dir: &std::path::Path) -> Vec<String> {
+        std::fs::read_to_string(data_dir.join(CONNECTION_LIST)).unwrap_or_default().lines().filter(|l| !l.trim().is_empty()).map(str::to_string).collect()
     }
 
     /// Removes the secret (also under the pre-release service name); a missing secret is not an error.

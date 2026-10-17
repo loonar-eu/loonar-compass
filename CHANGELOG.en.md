@@ -2,6 +2,17 @@
 
 All notable changes to Loonar Compass (named Loonar EA Assistant until version 0.3).
 
+## Version 0.5 (2026-10-18)
+
+A model for each conversation:
+
+- Every conversation has its own model. The conversation header shows it ("Model: …"); a click opens the model of the conversation, where you can check or change it.
+- A new conversation says which model it will use: the default from the settings. "Choose another model…" lets you pick another PostgreSQL database (server, port, database, account, password, encryption) or an EA file (.qea, .qeax), with its EA account, and test the connection.
+- Passwords of a connection that differs from the settings are kept in Windows Credential Manager; uninstalling removes them together with the other secrets when you choose so.
+- Dropping a .qea or .qeax file on the window makes it the model of the conversation (in a conversation with messages, a new conversation starts).
+- Existing conversations get a copy of the model from the settings, so they keep working with it when the settings change later.
+- The assistant's memory stays shared by all models. A note is limited to one model only when you ask for it ("remember this only for this model").
+
 ## Version 0.4 (2026-10-17)
 
 Models in files:
