@@ -6,6 +6,7 @@
 mod claude;
 mod com;
 mod confluence;
+mod diagram_editor;
 mod config;
 mod ea;
 mod ea_com;
@@ -503,6 +504,19 @@ fn main() -> eframe::Result {
             config::user_data_dir().join("app.properties")
         }
     };
+    // Diagram editor in its own process: `--edit-diagram <id>` (the result goes to %TEMP%\loonar-diagram-editor.log).
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(id) = args.iter().position(|a| a == "--edit-diagram").and_then(|i| args.get(i + 1)).and_then(|v| v.parse::<i64>().ok()) {
+        let result = AppConfig::load(&props_path).and_then(|cfg| {
+            i18n::set(i18n::Lang::parse(&cfg.ui_language));
+            diagram_editor::run_from_command_line(&cfg, id)
+        });
+        let _ = std::fs::write(std::env::temp_dir().join("loonar-diagram-editor.log"), match &result {
+            Ok(text) => text.clone(),
+            Err(e) => format!("error: {e:#}"),
+        });
+        std::process::exit(if result.is_ok() { 0 } else { 1 });
+    }
     // Language already before the window opens: a startup error message (system dialog) must be in the user's language.
     // No entry in an existing file = Polish, as in AppConfig::load.
     if let Ok(text) = std::fs::read_to_string(&props_path) {

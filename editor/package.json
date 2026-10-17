@@ -1,0 +1,8 @@
+{
+  "name": "loonar-compass-diagram-editor",
+  "private": true,
+  "description": "Diagram editor of Loonar Compass (maxGraph), bundled into assets/editor/editor.js",
+  "scripts": { "build": "esbuild src/editor.js --bundle --minify --format=iife --target=es2020 --outfile=../assets/editor/editor.js" },
+  "dependencies": { "@maxgraph/core": "*" },
+  "devDependencies": { "esbuild": "*" }
+}
