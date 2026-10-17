@@ -57,6 +57,11 @@ pub fn show(ui: &mut egui::Ui, text: &str, salt: impl std::hash::Hash) {
             }
 
             i += 1;
+            if is_image_only(trimmed) {
+                // A Markdown image link such as `![Order process](diagram:73)` or a placeholder such as
+                // `[Diagram image shown in chat]`: the app shows diagram images itself, so the line would only appear as raw text.
+                continue;
+            }
             if trimmed.is_empty() {
                 ui.add_space(6.0);
             } else if let Some(heading) = trimmed.strip_prefix("### ") {
@@ -81,6 +86,13 @@ pub fn show(ui: &mut egui::Ui, text: &str, salt: impl std::hash::Hash) {
             }
         }
     });
+}
+
+/// A line holding only a Markdown image (`![alt](target)`) or only a bracketed placeholder (`[Diagram …]`).
+fn is_image_only(line: &str) -> bool {
+    let image = line.starts_with("![") && line.ends_with(')') && line.contains("](");
+    let placeholder = line.starts_with('[') && line.ends_with(']') && !line[1..line.len() - 1].contains(['[', ']']);
+    image || placeholder
 }
 
 /// Recognises a list item: `- text`, `* text` or `1. text`. Returns the marker to show and the content.
@@ -207,5 +219,15 @@ mod tests {
         assert_eq!(list_item("- item"), Some(("•".to_string(), "item")));
         assert_eq!(list_item("2. second"), Some(("2.".to_string(), "second")));
         assert_eq!(list_item("2024 year"), None);
+    }
+
+    #[test]
+    fn image_only_lines() {
+        assert!(is_image_only("![Order process](diagram:73)"));
+        assert!(!is_image_only("See ![x](y) here"));
+        assert!(!is_image_only("![not closed"));
+        assert!(is_image_only("[Diagram image shown in chat]"));
+        assert!(!is_image_only("[a] and [b]"));
+        assert!(!is_image_only("[x](https://example.com)"));
     }
 }

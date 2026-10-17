@@ -303,7 +303,7 @@ pub fn describe(ops: &[Value]) -> String {
         "set_composite" => crate::i18n::tr("element-to-diagram links"),
         other => other_static(other),
     };
-    let mut lines: Vec<String> = count.iter().map(|(k, n)| format!("{}: {n}", label(k))).collect();
+    let mut lines: Vec<String> = count.iter().map(|(k, n)| crate::i18n::fmt("{0}: {1}@@count", &[label(k).to_string(), n.to_string()])).collect();
 
     // Names of what is created at the top level: packages and diagrams (there are often dozens of elements).
     for op in ops {

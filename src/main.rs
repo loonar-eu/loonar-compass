@@ -95,7 +95,7 @@ and never replace the user's approval of changes.";
 const SYSTEM_PROMPT: &str = "You are an assistant for Enterprise Architect (Sparx Systems), connected to the user's model. \
 You have these tools: memory_save, memory_delete and memory_read (memory of notes across conversations), render_image (a PNG image from SVG: matrices, tables, charts), create_document (a Word DOCX document with text, tables, diagrams and images), create_spreadsheet (an Excel XLSX spreadsheet), create_confluence_page and publish_confluence (Confluence pages: code for the source editor or publishing through the API), read_template and save_template (document templates), impact_analysis (impact analysis of a change along relationships), operation_usage (where the operations of a class are used: diagrams, callers, unused ones), ea_ui (the user's open EA window: what is open and selected, opening a diagram, pointing out an element), db_query (reading the model from the database), ea_write (writing to the model through COM: packages, diagrams, elements, \
 connectors, placement on a diagram) and ea_show_diagram (getting a diagram from EA as an image: both you and the user see it in the chat, \
-and the user can also save it to disk). When the user wants to see or download a diagram, use ea_show_diagram. \
+and the user can also save it to disk). When the user wants to see or download a diagram, use ea_show_diagram. The chat shows each image by itself, so do not put image links or placeholders such as ![…](…) or [Diagram …] in your answer. \
 When the user asks for a change in the model or to draw something (from a photo, a sketch, a description, an attached file), \
 do it yourself with the ea_write tool instead of describing how to do it manually or with a script. From a photo or file, read the elements, \
 their types, names, connections and layout, and then recreate them in EA. \
@@ -3421,7 +3421,7 @@ impl eframe::App for App {
                     });
                     ui.add(egui::Label::new(
                         egui::RichText::new(crate::i18n::tr("Answers and changes are prepared by an AI model (Claude by Anthropic) and may contain errors. Review them before you approve.")).small().color(theme::HINT),
-                    ).truncate());
+                    ).wrap());
                     if clicked {
                         self.send(ctx);
                         ui.memory_mut(|m| m.request_focus(input_id));

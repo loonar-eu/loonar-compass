@@ -732,3 +732,4 @@ Checking… (starting EA can take up to a minute) ‖ Trwa sprawdzanie… (uruch
 Workspace ID ‖ Workspace ID ‖ Workspace-ID ‖ ID de l'espace de travail (workspace)
 optional, e.g. wrkspc_… ‖ opcjonalnie, np. wrkspc_… ‖ optional, z. B. wrkspc_… ‖ facultatif, p. ex. wrkspc_…
 The API key is not assigned to a workspace: enter the Workspace ID from the Anthropic Console in Settings → 1. Claude ({0}). ‖ Klucz API nie jest przypisany do workspace’u: wpisz Workspace ID z konsoli Anthropic w Ustawienia → 1. Claude ({0}). ‖ Der API-Schlüssel ist keinem Workspace zugeordnet: Geben Sie die Workspace-ID aus der Anthropic Console unter Einstellungen → 1. Claude ein ({0}). ‖ La clé API n'est rattachée à aucun espace de travail : saisissez l'ID de l'espace de travail de la console Anthropic dans Paramètres → 1. Claude ({0}).
+{0}: {1}@@count ‖ {0}: {1} ‖ {0}: {1} ‖ {0} : {1}
