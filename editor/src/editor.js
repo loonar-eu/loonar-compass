@@ -751,6 +751,9 @@ function bpmnTypeRow(cell) {
 const connector = graph.getPlugin('ConnectionHandler');
 connector.connectImage = svgImage('<circle cx="12" cy="12" r="11" fill="#0E4A6B" stroke="none"/><path d="M6.5 12h10M12.5 7.5l4.5 4.5-4.5 4.5" stroke="#FFFFFF" stroke-width="2.4"/>', 22);
 connector.marker.hotspot = 1;
+// maxGraph inserts every new edge with the id '' (ConnectionHandler.connect): each one gets its own here, so the
+// properties and the saving of two new relationships never mix up.
+connector.insertEdge = (parent, _id, value, source, target, style) => graph.insertEdge({ parent, id: `k${++counter}`, value, source, target, style });
 connector.getIconPosition = (icon, state) => {
   const s = graph.getView().scale;
   const top = isLifeline(meta.get(state.cell.id)?.ea) ? state.y + 25 * s : state.getCenterY();
@@ -853,7 +856,8 @@ function changes() {
     if (m.kind === 'element') (choice === 'model' ? out.deleted : out.removed).push(m.ea.id);
     else (choice === 'model' ? out.deleted_connectors : out.hidden).push(m.ea.id);
   }
-  const key = (cell) => (meta.get(cell.id)?.isNew ? `#${cell.id}` : meta.get(cell.id).ea.id);
+  const newKey = (cell) => meta.get(cell.id)?.key || cell.id;
+  const key = (cell) => (meta.get(cell.id)?.isNew ? `#${newKey(cell)}` : meta.get(cell.id).ea.id);
   for (const cell of Object.values(graph.getDataModel().cells)) {
     const m = meta.get(cell.id);
     if (!m) continue;
@@ -881,7 +885,7 @@ function changes() {
         const message = isMessage(cell)
           ? { sequence: seqOrder.indexOf(cell) + 1, message_sort: current(cell, 'message_sort'), is_return: !!current(cell, 'is_return') }
           : {};
-        out.connected.push({ key: cell.id, type: m.ea.type, stereotype: m.ea.stereotype, name: String(cell.value || ''), source: key(cell.source), target: key(cell.target), points, ...message });
+        out.connected.push({ key: newKey(cell), type: m.ea.type, stereotype: m.ea.stereotype, name: String(cell.value || ''), source: key(cell.source), target: key(cell.target), points, ...message });
         continue;
       }
       // Messages: their place is their number (below), not a route.
@@ -981,6 +985,15 @@ if (data.selftest === 'props') {
     document.getElementById('status').textContent = JSON.stringify(changes()).slice(0, 300);
     setTimeout(() => document.getElementById('save').click(), 1000);
   }, 1500);
+} else if (data.selftest === 'newrel') {
+  // A new relationship with its direction set before saving (the way the connect arrow creates it).
+  setTimeout(() => {
+    const v = (n) => Object.values(graph.getDataModel().cells).find((c) => c.isVertex() && c.value === n);
+    const e = connector.insertEdge(parent, '', '', v('Invoice'), v('Product'), {});
+    meta.set(e.id, { kind: 'connector', ea: { type: 'Association', stereotype: '', props: {}, tags: [] }, isNew: true });
+    setField(e, 'direction', 'Source -> Destination');
+    setTimeout(() => document.getElementById('save').click(), 800);
+  }, 1500);
 } else if (data.selftest === 'types') {
   // Every element of the toolbox once, the first two joined with the first kind of connector.
   setTimeout(() => {
@@ -1057,4 +1070,4 @@ if (data.selftest === 'props') {
 }
 
 // Handle for scripted checks of the page (screenshots of the panel and dialogs in a browser).
-window.__editor = { graph, render, askDelete, setTab: (k) => { tab = k; render(); } };
+window.__editor = { graph, render, askDelete, changes, setField, meta, setTab: (k) => { tab = k; render(); } };

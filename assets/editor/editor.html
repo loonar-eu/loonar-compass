@@ -188,7 +188,11 @@ button.primary:hover { background: #0B3B56; }
 header button, header .label { white-space: nowrap; }
 header .group { flex: none; }
 #spacer { min-width: 8px; }
-header { flex-wrap: nowrap; }
+/* A narrow window: the toolbar wraps; the saving buttons stay together on the right. */
+header { row-gap: 6px; }
+header .group { flex-wrap: nowrap; }
+header .actions { display: flex; align-items: center; gap: 8px; margin-left: auto; flex: 0 1 auto; min-width: 0; }
+header .actions button { flex: none; }
 header h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px; flex: none; }
 #graph { flex: 1; position: relative; overflow: auto; background: #FFFFFF; background-image: radial-gradient(#DFE7EE 1px, transparent 1px); background-size: 10px 10px; }
 .cls { font-family: "Segoe UI", sans-serif; font-size: 12px; width: 100%; }
@@ -271,11 +275,12 @@ main { flex: 1; display: flex; min-height: 0; }
     <button data-action="zoom-fit" id="b-fit">⤢</button>
     <button data-action="zoom-in">+</button>
   </div>
-  <span id="spacer"></span>
-  <span id="status"></span>
-  <button id="cancel"></button>
-  <button id="tidy"></button>
-  <button id="save" class="primary"></button>
+  <div class="actions">
+    <span id="status"></span>
+    <button id="cancel"></button>
+    <button id="tidy"></button>
+    <button id="save" class="primary"></button>
+  </div>
 </header>
 <main><div id="graph"></div><aside id="props"></aside></main>
 <div id="insert" hidden>

@@ -808,8 +808,17 @@ impl Job<'_> {
             "update_connector" => {
                 // Properties of an existing relationship: name, stereotype, direction, notes, the multiplicities and roles
                 // of both ends, tagged values. Both end elements are locked, as for deleting a connector.
+                // A relationship created earlier in this batch is read again from the model: changes made through the
+                // object returned when it was created did not reach the database (seen for the direction, 2026-10-18).
                 let connector = match is_key(&op["connector"]) {
-                    Some(key) => self.from_key(key, Kind::Connector)?,
+                    Some(key) => {
+                        let id = self.from_key(key, Kind::Connector)?.int("ConnectorID")?;
+                        self.repo
+                            .call("GetConnectorByID", &[i(id)])
+                            .ok()
+                            .and_then(|v| v.object())
+                            .ok_or_else(|| anyhow!("{}", crate::i18n::fmt("There is no connector with id {0}.", &[id.to_string()])))?
+                    }
                     None => {
                         let id = int_field(op, "connector")?;
                         self.repo
@@ -839,12 +848,28 @@ impl Job<'_> {
                 }
                 connector.update(&crate::i18n::fmt("connector id={0}", &[id.to_string()]))?;
                 self.set_reply(&connector, &op["is_return"])?;
+                // EA derives the direction of a relationship from the navigability of its ends: without them a new
+                // direction does not stay on a relationship created in the same session (checked 2026-10-18).
+                let navigable = |source: bool| -> Option<&'static str> {
+                    let direction = op["direction"].as_str()?;
+                    let yes = match direction {
+                        "Source -> Destination" => !source,
+                        "Destination -> Source" => source,
+                        "Bi-Directional" => true,
+                        _ => false,
+                    };
+                    Some(if yes { "Navigable" } else { "Unspecified" })
+                };
                 for (end, prefix) in [("ClientEnd", "source"), ("SupplierEnd", "target")] {
                     let (card, role) = (format!("{prefix}_multiplicity"), format!("{prefix}_role"));
-                    if op[&card].is_null() && op[&role].is_null() {
+                    let navigability = navigable(prefix == "source");
+                    if op[&card].is_null() && op[&role].is_null() && navigability.is_none() {
                         continue;
                     }
                     let end = connector.obj(end)?;
+                    if let Some(value) = navigability {
+                        end.set("Navigable", s(value))?;
+                    }
                     if !op[&card].is_null() {
                         end.set("Cardinality", s(&text_field(op, &card)))?;
                     }

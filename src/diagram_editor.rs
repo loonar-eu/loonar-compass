@@ -677,7 +677,8 @@ pub fn run_from_command_line(cfg: &AppConfig, diagram_id: i64) -> Result<String>
     }
     let result = crate::ea::run_batch(cfg, &ops, &crate::ea::BatchOptions::default())?;
     crate::ea::shutdown();
-    Ok(format!("{} operations saved: {}", ops.len(), result["created"]))
+    Ok(format!("{} operations saved: {}
+{}", ops.len(), result["created"], serde_json::to_string(&ops)?))
 }
 
 #[cfg(test)]
@@ -741,6 +742,39 @@ mod tests {
     fn bend_points_come_with_y_downwards() {
         assert_eq!(parse_path("120:-80;300:-80;"), vec![[120, 80], [300, 80]]);
         assert!(parse_path("").is_empty());
+    }
+
+    /// A relationship created and given a direction in the same batch (the editor's new connector edited in the
+    /// panel). Run with LOONAR_TEST_QEA (a copy, it is changed): `cargo test new_connector_direction -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "requires EA and LOONAR_TEST_QEA"]
+    fn new_connector_direction() {
+        let file = std::env::var("LOONAR_TEST_QEA").expect("LOONAR_TEST_QEA");
+        let dir = std::env::temp_dir().join(format!("loonar-editor-dir-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("app.properties"), format!("model.source=file
+model.file={file}
+")).unwrap();
+        let cfg = AppConfig::load(&dir.join("app.properties")).unwrap();
+        let q = |sql: &str| query_rows(&cfg, sql).unwrap();
+        let ids = q("select object_id from t_object where object_type = 'Class' order by object_id limit 2");
+        let (a, b) = (ids[0][0].clone(), ids[1][0].clone());
+        let ops = vec![
+            json!({ "op": "create_connector", "key": "k1", "source": a.parse::<i64>().unwrap(), "target": b.parse::<i64>().unwrap(), "type": "Association" }),
+            json!({ "op": "update_connector", "connector": "#k1", "direction": "Source -> Destination" }),
+        ];
+        let result = crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions::default()).unwrap();
+        let id = result["created"][0]["id"].as_i64().unwrap();
+        // EA keeps the file open: read after it has closed it.
+        crate::ea::shutdown();
+        let same_batch = q(&format!("select direction from t_connector where connector_id = {id}"));
+        crate::ea::run_batch(&cfg, &[json!({ "op": "update_connector", "connector": id, "direction": "Bi-Directional" })], &crate::ea::BatchOptions::default()).unwrap();
+        crate::ea::shutdown();
+        let next_batch = q(&format!("select direction from t_connector where connector_id = {id}"));
+        println!("same batch: {same_batch:?}, next batch: {next_batch:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(same_batch[0][0], "Source -> Destination");
+        assert_eq!(next_batch[0][0], "Bi-Directional");
     }
 
     /// The diagram from an EA file as the editor gets it. Run with LOONAR_TEST_QEA (and LOONAR_TEST_DIAGRAM, default 8):
