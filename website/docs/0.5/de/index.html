@@ -267,6 +267,15 @@
   <tr><td>Bereich (Schlüssel)</td><td>Der Bereichsschlüssel, zum Beispiel <code>ARCH</code></td></tr>
   <tr><td>Übergeordnete Seite (ID)</td><td>Optional: die ID der Seite, unter der neue Seiten angelegt werden</td></tr>
 </table>
+<p><b>Confluence Cloud: woher die Angaben kommen.</b></p>
+<ol>
+  <li><b>Token</b>: Es wird im Atlassian-Konto erstellt, nicht in Confluence. Öffnen Sie <code>https://id.atlassian.com/manage-profile/security/api-tokens</code> (Atlassian-Konto → Security → API tokens). Atlassian kann zuerst eine Bestätigung mit einem per E-Mail gesendeten Code verlangen.</li>
+  <li>Klicken Sie auf <b>Create API token</b> (das einfache, nicht <b>Create API token with scopes</b>), geben Sie einen Namen ein, zum Beispiel Loonar Compass, und wählen Sie die Gültigkeit: standardmäßig eine Woche, höchstens ein Jahr. Klicken Sie auf <b>Create</b> und kopieren Sie das Token: Atlassian zeigt es nur einmal. Wenn es abläuft, erstellen Sie ein neues und fügen es auf Karte 6 ein.</li>
+  <li><b>E-Mail</b>: die E-Mail-Adresse des Atlassian-Kontos, zu dem das Token gehört.</li>
+  <li><b>Adresse</b>: Ihre Website mit <code>/wiki</code>, zum Beispiel <code>https://ihre-website.atlassian.net/wiki</code>.</li>
+  <li><b>Bereichsschlüssel</b>: Er steht in der Adresse jeder Seite des Bereichs nach <code>/spaces/</code> (zum Beispiel ergibt <code>…/wiki/spaces/PM/…</code> den Schlüssel <code>PM</code>) und in den <b>Bereichseinstellungen</b>.</li>
+  <li><b>ID der übergeordneten Seite</b> (optional): die Zahl in der Adresse der Seite nach <code>/pages/</code> (zum Beispiel ergibt <code>…/pages/65818/…</code> die ID <code>65818</code>).</li>
+</ol>
 <p>Speichern Sie die Karte mit der Schaltfläche <b>Speichern und Confluence-Verbindung prüfen</b>.</p>
 <div class="prompt">Erstelle eine Confluence-Seite mit einer Beschreibung des Prozesses „Reklamationsbearbeitung“ samt Diagramm und veröffentliche sie im Bereich.</div>
 <h2 id="s10">10. Dokumentvorlagen</h2>

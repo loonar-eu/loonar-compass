@@ -268,6 +268,15 @@
   <tr><td>Przestrzeń (klucz)</td><td>Klucz przestrzeni, na przykład <code>ARCH</code></td></tr>
   <tr><td>Strona nadrzędna (ID)</td><td>Opcjonalnie: ID strony, pod którą powstają nowe strony</td></tr>
 </table>
+<p><b>Confluence Cloud: skąd wziąć dane.</b></p>
+<ol>
+  <li><b>Token</b>: tworzy się go na koncie Atlassian, nie w Confluence. Otwórz <code>https://id.atlassian.com/manage-profile/security/api-tokens</code> (konto Atlassian → Security → API tokens). Atlassian może najpierw poprosić o potwierdzenie tożsamości kodem wysłanym e-mailem.</li>
+  <li>Kliknij <b>Create API token</b> (zwykły, nie <b>Create API token with scopes</b>), nadaj nazwę, na przykład Loonar Compass, i wybierz ważność: domyślnie tydzień, najwyżej rok. Kliknij <b>Create</b> i skopiuj token: Atlassian pokazuje go tylko raz. Gdy wygaśnie, utwórz nowy i wklej go w karcie 6.</li>
+  <li><b>E-mail</b>: adres konta Atlassian, do którego należy token.</li>
+  <li><b>Adres</b>: Twoja witryna z <code>/wiki</code>, na przykład <code>https://twoja-witryna.atlassian.net/wiki</code>.</li>
+  <li><b>Przestrzeń (klucz)</b>: jest w adresie każdej strony przestrzeni, po <code>/spaces/</code> (na przykład <code>…/wiki/spaces/PM/…</code> daje <code>PM</code>), oraz w <b>Ustawieniach przestrzeni</b>.</li>
+  <li><b>Strona nadrzędna (ID)</b> (opcjonalnie): liczba w adresie strony, po <code>/pages/</code> (na przykład <code>…/pages/65818/…</code> daje <code>65818</code>).</li>
+</ol>
 <p>Zapisz kartę przyciskiem <b>Zapisz i sprawdź połączenie z Confluence</b>.</p>
 <div class="prompt">Przygotuj stronę Confluence z opisem procesu „Obsługa reklamacji” z diagramem i opublikuj ją w przestrzeni.</div>
 <h2 id="s10">10. Szablony dokumentów</h2>
