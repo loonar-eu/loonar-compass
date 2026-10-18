@@ -943,3 +943,15 @@ Miro did not create the frame ‖ Miro nie utworzyło ramki ‖ Miro hat den Rah
 Miro refused access: the token needs the boards:read and boards:write permissions, and the board must allow editing ‖ Miro odmówiło dostępu: token potrzebuje uprawnień boards:read i boards:write, a tablica musi pozwalać na edycję ‖ Miro hat den Zugriff verweigert: Das Token braucht die Berechtigungen boards:read und boards:write, und das Board muss Bearbeitung erlauben ‖ Miro a refusé l'accès : le jeton doit avoir les autorisations boards:read et boards:write, et le tableau doit permettre la modification
 Miro rejected the access token (check it in the settings) ‖ Miro odrzuciło token dostępu (sprawdź go w ustawieniach) ‖ Miro hat das Zugriffstoken abgelehnt (prüfen Sie es in den Einstellungen) ‖ Miro a rejeté le jeton d'accès (vérifiez-le dans les paramètres)
 connection to Miro ‖ połączenie z Miro ‖ Verbindung zu Miro ‖ connexion à Miro
+Asynchronous ‖ Asynchroniczny ‖ Asynchron ‖ Asynchrone
+Asynchronous message ‖ Komunikat asynchroniczny ‖ Asynchrone Nachricht ‖ Message asynchrone
+Kind ‖ Rodzaj ‖ Art ‖ Type
+Later ‖ Później ‖ Später ‖ Plus tard
+Lifeline ‖ Linia życia ‖ Lebenslinie ‖ Ligne de vie
+Message ‖ Komunikat ‖ Nachricht ‖ Message
+Messages go from top to bottom in their order: change it with ▲ ▼ in the panel (Alt+↑ / Alt+↓). ‖ Komunikaty idą od góry w swojej kolejności: zmienisz ją przyciskami ▲ ▼ w panelu (Alt+↑ / Alt+↓). ‖ Nachrichten verlaufen in ihrer Reihenfolge von oben nach unten: Ändern Sie sie mit ▲ ▼ im Bereich (Alt+↑ / Alt+↓). ‖ Les messages vont de haut en bas dans leur ordre : changez-le avec ▲ ▼ dans le panneau (Alt+↑ / Alt+↓).
+New lifeline ‖ Nowa linia życia ‖ Neue Lebenslinie ‖ Nouvelle ligne de vie
+Operation of the receiver ‖ Operacja odbiorcy ‖ Operation des Empfängers ‖ Opération du destinataire
+Order ‖ Kolejność ‖ Reihenfolge ‖ Ordre
+Reply ‖ Odpowiedź ‖ Antwort ‖ Réponse
+Synchronous ‖ Synchroniczny ‖ Synchron ‖ Synchrone

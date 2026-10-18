@@ -435,6 +435,15 @@ impl Job<'_> {
         Ok(())
     }
 
+    /// Reply message of a sequence diagram (dashed, drawn back to the caller): the database keeps the flag in
+    /// t_connector.pdata4, which COM does not expose.
+    fn set_reply(&self, connector: &Disp, value: &Value) -> Result<()> {
+        let Some(reply) = value.as_bool() else { return Ok(()) };
+        let id = connector.int("ConnectorID")?;
+        self.repo.call("Execute", &[s(&format!("UPDATE t_connector SET PDATA4 = '{}' WHERE Connector_ID = {id}", if reply { 1 } else { 0 }))])?;
+        Ok(())
+    }
+
     /// Element/connector from an MDG profile: ALWAYS a base UML type + stereotype. AddNew with a qualified type
     /// ("BPMN2.0::StartEvent") leaves an orphaned object without a package in the database (verified 2026-10-13).
     fn new_typed(&self, collection: &Disp, name: &str, kind: &str, stereotype: &str) -> Result<Disp> {
@@ -691,7 +700,18 @@ impl Job<'_> {
                 let title = text_field(op, "name");
                 let connector = self.new_typed(&source.obj("Connectors")?, &title, &text_field(op, "type"), &text_field(op, "stereotype"))?;
                 connector.set("SupplierID", i(target.int("ElementID")?))?;
+                // A message of a sequence diagram belongs to that diagram and has its place in the order.
+                if !op["diagram"].is_null() {
+                    connector.set("DiagramID", i(self.diagram(&op["diagram"])?.int("DiagramID")?))?;
+                }
+                if let Some(n) = int_of(&op["sequence"]) {
+                    connector.set("SequenceNo", i(n))?;
+                }
+                if !op["message_sort"].is_null() {
+                    connector.set("TransitionEvent", s(&text_field(op, "message_sort")))?;
+                }
                 connector.update(&crate::i18n::fmt("connector '{0}'", &[title.clone()]))?;
+                self.set_reply(&connector, &op["is_return"])?;
                 self.set_tags(&connector, &op["tags"])?;
                 let (id, guid, real) = (connector.int("ConnectorID")?, connector.text("ConnectorGUID")?, connector.text("Name")?);
                 self.register(&op["key"], Kind::Connector, &connector, id, guid, real);
@@ -787,7 +807,14 @@ impl Job<'_> {
                 if !stereotype.is_empty() || op["clear_stereotype"].as_bool() == Some(true) {
                     connector.set("StereotypeEx", s(&stereotype))?;
                 }
+                if let Some(n) = int_of(&op["sequence"]) {
+                    connector.set("SequenceNo", i(n))?;
+                }
+                if !op["message_sort"].is_null() {
+                    connector.set("TransitionEvent", s(&text_field(op, "message_sort")))?;
+                }
                 connector.update(&crate::i18n::fmt("connector id={0}", &[id.to_string()]))?;
+                self.set_reply(&connector, &op["is_return"])?;
                 for (end, prefix) in [("ClientEnd", "source"), ("SupplierEnd", "target")] {
                     let (card, role) = (format!("{prefix}_multiplicity"), format!("{prefix}_role"));
                     if op[&card].is_null() && op[&role].is_null() {

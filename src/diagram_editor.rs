@@ -283,6 +283,18 @@ fn toolbox(diagram_type: &str, bpmn: bool) -> (Value, Value) {
         );
     }
     match diagram_type {
+        "Sequence" => (
+            json!([
+                tool(crate::i18n::tr("Lifeline"), crate::i18n::tr("New lifeline"), "Sequence", "", 120, 400),
+                tool(crate::i18n::tr("Actor"), crate::i18n::tr("New actor"), "Actor", "", 120, 400),
+                tool(crate::i18n::tr("Note"), "", "Note", "", 160, 60),
+            ]),
+            json!([
+                { "label": crate::i18n::tr("Message"), "type": "Sequence", "stereotype": "", "sort": "Synchronous", "reply": false },
+                { "label": crate::i18n::tr("Asynchronous message"), "type": "Sequence", "stereotype": "", "sort": "Asynchronous", "reply": false },
+                { "label": crate::i18n::tr("Reply"), "type": "Sequence", "stereotype": "", "sort": "Synchronous", "reply": true },
+            ]),
+        ),
         "Use Case" => (
             json!([tool(crate::i18n::tr("Actor"), crate::i18n::tr("New actor"), "Actor", "", 40, 80), tool(crate::i18n::tr("Use case"), crate::i18n::tr("New use case"), "UseCase", "", 150, 70), tool(crate::i18n::tr("Note"), "", "Note", "", 160, 60)]),
             json!([conn(crate::i18n::tr("Association"), "Association", ""), conn("«include»", "Dependency", "include"), conn("«extend»", "Dependency", "extend")]),
@@ -354,6 +366,10 @@ fn texts() -> Value {
         ("ls_tree_vertical", crate::i18n::tr("Tree, vertical")), ("ls_tree_horizontal", crate::i18n::tr("Tree, horizontal")),
         ("ls_lateral_vertical", crate::i18n::tr("Lateral, vertical")), ("ls_lateral_horizontal", crate::i18n::tr("Lateral, horizontal")),
         ("after_save", crate::i18n::tr("Available after the relationship is saved.")),
+        ("f_order", crate::i18n::tr("Order")), ("earlier", crate::i18n::tr("Earlier")), ("later", crate::i18n::tr("Later")),
+        ("f_message_sort", crate::i18n::tr("Kind")), ("synchronous", crate::i18n::tr("Synchronous")), ("asynchronous", crate::i18n::tr("Asynchronous")),
+        ("f_is_return", crate::i18n::tr("Reply")), ("operation_of_target", crate::i18n::tr("Operation of the receiver")),
+        ("seq_hint", crate::i18n::tr("Messages go from top to bottom in their order: change it with ▲ ▼ in the panel (Alt+↑ / Alt+↓).")),
         ("tab_members", crate::i18n::tr("Attributes and operations")), ("attributes", crate::i18n::tr("Attributes")),
         ("operations", crate::i18n::tr("Operations")), ("none", crate::i18n::tr("None.")), ("visibility", crate::i18n::tr("Visibility")),
         ("return_type", crate::i18n::tr("Return type")), ("parameters", crate::i18n::tr("Parameters")),
@@ -395,6 +411,15 @@ pub fn to_ops(model: &Value, changes: &Value) -> Vec<Value> {
         let mut op = json!({ "op": "create_connector", "source": c["source"], "target": c["target"], "type": c["type"] });
         if let Some(key) = c["key"].as_str() {
             op["key"] = json!(key);
+        }
+        // A message of a sequence diagram: on this diagram, with its number, kind and reply flag.
+        if c["type"] == "Sequence" {
+            op["diagram"] = diagram.clone();
+            for field in ["sequence", "message_sort", "is_return"] {
+                if !c[field].is_null() {
+                    op[field] = c[field].clone();
+                }
+            }
         }
         for field in ["stereotype", "name"] {
             if c[field].as_str().is_some_and(|s| !s.is_empty()) {
@@ -467,6 +492,10 @@ pub fn to_ops(model: &Value, changes: &Value) -> Vec<Value> {
             }
             _ => {}
         }
+    }
+    // New order of the messages of a sequence diagram (their numbers; EA lays them out by number).
+    for c in list("sequence") {
+        ops.push(json!({ "op": "update_connector", "connector": c["id"], "sequence": c["sequence"] }));
     }
     for c in list("colors") {
         ops.push(json!({ "op": "set_color", "diagram": diagram, "element": c["id"], "bgcolor": c["bgcolor"] }));
@@ -623,6 +652,22 @@ mod tests {
         assert_eq!(ops[2], json!({ "op": "delete_operation", "operation": 3 }));
         assert_eq!(ops[3]["return_type"], "Money");
         assert_eq!(ops[3]["parameters"], json!([{ "name": "tax", "type": "Rate" }, { "name": "discount", "type": "" }]));
+    }
+
+    #[test]
+    fn sequence_messages_get_their_diagram_number_and_kind() {
+        let model = json!({ "diagram": { "id": 9, "package": 11 } });
+        let changes = json!({
+            "connected": [{ "key": "n3", "type": "Sequence", "stereotype": "", "name": "pay()", "source": 1, "target": 2,
+                            "sequence": 3, "message_sort": "Asynchronous", "is_return": false }],
+            "sequence": [{ "id": 40, "sequence": 1 }, { "id": 41, "sequence": 2 }],
+        });
+        let ops = to_ops(&model, &changes);
+        assert_eq!(ops[0]["op"], "create_connector");
+        assert_eq!(ops[0]["diagram"], 9);
+        assert_eq!(ops[0]["sequence"], 3);
+        assert_eq!(ops[0]["message_sort"], "Asynchronous");
+        assert_eq!(ops[1], json!({ "op": "update_connector", "connector": 40, "sequence": 1 }));
     }
 
     #[test]

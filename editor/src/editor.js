@@ -7,6 +7,13 @@ import {
 
 const data = window.__DIAGRAM__;
 const t = data.texts;
+const SEQ = data.diagram.type === 'Sequence';
+// On a sequence diagram: the participants (a header with a dashed line down), not fragments, notes or the frame.
+const isLifeline = (ea) => SEQ && !!ea && !['InteractionFragment', 'Note', 'Text', 'Boundary'].includes(ea.type);
+const HEADER = 50;
+const STEP = 40;
+const seqOrder = []; // message edges of a sequence diagram, from top to bottom
+const isMessage = (cell) => SEQ && !!cell && cell.isEdge() && meta.get(cell.id)?.ea.type === 'Sequence';
 const container = document.getElementById('graph');
 const graph = new Graph(container, undefined, [...getDefaultPlugins(), RubberBandHandler]);
 graph.setPanning(true);
@@ -30,6 +37,8 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 
 function vertexStyle(el) {
   const st = el.stereotype || '';
+  if (isLifeline(el)) return { fillColor: '#FFFFFF', fillOpacity: 0, strokeColor: 'none', verticalAlign: 'top', overflow: 'fill', whiteSpace: 'wrap', fontSize: 12 };
+  if (el.type === 'InteractionFragment') return { fillColor: 'none', strokeColor: '#55667A', align: 'left', verticalAlign: 'top', spacingLeft: 6, spacingTop: 4, fontSize: 11 };
   if (el.type === 'Event' || st.endsWith('Event')) {
     const end = st.includes('End');
     return { shape: 'ellipse', perimeter: 'ellipsePerimeter', fillColor: end ? '#FDECEA' : '#EAF7EE', strokeColor: end ? '#B3261E' : '#1D7A46', strokeWidth: end ? 3 : 1.5, verticalLabelPosition: 'bottom', verticalAlign: 'top', fontColor: '#2A3A47', fontSize: 11, resizable: false };
@@ -75,6 +84,8 @@ function classLabel(cell, ea) {
 const baseGetLabel = graph.getLabel.bind(graph);
 graph.getLabel = (cell) => {
   const m = meta.get(cell.id);
+  if (m && cell.isVertex() && isLifeline(m.ea)) return `<div class="ll${m.ea.type === 'Actor' ? ' actor' : ''}"><div class="hd">${esc(cell.value)}</div><div class="ln"></div></div>`;
+  if (m && isMessage(cell)) return `${seqOrder.indexOf(cell) + 1}: ${esc(cell.value)}`;
   if (m && m.kind === 'element' && ['Class', 'Interface', 'Enumeration', 'DataType'].includes(m.ea.type)) return classLabel(cell, m.ea);
   return m && cell.isVertex() ? esc(cell.value) : baseGetLabel(cell);
 };
@@ -102,7 +113,7 @@ graph.batchUpdate(() => {
   }
   for (const c of data.connectors) {
     if (!ids.has(c.source) || !ids.has(c.target)) continue;
-    const e = graph.insertEdge({ parent, id: `c${c.id}`, value: c.name || '', source: cells.get(c.source), target: cells.get(c.target), style: edgeStyle(c) });
+    const e = graph.insertEdge({ parent, id: `c${c.id}`, value: c.name || '', source: cells.get(c.source), target: cells.get(c.target), style: SEQ && c.type === 'Sequence' ? {} : edgeStyle(c) });
     if (c.points && c.points.length) e.geometry.points = c.points.map(([x, y]) => new Point(x, y));
     meta.set(e.id, { kind: 'connector', ea: c, isNew: false });
     original.set(e.id, { name: c.name || '', points: JSON.stringify(c.points || []) });
@@ -120,6 +131,10 @@ document.addEventListener('keydown', (ev) => {
   if (graph.isEditing() || ev.target.closest?.('input, textarea, select')) return;
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { undo.undo(); ev.preventDefault(); }
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'y') { undo.redo(); ev.preventDefault(); }
+  if (SEQ && ev.altKey && (ev.key === 'ArrowUp' || ev.key === 'ArrowDown')) {
+    const cell = graph.getSelectionCell();
+    if (isMessage(cell)) { moveMessage(cell, ev.key === 'ArrowUp' ? -1 : 1); ev.preventDefault(); }
+  }
   if (ev.key === 'Delete' || ev.key === 'Backspace') {
     const selected = graph.getSelectionCells().filter((c) => meta.get(c.id));
     if (!selected.length) return;
@@ -150,6 +165,7 @@ function askDelete(list) {
   const usage = [others.length ? t.used_on.replace('{0}', others.length).replace('{1}', others.slice(0, 8).join(', ') + (others.length > 8 ? '…' : '')) : t.used_nowhere];
   if (elements.length) usage.push(t.relations.replace('{0}', relations));
   overlay.querySelector('[data-d="model"] span').textContent = `${t.delete_from_model_hint} ${usage.join(' ')}`;
+  overlay.querySelector('[data-d="diagram"]').hidden = list.every((c) => isMessage(c));
   overlay.hidden = false;
   overlay.onclick = (e) => {
     const choice = e.target.closest('[data-d]')?.dataset.d;
@@ -212,7 +228,7 @@ function setField(cell, field, value) {
 
 function input(cell, field, kind) {
   const value = current(cell, field);
-  const on = (v) => setField(cell, field, v);
+  const on = (v) => { setField(cell, field, v); if (isMessage(cell)) layoutMessages(); };
   if (kind === 'text') return el('textarea', { rows: '4', oninput: (ev) => on(ev.target.value) }, String(value));
   if (kind === 'bool') { const c = el('input', { type: 'checkbox', onchange: (ev) => on(ev.target.checked) }); c.checked = !!value; return c; }
   const select = (options) => {
@@ -225,6 +241,7 @@ function input(cell, field, kind) {
   if (kind === 'status') return select((data.statuses.length ? data.statuses : ['Proposed', 'Approved', 'Implemented', 'Mandatory', 'Validated']).map((s) => [s, s]));
   if (kind === 'complexity') return select([['1', t.easy], ['2', t.medium], ['3', t.difficult]]);
   if (kind === 'direction') return select(DIRECTIONS.map(([v, k]) => [v, t[k]]));
+  if (kind === 'sort') return select([['Synchronous', t.synchronous], ['Asynchronous', t.asynchronous]]);
   const i = el('input', { type: 'text', value: String(value), oninput: (ev) => on(ev.target.value) });
   if (kind === 'multiplicity') {
     i.setAttribute('list', 'multiplicities');
@@ -379,7 +396,8 @@ function render() {
   const tabs = el('div', { class: 'tabs' });
   const tabList = [['general', t.tab_general]];
   if (cell.isVertex() && CLASSIFIERS.includes(m.ea.type)) tabList.push(['members', t.tab_members]);
-  tabList.push(['tags', t.tab_tags], ['appearance', t.tab_appearance]);
+  tabList.push(['tags', t.tab_tags]);
+  if (!isMessage(cell)) tabList.push(['appearance', t.tab_appearance]);
   if (!tabList.some(([k]) => k === tab)) tab = 'general';
   for (const [k, label] of tabList) {
     tabs.append(el('button', { class: k === tab ? 'on' : '', onclick: () => { tab = k; render(); } }, label));
@@ -394,6 +412,25 @@ function render() {
     for (const [field, label, kind] of EL_FIELDS) body.append(row(t[label], 'model', input(cell, field, kind)));
     const p = m.ea.props || {};
     body.append(readonly(t.f_package, p.package), readonly(t.f_guid, p.guid), readonly(t.f_created, p.created), readonly(t.f_modified, p.modified));
+  } else if (isMessage(cell)) {
+    body.append(row(t.f_name, 'model', nameInput(cell)));
+    // The operations of the receiver: choosing one names the message after it.
+    const ops = (meta.get(cell.target.id)?.ea.operation_list || []).map((o) => `${o.name}(${o.parameters || ''})`);
+    if (ops.length) {
+      const pick = el('select', { onchange: (ev) => { if (ev.target.value) { graph.getDataModel().setValue(cell, ev.target.value); render(); } } });
+      pick.append(el('option', { value: '' }, '—'), ...ops.map((o) => el('option', { value: o }, o)));
+      body.append(row(t.operation_of_target, 'model', pick));
+    }
+    const i = seqOrder.indexOf(cell);
+    const up = el('button', { title: `${t.earlier} (Alt+↑)`, onclick: (ev) => { ev.preventDefault(); moveMessage(cell, -1); } }, '▲');
+    const down = el('button', { title: `${t.later} (Alt+↓)`, onclick: (ev) => { ev.preventDefault(); moveMessage(cell, 1); } }, '▼');
+    up.disabled = i <= 0;
+    down.disabled = i >= seqOrder.length - 1;
+    body.append(row(t.f_order, 'model', el('div', { class: 'order' }, el('b', {}, `${i + 1} / ${seqOrder.length}`), up, down)));
+    body.append(row(t.f_message_sort, 'model', input(cell, 'message_sort', 'sort')));
+    body.append(row(t.f_is_return, 'model', input(cell, 'is_return', 'bool')));
+    body.append(readonly(t.f_source, String(cell.source?.value ?? '')), readonly(t.f_target, String(cell.target?.value ?? '')));
+    body.append(row(t.f_notes, 'model', input(cell, 'notes', 'text')));
   } else {
     body.append(row(t.f_name, 'model', nameInput(cell)));
     const ends = (c) => String(c?.value ?? '');
@@ -471,6 +508,97 @@ insertInput.addEventListener('input', showCandidates);
 insertBox.querySelector('.i-close').addEventListener('click', () => { insertBox.hidden = true; });
 insertBox.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') insertBox.hidden = true; });
 
+// --- sequence diagrams: lifelines and messages in their order ----------------------------------------------------
+// EA lays messages out from top to bottom by their number (SequenceNo), so here too the order is what counts: the
+// vertical place of a message follows from its position in the list, which the user changes with ▲ ▼ (Alt+↑/↓).
+
+function lifelines() {
+  return Object.values(graph.getDataModel().cells).filter((c) => c.isVertex() && isLifeline(meta.get(c.id)?.ea));
+}
+function messageStyle(cell) {
+  const reply = !!current(cell, 'is_return');
+  const asynchronous = current(cell, 'message_sort') === 'Asynchronous';
+  return {
+    strokeColor: '#3B4B59', fontSize: 11, labelBackgroundColor: '#FFFFFF', dashed: reply,
+    endArrow: reply || asynchronous ? 'open' : 'block', endFill: !(reply || asynchronous), movable: false, bendable: false,
+    exitPerimeter: false, entryPerimeter: false, verticalAlign: 'bottom', spacingBottom: 2,
+  };
+}
+// Lays the messages out in their order and makes the lifelines long enough for them.
+function layoutMessages() {
+  if (!SEQ) return;
+  const present = graph.getDataModel().cells;
+  for (let i = seqOrder.length - 1; i >= 0; i--) if (!present[seqOrder[i].id]) seqOrder.splice(i, 1);
+  const lines = lifelines();
+  const top = lines.length ? Math.min(...lines.map((c) => c.geometry.y)) : 40;
+  const first = top + HEADER + 30;
+  const needed = first + STEP * Math.max(seqOrder.length, 1) + 30;
+  graph.batchUpdate(() => {
+    for (const c of lines) {
+      if (c.geometry.y + c.geometry.height < needed) {
+        const g = c.geometry.clone();
+        g.height = needed - g.y;
+        graph.getDataModel().setGeometry(c, g);
+      }
+    }
+    seqOrder.forEach((e, i) => {
+      const y = first + STEP * i;
+      const s = e.source.geometry;
+      const d = e.target.geometry;
+      const style = { ...messageStyle(e), exitX: 0.5, exitY: (y - s.y) / s.height, entryX: 0.5 };
+      const g = e.geometry.clone();
+      if (e.source === e.target) {
+        // A message to itself: out to the right and back a little lower.
+        const x = s.x + s.width / 2 + 40;
+        style.entryY = (y + 18 - s.y) / s.height;
+        g.points = [new Point(x, y), new Point(x, y + 18)];
+      } else {
+        style.entryY = (y - d.y) / d.height;
+        g.points = [];
+      }
+      graph.getDataModel().setStyle(e, style);
+      graph.getDataModel().setGeometry(e, g);
+    });
+  });
+}
+function moveMessage(cell, delta) {
+  const i = seqOrder.indexOf(cell);
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= seqOrder.length) return;
+  [seqOrder[i], seqOrder[j]] = [seqOrder[j], seqOrder[i]];
+  layoutMessages();
+  render();
+}
+if (SEQ) {
+  const byOrder = (a, b) => {
+    const pa = meta.get(a.id).ea.props || {};
+    const pb = meta.get(b.id).ea.props || {};
+    return (pa.seq || 0) - (pb.seq || 0) || (pa.y || 0) - (pb.y || 0) || meta.get(a.id).ea.id - meta.get(b.id).ea.id;
+  };
+  for (const c of Object.values(graph.getDataModel().cells)) {
+    const m = meta.get(c.id);
+    if (!isMessage(c)) continue;
+    m.ea.props = m.ea.props || {};
+    m.ea.props.message_sort = m.ea.props.sort || 'Synchronous';
+    m.ea.props.is_return = !!m.ea.props.return;
+    seqOrder.push(c);
+  }
+  seqOrder.sort(byOrder);
+  // Lifelines move only sideways: their tops stay level, as in EA.
+  graph.addListener(InternalEvent.CELLS_MOVED, (_s, evt) => {
+    const moved = (evt.getProperty('cells') || []).filter((c) => c.isVertex() && isLifeline(meta.get(c.id)?.ea));
+    if (!moved.length) return;
+    const others = lifelines().filter((c) => !moved.includes(c));
+    const top = others.length ? Math.min(...others.map((c) => c.geometry.y)) : moved[0].geometry.y;
+    graph.batchUpdate(() => moved.forEach((c) => { const g = c.geometry.clone(); g.y = top; graph.getDataModel().setGeometry(c, g); }));
+    layoutMessages();
+  });
+  graph.addListener(InternalEvent.CELLS_RESIZED, () => layoutMessages());
+  graph.addListener(InternalEvent.CELLS_REMOVED, () => layoutMessages());
+  document.getElementById('status').textContent = t.seq_hint;
+  layoutMessages();
+}
+
 // --- toolbox and new connectors ----------------------------------------------------------------------------------
 
 let counter = 0;
@@ -480,11 +608,20 @@ for (const tool of data.toolbox) {
   b.textContent = tool.label;
   b.title = t.add_hint;
   b.addEventListener('click', () => {
-    const [x, y] = freeSpot(tool.width, tool.height);
+    let [x, y] = freeSpot(tool.width, tool.height);
+    let height = tool.height;
+    if (SEQ && isLifeline({ type: tool.type })) {
+      const lines = lifelines();
+      if (lines.length) {
+        x = Math.max(...lines.map((c) => c.geometry.x + c.geometry.width)) + 40;
+        y = Math.min(...lines.map((c) => c.geometry.y));
+        height = Math.max(...lines.map((c) => c.geometry.height));
+      }
+    }
     const ea = { type: tool.type, stereotype: tool.stereotype || '', attributes: [], operations: [], props: {}, tags: [], attribute_list: [], operation_list: [] };
     let v;
     graph.batchUpdate(() => {
-      v = graph.insertVertex({ parent, id: `n${++counter}`, value: tool.name, position: [x, y], size: [tool.width, tool.height], style: vertexStyle(ea) });
+      v = graph.insertVertex({ parent, id: `n${++counter}`, value: tool.name, position: [x, y], size: [tool.width, height], style: vertexStyle(ea) });
       meta.set(v.id, { kind: 'element', ea, isNew: true });
     });
     graph.setSelectionCell(v);
@@ -499,10 +636,23 @@ data.connector_types.forEach((ct, i) => {
   o.textContent = ct.label;
   connType.appendChild(o);
 });
+// The message selected before a new one is drawn: the new one goes right after it.
+let lastMessage = null;
+graph.getSelectionModel().addListener(InternalEvent.CHANGE, () => { const c = graph.getSelectionCell(); if (isMessage(c)) lastMessage = c; });
 graph.getPlugin('ConnectionHandler').addListener(InternalEvent.CONNECT, (_s, evt) => {
   const edge = evt.getProperty('cell');
   const ct = data.connector_types[Number(connType.value) || 0];
   const ea = { type: ct.type, stereotype: ct.stereotype || '', name: '', props: {}, tags: [] };
+  if (SEQ && ct.type === 'Sequence') {
+    ea.props = { message_sort: ct.sort || 'Synchronous', is_return: !!ct.reply };
+    meta.set(edge.id, { kind: 'connector', ea, isNew: true });
+    // After the selected message, else at the end.
+    const after = seqOrder.indexOf(lastMessage);
+    seqOrder.splice(after >= 0 ? after + 1 : seqOrder.length, 0, edge);
+    layoutMessages();
+    graph.setSelectionCell(edge);
+    return;
+  }
   meta.set(edge.id, { kind: 'connector', ea, isNew: true });
   graph.setCellStyle(edgeStyle(ea), [edge]);
 });
@@ -533,7 +683,7 @@ const round = (n) => Math.round(n);
 function changes() {
   const out = {
     action: 'save', moved: [], renamed: [], routed: [], created: [], connected: [], removed: [], hidden: [], deleted: [], deleted_connectors: [],
-    updated: [], updated_connectors: [], colors: [], line_styles: [], placed: [],
+    updated: [], updated_connectors: [], colors: [], line_styles: [], placed: [], sequence: [],
   };
   // Existing objects that are no longer on the diagram: what the user chose for them (elements removed with them
   // take their connectors off this diagram without any separate operation).
@@ -567,7 +717,16 @@ function changes() {
       if (!cell.source || !cell.target) continue;
       const points = (cell.geometry.points || []).map((p) => [round(p.x), round(p.y)]);
       if (m.isNew) {
-        out.connected.push({ key: cell.id, type: m.ea.type, stereotype: m.ea.stereotype, name: String(cell.value || ''), source: key(cell.source), target: key(cell.target), points });
+        const message = isMessage(cell)
+          ? { sequence: seqOrder.indexOf(cell) + 1, message_sort: current(cell, 'message_sort'), is_return: !!current(cell, 'is_return') }
+          : {};
+        out.connected.push({ key: cell.id, type: m.ea.type, stereotype: m.ea.stereotype, name: String(cell.value || ''), source: key(cell.source), target: key(cell.target), points, ...message });
+        continue;
+      }
+      // Messages: their place is their number (below), not a route.
+      if (isMessage(cell)) {
+        const n = seqOrder.indexOf(cell) + 1;
+        if (n !== (m.ea.props || {}).seq) out.sequence.push({ id: m.ea.id, sequence: n });
         continue;
       }
       const o = original.get(cell.id);
@@ -624,7 +783,7 @@ document.getElementById('save').addEventListener('click', () => {
   const c = changes();
   const count = c.moved.length + c.renamed.length + c.routed.length + c.created.length + c.connected.length
     + c.removed.length + c.hidden.length + c.deleted.length + c.deleted_connectors.length
-    + c.updated.length + c.updated_connectors.length + c.colors.length + c.line_styles.length + c.members.length + c.placed.length;
+    + c.updated.length + c.updated_connectors.length + c.colors.length + c.line_styles.length + c.members.length + c.placed.length + c.sequence.length;
   if (!count) { document.getElementById('status').textContent = t.nothing; return; }
   send(c);
 });
@@ -658,6 +817,28 @@ if (data.selftest === 'props') {
     setField(edge, 'direction', 'Source -> Destination');
     editOf(edge.id).tags.reviewed = 'yes';
     editOf(edge.id).line_style = 'orthogonal_square';
+    document.getElementById('status').textContent = JSON.stringify(changes()).slice(0, 300);
+    setTimeout(() => document.getElementById('save').click(), 1000);
+  }, 1500);
+} else if (data.selftest === 'seq') {
+  setTimeout(() => {
+    const all = () => Object.values(graph.getDataModel().cells);
+    const msg = (n) => all().find((c) => isMessage(c) && c.value === n);
+    // log() right after order(), confirm() renamed, pay() asynchronous.
+    const log = msg('log()');
+    while (seqOrder.indexOf(log) > 1) moveMessage(log, -1);
+    graph.getDataModel().setValue(msg('confirm()'), 'confirmOrder()');
+    setField(msg('pay()'), 'message_sort', 'Asynchronous');
+    // A new lifeline and a message to it right after pay().
+    document.querySelector('#toolbox button').click();
+    const warehouse = graph.getSelectionCell();
+    graph.stopEditing(false);
+    graph.getDataModel().setValue(warehouse, 'Warehouse');
+    const shop = all().find((c) => c.isVertex() && c.value === 'Shop');
+    const e = graph.insertEdge({ parent, id: 'n99', value: 'reserve()', source: shop, target: warehouse, style: {} });
+    meta.set(e.id, { kind: 'connector', ea: { type: 'Sequence', stereotype: '', props: { message_sort: 'Synchronous', is_return: false }, tags: [] }, isNew: true });
+    seqOrder.splice(seqOrder.indexOf(msg('pay()')) + 1, 0, e);
+    layoutMessages();
     document.getElementById('status').textContent = JSON.stringify(changes()).slice(0, 300);
     setTimeout(() => document.getElementById('save').click(), 1000);
   }, 1500);
