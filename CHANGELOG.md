@@ -2,12 +2,14 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
-## Wersja 0.6 (w przygotowaniu)
+## Wersja 0.6 (2026-10-18)
 
 Edytor diagramów:
 
 - Pod każdym diagramem z EA w rozmowie jest przycisk „Edytuj diagram”. Otwiera diagram w oknie edytora (WebView2): przesuwanie, zmiana rozmiaru, wyrównywanie, zmiana nazw, cofanie (Ctrl+Z / Ctrl+Y). Edytor zmienia model, nie obrazek: zapis idzie przez EA, z panelem zatwierdzania i dziennikiem zmian.
 - Nowe elementy z przybornika dopasowanego do rodzaju diagramu: klas, komponentów, przypadków użycia, aktywności, BPMN, maszyny stanów (stany, początek, koniec, wybór), wdrożenia (węzły, urządzenia, środowiska wykonawcze, artefakty), pakietów (prawdziwe pakiety) i sekwencji. Nowy element trafia w wolne miejsce; łączenie przeciągnięciem od elementu do elementu.
+- Łączenie: po najechaniu na element pojawia się niebieska strzałka; przeciągnij ją na drugi element. Rodzaj relacji wybierasz z listy „Połączenie”.
+- BPMN: typy zadań (użytkownika, usługi, ręczne, skryptu, wysłania, odbioru, reguły biznesowej), zdarzeń (wiadomość, czas, sygnał, błąd…) i bramek (rozłączna, włączna, równoległa, złożona, oparta na zdarzeniach) jako ikony i znaczniki, wybór typu w zakładce „Ogólne”, zdarzenie pośrednie w przyborniku. Klasy powiększają się same, gdy dochodzą atrybuty i operacje.
 - „Z modelu…”: wstawianie na diagram elementów, które już są w modelu, z wyszukiwarką.
 - Usuwanie pyta: z tego diagramu czy z modelu. Przy usuwaniu z modelu pokazuje, na ilu i na jakich innych diagramach jest element i ile ma relacji.
 - Panel „Właściwości”: pola jak na karcie ogólnej EA (nazwa, alias, stereotyp, słowa kluczowe, status, wersja, autor, faza, złożoność, abstrakcyjny, notatki; pakiet, GUID i daty do odczytu), atrybuty i operacje klas, tagi (z listami wartości z profilu, np. BPMN), wygląd na diagramie (kolor, styl linii). Każde pole ma znaczek „model” albo „diagram”.

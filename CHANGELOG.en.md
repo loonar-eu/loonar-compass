@@ -2,12 +2,14 @@
 
 All notable changes to Loonar Compass (named Loonar EA Assistant until version 0.3).
 
-## Version 0.6 (in preparation)
+## Version 0.6 (2026-10-18)
 
 Diagram editor:
 
 - Every EA diagram in the conversation has an "Edit diagram" button. It opens the diagram in an editor window (WebView2): moving, resizing, aligning, renaming, undo (Ctrl+Z / Ctrl+Y). The editor changes the model, not a picture: saving goes through EA, with the approval panel and the change log.
 - New elements from a toolbox that fits the kind of diagram: class, component, use case, activity, BPMN, state machine (states, initial, final, choice), deployment (nodes, devices, execution environments, artifacts), package (real packages) and sequence. A new element goes to a free spot; connect by dragging from one element to another.
+- Connecting: an element under the mouse shows a blue arrow; drag it to another element. The kind of relationship comes from the "Connector" list.
+- BPMN: task types (user, service, manual, script, send, receive, business rule), event definitions (message, timer, signal, error…) and gateway types (exclusive, inclusive, parallel, complex, event-based) as icons and markers, the type chosen in the "General" tab, an intermediate event in the toolbox. Classes grow by themselves when attributes and operations are added.
 - "From the model…": puts elements that already exist in the model on the diagram, with a search.
 - Deleting asks: from this diagram or from the model. When deleting from the model it shows on how many and which other diagrams the element is and how many relationships it has.
 - "Properties" panel: the fields of EA's general tab (name, alias, stereotype, keywords, status, version, author, phase, complexity, abstract, notes; package, GUID and dates read-only), attributes and operations of classes, tagged values (with the profile's pick-lists, e.g. BPMN), appearance on the diagram (color, line style). Each field is marked "model" or "diagram".

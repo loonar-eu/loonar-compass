@@ -2,12 +2,14 @@
 
 Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen Loonar EA Assistant).
 
-## Version 0.6 (in Vorbereitung)
+## Version 0.6 (2026-10-18)
 
 Diagrammeditor:
 
 - Jedes EA-Diagramm in der Unterhaltung hat die Schaltfläche „Diagramm bearbeiten“. Sie öffnet das Diagramm in einem Editorfenster (WebView2): Verschieben, Größe ändern, Ausrichten, Umbenennen, Rückgängig (Strg+Z / Strg+Y). Der Editor ändert das Modell, kein Bild: Gespeichert wird über EA, mit dem Freigabebereich und dem Änderungsprotokoll.
 - Neue Elemente aus einer zur Diagrammart passenden Werkzeugleiste: Klassen, Komponenten, Anwendungsfälle, Aktivitäten, BPMN, Zustandsautomat (Zustände, Start, Ende, Auswahl), Verteilung (Knoten, Geräte, Ausführungsumgebungen, Artefakte), Pakete (echte Pakete) und Sequenz. Ein neues Element kommt an eine freie Stelle; Verbinden durch Ziehen von Element zu Element.
+- Verbinden: Ein Element unter der Maus zeigt einen blauen Pfeil; ziehen Sie ihn auf ein anderes Element. Die Art der Beziehung kommt aus der Liste „Verbindung“.
+- BPMN: Aufgabentypen (Benutzer, Service, manuell, Skript, Senden, Empfangen, Geschäftsregel), Ereignistypen (Nachricht, Zeitgeber, Signal, Fehler…) und Gateway-Typen (exklusiv, inklusiv, parallel, komplex, ereignisbasiert) als Symbole und Markierungen, Auswahl des Typs auf der Registerkarte „Allgemein“, ein Zwischenereignis in der Werkzeugleiste. Klassen wachsen von selbst, wenn Attribute und Operationen hinzukommen.
 - „Aus dem Modell…“: fügt Elemente, die bereits im Modell existieren, mit einer Suche in das Diagramm ein.
 - Löschen fragt: aus diesem Diagramm oder aus dem Modell. Beim Löschen aus dem Modell zeigt es, in wie vielen und welchen anderen Diagrammen das Element ist und wie viele Beziehungen es hat.
 - Bereich „Eigenschaften“: die Felder der allgemeinen Registerkarte von EA (Name, Alias, Stereotyp, Schlüsselwörter, Status, Version, Autor, Phase, Komplexität, abstrakt, Notizen; Paket, GUID und Datum nur zum Lesen), Attribute und Operationen von Klassen, Tagged Values (mit den Auswahllisten des Profils, z. B. BPMN), Darstellung im Diagramm (Farbe, Linienstil). Jedes Feld ist mit „Modell“ oder „Diagramm“ gekennzeichnet.

@@ -2,12 +2,14 @@
 
 Toutes les modifications importantes de l'application Loonar Compass (nommée Loonar EA Assistant jusqu'à la version 0.3).
 
-## Version 0.6 (en préparation)
+## Version 0.6 (2026-10-18)
 
 Éditeur de diagrammes :
 
 - Chaque diagramme d'EA dans la conversation a un bouton « Modifier le diagramme ». Il ouvre le diagramme dans une fenêtre d'éditeur (WebView2) : déplacer, redimensionner, aligner, renommer, annuler (Ctrl+Z / Ctrl+Y). L'éditeur modifie le modèle, pas une image : l'enregistrement passe par EA, avec le panneau d'approbation et le journal des modifications.
 - De nouveaux éléments depuis une boîte à outils adaptée au type de diagramme : classes, composants, cas d'utilisation, activités, BPMN, machine à états (états, début, fin, choix), déploiement (nœuds, équipements, environnements d'exécution, artefacts), paquetages (de vrais paquetages) et séquence. Un nouvel élément va à un emplacement libre ; on relie en faisant glisser d'un élément à un autre.
+- Relier : un élément sous la souris affiche une flèche bleue ; faites-la glisser vers un autre élément. Le type de relation vient de la liste « Connecteur ».
+- BPMN : types de tâches (utilisateur, service, manuelle, script, envoi, réception, règle métier), d'événements (message, minuterie, signal, erreur…) et de passerelles (exclusive, inclusive, parallèle, complexe, basée sur les événements) sous forme d'icônes et de marqueurs, choix du type dans l'onglet « Général », un événement intermédiaire dans la boîte à outils. Les classes s'agrandissent seules quand des attributs et des opérations s'ajoutent.
 - « Depuis le modèle… » : place dans le diagramme des éléments qui existent déjà dans le modèle, avec une recherche.
 - La suppression demande : de ce diagramme ou du modèle. Pour une suppression du modèle, elle indique dans combien et dans quels autres diagrammes figure l'élément et combien de relations il a.
 - Panneau « Propriétés » : les champs de l'onglet général d'EA (nom, alias, stéréotype, mots-clés, statut, version, auteur, phase, complexité, abstrait, notes ; paquetage, GUID et dates en lecture seule), attributs et opérations des classes, valeurs étiquetées (avec les listes du profil, p. ex. BPMN), apparence dans le diagramme (couleur, style de ligne). Chaque champ porte la marque « modèle » ou « diagramme ».
