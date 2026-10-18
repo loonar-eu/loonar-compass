@@ -31,6 +31,7 @@ InternalEvent.disableContextMenu(container);
 
 const meta = new Map(); // cell id -> {kind: 'element'|'connector', ea: {...}, isNew}
 const original = new Map(); // cell id -> {name, x, y, w, h, points}
+const edits = new Map(); // cell id -> {fields: {...}, tags: {name: value|null}, bgcolor?, line_style?}
 
 const BPMN = new Set(['Activity', 'StartEvent', 'EndEvent', 'IntermediateEvent', 'Gateway', 'Pool', 'Lane', 'SequenceFlow', 'MessageFlow']);
 // Notes show their text (EA keeps it in the notes, which may hold simple HTML formatting).
@@ -96,7 +97,7 @@ function edgeStyle(c) {
 function classLabel(cell, ea) {
   const rows = (items) => items.map((x) => `<div class="row">${esc(x)}</div>`).join('');
   const stereo = ea.type === 'Interface' ? '<div class="st">«interface»</div>' : (ea.stereotype && !BPMN.has(ea.stereotype) ? `<div class="st">«${esc(ea.stereotype)}»</div>` : '');
-  return `<div class="cls">${stereo}<div class="nm">${esc(cell.value)}</div><div class="cmp">${rows(ea.attributes || [])}</div><div class="cmp">${rows(ea.operations || [])}</div></div>`;
+  return `<div class="cls">${stereo}<div class="nm"${current(cell, 'abstract') ? ' style="font-style:italic"' : ''}>${esc(cell.value)}</div><div class="cmp">${rows(ea.attributes || [])}</div><div class="cmp">${rows(ea.operations || [])}</div></div>`;
 }
 const baseGetLabel = graph.getLabel.bind(graph);
 graph.getLabel = (cell) => {
@@ -200,7 +201,6 @@ function askDelete(list) {
 // --- properties panel: General, tagged values, appearance ---------------------------------------------------------
 // Every field says what it changes: the model (everywhere the object is shown) or only this diagram.
 
-const edits = new Map(); // cell id -> {fields: {...}, tags: {name: value|null}, bgcolor?, line_style?}
 const editOf = (id) => { if (!edits.has(id)) edits.set(id, { fields: {}, tags: {} }); return edits.get(id); };
 const panel = document.getElementById('props');
 let tab = 'general';
@@ -248,7 +248,7 @@ function setField(cell, field, value) {
 
 function input(cell, field, kind) {
   const value = current(cell, field);
-  const on = (v) => { setField(cell, field, v); if (isMessage(cell)) layoutMessages(); };
+  const on = (v) => { setField(cell, field, v); if (isMessage(cell)) layoutMessages(); if (field === 'abstract') graph.refresh(cell); };
   if (kind === 'text') return el('textarea', { rows: '4', oninput: (ev) => on(ev.target.value) }, String(value));
   if (kind === 'bool') { const c = el('input', { type: 'checkbox', onchange: (ev) => on(ev.target.checked) }); c.checked = !!value; return c; }
   const select = (options) => {
@@ -411,8 +411,14 @@ function render() {
   }
   const cell = sel[0];
   const m = meta.get(cell.id);
-  const type = m.ea.stereotype ? `${m.ea.type} «${String(m.ea.stereotype).replace(/^.*::/, '')}»` : m.ea.type;
+  const type = isMessage(cell) ? t.message : m.ea.stereotype ? `${m.ea.type} «${String(m.ea.stereotype).replace(/^.*::/, '')}»` : m.ea.type;
   panel.append(el('p', { class: 'kind' }, type));
+  // What a change of the model reaches: the other diagrams that show this object.
+  if (!m.isNew) {
+    const others = m.ea.other_diagrams || [];
+    const text = others.length ? t.used_on.replace('{0}', others.length).replace('{1}', others.slice(0, 5).join(', ') + (others.length > 5 ? '…' : '')) : t.used_nowhere;
+    panel.append(el('p', { class: 'hint usage' }, badge('model'), ' ', text));
+  }
   const tabs = el('div', { class: 'tabs' });
   const tabList = [['general', t.tab_general]];
   if (cell.isVertex() && CLASSIFIERS.includes(m.ea.type)) tabList.push(['members', t.tab_members]);

@@ -403,6 +403,7 @@ fn texts() -> Value {
         ("ls_tree_vertical", crate::i18n::tr("Tree, vertical")), ("ls_tree_horizontal", crate::i18n::tr("Tree, horizontal")),
         ("ls_lateral_vertical", crate::i18n::tr("Lateral, vertical")), ("ls_lateral_horizontal", crate::i18n::tr("Lateral, horizontal")),
         ("after_save", crate::i18n::tr("Available after the relationship is saved.")),
+        ("message", crate::i18n::tr("Message")),
         ("f_order", crate::i18n::tr("Order")), ("earlier", crate::i18n::tr("Earlier")), ("later", crate::i18n::tr("Later")),
         ("f_message_sort", crate::i18n::tr("Kind")), ("synchronous", crate::i18n::tr("Synchronous")), ("asynchronous", crate::i18n::tr("Asynchronous")),
         ("f_is_return", crate::i18n::tr("Reply")), ("operation_of_target", crate::i18n::tr("Operation of the receiver")),
