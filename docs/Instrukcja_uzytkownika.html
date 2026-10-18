@@ -57,16 +57,18 @@
     <li><a href="#s6">Rozmowa z asystentem</a></li>
     <li><a href="#s7">Praca z modelem Enterprise Architect</a></li>
     <li><a href="#s8">Współpraca z otwartym oknem EA</a></li>
-    <li><a href="#s9">Dokumenty: Word, Excel, obrazki PNG, Confluence</a></li>
-    <li><a href="#s10">Szablony dokumentów</a></li>
-    <li><a href="#s11">Pamięć asystenta</a></li>
-    <li><a href="#s12">Zatwierdzanie zmian i dziennik zmian</a></li>
-    <li><a href="#s13">Rozmowy: historia, wyszukiwanie, praca w tle</a></li>
-    <li><a href="#s14">Dane, bezpieczeństwo i prywatność</a></li>
-    <li><a href="#s15">Rozwiązywanie problemów</a></li>
-    <li><a href="#s16">Zgłaszanie błędów i nowe wydania</a></li>
-    <li><a href="#s17">Aktualizacja i odinstalowanie</a></li>
-    <li><a href="#s18">Licencja, znaki towarowe i kontakt</a></li>
+    <li><a href="#s9">Edytor diagramów</a></li>
+    <li><a href="#s10">Wysyłanie diagramów do Miro</a></li>
+    <li><a href="#s11">Dokumenty: Word, Excel, obrazki PNG, Confluence</a></li>
+    <li><a href="#s12">Szablony dokumentów</a></li>
+    <li><a href="#s13">Pamięć asystenta</a></li>
+    <li><a href="#s14">Zatwierdzanie zmian i dziennik zmian</a></li>
+    <li><a href="#s15">Rozmowy: historia, wyszukiwanie, praca w tle</a></li>
+    <li><a href="#s16">Dane, bezpieczeństwo i prywatność</a></li>
+    <li><a href="#s17">Rozwiązywanie problemów</a></li>
+    <li><a href="#s18">Zgłaszanie błędów i nowe wydania</a></li>
+    <li><a href="#s19">Aktualizacja i odinstalowanie</a></li>
+    <li><a href="#s20">Licencja, znaki towarowe i kontakt</a></li>
   </ol>
 </div>
 
@@ -81,10 +83,10 @@
   <li><b>przygotowuje dokumenty</b> z treści modelu: Word, Excel, obrazki PNG i strony Confluence, także według szablonów,</li>
   <li><b>pamięta ustalenia</b> między rozmowami (konwencje modelowania, preferencje, poprawki).</li>
 </ul>
-<p>Aplikacja korzysta z modelu językowego Claude Haiku 5.5 (Anthropic) przez Internet, z Twoim kluczem API. Z modelem EA łączy się na dwa sposoby: czyta go wprost (z bazy PostgreSQL albo z pliku .qea/.qeax), a zapisuje przez Enterprise Architect, na koncie użytkownika modelu podanym w ustawieniach, jeśli model ma takie konto. Gdy plik modelu masz otwarty w EA, zmiany idą przez Twoje okno EA; w pozostałych przypadkach EA działa w tle. Zmiany w modelu możesz przed zapisem zatwierdzić albo odrzucić (rozdział 12).</p>
-<p>Interfejs i odpowiedzi asystenta są dostępne w czterech językach: polskim, angielskim, niemieckim i francuskim (rozdział 5). Aplikacja jest bezpłatna, także do użytku komercyjnego (rozdział 18).</p>
+<p>Aplikacja korzysta z modelu językowego Claude Haiku 5.5 (Anthropic) przez Internet, z Twoim kluczem API. Z modelem EA łączy się na dwa sposoby: czyta go wprost (z bazy PostgreSQL albo z pliku .qea/.qeax), a zapisuje przez Enterprise Architect, na koncie użytkownika modelu podanym w ustawieniach, jeśli model ma takie konto. Gdy plik modelu masz otwarty w EA, zmiany idą przez Twoje okno EA; w pozostałych przypadkach EA działa w tle. Zmiany w modelu możesz przed zapisem zatwierdzić albo odrzucić (rozdział 14).</p>
+<p>Interfejs i odpowiedzi asystenta są dostępne w czterech językach: polskim, angielskim, niemieckim i francuskim (rozdział 5). Aplikacja jest bezpłatna, także do użytku komercyjnego (rozdział 20).</p>
 
-<h2 id="s2">2. Wymagania</h2>
+<h2 id="s2" data-page="install">2. Wymagania</h2>
 <div class="note">
   <b>Warunki konieczne.</b> Obsługiwana konfiguracja wymaga spełnienia następujących warunków:
   <ol style="margin: 4pt 0 0 0;">
@@ -100,14 +102,15 @@
   <tr><td>Model EA</td><td>Plik projektu EA .qea lub .qeax (wystarczy jego ścieżka) albo repozytorium w bazie PostgreSQL z włączonymi zabezpieczeniami użytkowników (potrzebne są: serwer, port, nazwa bazy oraz konto i hasło do bazy, hasło bez średnika; tym kontem asystent czyta model, a Enterprise Architect zapisuje zmiany). Plik .qea jest przeznaczony dla jednej osoby, a .qeax dla małego zespołu, który współdzieli plik.</td></tr>
   <tr><td>Konto użytkownika modelu</td><td>Dla modelu w bazie albo pliku modelu z włączonymi zabezpieczeniami: login i hasło konta asystenta w modelu EA. Najlepiej osobne konto tylko dla asystenta, żeby jego zmiany i blokady było widać osobno i żeby nie kolidowały z Twoimi.</td></tr>
   <tr><td>Klucz API Claude</td><td>Klucz z konsoli Anthropic (Anthropic Console).</td></tr>
-  <tr><td>Internet</td><td>Połączenie HTTPS z api.anthropic.com, także przez proxy z ustawień internetowych Windows (rozdział 14).</td></tr>
+  <tr><td>Internet</td><td>Połączenie HTTPS z api.anthropic.com, także przez proxy z ustawień internetowych Windows (rozdział 16).</td></tr>
   <tr><td>Uprawnienia administratora</td><td>Niepotrzebne przy instalacji „Tylko dla mnie”. Wymagane tylko przy instalacji dla wszystkich użytkowników komputera (rozdział 3).</td></tr>
-  <tr><td>Confluence (opcjonalnie)</td><td>Cloud albo Data Center, tylko do publikowania stron przez asystenta: adres, token i klucz przestrzeni (rozdział 9). Bez tego strony też powstają, a kod wklejasz sam.</td></tr>
+  <tr><td>Confluence (opcjonalnie)</td><td>Cloud albo Data Center, tylko do publikowania stron przez asystenta: adres, token i klucz przestrzeni (rozdział 11). Bez tego strony też powstają, a kod wklejasz sam.</td></tr>
+  <tr><td>Miro (opcjonalnie)</td><td>Tylko do wysyłania diagramów na tablicę Miro: token dostępu aplikacji Miro (rozdział 10).</td></tr>
   <tr><td>Program pocztowy (opcjonalnie)</td><td>Program pocztowy ustawiony w Windows jako domyślny, na przykład Outlook: do zgłaszania błędów i zapisu na informacje o nowych wydaniach.</td></tr>
 </table>
 <div class="note"><b>Koszty.</b> Sama aplikacja jest bezpłatna. Za korzystanie z modelu Claude płacisz firmie Anthropic według zużycia, na koncie, do którego należy klucz API.</div>
 
-<h2 id="s3">3. Instalacja</h2>
+<h2 id="s3" data-page="install">3. Instalacja</h2>
 <p>Uruchom plik <code>LoonarCompass-Setup-0.5.exe</code>. Kreator prowadzi przez kolejne strony przyciskami <b>Dalej</b> i <b>Wstecz</b>. Uprawnień administratora nie potrzebujesz, chyba że instalujesz aplikację dla wszystkich użytkowników komputera.</p>
 <div class="note"><b>Ostrzeżenie Windows SmartScreen.</b> Instalator nie jest jeszcze podpisany cyfrowo, dlatego przy pierwszym uruchomieniu Windows może pokazać komunikat „System Windows ochronił ten komputer”. Kliknij <b>Więcej informacji</b>, a potem <b>Uruchom mimo to</b>. Gdy w systemie jest włączona Inteligentna kontrola aplikacji (Smart App Control), Windows blokuje niepodpisane aplikacje bez możliwości ich uruchomienia: poczekaj wtedy na wersję podpisaną. Instalator pobieraj tylko z loonar.eu albo z wydań projektu na GitHubie.</div>
 <figure class="small"><img src="img/en/installer-language.png" alt="Kreator instalacji: pierwsza strona z wyborem jednego z czterech języków"><figcaption>Pierwsza strona kreatora: wybór języka</figcaption></figure>
@@ -145,22 +148,22 @@
 <p>Po lewej stronie okna jest granatowy <b>pasek nawigacji</b> z ikonami. Po najechaniu myszą na ikonę pojawia się jej nazwa. Kliknięcie przełącza widok. Na dole okna jest pasek z nazwą i wersją aplikacji oraz danymi właściciela.</p>
 <table>
   <tr><th style="width: 30%;">Ikona</th><th>Co zawiera</th></tr>
-  <tr><td><b>Czat</b></td><td>Lista rozmów i rozmowa z asystentem (rozdziały 6 i 13)</td></tr>
+  <tr><td><b>Czat</b></td><td>Lista rozmów i rozmowa z asystentem (rozdziały 6 i 15)</td></tr>
   <tr><td><b>Ustawienia</b></td><td>Klucz API, baza modelu, Enterprise Architect, język i tryb zatwierdzania, nowe wydania, Confluence (rozdział 5)</td></tr>
-  <tr><td><b>Pamięć asystenta</b></td><td>Ustalenia, które asystent zapamiętał między rozmowami (rozdział 11)</td></tr>
-  <tr><td><b>Szablony dokumentów</b></td><td>Szablony, które asystent wypełnia treścią z modelu (rozdział 10)</td></tr>
-  <tr><td><b>Dziennik zmian w modelu</b></td><td>Zapisy asystenta do modelu, z eksportem do Excela (rozdział 12)</td></tr>
+  <tr><td><b>Pamięć asystenta</b></td><td>Ustalenia, które asystent zapamiętał między rozmowami (rozdział 13)</td></tr>
+  <tr><td><b>Szablony dokumentów</b></td><td>Szablony, które asystent wypełnia treścią z modelu (rozdział 12)</td></tr>
+  <tr><td><b>Dziennik zmian w modelu</b></td><td>Zapisy asystenta do modelu, z eksportem do Excela (rozdział 14)</td></tr>
   <tr><td><b>Changelog</b></td><td>Lista zmian i znanych ograniczeń każdej wersji</td></tr>
-  <tr><td><b>Zgłoś błąd</b></td><td>Formularz zgłoszenia błędu ze zdjęciami (rozdział 16)</td></tr>
+  <tr><td><b>Zgłoś błąd</b></td><td>Formularz zgłoszenia błędu ze zdjęciami (rozdział 18)</td></tr>
   <tr><td><b>Wesprzyj projekt</b> (ikona serca, na dole paska, nad ikoną Informacje)</td><td>Dobrowolne wsparcie rozwoju aplikacji (opis niżej)</td></tr>
-  <tr><td><b>Informacje</b> (na dole paska)</td><td>Wersja, właściciel aplikacji, linki (polityka prywatności, kod źródłowy na GitHubie, loonar.eu), informacja o znakach towarowych, licencja i komponenty open source (rozdział 18)</td></tr>
+  <tr><td><b>Informacje</b> (na dole paska)</td><td>Wersja, właściciel aplikacji, linki (polityka prywatności, kod źródłowy na GitHubie, loonar.eu), informacja o znakach towarowych, licencja i komponenty open source (rozdział 20)</td></tr>
 </table>
 <p>Pomarańczowy znak <b>„!”</b> na ikonach Ustawienia, Pamięć asystenta i Szablony dokumentów oznacza, że po zmianie języka tłumaczenie jeszcze się nie zakończyło (rozdział 5).</p>
 <p><b>Wesprzyj projekt.</b> Loonar Compass jest bezpłatny, także do użytku komercyjnego, i taki pozostanie. Przycisk <b>Wesprzyj na suppi.pl</b> otwiera stronę <a href="https://suppi.pl/loonar">https://suppi.pl/loonar</a>, na której możesz dobrowolnie wesprzeć rozwój aplikacji; wpłaty pokrywają między innymi certyfikat do podpisywania kodu, dzięki któremu Windows rozpozna aplikację jako pochodzącą od zweryfikowanego wydawcy. W części „Inne sposoby wsparcia” są linki do kodu źródłowego na GitHubie i do loonar.eu: możesz zgłaszać błędy i pomysły, polecić aplikację innym użytkownikom Enterprise Architect albo dać projektowi gwiazdkę na GitHubie.</p>
 <h3>Widok czatu</h3>
 <ul>
   <li><b>Lista rozmów</b> po lewej jest pogrupowana na „Dzisiaj”, „Wczoraj”, „Ostatnie 7 dni” i „Wcześniej”. Nową rozmowę zaczynasz przyciskiem <b>+</b>. Wybrana rozmowa jest podświetlona.</li>
-  <li><b>Nagłówek rozmowy</b> pokazuje jej tytuł, przycisk <b>Model: …</b> z modelem tej rozmowy (rozdział 13), a w trakcie pracy asystenta znacznik „Claude pracuje”.</li>
+  <li><b>Nagłówek rozmowy</b> pokazuje jej tytuł, przycisk <b>Model: …</b> z modelem tej rozmowy (rozdział 15), a w trakcie pracy asystenta znacznik „Claude pracuje”.</li>
   <li><b>Wiadomości:</b> Twoje są w beżowym dymku, odpowiedzi asystenta mają ikonę aplikacji. Przy każdej wiadomości jest godzina (przy starszych także data).</li>
   <li><b>Ekran nowej rozmowy</b> pokazuje logo, podpowiedź, co możesz zrobić, oraz model, z którym rozmowa będzie pracować, z przyciskiem <b>Wybierz inny model…</b>.</li>
   <li><b>Karta wiadomości</b> na dole: pole tekstu, przycisk wklejania, model i tryb zatwierdzania (na przykład „claude-haiku-5-5 · tryb ask”) oraz okrągłe przyciski wysyłania i przerwania (rozdział 6).</li>
@@ -172,12 +175,13 @@
 <figure><img src="img/en/settings.png" alt="Widok Ustawienia z kartami Claude, Baza modelu, Enterprise Architect oraz Język i zatwierdzanie zmian"><figcaption>Ustawienia: każda karta z własnym zapisem i testem</figcaption></figure>
 <table>
   <tr><th style="width: 24%;">Karta</th><th>Pola</th><th style="width: 36%;">Co sprawdza test</th></tr>
-  <tr><td>1. Claude</td><td>Model (tylko do odczytu), Max tokenów (limit długości jednej odpowiedzi modelu), Klucz API Claude. Pod polami jest informacja, co aplikacja wysyła do Anthropic (rozdział 14).</td><td>„Zapisz i sprawdź klucz” wysyła krótkie zapytanie do modelu</td></tr>
+  <tr><td>1. Claude</td><td>Model (tylko do odczytu), Max tokenów (limit długości jednej odpowiedzi modelu), Klucz API Claude. Pod polami jest informacja, co aplikacja wysyła do Anthropic (rozdział 16).</td><td>„Zapisz i sprawdź klucz” wysyła krótkie zapytanie do modelu</td></tr>
   <tr><td>2. Model</td><td>Wybór: <b>Baza PostgreSQL</b> (Serwer, Port, Nazwa bazy, Konto bazy, Hasło do bazy zapisywane w Menedżerze poświadczeń Windows, Szyfrowanie połączenia) albo <b>Plik EA (.qea, .qeax)</b> (Plik modelu; przycisk <b>…</b> otwiera wybór pliku)</td><td>Baza: „Zapisz i sprawdź połączenie” łączy się z bazą, liczy pakiety, elementy i diagramy, mówi, czy połączenie jest szyfrowane, i ostrzega przed kontem superużytkownika. Plik: „Zapisz i sprawdź plik” otwiera go tylko do odczytu i liczy pakiety, elementy i diagramy</td></tr>
   <tr><td>3. Enterprise Architect</td><td>Ścieżka do EA.exe (przycisk <b>…</b> otwiera wybór pliku), Konto użytkownika EA, Hasło konta EA (dla pliku modelu bez zabezpieczeń oba pola zostają puste)</td><td>„Zapisz i sprawdź logowanie do EA” otwiera model w EA (plik modelu, który masz otwarty: w Twoim oknie EA) i loguje się na podane konto (kilka do kilkunastu sekund); wynik mówi też, czy zabezpieczenia modelu są włączone</td></tr>
-  <tr><td>4. Język i zatwierdzanie zmian</td><td>Język, Tryb (ask, plan albo auto; rozdział 12)</td><td>„Zapisz” bez testu; zmiana języka uruchamia przeniesienie treści na nowy język</td></tr>
-  <tr><td>5. Nowe wydania (newsletter)</td><td>Adres e-mail i zgoda „Chcę dostawać informacje o nowych wydaniach”, z informacją o wykorzystaniu adresu i linkiem do polityki prywatności (rozdział 16)</td><td>„Zapisz” przygotowuje wiadomość w programie pocztowym</td></tr>
-  <tr><td>6. Confluence</td><td>Adres Confluence, E-mail (tylko Cloud), Token, Przestrzeń (klucz), Strona nadrzędna (ID) (rozdział 9)</td><td>„Zapisz i sprawdź połączenie z Confluence” łączy się z Confluence i sprawdza przestrzeń</td></tr>
+  <tr><td>4. Język i zatwierdzanie zmian</td><td>Język, Tryb (ask, plan albo auto; rozdział 14)</td><td>„Zapisz” bez testu; zmiana języka uruchamia przeniesienie treści na nowy język</td></tr>
+  <tr><td>5. Nowe wydania (newsletter)</td><td>Adres e-mail i zgoda „Chcę dostawać informacje o nowych wydaniach”, z informacją o wykorzystaniu adresu i linkiem do polityki prywatności (rozdział 18)</td><td>„Zapisz” przygotowuje wiadomość w programie pocztowym</td></tr>
+  <tr><td>6. Confluence</td><td>Adres Confluence, E-mail (tylko Cloud), Token, Przestrzeń (klucz), Strona nadrzędna (ID) (rozdział 11)</td><td>„Zapisz i sprawdź połączenie z Confluence” łączy się z Confluence i sprawdza przestrzeń</td></tr>
+  <tr><td>7. Miro</td><td>Token dostępu aplikacji Miro z uprawnieniami boards:read i boards:write (rozdział 10)</td><td>Łączy się z Miro i liczy tablice, które widzi token</td></tr>
 </table>
 <p>Puste pole hasła, klucza lub tokena oznacza „bez zmian”. Napis <b>zapisano</b> obok pola mówi, że wartość jest już zapamiętana w Menedżerze poświadczeń, a <b>BRAK</b>, że jeszcze jej nie ma. Hasło do bazy nie może zawierać średnika (;), bo Enterprise Architect nie przekaże go w swoim ciągu połączenia. Adres Confluence musi zaczynać się od <code>https://</code>; adres <code>http://</code> jest dopuszczalny tylko dla serwera na tym samym komputerze.</p>
 <p><b>Wartości domyślne.</b> Gdy nie ma jeszcze ustawień, pola serwera, nazwy bazy, konta użytkownika EA i haseł są puste (przy serwerze szara podpowiedź „np. 127.0.0.1”), port to 5432, konto bazy to <code>postgres</code>, ścieżka do EA to <code>C:\Program Files\Sparx Systems\EA\EA.exe</code>, tryb zatwierdzania to <b>ask</b>, a Max tokenów to 10000. Jeśli brakuje ustawień albo któregoś z haseł lub klucza, aplikacja otwiera się w widoku Ustawienia i podaje, co trzeba uzupełnić.</p>
@@ -296,7 +300,7 @@
 <ul>
   <li><b>Pierwsze wywołanie EA trwa od kilku do kilkunastu sekund</b>, bo aplikacja uruchamia Enterprise Architect w tle i otwiera model. Kolejne zapisy i pobrania diagramów trwają już krócej niż sekundę. Po 10 minutach bez wywołań EA w tle zamyka się i zwalnia licencję. Zamknięcie aplikacji też zamyka jej sesję EA.</li>
   <li><b>Blokady.</b> W modelu z włączonymi zabezpieczeniami asystent blokuje obiekt na swoje konto na czas zapisu i po zapisie blokadę zdejmuje. Obiektu zablokowanego przez innego użytkownika nie zmieni; komunikat podaje, kto blokuje element (konto lub grupa, od kiedy), jego pakiet i diagram.</li>
-  <li><b>Usuwanie jest trwałe.</b> Usunięcie pakietu usuwa całą jego zawartość. W trybach <b>ask</b> i <b>plan</b> usuwanie zawsze wymaga osobnej zgody, a panel zgody podaje nazwy usuwanych obiektów (rozdział 12). Przy ważnych modelach używaj trybu <b>ask</b>, proś o baseline i rób kopie zapasowe bazy.</li>
+  <li><b>Usuwanie jest trwałe.</b> Usunięcie pakietu usuwa całą jego zawartość. W trybach <b>ask</b> i <b>plan</b> usuwanie zawsze wymaga osobnej zgody, a panel zgody podaje nazwy usuwanych obiektów (rozdział 14). Przy ważnych modelach używaj trybu <b>ask</b>, proś o baseline i rób kopie zapasowe bazy.</li>
   <li><b>Zapis częściowy.</b> Gdy jedna z operacji zapisu się nie uda, wcześniejsze operacje z tego samego zapisu zostają w modelu; komunikat podaje, co zostało zapisane.</li>
   <li><b>Sprawdzaj wynik.</b> Asystent może się pomylić: źle odczytać zdjęcie, wybrać inny typ elementu albo ułożyć diagram nieczytelnie. Poproś o pokazanie diagramu po zmianach i o poprawki.</li>
   <li><b>Duże diagramy</b> asystent zapisuje w kilku krokach. To normalne.</li>
@@ -313,8 +317,51 @@
 <div class="prompt">Otwórz w moim EA diagram „Proces zamówienia” i wskaż w przeglądarce pakiet „Wymagania”.</div>
 <p>Klawisz <span class="key">F5</span> jest potrzebny tylko wtedy, gdy okno EA nie jest otwarte albo pokazuje inny model: asystent działa wtedy jak zwykle, a zmiany zobaczysz po odświeżeniu pakietu w EA. Jeśli w oknie EA jest otwarte okno dialogowe, EA nie odpowiada asystentowi; zamknij je i ponów prośbę.</p>
 
-<h2 id="s9" class="break">9. Dokumenty: Word, Excel, obrazki PNG, Confluence</h2>
-<p>Asystent przygotowuje dokumenty z treści modelu i rozmowy. Gotowy plik pojawia się na czacie jako karta z przyciskami, a sam plik zostaje w folderze <code>attachments</code> w folderze danych (rozdział 14).</p>
+<h2 id="s9" class="break">9. Edytor diagramów</h2>
+<p>Każdy diagram z EA pokazany w rozmowie ma przycisk <b>Edytuj diagram</b>. Otwiera on diagram w oknie edytora, w którym zmieniasz go myszą. Edytor działa na modelu, nie na obrazku: to, co zapiszesz, trafia do EA przez te same operacje, których używa asystent, z panelem zatwierdzania i dziennikiem zmian (rozdział 14). Edytor potrzebuje WebView2, który jest częścią Windows 10 i 11.</p>
+<figure><img src="img/en/editor.png" alt="Edytor diagramów z diagramem klas i panelem Właściwości"><figcaption>Edytor diagramów: pasek narzędzi, diagram i panel Właściwości</figcaption></figure>
+<h3>Rysowanie</h3>
+<ul>
+  <li><b>Przesuwanie, zmiana rozmiaru i wyrównywanie</b> elementów myszą i przyciskami wyrównania; <span class="key">Ctrl</span>+<span class="key">Z</span> i <span class="key">Ctrl</span>+<span class="key">Y</span> cofają i ponawiają.</li>
+  <li><b>Dodaj</b>: przyciski zależą od rodzaju diagramu (klas, komponentów, przypadków użycia, aktywności, BPMN, maszyny stanów, wdrożenia, pakietów, sekwencji). Nowy element trafia w wolne miejsce blisko środka widoku; od razu wpisz jego nazwę.</li>
+  <li><b>Łączenie</b>: przeciągnij od jednego elementu do drugiego. Rodzaj relacji wybierasz na liście <b>Połączenie</b>.</li>
+  <li><b>Z modelu…</b> wstawia na diagram element, który już jest w modelu (wyszukiwanie po nazwie, typie lub pakiecie). Jego relacje z elementami diagramu pojawią się po zapisie.</li>
+  <li>Dwuklik na elemencie lub relacji zmienia nazwę.</li>
+</ul>
+<h3>Właściwości</h3>
+<p>Panel <b>Właściwości</b> pokazuje zaznaczony element lub relację. Każde pole ma znaczek <b>model</b> (zmiana obowiązuje wszędzie, gdzie obiekt jest pokazany) albo <b>diagram</b> (tylko ten diagram).</p>
+<ul>
+  <li><b>Ogólne</b>: nazwa, alias, stereotyp, słowa kluczowe, status, wersja, autor, faza, złożoność, abstrakcyjny i notatki; pakiet, GUID i daty tylko do odczytu. Dla relacji: nazwa, stereotyp, kierunek, krotności i role obu końców, notatki.</li>
+  <li><b>Atrybuty i operacje</b> (klasy, interfejsy, komponenty): dodawanie, zmiana (widoczność, nazwa, typ) i usuwanie; nowa operacja przyjmuje parametry w postaci <code>nazwa: Typ, inna: Typ</code>.</li>
+  <li><b>Tagi</b>: zmiana, dodawanie i usuwanie; gdy profil podaje dozwolone wartości (na przykład typy zadań BPMN), wybierasz z listy.</li>
+  <li><b>Wygląd</b>: kolor wypełnienia na tym diagramie albo domyślny kolor elementu oraz styl linii relacji na tym diagramie.</li>
+</ul>
+<h3>Usuwanie</h3>
+<p>Klawisz <span class="key">Delete</span> usuwa bez pytania to, co dodałeś w edytorze. Przy obiekcie, który już jest w modelu, edytor pyta: <b>Usuń z tego diagramu</b> (zostaje w modelu i na innych diagramach) albo <b>Usuń z modelu</b> (trwale, razem z relacjami, ze wszystkich diagramów). Pokazuje, na jakich innych diagramach jest element i ile ma relacji.</p>
+<figure><img src="img/en/editor-delete.png" alt="Okno usuwania z wyborem: ten diagram albo model"><figcaption>Usuwanie: z tego diagramu albo z modelu, z listą innych diagramów elementu</figcaption></figure>
+<h3>Diagramy sekwencji</h3>
+<p>Linie życia mają nagłówek i przerywaną linię; przesuwają się tylko w poziomie. Komunikaty idą od góry w swojej kolejności, z numerami, tak jak rysuje je EA. Kolejność zaznaczonego komunikatu zmieniasz przyciskami <b>▲ ▼</b> w panelu albo <span class="key">Alt</span>+<span class="key">↑</span> / <span class="key">Alt</span>+<span class="key">↓</span>. Nowy komunikat (przeciągnij od jednej linii życia do drugiej) trafia zaraz po zaznaczonym. W panelu ustawiasz rodzaj (synchroniczny albo asynchroniczny), czy to odpowiedź, i możesz nazwać go operacją odbiorcy.</p>
+<figure><img src="img/en/editor-sequence.png" alt="Diagram sekwencji w edytorze z właściwościami komunikatu"><figcaption>Diagram sekwencji: ponumerowane komunikaty, kolejność zmieniana przyciskami ▲ ▼</figcaption></figure>
+<h3>Zapis</h3>
+<ul>
+  <li><b>Zapisz do EA</b> zapisuje zmiany i zamyka edytor; wynik pojawia się w rozmowie. <b>Anuluj</b> zamyka go bez zapisu.</li>
+  <li><b>Uporządkuj z AI</b> zapisuje zmiany i prosi asystenta w rozmowie o takie rozmieszczenie diagramu, żeby dobrze się czytał, bez dodawania, usuwania i zmiany nazw.</li>
+</ul>
+
+<h2 id="s10">10. Wysyłanie diagramów do Miro</h2>
+<p>Diagram z EA może trafić na tablicę Miro jako edytowalne kształty i połączenia w ramce z nazwą diagramu. Tylko z EA do Miro: to, co ktoś zmieni na tablicy, nie wraca do modelu.</p>
+<p><b>Konfiguracja, jednorazowo:</b> w Miro otwórz ustawienia profilu → <b>Your apps</b> → <b>Create new app</b>, nadaj uprawnienia <code>boards:read</code> i <code>boards:write</code>, zainstaluj aplikację w swoim zespole i skopiuj token dostępu. Wklej go w Ustawieniach, karta <b>„7. Miro”</b>, i kliknij <b>Zapisz i sprawdź połączenie z Miro</b>. Token jest przechowywany w Menedżerze poświadczeń Windows.</p>
+<p><b>Wysyłanie:</b></p>
+<ol>
+  <li>Kliknij <b>Wyślij do Miro</b> pod diagramem w rozmowie.</li>
+  <li>Wybierz tablicę (pierwsza jest ta użyta ostatnio; pole wyszukiwania filtruje po nazwie).</li>
+  <li>Miniatura pokazuje, co już jest na tablicy (szare), i gdzie trafi diagram (niebieska ramka, czerwona, gdy coś by zasłoniła). Aplikacja sama znajduje wolne miejsce; przeciągnij ramkę, żeby wybrać inne.</li>
+  <li>Kliknij <b>Wyślij do Miro</b>. Po wysłaniu w rozmowie pojawia się wiadomość z linkiem, który otwiera tablicę na nowej ramce.</li>
+</ol>
+<p>Diagramy sekwencji trafiają jako linie życia z ponumerowanymi komunikatami w kolejności z EA (odpowiedzi przerywaną linią). Ponowne wysłanie tego samego diagramu stawia nową ramkę obok poprzedniej, więc nic, co zmieniono na tablicy, nie zostaje nadpisane.</p>
+
+<h2 id="s11" class="break">11. Dokumenty: Word, Excel, obrazki PNG, Confluence</h2>
+<p>Asystent przygotowuje dokumenty z treści modelu i rozmowy. Gotowy plik pojawia się na czacie jako karta z przyciskami, a sam plik zostaje w folderze <code>attachments</code> w folderze danych (rozdział 16).</p>
 <table>
   <tr><th style="width: 22%;">Rodzaj</th><th>Co zawiera</th><th style="width: 30%;">Przyciski na czacie</th></tr>
   <tr><td>Word (DOCX)</td><td>Nagłówki, akapity, listy, tabele, diagramy z EA i obrazki narysowane wcześniej w rozmowie</td><td><b>Otwórz</b>, <b>Zapisz jako…</b></td></tr>
@@ -345,7 +392,7 @@
 <p>Zapisz kartę przyciskiem <b>Zapisz i sprawdź połączenie z Confluence</b>.</p>
 <div class="prompt">Przygotuj stronę Confluence z opisem procesu „Obsługa reklamacji” z diagramem i opublikuj ją w przestrzeni.</div>
 
-<h2 id="s10" class="break">10. Szablony dokumentów</h2>
+<h2 id="s12" class="break">12. Szablony dokumentów</h2>
 <p>Szablon mówi asystentowi, jak zbudować dokument: jakie sekcje ma mieć i co do nich wpisać. Asystent wypełnia go treścią z modelu i rozmowy i przygotowuje stronę Confluence albo dokument Word. Gdy prosisz o dokument, asystent sam sprawdza, czy pasuje do niego któryś szablon; czego nie wie, oznacza jako „do uzupełnienia”, zamiast zgadywać.</p>
 <p>Po instalacji są dostępne szablony domyślne, w języku aplikacji:</p>
 <ul>
@@ -364,15 +411,15 @@
 <h3>Własne szablony</h3>
 <p>Szablony to pliki Markdown (<code>.md</code>) ze wskazówkami dla asystenta. Pierwszy wiersz w postaci <code>&gt; Szablon: opis</code> jest opisem widocznym na liście, a kolejne wiersze zaczynające się od <code>&gt;</code> to wskazówki dla asystenta. Możesz zmieniać istniejące szablony, dodawać własne pliki do folderu szablonów albo poprosić asystenta, żeby zrobił szablon z przykładowego dokumentu:</p>
 <div class="prompt">Zrób szablon z załączonego dokumentu: zachowaj układ sekcji i dopisz, co w każdej powinno się znaleźć.</div>
-<p>Nadpisanie istniejącego szablonu przez asystenta przechodzi przez zatwierdzanie tak jak zmiany w modelu (tryby <b>ask</b> i <b>plan</b>, rozdział 12).</p>
+<p>Nadpisanie istniejącego szablonu przez asystenta przechodzi przez zatwierdzanie tak jak zmiany w modelu (tryby <b>ask</b> i <b>plan</b>, rozdział 14).</p>
 
-<h2 id="s11">11. Pamięć asystenta</h2>
+<h2 id="s13">13. Pamięć asystenta</h2>
 <p>Asystent pamięta ustalenia między rozmowami: konwencje modelowania, Twoje preferencje i poprawki oraz fakty o projektach i modelu. Zna je w każdej nowej rozmowie. Ustalenie na ten sam temat aktualizuje, zamiast dublować, a nieaktualne usuwa. Haseł, kluczy ani innych sekretów nie zapamiętuje.</p>
 <p>Ustalenia asystent zapisuje sam, gdy uzna, że przydadzą się w kolejnych rozmowach, i mówi o tym jednym zdaniem. Możesz też poprosić o to wprost, zaczynając od „zapamiętaj…”:</p>
 <div class="prompt">Zapamiętaj: wymagania numerujemy FR01, FR02… i trzymamy w pakiecie „Wymagania”.</div>
 <div class="prompt">Zapamiętaj, że na diagramach BPMN zadania systemowe kolorujemy na zielono.</div>
 <p>Ustalenia są wspólne dla wszystkich modeli. Jeśli chcesz, żeby ustalenie dotyczyło tylko jednego modelu, powiedz to wprost, na przykład „zapamiętaj to tylko dla tego modelu”: wtedy asystent korzysta z niego wyłącznie w rozmowach z tym modelem, a widok „Pamięć asystenta” oznacza je znacznikiem „Tylko dla modelu …”.</p>
-<p>Zapis ustalenia w pamięci (i jego usunięcie przez asystenta) przechodzi przez zatwierdzanie tak jak zmiany w modelu: w trybach <b>ask</b> i <b>plan</b> panel zgody pokazuje nazwę i początek treści notatki (rozdział 12). Zapis ustalenia nie przerywa pracy asystenta nad bieżącym zadaniem. Ustalenia dotyczące modelu mogą być nieaktualne, dlatego przed zapisem do modelu asystent sprawdza je w bazie. Pełna treść pamięci trafia do Claude w każdym zapytaniu (rozdział 14).</p>
+<p>Zapis ustalenia w pamięci (i jego usunięcie przez asystenta) przechodzi przez zatwierdzanie tak jak zmiany w modelu: w trybach <b>ask</b> i <b>plan</b> panel zgody pokazuje nazwę i początek treści notatki (rozdział 14). Zapis ustalenia nie przerywa pracy asystenta nad bieżącym zadaniem. Ustalenia dotyczące modelu mogą być nieaktualne, dlatego przed zapisem do modelu asystent sprawdza je w bazie. Pełna treść pamięci trafia do Claude w każdym zapytaniu (rozdział 16).</p>
 <h3>Widok „Pamięć asystenta”</h3>
 <ul>
   <li>Lista ustaleń z datą.</li>
@@ -380,7 +427,7 @@
   <li><b>Otwórz folder pamięci</b> otwiera folder <code>memory</code> w Eksploratorze. Ustalenia są w nim plikami Markdown, a spis jest w pliku <code>MEMORY.md</code>.</li>
 </ul>
 
-<h2 id="s12" class="break">12. Zatwierdzanie zmian i dziennik zmian</h2>
+<h2 id="s14" class="break">14. Zatwierdzanie zmian i dziennik zmian</h2>
 <p>Tryb ustawiasz w widoku <b>Ustawienia</b>, w karcie 4. Decyduje on, czy i kiedy aplikacja zapyta o zgodę przed zapisem do EA, do pamięci asystenta i przed nadpisaniem szablonu. Odczyt modelu i pokazywanie diagramów nigdy nie wymagają zgody. Bieżący tryb widać też w karcie wiadomości.</p>
 <table>
   <tr><th style="width: 12%;">Tryb</th><th style="width: 50%;">Kiedy pyta o zgodę</th><th>Dla kogo</th></tr>
@@ -394,7 +441,7 @@
 <p>Każdy zapis asystenta do modelu EA, także nieudany, trafia do dziennika zmian (plik <code>audit_log.jsonl</code> w folderze danych). Nie ma w nim zapisów odrzuconych przez Ciebie ani operacji, których aplikacja nie dopuściła do zapisu; dziennik nie obejmuje też pamięci, szablonów ani publikacji w Confluence.</p>
 <p>Widok <b>Dziennik zmian</b> (ikona „Dziennik zmian w modelu”) pokazuje 200 ostatnich zapisów, od najnowszych: wynik (OK albo BŁĄD), czas, konto EA i bazę, opis zmian oraz treść błędu. Przycisk <b>Eksportuj do Excela</b> zapisuje cały dziennik jako arkusz XLSX (kolumny: Czas, Wynik, Konto EA, Baza, Tryb, Zmiany, Utworzone, Błąd), na przykład do przeglądu zmian w zespole. Przycisk <b>Otwórz plik dziennika</b> otwiera plik dziennika w Notatniku.</p>
 
-<h2 id="s13">13. Rozmowy: historia, wyszukiwanie, praca w tle</h2>
+<h2 id="s15">15. Rozmowy: historia, wyszukiwanie, praca w tle</h2>
 <ul>
   <li><b>Nowa rozmowa:</b> przycisk <b>+</b> nad listą rozmów. Każda rozmowa jest zapisywana i wraca po ponownym uruchomieniu aplikacji.</li>
   <li><b>Grupy:</b> rozmowy są pogrupowane na „Dzisiaj”, „Wczoraj”, „Ostatnie 7 dni” i „Wcześniej”.</li>
@@ -413,7 +460,7 @@
 </table>
 <p>Zapisy do EA z różnych rozmów wykonują się po kolei, nie jednocześnie. EA w tle ma otwarty jeden model naraz: przejście między rozmowami z różnymi modelami otwiera go ponownie, co trwa od kilku do około 25 sekund. Gdy czat jest przewinięty wyżej, kółko ze strzałką nad polem wiadomości przenosi na koniec rozmowy.</p>
 
-<h2 id="s14" class="break">14. Dane, bezpieczeństwo i prywatność</h2>
+<h2 id="s16" class="break">16. Dane, bezpieczeństwo i prywatność</h2>
 <h3>Gdzie są Twoje dane</h3>
 <table>
   <tr><th style="width: 34%;">Co</th><th>Gdzie</th></tr>
@@ -452,7 +499,7 @@
   <li><b>Chwilowe błędy Claude API</b> (przeciążenie 529 i inne błędy 5xx, limit zapytań 429) aplikacja ponawia automatycznie.</li>
 </ul>
 
-<h2 id="s15">15. Rozwiązywanie problemów</h2>
+<h2 id="s17">17. Rozwiązywanie problemów</h2>
 <table>
   <tr><th style="width: 38%;">Objaw</th><th>Co zrobić</th></tr>
   <tr><td>Windows SmartScreen ostrzega przed instalatorem („System Windows ochronił ten komputer”)</td><td>Instalator nie jest jeszcze podpisany cyfrowo. Kliknij „Więcej informacji”, a potem „Uruchom mimo to”.</td></tr>
@@ -482,7 +529,7 @@
   <tr><td>Nie da się przeciągnąć plików do okna</td><td>Aplikacja została uruchomiona jako administrator. Zamknij ją i uruchom zwykłym skrótem.</td></tr>
 </table>
 
-<h2 id="s16" class="break">16. Zgłaszanie błędów i nowe wydania</h2>
+<h2 id="s18" class="break">18. Zgłaszanie błędów i nowe wydania</h2>
 <h3>Zgłoś błąd</h3>
 <ol>
   <li>Kliknij ikonę <b>Zgłoś błąd</b> w pasku nawigacji.</li>
@@ -496,7 +543,7 @@
 <h3>Nowe wydania (newsletter)</h3>
 <p>W karcie <b>„5. Nowe wydania (newsletter)”</b> w ustawieniach wpisz adres e-mail, zaznacz „Chcę dostawać informacje o nowych wydaniach” i kliknij <b>Zapisz</b>. Dostaniesz krótki e-mail, gdy wyjdzie nowa wersja: co nowego i skąd ją pobrać, bez reklam. Zapis i rezygnacja trafiają do autora wiadomością z programu pocztowego. Adres jest wykorzystywany wyłącznie do informacji o nowych wersjach, na podstawie Twojej zgody, do czasu jej wycofania; administratorem danych jest Loonar Mariusz Głowacki. Zgodę wycofasz w każdej chwili, odznaczając opcję i zapisując kartę albo pisząc e-mail. Pod informacją w karcie jest link do polityki prywatności.</p>
 
-<h2 id="s17">17. Aktualizacja i odinstalowanie</h2>
+<h2 id="s19" data-page="install">19. Aktualizacja i odinstalowanie</h2>
 <p><b>Aktualizacja.</b> Zamknij aplikację i uruchom instalator nowszej wersji. Kreator pokaże stronę „Co nowego” ze zmianami od zainstalowanej wersji, zaproponuje ten sam rodzaj instalacji i folder oraz zachowa Twoje ustawienia, hasła, historię rozmów, załączniki, pamięć, szablony i dziennik zmian. Aktualizację z wersji o dawnej nazwie opisuje rozdział 3.</p>
 <p><b>Zamykanie aplikacji.</b> Zamknięcie okna zamyka też sesję Enterprise Architect uruchomioną w tle przez aplikację, więc licencja EA jest od razu zwalniana.</p>
 <p><b>Odinstalowanie.</b> Zamknij aplikację. Użyj skrótu „Odinstaluj Loonar Compass” w menu Start albo pozycji „Loonar Compass” w ustawieniach Windows (Aplikacje → Zainstalowane aplikacje). Przy instalacji dla wszystkich użytkowników Windows poprosi o uprawnienia administratora. Program odinstalowujący usuwa pliki programu, skróty i wpis w systemie, pokazując postęp na pasku. Twoje dane zostają na komputerze, chyba że zaznaczysz:</p>
@@ -506,7 +553,7 @@
 </ul>
 <p>Usuwane są tylko dane użytkownika, który uruchomił odinstalowanie; dane innych użytkowników zostają w ich profilach.</p>
 
-<h2 id="s18">18. Licencja, znaki towarowe i kontakt</h2>
+<h2 id="s20">20. Licencja, znaki towarowe i kontakt</h2>
 <p><b>Licencja.</b> Loonar Compass jest oprogramowaniem typu freeware. W skrócie:</p>
 <ul>
   <li>korzystanie jest bezpłatne, także zawodowe i komercyjne, na dowolnej liczbie komputerów, bez ograniczeń czasu i terytorium,</li>
@@ -520,7 +567,7 @@
 <p><b>Prywatność i nota prawna.</b> Polityka prywatności: <a href="https://loonar.eu/pl/privacy/">https://loonar.eu/pl/privacy/</a>. Nota prawna: <a href="https://loonar.eu/pl/legal/">https://loonar.eu/pl/legal/</a>. Link do polityki prywatności jest też w widoku Informacje, w formularzu zgłoszenia błędu i w karcie newslettera.</p>
 <p><b>Kod źródłowy i komponenty open source.</b> Kod źródłowy aplikacji jest publiczny: <a href="https://github.com/loonar-eu/loonar-compass">https://github.com/loonar-eu/loonar-compass</a>. Aplikacja zawiera biblioteki i czcionki open source; każda z nich ma własną licencję. Ich lista jest w pliku <code>THIRD-PARTY-NOTICES.txt</code> w folderze programu, a w widoku Informacje otwiera ją przycisk <b>Pokaż licencje komponentów</b> w części „Komponenty open source”.</p>
 <p><b>Znaki towarowe.</b> Sparx Systems i Enterprise Architect są zarejestrowanymi znakami towarowymi Sparx Systems Pty Ltd. Claude i Anthropic są znakami towarowymi Anthropic, PBC. Atlassian, Confluence i Jira są znakami towarowymi Atlassian. Microsoft, Windows, Word i Excel są znakami towarowymi grupy Microsoft. PostgreSQL jest zarejestrowanym znakiem towarowym PostgreSQL Community Association. Loonar Compass jest niezależnym produktem, niepowiązanym z tymi firmami, nieautoryzowanym ani niesponsorowanym przez nie.</p>
-<p><b>Właściciel i kontakt.</b> Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard.<br>E-mail: mariusz@loonar.eu, strona: <a href="https://loonar.eu">https://loonar.eu</a> (z pytaniami i odpowiedziami). Błędy najwygodniej zgłaszać przez widok <b>Zgłoś błąd</b> (rozdział 16). Problemy z bezpieczeństwem zgłaszaj prywatnie e-mailem na mariusz@loonar.eu, z tematem „Security: Loonar Compass”, a nie w publicznym zgłoszeniu na GitHubie.</p>
+<p><b>Właściciel i kontakt.</b> Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard.<br>E-mail: mariusz@loonar.eu, strona: <a href="https://loonar.eu">https://loonar.eu</a> (z pytaniami i odpowiedziami). Błędy najwygodniej zgłaszać przez widok <b>Zgłoś błąd</b> (rozdział 18). Problemy z bezpieczeństwem zgłaszaj prywatnie e-mailem na mariusz@loonar.eu, z tematem „Security: Loonar Compass”, a nie w publicznym zgłoszeniu na GitHubie.</p>
 <p><b>Wsparcie projektu.</b> Rozwój aplikacji możesz dobrowolnie wesprzeć na <a href="https://suppi.pl/loonar">https://suppi.pl/loonar</a> (widok <b>Wesprzyj projekt</b>, rozdział 4).</p>
 <p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.5 &middot; © 2026 Loonar Mariusz Głowacki. Wszelkie prawa zastrzeżone.</p>
 

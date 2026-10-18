@@ -2,6 +2,29 @@
 
 Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen Loonar EA Assistant).
 
+## Version 0.6 (in Vorbereitung)
+
+Diagrammeditor:
+
+- Jedes EA-Diagramm in der Unterhaltung hat die Schaltfläche „Diagramm bearbeiten“. Sie öffnet das Diagramm in einem Editorfenster (WebView2): Verschieben, Größe ändern, Ausrichten, Umbenennen, Rückgängig (Strg+Z / Strg+Y). Der Editor ändert das Modell, kein Bild: Gespeichert wird über EA, mit dem Freigabebereich und dem Änderungsprotokoll.
+- Neue Elemente aus einer zur Diagrammart passenden Werkzeugleiste: Klassen, Komponenten, Anwendungsfälle, Aktivitäten, BPMN, Zustandsautomat (Zustände, Start, Ende, Auswahl), Verteilung (Knoten, Geräte, Ausführungsumgebungen, Artefakte), Pakete (echte Pakete) und Sequenz. Ein neues Element kommt an eine freie Stelle; Verbinden durch Ziehen von Element zu Element.
+- „Aus dem Modell…“: fügt Elemente, die bereits im Modell existieren, mit einer Suche in das Diagramm ein.
+- Löschen fragt: aus diesem Diagramm oder aus dem Modell. Beim Löschen aus dem Modell zeigt es, in wie vielen und welchen anderen Diagrammen das Element ist und wie viele Beziehungen es hat.
+- Bereich „Eigenschaften“: die Felder der allgemeinen Registerkarte von EA (Name, Alias, Stereotyp, Schlüsselwörter, Status, Version, Autor, Phase, Komplexität, abstrakt, Notizen; Paket, GUID und Datum nur zum Lesen), Attribute und Operationen von Klassen, Tagged Values (mit den Auswahllisten des Profils, z. B. BPMN), Darstellung im Diagramm (Farbe, Linienstil). Jedes Feld ist mit „Modell“ oder „Diagramm“ gekennzeichnet.
+- Beziehungen: Name, Stereotyp, Richtung, Multiplizitäten und Rollen beider Enden, Notizen, Tagged Values.
+- Sequenzdiagramme: Lebenslinien, Nachrichten in ihrer EA-Reihenfolge (umsortieren mit ▲ ▼ oder Alt+↑ / Alt+↓), synchrone, asynchrone und Antwortnachrichten, ein Name aus einer Operation des Empfängers.
+- „Mit KI aufräumen“: speichert die Änderungen und bittet den Assistenten in der Unterhaltung, das Diagramm gut lesbar anzuordnen.
+- Neue Schreiboperationen für den Assistenten: Beziehungen ändern, Attribute und Operationen ändern und löschen, Untertyp des Elements (Pseudozustände), Sequenznachrichten mit Nummer, Art und Antwortkennzeichen; Tagged Value entfernen.
+
+Miro (von EA nach Miro):
+
+- Einstellungskarte „7. Miro“: Zugriffstoken (in der Windows-Anmeldeinformationsverwaltung) und Verbindungstest.
+- „An Miro senden“ unter einem Diagramm: Board-Auswahl, eine Miniatur des Boards mit dem Platz für das Diagramm (die Anwendung findet eine freie Stelle; der Rahmen lässt sich ziehen), gesendet als bearbeitbare Formen und Verbindungen in einem Rahmen mit dem Namen des Diagramms. Sequenzdiagramme: Lebenslinien und nummerierte Nachrichten in ihrer EA-Reihenfolge.
+
+Dokumentation:
+
+- Neue Kapitel des Handbuchs: „9. Diagrammeditor“ und „10. Diagramme an Miro senden“ (die folgenden Kapitel sind um zwei verschoben); auf der Website auf dem Telefon ein Dokumentationssymbol in der Kopfzeile.
+
 ## Version 0.5 (2026-10-17)
 
 Ein Modell pro Unterhaltung:

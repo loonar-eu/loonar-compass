@@ -2,6 +2,29 @@
 
 Toutes les modifications importantes de l'application Loonar Compass (nommée Loonar EA Assistant jusqu'à la version 0.3).
 
+## Version 0.6 (en préparation)
+
+Éditeur de diagrammes :
+
+- Chaque diagramme d'EA dans la conversation a un bouton « Modifier le diagramme ». Il ouvre le diagramme dans une fenêtre d'éditeur (WebView2) : déplacer, redimensionner, aligner, renommer, annuler (Ctrl+Z / Ctrl+Y). L'éditeur modifie le modèle, pas une image : l'enregistrement passe par EA, avec le panneau d'approbation et le journal des modifications.
+- De nouveaux éléments depuis une boîte à outils adaptée au type de diagramme : classes, composants, cas d'utilisation, activités, BPMN, machine à états (états, début, fin, choix), déploiement (nœuds, équipements, environnements d'exécution, artefacts), paquetages (de vrais paquetages) et séquence. Un nouvel élément va à un emplacement libre ; on relie en faisant glisser d'un élément à un autre.
+- « Depuis le modèle… » : place dans le diagramme des éléments qui existent déjà dans le modèle, avec une recherche.
+- La suppression demande : de ce diagramme ou du modèle. Pour une suppression du modèle, elle indique dans combien et dans quels autres diagrammes figure l'élément et combien de relations il a.
+- Panneau « Propriétés » : les champs de l'onglet général d'EA (nom, alias, stéréotype, mots-clés, statut, version, auteur, phase, complexité, abstrait, notes ; paquetage, GUID et dates en lecture seule), attributs et opérations des classes, valeurs étiquetées (avec les listes du profil, p. ex. BPMN), apparence dans le diagramme (couleur, style de ligne). Chaque champ porte la marque « modèle » ou « diagramme ».
+- Relations : nom, stéréotype, direction, multiplicités et rôles des deux extrémités, notes, valeurs étiquetées.
+- Diagrammes de séquence : lignes de vie, messages dans leur ordre d'EA (réordonnés avec ▲ ▼ ou Alt+↑ / Alt+↓), messages synchrones, asynchrones et réponses, un nom tiré d'une opération du destinataire.
+- « Réorganiser avec l'IA » : enregistre les modifications et demande à l'assistant, dans la conversation, de disposer le diagramme pour qu'il se lise bien.
+- Nouvelles opérations d'écriture pour l'assistant : modifier les relations, modifier et supprimer les attributs et opérations, le sous-type de l'élément (pseudo-états), les messages de séquence avec leur numéro, leur type et l'indicateur de réponse ; retirer une valeur étiquetée.
+
+Miro (d'EA vers Miro) :
+
+- Carte de paramètres « 7. Miro » : jeton d'accès (dans le Gestionnaire d'identification de Windows) et test de connexion.
+- « Envoyer vers Miro » sous un diagramme : choix du tableau, miniature du tableau avec l'emplacement du diagramme (l'application trouve un emplacement libre ; le cadre peut être déplacé), envoi sous forme de formes et de connecteurs modifiables dans un cadre portant le nom du diagramme. Diagrammes de séquence : lignes de vie et messages numérotés dans leur ordre d'EA.
+
+Documentation :
+
+- Nouveaux chapitres du guide : « 9. Éditeur de diagrammes » et « 10. Envoyer des diagrammes vers Miro » (les chapitres suivants sont décalés de deux) ; sur le site, une icône de documentation dans l'en-tête sur téléphone.
+
 ## Version 0.5 (2026-10-17)
 
 Un modèle par conversation :

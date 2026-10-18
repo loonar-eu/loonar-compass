@@ -14,8 +14,9 @@ import shutil
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ARCHIVE = os.path.join(ROOT, "website_src", "docs_archive")
 SOURCE = {"pl": "Instrukcja_uzytkownika", "en": "Manual.en", "de": "Manual.de", "fr": "Manual.fr"}
-# Chapters that make up the installation page; all the others form the user guide.
-INSTALL = {"s2", "s3", "s17"}
+# Chapters that make up the installation page are marked <h2 ... data-page="install">; all the others form the user
+# guide. Guides of versions before 0.6 have no marks: there these chapters were 2, 3 and 17.
+INSTALL_BEFORE_0_6 = {"s2", "s3", "s17"}
 PAGES = ("index.html", "install.html")
 
 T = {
@@ -91,6 +92,7 @@ def clean(html, here, other_page):
         html = re.sub(rf'style="color:\s*{colour};?"', f'class="{cls}"', html)
     html = re.sub(r'\sstyle="[^"]*"', "", html)
     html = html.replace(' class="break"', "")
+    html = re.sub(r'\sdata-page="[^"]*"', "", html)
 
     def fix(m):
         target = m.group(1)
@@ -121,8 +123,10 @@ def generate(b):
                 if has_pdf and label != "latest":
                     os.makedirs(os.path.join(b.OUT, "docs", label, lang), exist_ok=True)
                     shutil.copyfile(pdf, os.path.join(b.OUT, "docs", label, lang, SOURCE[lang] + ".pdf"))
+                marked = {c[0] for c in chapters if re.match(r'<h2 [^>]*data-page="install"', c[2])}
+                install = marked or INSTALL_BEFORE_0_6
                 for page in PAGES:
-                    picked = [c for c in chapters if (c[0] in INSTALL) == (page == "install.html")]
+                    picked = [c for c in chapters if (c[0] in install) == (page == "install.html")]
                     write_page(b, ver, label, lang, page, picked, has_pdf, vers, current, chapters)
                     if label == "latest":
                         urls.append(b.SITE + base + lang + "/" + ("" if page == "index.html" else page))

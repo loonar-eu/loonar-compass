@@ -2,6 +2,29 @@
 
 All notable changes to Loonar Compass (named Loonar EA Assistant until version 0.3).
 
+## Version 0.6 (in preparation)
+
+Diagram editor:
+
+- Every EA diagram in the conversation has an "Edit diagram" button. It opens the diagram in an editor window (WebView2): moving, resizing, aligning, renaming, undo (Ctrl+Z / Ctrl+Y). The editor changes the model, not a picture: saving goes through EA, with the approval panel and the change log.
+- New elements from a toolbox that fits the kind of diagram: class, component, use case, activity, BPMN, state machine (states, initial, final, choice), deployment (nodes, devices, execution environments, artifacts), package (real packages) and sequence. A new element goes to a free spot; connect by dragging from one element to another.
+- "From the model…": puts elements that already exist in the model on the diagram, with a search.
+- Deleting asks: from this diagram or from the model. When deleting from the model it shows on how many and which other diagrams the element is and how many relationships it has.
+- "Properties" panel: the fields of EA's general tab (name, alias, stereotype, keywords, status, version, author, phase, complexity, abstract, notes; package, GUID and dates read-only), attributes and operations of classes, tagged values (with the profile's pick-lists, e.g. BPMN), appearance on the diagram (color, line style). Each field is marked "model" or "diagram".
+- Relationships: name, stereotype, direction, multiplicities and roles of both ends, notes, tagged values.
+- Sequence diagrams: lifelines, messages in their EA order (reordered with ▲ ▼ or Alt+↑ / Alt+↓), synchronous, asynchronous and reply messages, a name taken from an operation of the receiver.
+- "Tidy with AI": saves the changes and asks the assistant in the conversation to arrange the diagram so it reads well.
+- New write operations for the assistant: changing relationships, changing and deleting attributes and operations, the element subtype (pseudostates), sequence messages with their number, kind and reply flag; removing a tagged value.
+
+Miro (from EA to Miro):
+
+- Settings card "7. Miro": access token (in Windows Credential Manager) and a connection test.
+- "Send to Miro" under a diagram: board choice, a thumbnail of the board with the place for the diagram (the application finds a free spot; the frame can be dragged), sent as editable shapes and connectors in a frame named after the diagram. Sequence diagrams: lifelines and numbered messages in their EA order.
+
+Documentation:
+
+- New chapters of the guide: "9. Diagram editor" and "10. Sending diagrams to Miro" (the following chapters moved by two); on the website, a documentation icon in the header on phones.
+
 ## Version 0.5 (2026-10-17)
 
 A model for each conversation:

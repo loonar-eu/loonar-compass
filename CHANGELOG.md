@@ -2,6 +2,29 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
+## Wersja 0.6 (w przygotowaniu)
+
+Edytor diagramów:
+
+- Pod każdym diagramem z EA w rozmowie jest przycisk „Edytuj diagram”. Otwiera diagram w oknie edytora (WebView2): przesuwanie, zmiana rozmiaru, wyrównywanie, zmiana nazw, cofanie (Ctrl+Z / Ctrl+Y). Edytor zmienia model, nie obrazek: zapis idzie przez EA, z panelem zatwierdzania i dziennikiem zmian.
+- Nowe elementy z przybornika dopasowanego do rodzaju diagramu: klas, komponentów, przypadków użycia, aktywności, BPMN, maszyny stanów (stany, początek, koniec, wybór), wdrożenia (węzły, urządzenia, środowiska wykonawcze, artefakty), pakietów (prawdziwe pakiety) i sekwencji. Nowy element trafia w wolne miejsce; łączenie przeciągnięciem od elementu do elementu.
+- „Z modelu…”: wstawianie na diagram elementów, które już są w modelu, z wyszukiwarką.
+- Usuwanie pyta: z tego diagramu czy z modelu. Przy usuwaniu z modelu pokazuje, na ilu i na jakich innych diagramach jest element i ile ma relacji.
+- Panel „Właściwości”: pola jak na karcie ogólnej EA (nazwa, alias, stereotyp, słowa kluczowe, status, wersja, autor, faza, złożoność, abstrakcyjny, notatki; pakiet, GUID i daty do odczytu), atrybuty i operacje klas, tagi (z listami wartości z profilu, np. BPMN), wygląd na diagramie (kolor, styl linii). Każde pole ma znaczek „model” albo „diagram”.
+- Relacje: nazwa, stereotyp, kierunek, krotności i role obu końców, notatki, tagi.
+- Diagramy sekwencji: linie życia, komunikaty w kolejności z EA (zmiana kolejności ▲ ▼ albo Alt+↑ / Alt+↓), komunikaty synchroniczne, asynchroniczne i odpowiedzi, nazwa z operacji odbiorcy.
+- „Uporządkuj z AI”: zapisuje zmiany i prosi asystenta w rozmowie o czytelne rozmieszczenie diagramu.
+- Nowe operacje zapisu dla asystenta: zmiana relacji, zmiana i usuwanie atrybutów i operacji, podtyp elementu (pseudostany), komunikaty sekwencji z numerem, rodzajem i odpowiedzią; usuwanie tagu.
+
+Miro (z EA do Miro):
+
+- Karta ustawień „7. Miro”: token dostępu (w Menedżerze poświadczeń Windows) i test połączenia.
+- „Wyślij do Miro” pod diagramem: wybór tablicy, miniatura tablicy z miejscem na diagram (aplikacja sama znajduje wolne miejsce, ramkę można przeciągnąć), wysyłka jako edytowalne kształty i połączenia w ramce z nazwą diagramu. Diagramy sekwencji: linie życia i ponumerowane komunikaty w kolejności z EA.
+
+Dokumentacja:
+
+- Nowe rozdziały instrukcji: „9. Edytor diagramów” i „10. Wysyłanie diagramów do Miro” (kolejne rozdziały przesunęły się o dwa); na stronie na telefonie ikona dokumentacji w nagłówku.
+
 ## Wersja 0.5 (2026-10-17)
 
 Model dla każdej rozmowy:
