@@ -116,7 +116,10 @@ def generate(b):
                     shutil.copyfile(os.path.join(src["img"], f), os.path.join(img_out, f))
             shutil.copyfile(src["logo"], os.path.join(img_out, "logo.png"))
             for lang in b.LANGS:
-                chapters = sections(os.path.join(src["html"], SOURCE[lang] + ".html"))
+                guide = os.path.join(src["html"], SOURCE[lang] + ".html")
+                if ver == current and f"Loonar Compass {current} " not in open(guide, encoding="utf-8").read():
+                    raise SystemExit(f"ERROR: {SOURCE[lang]}.html does not say version {current} (title, cover, footer)")
+                chapters = sections(guide)
                 pdf = os.path.join(src["pdf"], SOURCE[lang] + ".pdf")
                 has_pdf = os.path.isfile(pdf)
                 # "latest" links to the PDF of its version instead of keeping a second copy.

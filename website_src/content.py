@@ -52,7 +52,7 @@ T["en"] = dict(
  h1='AI assistant for Sparx Enterprise Architect — <em>talk to your model</em>',
  lead="Ask questions in plain language, have diagrams drawn and reworked, and turn the model into documents. Every change is written by Enterprise Architect itself — and only after you approve it.",
  cta1="Download free", cta2="See what it can do",
- meta="Version {ver} · Windows 10/11 · uses Anthropic’s Claude API with your own API key",
+ meta="Version <a href=\"{changelog}\">{ver}</a> · Windows 10/11 · uses Anthropic’s Claude API with your own API key",
  hero_alt="Illustration of the Loonar Compass window: a request to draw an online shop order process as BPMN, the list of steps and the assistant's answer.",
  f_h="What it does", f_sub="One conversation instead of dozens of dialogs — from a quick question to a complete, consistently styled diagram.",
  features=[
@@ -236,7 +236,7 @@ T["pl"] = dict(
  h1='Asystent AI do Sparx Enterprise Architect — <em>porozmawiaj ze swoim modelem</em>',
  lead="Zadawaj pytania zwykłym językiem, zlecaj rysowanie i przebudowę diagramów, zamieniaj model w dokumenty. Każdą zmianę zapisuje sam Enterprise Architect — i to dopiero wtedy, gdy ją zatwierdzisz.",
  cta1="Pobierz za darmo", cta2="Zobacz, co potrafi",
- meta="Wersja {ver} · Windows 10/11 · korzysta z Claude API firmy Anthropic (Twój klucz API)",
+ meta="Wersja <a href=\"{changelog}\">{ver}</a> · Windows 10/11 · korzysta z Claude API firmy Anthropic (Twój klucz API)",
  hero_alt="Ilustracja okna Loonar Compass: prośba o narysowanie procesu zamówienia w sklepie internetowym w BPMN, lista kroków i odpowiedź asystenta.",
  f_h="Co potrafi", f_sub="Jedna rozmowa zamiast dziesiątek okien dialogowych — od szybkiego pytania po kompletny, spójnie sformatowany diagram.",
  features=[
@@ -416,7 +416,7 @@ T["de"] = dict(
  h1='KI-Assistent für Sparx Enterprise Architect – <em>sprechen Sie mit Ihrem Modell</em>',
  lead="Stellen Sie Fragen in natürlicher Sprache, lassen Sie Diagramme zeichnen und umbauen und machen Sie aus dem Modell Dokumente. Jede Änderung schreibt Enterprise Architect selbst – und erst, wenn Sie sie freigegeben haben.",
  cta1="Kostenlos herunterladen", cta2="Funktionen ansehen",
- meta="Version {ver} · Windows 10/11 · nutzt die Claude-API von Anthropic mit Ihrem eigenen API-Schlüssel",
+ meta="Version <a href=\"{changelog}\">{ver}</a> · Windows 10/11 · nutzt die Claude-API von Anthropic mit Ihrem eigenen API-Schlüssel",
  hero_alt="Illustration des Fensters von Loonar Compass: eine Anfrage, den Bestellprozess eines Onlineshops als BPMN zu zeichnen, die Schrittliste und die Antwort des Assistenten.",
  f_h="Was er kann", f_sub="Ein Gespräch statt Dutzender Dialogfenster – von der schnellen Frage bis zum vollständigen, einheitlich gestalteten Diagramm.",
  features=[
@@ -596,7 +596,7 @@ T["fr"] = dict(
  h1='L’assistant IA pour Sparx Enterprise Architect — <em>parlez à votre modèle</em>',
  lead="Posez vos questions en langage naturel, faites dessiner et remanier vos diagrammes, transformez le modèle en documents. Chaque modification est enregistrée par Enterprise Architect lui-même — et seulement après votre validation.",
  cta1="Télécharger gratuitement", cta2="Découvrir les fonctionnalités",
- meta="Version {ver} · Windows 10/11 · utilise l’API Claude d’Anthropic avec votre propre clé API",
+ meta="Version <a href=\"{changelog}\">{ver}</a> · Windows 10/11 · utilise l’API Claude d’Anthropic avec votre propre clé API",
  hero_alt="Illustration de la fenêtre de Loonar Compass : une demande de dessiner en BPMN le processus de commande d’une boutique en ligne, la liste des étapes et la réponse de l’assistant.",
  f_h="Ce qu’il sait faire", f_sub="Une conversation au lieu de dizaines de boîtes de dialogue — de la question rapide au diagramme complet et homogène.",
  features=[

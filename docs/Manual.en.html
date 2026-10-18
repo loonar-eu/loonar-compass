@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Loonar Compass 0.5 - User guide</title>
+<title>Loonar Compass 0.6 - User guide</title>
 <style>
   @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
   body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1f1e1b; }
@@ -38,7 +38,7 @@
   <img src="img/logo.png" alt="Loonar Compass logo">
   <h1 style="margin-top: 10mm;">Loonar Compass</h1>
   <div class="sub">User guide</div>
-  <div class="sub" style="font-size: 11pt;">version 0.5 &middot; October 2026</div>
+  <div class="sub" style="font-size: 11pt;">version 0.6 &middot; October 2026</div>
   <div class="owner">
     Loonar Mariusz Głowacki<br>
     ul. Gombrowicza 12, 73-110 Stargard<br>
@@ -110,7 +110,7 @@
 <div class="note"><b>Costs.</b> The application itself is free. You pay Anthropic for your use of the Claude model, through the account the API key belongs to.</div>
 
 <h2 id="s3" data-page="install">3. Installation</h2>
-<p>Run the file <code>LoonarCompass-Setup-0.5.exe</code>. The wizard guides you through the steps with the <b>Next</b> and <b>Back</b> buttons. You do not need administrator rights unless you install the application for all users of the computer.</p>
+<p>Run the file <code>LoonarCompass-Setup-0.6.exe</code>. The wizard guides you through the steps with the <b>Next</b> and <b>Back</b> buttons. You do not need administrator rights unless you install the application for all users of the computer.</p>
 <div class="note"><b>Windows SmartScreen.</b> The installer is not digitally signed yet, so when you run it for the first time, Windows SmartScreen may show the warning “Windows protected your PC”. Click <b>More info</b> and then <b>Run anyway</b>. If Smart App Control is turned on, Windows blocks unsigned applications altogether; in that case, wait for the signed version.</div>
 <figure class="small"><img src="img/en/installer-language.png" alt="Setup wizard: the language selection page with Polish, English, German and French"><figcaption>The first page of the wizard: choosing the language</figcaption></figure>
 <ol>
@@ -462,7 +462,7 @@
   <li><b>Renaming:</b> click the pencil next to the selected conversation, type a name; <span class="key">Enter</span> saves, <span class="key">Esc</span> cancels.</li>
   <li><b>Model of the conversation:</b> every conversation works with its own model. A new conversation uses the default model from the settings (the new conversation screen says which one); <b>Choose another model…</b> or the <b>Model: …</b> button in the header opens the model of the conversation. There you choose <b>Default from the settings</b> or <b>Another model</b>: a PostgreSQL database (server, port, database name, user, password, connection encryption) or an EA file (.qea, .qeax), and the EA account. <b>Test the connection</b> opens the model and counts packages, elements and diagrams; <b>Save</b> sets it for the conversation. Passwords of a connection that differs from the settings are kept in Windows Credential Manager. Changing the model of a conversation that already has messages applies to the next messages; the earlier answers refer to the previous model.</li>
   <li><b>EA file dropped on the window:</b> a .qea or .qeax file dropped on the chat becomes the model of the conversation instead of an attachment; in a conversation with messages, a new conversation starts with that file.</li>
-  <li><b>Conversations from earlier versions</b> get a copy of the model from the settings when version 0.5 starts for the first time, so they keep working with that model even if the settings change later. Hovering over a conversation in the list shows its model.</li>
+  <li><b>Conversations from earlier versions</b> get a copy of the model from the settings when version 0.5 or later starts for the first time, so they keep working with that model even if the settings change later. Hovering over a conversation in the list shows its model.</li>
   <li><b>Several conversations at once:</b> while the assistant is working, you can start a new conversation or switch to another one. The work already started continues in the background.</li>
   <li><b>Deleting:</b> conversations cannot be deleted in the application. If you need to, close the application and delete the conversation's file in the <code>history</code> folder (chapter 16).</li>
 </ul>
@@ -562,7 +562,7 @@
 <p><b>Open-source components.</b> The application includes open-source libraries and fonts; each keeps its own license. The list and the license texts are in the <code>THIRD-PARTY-NOTICES.txt</code> file in the installation folder; in the <b>About</b> view, click <b>Show licenses of the components</b>.</p>
 <p><b>Support.</b> The application is free and will stay free. If you want to support its development, use the <b>Support the project</b> view or go to <a href="https://suppi.pl/loonar">suppi.pl/loonar</a>. The source code is at <a href="https://github.com/loonar-eu/loonar-compass">github.com/loonar-eu/loonar-compass</a>.</p>
 <p>Application owner: Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard.<br>Contact: mariusz@loonar.eu, <a href="https://loonar.eu">loonar.eu</a>. The most convenient way to report bugs is the <b>Report a bug</b> view.</p>
-<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.5. Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. Atlassian, Confluence and Jira are trademarks of Atlassian. Microsoft, Windows, Word and Excel are trademarks of the Microsoft group of companies. PostgreSQL is a registered trademark of the PostgreSQL Community Association. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.</p>
+<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.6. Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. Atlassian, Confluence and Jira are trademarks of Atlassian. Microsoft, Windows, Word and Excel are trademarks of the Microsoft group of companies. PostgreSQL is a registered trademark of the PostgreSQL Community Association. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.</p>
 
 </body>
 </html>

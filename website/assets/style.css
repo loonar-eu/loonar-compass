@@ -328,6 +328,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .dl-card { width: min(100%, 720px); background: var(--surface); border: 1px solid var(--line); border-radius: 22px; box-shadow: var(--shadow); padding: clamp(26px, 4vw, 44px); text-align: center; display: flex; flex-direction: column; align-items: center; }
 .dl-card img { border-radius: 14px; box-shadow: 0 10px 24px rgba(14, 74, 107, .25); margin-bottom: 18px; }
 .dl-card h3 { font-size: 1.5rem; }
+.dl-new { margin: 6px 0 0; font-weight: 600; }
 .dl-meta { color: var(--muted); margin: 6px 0 24px; font-size: .95rem; }
 .dl-meta time { white-space: nowrap; }
 .hash { margin-top: 16px; font-size: .82rem; color: var(--muted); max-width: 100%; }
@@ -516,3 +517,8 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   .hdr-docs span { display: none; }
   .hdr-docs .mark { display: block; }
 }
+
+/* ---------- changelog ---------- */
+.changelog ul { list-style: disc; padding-left: 1.3em; margin: 6px 0 16px; }
+.changelog li { margin: 5px 0; }
+.changelog h2 + p, .changelog ul + p { font-weight: 650; margin-top: 16px; }

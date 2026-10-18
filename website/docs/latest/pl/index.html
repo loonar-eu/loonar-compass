@@ -31,8 +31,8 @@
 <link rel="icon" href="../../../favicon.svg" type="image/svg+xml">
 <link rel="icon" href="../../../favicon-32.png" type="image/png" sizes="32x32">
 <link rel="apple-touch-icon" href="../../../apple-touch-icon.png">
-<link rel="stylesheet" href="../../../assets/style.css?v=6">
-<script src="../../../assets/site.js?v=6" defer></script>
+<link rel="stylesheet" href="../../../assets/style.css?v=8">
+<script src="../../../assets/site.js?v=8" defer></script>
 </head>
 <body id="top">
 <a class="skip" href="#main">Przejdź do treści</a>
@@ -385,7 +385,7 @@
   <li><b>Usuwanie:</b> w aplikacji nie można usuwać rozmów. Każda rozmowa to plik JSON w folderze <code>history</code> w folderze danych (nazwą pliku jest identyfikator rozmowy, a tytuł jest w jego treści). Jeśli musisz usunąć rozmowę, zamknij aplikację i usuń jej plik; załączniki zostają w folderze <code>attachments</code>.</li>
   <li><b>Model rozmowy:</b> każda rozmowa pracuje z własnym modelem. Nowa rozmowa korzysta z modelu domyślnego z ustawień (ekran nowej rozmowy mówi, z którego). Przycisk <b>Wybierz inny model…</b> albo <b>Model: …</b> w nagłówku otwiera okno „Model tej rozmowy”. Wybierasz w nim <b>Domyślny z ustawień</b> albo <b>Inny model</b>: <b>Baza PostgreSQL</b> (serwer, port, nazwa bazy, użytkownik, hasło, szyfrowanie połączenia) albo <b>Plik EA (.qea, .qeax)</b>, oraz konto EA. <b>Sprawdź połączenie</b> otwiera model i liczy pakiety, elementy i diagramy; <b>Zapisz</b> ustawia go dla rozmowy. Hasła połączenia innego niż w ustawieniach trafiają do Menedżera poświadczeń Windows. Zmiana modelu w rozmowie, która ma już wiadomości, dotyczy kolejnych wiadomości; wcześniejsze odpowiedzi odnoszą się do poprzedniego modelu.</li>
   <li><b>Plik EA upuszczony na okno:</b> plik .qea lub .qeax upuszczony na czat staje się modelem rozmowy, a nie załącznikiem. Jeśli rozmowa ma już wiadomości, z tym plikiem zaczyna się nowa rozmowa.</li>
-  <li><b>Rozmowy z wcześniejszych wersji</b> przy pierwszym uruchomieniu wersji 0.5 dostają kopię modelu z ustawień, więc pracują z nim dalej, nawet gdy później zmienisz ustawienia. Po najechaniu myszą na rozmowę na liście widać jej model.</li>
+  <li><b>Rozmowy z wcześniejszych wersji</b> przy pierwszym uruchomieniu wersji 0.5 lub nowszej dostają kopię modelu z ustawień, więc pracują z nim dalej, nawet gdy później zmienisz ustawienia. Po najechaniu myszą na rozmowę na liście widać jej model.</li>
 </ul>
 <table>
   <tr><th>Kropka przy rozmowie</th><th>Znaczenie</th></tr>
@@ -489,7 +489,7 @@
 <p><b>Znaki towarowe.</b> Sparx Systems i Enterprise Architect są zarejestrowanymi znakami towarowymi Sparx Systems Pty Ltd. Claude i Anthropic są znakami towarowymi Anthropic, PBC. Atlassian, Confluence i Jira są znakami towarowymi Atlassian. Microsoft, Windows, Word i Excel są znakami towarowymi grupy Microsoft. PostgreSQL jest zarejestrowanym znakiem towarowym PostgreSQL Community Association. Loonar Compass jest niezależnym produktem, niepowiązanym z tymi firmami, nieautoryzowanym ani niesponsorowanym przez nie.</p>
 <p><b>Właściciel i kontakt.</b> Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard.<br>E-mail: mariusz@loonar.eu, strona: <a href="https://loonar.eu">https://loonar.eu</a> (z pytaniami i odpowiedziami). Błędy najwygodniej zgłaszać przez widok <b>Zgłoś błąd</b> (rozdział 18). Problemy z bezpieczeństwem zgłaszaj prywatnie e-mailem na mariusz@loonar.eu, z tematem „Security: Loonar Compass”, a nie w publicznym zgłoszeniu na GitHubie.</p>
 <p><b>Wsparcie projektu.</b> Rozwój aplikacji możesz dobrowolnie wesprzeć na <a href="https://suppi.pl/loonar">https://suppi.pl/loonar</a> (widok <b>Wesprzyj projekt</b>, rozdział 4).</p>
-<p>Loonar Compass 0.5 &middot; © 2026 Loonar Mariusz Głowacki. Wszelkie prawa zastrzeżone.</p>
+<p>Loonar Compass 0.6 &middot; © 2026 Loonar Mariusz Głowacki. Wszelkie prawa zastrzeżone.</p>
     </article>
   </div>
 </main>

@@ -120,4 +120,36 @@
     <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/fr/legal/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/legal/"/>
   </url>
+  <url>
+    <loc>https://loonar.eu/changelog/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/pl/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/de/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/fr/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/changelog/"/>
+  </url>
+  <url>
+    <loc>https://loonar.eu/pl/changelog/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/pl/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/de/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/fr/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/changelog/"/>
+  </url>
+  <url>
+    <loc>https://loonar.eu/de/changelog/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/pl/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/de/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/fr/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/changelog/"/>
+  </url>
+  <url>
+    <loc>https://loonar.eu/fr/changelog/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/pl/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/de/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/fr/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/changelog/"/>
+  </url>
 </urlset>

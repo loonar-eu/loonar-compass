@@ -10,6 +10,12 @@ of the licence; then checks the generated HTML.
 import os, re, json, sys, hashlib, shutil, posixpath
 from html.parser import HTMLParser
 from urllib.parse import urlsplit
+from html import escape as _escape
+
+
+def html_escape(s):
+    return _escape(s, quote=False)
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from content import T, ICONS, MARKS, FEATURE_ICONS, SEC_ICONS, FAQ_IDS
 import legal
@@ -42,7 +48,7 @@ GOATCOUNTER = "loonar"   # GoatCounter site code (https://loonar.goatcounter.com
 SUPPORT_URL = "https://suppi.pl/loonar"
 LINKEDIN_URL = "https://pl.linkedin.com/in/glowackimariusz"
 # -----------------------------------------------------------------------------------------
-ASSET_V = "6"  # raise after every change of assets/style.css or assets/site.js (cache busting)
+ASSET_V = "8"  # raise after every change of assets/style.css or assets/site.js (cache busting)
 
 SETUP = SETUP_URL.rsplit("/", 1)[1]
 REPO = SETUP_URL.split("/releases/")[0]
@@ -84,7 +90,8 @@ def fill(s, lang, P, absolute=False):
     lic = (SITE if absolute else P) + f"assets/license-{lang}.txt"
     return (s.replace("{ver}", VER).replace("{setup}", SETUP).replace("{size}", str(SIZE))
              .replace("{date}", f'<time datetime="{RELEASE}">{DATE[lang]}</time>')
-             .replace("{repo}", REPO).replace("{releases}", RELEASES_URL).replace("{lic}", lic))
+             .replace("{repo}", REPO).replace("{releases}", RELEASES_URL).replace("{lic}", lic)
+             .replace("{changelog}", (SITE if absolute else P) + page_dir("changelog", lang)))
 
 
 def ld_json(obj):
@@ -486,6 +493,7 @@ def home_page(lang):
       <div class="dl-card reveal">
         <img src="{P}assets/img/logo.svg" alt="" width="64" height="64">
         <h3>{NAME} {VER}</h3>
+        <p class="dl-new"><a href="{P}{page_dir("changelog", lang)}#{version_anchor(VER)}">{CL_T[lang]["new"].replace("{ver}", VER)}</a></p>
         <p class="dl-meta">{fill(t["d_meta"], lang, P)}</p>
         <!-- DOWNLOAD LINK: the only link to the installer; generated from SETUP_URL in website_src/build.py (see README.md) -->
         <a class="btn btn-lg" id="download-link" href="{SETUP_URL}" data-gc="download">{icon("dl","ico-btn")}{t["d_btn"]}</a>
@@ -585,6 +593,84 @@ def doc_page(kind, lang):
 '''
     write(d + "index.html", html)
 
+# ---------------------------------------------------------------------------- changelog (from CHANGELOG*.md)
+
+CHANGELOGS = {"pl": "CHANGELOG.md", "en": "CHANGELOG.en.md", "de": "CHANGELOG.de.md", "fr": "CHANGELOG.fr.md"}
+CL_T = {
+    "en": dict(title="Changelog", desc="What changed in each version of Loonar Compass.", new="What’s new in version {ver}"),
+    "pl": dict(title="Historia zmian", desc="Co zmieniło się w kolejnych wersjach Loonar Compass.", new="Co nowego w wersji {ver}"),
+    "de": dict(title="Versionshinweise", desc="Was sich in den einzelnen Versionen von Loonar Compass geändert hat.", new="Neu in Version {ver}"),
+    "fr": dict(title="Notes de version", desc="Ce qui a changé dans chaque version de Loonar Compass.", new="Nouveautés de la version {ver}"),
+}
+
+
+def version_anchor(ver):
+    return "v" + ver.replace(".", "-")
+
+
+def md_inline(s):
+    s = html_escape(s)
+    s = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", s)
+    s = re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
+    return re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r'<a href="\2">\1</a>', s)
+
+
+def changelog_html(text):
+    """The changelog Markdown (headings ##, paragraphs, lists) as HTML; the title line is the page's own heading."""
+    out, items = [], []
+
+    def flush():
+        if items:
+            out.append("<ul>" + "".join(f"<li>{i}</li>" for i in items) + "</ul>")
+            items.clear()
+    for line in text.splitlines()[1:]:
+        s = line.strip()
+        if not s:
+            flush()
+            continue
+        if s.startswith("## "):
+            flush()
+            head_text = s[3:]
+            m = re.search(r"(\d+\.\d+)", head_text)
+            anchor = f' id="{version_anchor(m.group(1))}"' if m else ""
+            out.append(f"<h2{anchor}>{md_inline(head_text)}</h2>")
+        elif s.startswith("- "):
+            items.append(md_inline(s[2:]))
+        else:
+            flush()
+            out.append(f"<p>{md_inline(s)}</p>")
+    flush()
+    return "\n".join(out)
+
+
+def changelog_page(lang):
+    d, P, t, sw = common("changelog", lang)
+    c = CL_T[lang]
+    body = changelog_html(open(os.path.join(ROOT, CHANGELOGS[lang]), encoding="utf-8").read())
+    if f'id="{version_anchor(VER)}"' not in body:
+        raise SystemExit(f"ERROR: {CHANGELOGS[lang]} has no section for version {VER}")
+    if lang == "fr":
+        body = nbsp_fr(body)
+    home = rel(d, PATH[lang])
+    alternates = [(l, SITE + page_dir("changelog", l)) for l in LANGS] + [("x-default", SITE + page_dir("changelog", "en"))]
+    html = head(lang, f"{c['title']} – {NAME}", c["desc"], SITE + d, alternates, P, f"{c['title']} – {NAME}", c["desc"]) + f'''
+<body id="top">
+{header(t, lang, home, sw)}
+
+<main id="main" class="doc-main">
+  <article class="wrap doc changelog">
+    <h1>{c["title"]}</h1>
+    {body}
+    <p class="doc-back"><a href="{home}">← {t["doc_home"]}</a></p>
+  </article>
+</main>
+
+{footer(t, lang, P, rel(d, page_dir("privacy", lang)), rel(d, page_dir("legal", lang)), sw["html"])}
+</body>
+</html>
+'''
+    write(d + "index.html", html)
+
 # ---------------------------------------------------------------------------- 404 page
 
 def not_found():
@@ -617,7 +703,7 @@ def not_found():
 
 def sitemap(extra=()):
     urls = [f'  <url>\n    <loc>{u}</loc>\n  </url>' for u in extra]
-    for kind in ("home", "privacy", "legal"):
+    for kind in ("home", "privacy", "legal", "changelog"):
         for l in LANGS:
             alts = ''.join(f'\n    <xhtml:link rel="alternate" hreflang="{a}" href="{SITE + page_dir(kind, a)}"/>' for a in LANGS)
             alts += f'\n    <xhtml:link rel="alternate" hreflang="x-default" href="{SITE + page_dir(kind, "en")}"/>'
@@ -728,6 +814,7 @@ if __name__ == "__main__":
         home_page(l)
         doc_page("privacy", l)
         doc_page("legal", l)
+        changelog_page(l)
     doc_urls = docs.generate(sys.modules[__name__])
     not_found()
     sitemap(doc_urls)
