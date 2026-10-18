@@ -94,7 +94,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .brand span { font-weight: 500; }
 .main-nav { margin-left: auto; }
 .main-nav ul { display: flex; gap: 4px; }
-.main-nav a { display: block; padding: 8px 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: .95rem; font-weight: 500; }
+.main-nav a { display: block; white-space: nowrap; padding: 8px 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: .95rem; font-weight: 500; }
 .main-nav a:hover { background: var(--navy-50); color: var(--navy); }
 .lang ul { display: flex; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
 .lang a { display: block; padding: 4px 9px; border-radius: 999px; font-size: .78rem; font-weight: 650; letter-spacing: .04em; color: var(--muted); text-decoration: none; }
@@ -106,8 +106,17 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .hdr-gh:hover { background: var(--navy-50); color: var(--navy); }
 .hdr-gh .mark { width: 22px; height: 22px; }
 /* the longest menu (DE) needs about 1230 px: tighter spacing first, then the menu hides */
-@media (max-width: 1320px) { .hdr { gap: 16px; } .main-nav a { padding: 8px 9px; } }
-@media (max-width: 1240px) { .main-nav { display: none; } .lang { margin-left: auto; } }
+/* The header is wider than the content: the menu (the longest is German, about 1300 px) fits in one line. */
+.site-header .wrap.hdr { width: min(1400px, 100% - 2 * var(--gutter)); }
+@media (max-width: 1440px) { .hdr { gap: 14px; } .main-nav a { padding: 8px 8px; } }
+/* With the menu shown, the documentation is in the menu; the separate link (an icon) returns with the menu hidden. */
+.hdr:not(.nonav) .hdr-docs { display: none; }
+@media (max-width: 1340px) {
+  .main-nav { display: none; } .lang { margin-left: auto; }
+  .hdr:not(.nonav) .hdr-docs { display: inline-flex; width: 36px; height: 36px; padding: 0; justify-content: center; border-radius: 50%; }
+  .hdr:not(.nonav) .hdr-docs span { display: none; }
+  .hdr:not(.nonav) .hdr-docs .mark { display: block; }
+}
 @media (max-width: 560px) {
   .hdr { gap: 10px; height: 60px; }
   .brand span { display: none; }
