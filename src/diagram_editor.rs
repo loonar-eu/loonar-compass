@@ -279,6 +279,7 @@ fn toolbox(diagram_type: &str, bpmn: bool) -> (Value, Value) {
             json!([
                 tool(crate::i18n::tr("Task"), crate::i18n::tr("New task"), "Activity", "BPMN2.0::Activity", 110, 60),
                 tool(crate::i18n::tr("Start event"), "", "Event", "BPMN2.0::StartEvent", 30, 30),
+                tool(crate::i18n::tr("Intermediate event"), "", "Event", "BPMN2.0::IntermediateEvent", 30, 30),
                 tool(crate::i18n::tr("End event"), "", "Event", "BPMN2.0::EndEvent", 30, 30),
                 tool(crate::i18n::tr("Gateway"), "", "Decision", "BPMN2.0::Gateway", 40, 40),
             ]),
@@ -361,7 +362,7 @@ fn toolbox(diagram_type: &str, bpmn: bool) -> (Value, Value) {
 fn texts() -> Value {
     let mut out = json!({
         "add": crate::i18n::tr("Add:"), "connector": crate::i18n::tr("Connector:"), "save": crate::i18n::tr("Save to EA"), "cancel": crate::i18n::tr("Cancel"),
-        "hint": crate::i18n::tr("Drag from an element to another to connect them. Double-click to rename."),
+        "hint": crate::i18n::tr("To connect: point at an element and drag its blue arrow to another one. Double-click to rename."),
         "nothing": crate::i18n::tr("Nothing has changed."), "add_hint": crate::i18n::tr("Adds the element in the middle of the view"),
         "align_left": crate::i18n::tr("Align left"), "align_center": crate::i18n::tr("Align centers"), "align_top": crate::i18n::tr("Align tops"),
         "align_middle": crate::i18n::tr("Align middles"), "same_size": crate::i18n::tr("Same size as the first selected"), "fit": crate::i18n::tr("Fit to window"),
@@ -404,6 +405,18 @@ fn texts() -> Value {
         ("ls_lateral_vertical", crate::i18n::tr("Lateral, vertical")), ("ls_lateral_horizontal", crate::i18n::tr("Lateral, horizontal")),
         ("after_save", crate::i18n::tr("Available after the relationship is saved.")),
         ("message", crate::i18n::tr("Message")),
+        ("bpmn_taskType", crate::i18n::tr("Task type")), ("bpmn_eventDefinition", crate::i18n::tr("Event type")),
+        ("bpmn_gatewayType", crate::i18n::tr("Gateway type")),
+        ("bpmn_Abstract", crate::i18n::tr("Task")), ("bpmn_User", crate::i18n::tr("User task")), ("bpmn_Service", crate::i18n::tr("Service task")),
+        ("bpmn_Manual", crate::i18n::tr("Manual task")), ("bpmn_Script", crate::i18n::tr("Script task")), ("bpmn_Send", crate::i18n::tr("Send task")),
+        ("bpmn_Receive", crate::i18n::tr("Receive task")), ("bpmn_BusinessRule", crate::i18n::tr("Business rule task")),
+        ("bpmn_None", crate::i18n::tr("None")), ("bpmn_Message", crate::i18n::tr("Message")), ("bpmn_Timer", crate::i18n::tr("Timer")),
+        ("bpmn_Signal", crate::i18n::tr("Signal")), ("bpmn_Error", crate::i18n::tr("Error")), ("bpmn_Escalation", crate::i18n::tr("Escalation")),
+        ("bpmn_Conditional", crate::i18n::tr("Conditional")), ("bpmn_Compensation", crate::i18n::tr("Compensation")),
+        ("bpmn_Cancel", crate::i18n::tr("Cancellation")), ("bpmn_Terminate", crate::i18n::tr("Terminate")), ("bpmn_Multiple", crate::i18n::tr("Multiple")),
+        ("bpmn_ParallelMultiple", crate::i18n::tr("Parallel multiple")),
+        ("bpmn_Exclusive", crate::i18n::tr("Exclusive (XOR)")), ("bpmn_Inclusive", crate::i18n::tr("Inclusive (OR)")),
+        ("bpmn_Parallel", crate::i18n::tr("Parallel (AND)")), ("bpmn_Complex", crate::i18n::tr("Complex")), ("bpmn_Event", crate::i18n::tr("Event-based")),
         ("f_order", crate::i18n::tr("Order")), ("earlier", crate::i18n::tr("Earlier")), ("later", crate::i18n::tr("Later")),
         ("f_message_sort", crate::i18n::tr("Kind")), ("synchronous", crate::i18n::tr("Synchronous")), ("asynchronous", crate::i18n::tr("Asynchronous")),
         ("f_is_return", crate::i18n::tr("Reply")), ("operation_of_target", crate::i18n::tr("Operation of the receiver")),
@@ -584,9 +597,17 @@ pub fn run(model: &Value) -> Result<Option<Value>> {
     let mut event_loop = EventLoopBuilder::<String>::with_user_event().build();
     let proxy = event_loop.create_proxy();
     let title = format!("{} – {}", model["diagram"]["name"].as_str().unwrap_or(""), crate::config::APP_NAME);
+    // Most of the screen: the panel and the toolbar need room next to the diagram.
+    let (width, height) = event_loop
+        .primary_monitor()
+        .map(|m| {
+            let size = m.size().to_logical::<f64>(m.scale_factor());
+            ((size.width * 0.88).max(1100.0), (size.height * 0.85).max(720.0))
+        })
+        .unwrap_or((1280.0, 820.0));
     let window = tao::window::WindowBuilder::new()
         .with_title(title)
-        .with_inner_size(tao::dpi::LogicalSize::new(1280.0, 820.0))
+        .with_inner_size(tao::dpi::LogicalSize::new(width, height))
         .build(&event_loop)
         .context(crate::i18n::tr("opening the editor window"))?;
     let _webview = wry::WebViewBuilder::new()

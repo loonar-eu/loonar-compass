@@ -77,13 +77,22 @@ pub struct Link {
     pub line: &'static str,
 }
 
-/// The diagram as Miro items: the frame size, the shapes (in drawing order) and the connectors.
+/// A text without a shape: the name under an event, a gateway or an actor (as EA shows it).
+#[derive(Clone, Debug)]
+pub struct Label {
+    pub rect: Rect,
+    pub content: String,
+}
+
+/// The diagram as Miro items: the frame size, the shapes (in drawing order), the names under small shapes and the
+/// connectors.
 #[derive(Clone, Debug)]
 pub struct Plan {
     pub title: String,
     pub width: f64,
     pub height: f64,
     pub shapes: Vec<Shape>,
+    pub labels: Vec<Label>,
     pub links: Vec<Link>,
 }
 
@@ -99,12 +108,74 @@ fn short_stereotype(s: &str) -> &str {
     s.rsplit("::").next().unwrap_or(s)
 }
 
+/// The value of a tagged value of an element.
+fn tag<'a>(el: &'a Value, name: &str) -> &'a str {
+    el["tags"].as_array().into_iter().flatten().find(|t| t["name"] == name).and_then(|t| t["value"].as_str()).unwrap_or("")
+}
+
+/// BPMN kind as a symbol: a task type, an event definition or a gateway marker ("" when there is none).
+fn bpmn_symbol(el: &Value) -> &'static str {
+    let st = short_stereotype(el["stereotype"].as_str().unwrap_or(""));
+    if st == "Activity" {
+        return match tag(el, "taskType") {
+            "User" => "👤",
+            "Service" => "⚙️",
+            "Manual" => "✋",
+            "Script" => "📜",
+            "Send" => "✉️",
+            "Receive" => "📨",
+            "BusinessRule" => "📋",
+            _ => "",
+        };
+    }
+    if st.ends_with("Event") {
+        return match tag(el, "eventDefinition") {
+            "Message" => "✉️",
+            "Timer" => "⏱️",
+            "Signal" => "△",
+            "Error" => "⚡",
+            "Escalation" => "⇧",
+            "Conditional" => "☰",
+            "Compensation" => "⏪",
+            "Cancel" => "✖",
+            "Terminate" => "●",
+            "Multiple" => "⬠",
+            "ParallelMultiple" => "✚",
+            _ => "",
+        };
+    }
+    if st == "Gateway" {
+        return match tag(el, "gatewayType") {
+            "Parallel" => "✚",
+            "Inclusive" => "◯",
+            "Complex" => "✱",
+            "Event" => "⬠",
+            _ if tag(el, "markerVisible") == "true" => "✕",
+            _ => "",
+        };
+    }
+    ""
+}
+
+/// Small shapes (events, gateways, actors, pseudostates) carry their name below, not inside.
+fn name_below(el: &Value) -> bool {
+    let kind = el["type"].as_str().unwrap_or("");
+    let st = el["stereotype"].as_str().unwrap_or("");
+    kind == "Event" || st.ends_with("Event") || kind == "Decision" || st.contains("Gateway") || kind == "Actor" || kind == "StateNode"
+}
+
 /// Miro shape, fill and border of an EA element.
 fn look(el: &Value) -> (&'static str, &'static str, &'static str) {
     let kind = el["type"].as_str().unwrap_or("");
     let st = el["stereotype"].as_str().unwrap_or("");
+    if st.ends_with("IntermediateEvent") {
+        return ("circle", "#FFF8E6", "#9A6B00");
+    }
     if kind == "Event" || st.ends_with("Event") {
         return if st.contains("End") { ("circle", "#FDECEA", "#B3261E") } else { ("circle", "#EAF7EE", "#1D7A46") };
+    }
+    if kind == "StateNode" {
+        return ("circle", "#1F2A33", "#1F2A33");
     }
     if kind == "Decision" || st.contains("Gateway") {
         return ("rhombus", "#FFF8D6", "#B8A26A");
@@ -122,6 +193,13 @@ fn look(el: &Value) -> (&'static str, &'static str, &'static str) {
 /// Text of a shape: «stereotype», the name, and for classes their attributes and operations.
 fn content(el: &Value) -> String {
     let mut out = String::new();
+    let symbol = bpmn_symbol(el);
+    if name_below(el) {
+        return if symbol.is_empty() { String::new() } else { format!("<p>{symbol}</p>") };
+    }
+    if !symbol.is_empty() {
+        out.push_str(&format!("<p>{symbol}</p>"));
+    }
     let kind = el["type"].as_str().unwrap_or("");
     let st = el["stereotype"].as_str().unwrap_or("");
     if kind == "Interface" {
@@ -171,6 +249,7 @@ pub fn plan(model: &Value) -> Plan {
     let mut order = elements.clone();
     order.sort_by(|a, b| (num(&b["width"]) * num(&b["height"])).total_cmp(&(num(&a["width"]) * num(&a["height"]))));
     let mut shapes = Vec::new();
+    let mut labels = Vec::new();
     let (mut width, mut height) = (0.0_f64, 0.0_f64);
     for el in order {
         let (shape, fill, border) = look(el);
@@ -180,6 +259,12 @@ pub fn plan(model: &Value) -> Plan {
         height = height.max(rect.bottom() + PADDING);
         let container = elements.iter().any(|o| o["parent"] == el["id"]);
         let classifier = matches!(el["type"].as_str(), Some("Class" | "Interface" | "Enumeration" | "DataType" | "Component"));
+        let name = el["name"].as_str().unwrap_or("");
+        if name_below(el) && !name.is_empty() {
+            let label = Rect { x: rect.x + rect.w / 2.0 - 60.0, y: rect.bottom() + 4.0, w: 120.0, h: 24.0 };
+            height = height.max(label.bottom() + PADDING);
+            labels.push(Label { rect: label, content: esc(name) });
+        }
         shapes.push(Shape {
             key: el["id"].to_string(),
             rect,
@@ -187,7 +272,7 @@ pub fn plan(model: &Value) -> Plan {
             shape,
             fill: fill.to_string(),
             border: border.to_string(),
-            font_size: if shape == "circle" && rect.w < 50.0 { 10 } else { 14 },
+            font_size: if rect.w < 60.0 || rect.h < 40.0 { 12 } else if rect.w < 140.0 || rect.h < 70.0 { 12 } else { 14 },
             top: container || classifier,
             anchor: false,
         });
@@ -209,7 +294,7 @@ pub fn plan(model: &Value) -> Plan {
             }
         })
         .collect();
-    Plan { title, width: width.max(200.0), height: height.max(120.0), shapes, links }
+    Plan { title, width: width.max(200.0), height: height.max(120.0), shapes, labels, links }
 }
 
 /// Sequence diagram: a header for each lifeline with a dashed line down, and the messages as connectors between
@@ -288,7 +373,7 @@ fn sequence_plan(model: &Value, title: String) -> Plan {
             line: if from == to { "curved" } else { "straight" },
         });
     }
-    Plan { title, width: width.max(200.0), height: bottom + PADDING, shapes, links }
+    Plan { title, width: width.max(200.0), height: bottom + PADDING, shapes, labels: vec![], links }
 }
 
 fn anchor(key: String, cx: f64, cy: f64) -> Shape {
@@ -439,7 +524,7 @@ impl Client {
     /// connectors. Returns the link that opens the board at the frame.
     pub fn send(&self, board: &Board, plan: &Plan, at: Rect, progress: &dyn Fn(usize, usize)) -> Result<String> {
         let path = format!("/boards/{}", urlencode(&board.id));
-        let total = 1 + plan.shapes.len() + plan.links.len();
+        let total = 1 + plan.shapes.len() + plan.labels.len() + plan.links.len();
         let mut done = 0;
         let frame = self.post(
             &format!("{path}/frames"),
@@ -477,6 +562,20 @@ impl Client {
             if let Some(id) = created["id"].as_str() {
                 ids.insert(s.key.clone(), id.to_string());
             }
+            done += 1;
+            progress(done, total);
+        }
+        for l in &plan.labels {
+            self.post(
+                &format!("{path}/texts"),
+                &json!({
+                    "data": { "content": l.content },
+                    "style": { "fontSize": "12", "textAlign": "center", "color": "#2A3A47" },
+                    "position": { "x": l.rect.x + l.rect.w / 2.0, "y": l.rect.y + l.rect.h / 2.0, "origin": "center" },
+                    "geometry": { "width": l.rect.w },
+                    "parent": { "id": frame_id },
+                }),
+            )?;
             done += 1;
             progress(done, total);
         }
@@ -545,6 +644,31 @@ mod tests {
         assert_eq!(p.width, 400.0 - 100.0 + 160.0 + 2.0 * PADDING);
         assert_eq!(p.links[0].end_cap, "arrow");
         assert_eq!(p.links[1].end_cap, "triangle");
+    }
+
+    #[test]
+    fn bpmn_kinds_and_names_of_small_shapes() {
+        let model = json!({
+            "diagram": { "id": 3, "name": "Order process", "type": "BPMN2.0::Business Process" },
+            "elements": [
+                { "id": 1, "name": "Order placed", "type": "Event", "stereotype": "StartEvent", "left": 10, "top": 50, "width": 30, "height": 30,
+                  "tags": [{ "name": "eventDefinition", "value": "Message" }] },
+                { "id": 2, "name": "Check", "type": "Activity", "stereotype": "Activity", "left": 80, "top": 40, "width": 110, "height": 60,
+                  "tags": [{ "name": "taskType", "value": "User" }] },
+                { "id": 3, "name": "OK?", "type": "Decision", "stereotype": "Gateway", "left": 230, "top": 50, "width": 40, "height": 40,
+                  "tags": [{ "name": "gatewayType", "value": "Parallel" }] },
+            ],
+            "connectors": [],
+        });
+        let p = plan(&model);
+        let shape = |k: &str| p.shapes.iter().find(|s| s.key == k).unwrap();
+        assert_eq!(shape("1").content, "<p>✉️</p>", "an event shows its kind, its name goes below");
+        assert!(shape("2").content.starts_with("<p>👤</p>") && shape("2").content.contains("Check"));
+        assert_eq!(shape("3").content, "<p>✚</p>");
+        let mut names: Vec<&str> = p.labels.iter().map(|l| l.content.as_str()).collect();
+        names.sort();
+        assert_eq!(names, ["OK?", "Order placed"], "names of the event and the gateway, not of the task");
+        assert!(p.labels.iter().all(|l| l.rect.y > PADDING + 30.0), "names are below the shapes");
     }
 
     #[test]

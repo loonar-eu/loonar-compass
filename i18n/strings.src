@@ -971,3 +971,30 @@ New state ‖ Nowy stan ‖ Neuer Zustand ‖ Nouvel état
 Node ‖ Węzeł ‖ Knoten ‖ Nœud
 State ‖ Stan ‖ Zustand ‖ État
 Transition ‖ Przejście ‖ Transition ‖ Transition
+Business rule task ‖ Zadanie reguły biznesowej ‖ Geschäftsregel-Aufgabe ‖ Tâche de règle métier
+Cancellation ‖ Anulowanie ‖ Abbruch ‖ Annulation
+Compensation ‖ Kompensacja ‖ Kompensation ‖ Compensation
+Complex ‖ Złożona ‖ Komplex ‖ Complexe
+Conditional ‖ Warunkowe ‖ Bedingung ‖ Conditionnel
+Escalation ‖ Eskalacja ‖ Eskalation ‖ Escalade
+Event type ‖ Typ zdarzenia ‖ Ereignistyp ‖ Type d'événement
+Event-based ‖ Oparta na zdarzeniach ‖ Ereignisbasiert ‖ Basée sur les événements
+Exclusive (XOR) ‖ Rozłączna (XOR) ‖ Exklusiv (XOR) ‖ Exclusive (XOR)
+Gateway type ‖ Typ bramki ‖ Gateway-Typ ‖ Type de passerelle
+Inclusive (OR) ‖ Włączna (OR) ‖ Inklusiv (OR) ‖ Inclusive (OR)
+Intermediate event ‖ Zdarzenie pośrednie ‖ Zwischenereignis ‖ Événement intermédiaire
+Manual task ‖ Zadanie ręczne ‖ Manuelle Aufgabe ‖ Tâche manuelle
+Multiple ‖ Wielokrotne ‖ Mehrfach ‖ Multiple
+None ‖ Brak ‖ Keine ‖ Aucun
+Parallel (AND) ‖ Równoległa (AND) ‖ Parallel (AND) ‖ Parallèle (AND)
+Parallel multiple ‖ Wielokrotne równoległe ‖ Parallel mehrfach ‖ Multiple parallèle
+Receive task ‖ Zadanie odbioru ‖ Empfangsaufgabe ‖ Tâche de réception
+Script task ‖ Zadanie skryptu ‖ Skriptaufgabe ‖ Tâche de script
+Send task ‖ Zadanie wysłania ‖ Sendeaufgabe ‖ Tâche d'envoi
+Service task ‖ Zadanie usługi ‖ Serviceaufgabe ‖ Tâche de service
+Signal ‖ Sygnał ‖ Signal ‖ Signal
+Task type ‖ Typ zadania ‖ Aufgabentyp ‖ Type de tâche
+Terminate ‖ Zakończenie ‖ Terminierung ‖ Terminaison
+Timer ‖ Czasowe ‖ Zeitgeber ‖ Minuterie
+To connect: point at an element and drag its blue arrow to another one. Double-click to rename. ‖ Łączenie: najedź na element i przeciągnij jego niebieską strzałkę do drugiego. Dwuklik zmienia nazwę. ‖ Verbinden: Zeigen Sie auf ein Element und ziehen Sie seinen blauen Pfeil zu einem anderen. Doppelklick zum Umbenennen. ‖ Relier : pointez un élément et faites glisser sa flèche bleue vers un autre. Double-clic pour renommer.
+User task ‖ Zadanie użytkownika ‖ Benutzeraufgabe ‖ Tâche utilisateur

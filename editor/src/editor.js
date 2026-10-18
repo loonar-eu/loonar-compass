@@ -2,7 +2,7 @@
 // align, rename, add elements from the toolbox and connect them, then sends the changes to the application, which
 // saves them in EA through its own operations. The diagram comes in window.__DIAGRAM__ (set by the application).
 import {
-  Graph, InternalEvent, RubberBandHandler, getDefaultPlugins, UndoManager, Point,
+  Graph, InternalEvent, RubberBandHandler, getDefaultPlugins, UndoManager, Point, ImageBox, CellOverlay,
 } from '@maxgraph/core';
 
 const data = window.__DIAGRAM__;
@@ -55,6 +55,9 @@ function vertexStyle(el) {
   }
   if (el.type === 'Artifact') return { fillColor: '#FFFFFF', strokeColor: '#55667A', whiteSpace: 'wrap', fontSize: 12 };
   if (el.type === 'InteractionFragment') return { fillColor: 'none', strokeColor: '#55667A', align: 'left', verticalAlign: 'top', spacingLeft: 6, spacingTop: 4, fontSize: 11 };
+  if (st.endsWith('IntermediateEvent')) {
+    return { shape: 'doubleEllipse', perimeter: 'ellipsePerimeter', fillColor: '#FFF8E6', strokeColor: '#9A6B00', strokeWidth: 1.5, verticalLabelPosition: 'bottom', verticalAlign: 'top', fontColor: '#2A3A47', fontSize: 11, resizable: false };
+  }
   if (el.type === 'Event' || st.endsWith('Event')) {
     const end = st.includes('End');
     return { shape: 'ellipse', perimeter: 'ellipsePerimeter', fillColor: end ? '#FDECEA' : '#EAF7EE', strokeColor: end ? '#B3261E' : '#1D7A46', strokeWidth: end ? 3 : 1.5, verticalLabelPosition: 'bottom', verticalAlign: 'top', fontColor: '#2A3A47', fontSize: 11, resizable: false };
@@ -288,7 +291,7 @@ function tagsTab(cell) {
   for (const tag of list) {
     const removed = e.tags[tag.name] === null;
     const value = tag.name in e.tags && !removed ? e.tags[tag.name] : (tag.value ?? '');
-    const on = (v) => { if (v === (tag.value ?? '') && !tag.added) delete e.tags[tag.name]; else e.tags[tag.name] = v; };
+    const on = (v) => { if (v === (tag.value ?? '') && !tag.added) delete e.tags[tag.name]; else e.tags[tag.name] = v; refreshBpmn(cell); };
     let control;
     if (tag.values && tag.values.length) {
       control = el('select', { onchange: (ev) => on(ev.target.value) });
@@ -366,6 +369,17 @@ function relabel(cell) {
   const w = membersOf(cell);
   ea.attributes = w.attributes.map((a) => `${sign(a.visibility)} ${a.name}${a.type ? `: ${a.type}` : ''}`);
   ea.operations = w.operations.map((o) => `${sign(o.visibility)} ${o.name}(${o.parameters || ''})${o.type && o.type !== 'void' ? `: ${o.type}` : ''}`);
+  // The box grows so that every attribute and operation stays visible (it never shrinks by itself).
+  const stereo = ea.type === 'Interface' || (ea.stereotype && !BPMN.has(ea.stereotype));
+  const height = (stereo ? 44 : 30) + 6 + ea.attributes.length * 15 + 6 + ea.operations.length * 15 + 8;
+  const width = Math.min(380, Math.max(...[...ea.attributes, ...ea.operations].map((r) => r.length * 6.6 + 18), 0));
+  const g = cell.geometry;
+  if (g.height < height || g.width < width) {
+    const ng = g.clone();
+    ng.height = Math.max(g.height, height);
+    ng.width = Math.max(g.width, width);
+    graph.getDataModel().setGeometry(cell, ng);
+  }
   graph.refresh(cell);
 }
 function membersTab(cell) {
@@ -435,6 +449,7 @@ function render() {
   else if (tab === 'appearance') body.append(appearanceTab(cell));
   else if (cell.isVertex()) {
     body.append(row(t.f_name, 'model', nameInput(cell)));
+    if (bpmnTypeTag(m.ea)) body.append(bpmnTypeRow(cell));
     for (const [field, label, kind] of EL_FIELDS) body.append(row(t[label], 'model', input(cell, field, kind)));
     const p = m.ea.props || {};
     body.append(readonly(t.f_package, p.package), readonly(t.f_guid, p.guid), readonly(t.f_created, p.created), readonly(t.f_modified, p.modified));
@@ -624,6 +639,123 @@ if (SEQ) {
   document.getElementById('status').textContent = t.seq_hint;
   layoutMessages();
 }
+
+// --- BPMN: the kind of a task, event or gateway (EA keeps it in tagged values of the BPMN profile) ---------------
+
+const bpmnTypeTag = (ea) => {
+  const st = String(ea?.stereotype || '').replace(/^.*::/, '');
+  if (st === 'Activity') return 'taskType';
+  if (/Event$/.test(st)) return 'eventDefinition';
+  if (st === 'Gateway') return 'gatewayType';
+  return null;
+};
+const BPMN_VALUES = {
+  taskType: ['Abstract', 'User', 'Service', 'Manual', 'Script', 'Send', 'Receive', 'BusinessRule'],
+  eventDefinition: ['None', 'Message', 'Timer', 'Signal', 'Error', 'Escalation', 'Conditional', 'Compensation', 'Cancel', 'Terminate', 'Multiple', 'ParallelMultiple'],
+  gatewayType: ['Exclusive', 'Inclusive', 'Parallel', 'Complex', 'Event'],
+};
+// The value of a tagged value: what the user chose in the editor, or what the model has.
+function tagValue(cell, name) {
+  const e = edits.get(cell.id);
+  if (e && name in e.tags && e.tags[name] !== null) return e.tags[name];
+  const tag = (meta.get(cell.id)?.ea.tags || []).find((x) => x.name === name);
+  return tag ? (tag.value ?? '') : '';
+}
+const svgImage = (body, size, fill = 'none') => new ImageBox('data:image/svg+xml;utf8,' + encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}" fill="${fill}" stroke="#3B4B59" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`,
+), size, size);
+const TASK_ICONS = {
+  User: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.5 3.6-7 8-7s8 2.5 8 7"/>',
+  Service: '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
+  Manual: '<path d="M7 12V6a1.5 1.5 0 013 0v5M10 11V4a1.5 1.5 0 013 0v7M13 11V5a1.5 1.5 0 013 0v7M16 12V8a1.5 1.5 0 013 0v6a7 7 0 01-7 7h-1a6 6 0 01-5-2.8l-3-5a1.5 1.5 0 012.6-1.5L7 15"/>',
+  Script: '<path d="M7 3h11v18H7z"/><path d="M10 8h5M10 12h5M10 16h5"/>',
+  Send: '<rect x="3" y="6" width="18" height="12" fill="#3B4B59"/><path d="M3 6l9 7 9-7" stroke="#FFFFFF"/>',
+  Receive: '<rect x="3" y="6" width="18" height="12"/><path d="M3 6l9 7 9-7"/>',
+  BusinessRule: '<rect x="3" y="5" width="18" height="14"/><path d="M3 9.5h18M8 9.5V19"/>',
+};
+const EVENT_ICONS = {
+  Message: '<rect x="4" y="7" width="16" height="10"/><path d="M4 7l8 6 8-6"/>',
+  Timer: '<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
+  Signal: '<path d="M12 4.5l8 14.5H4z"/>',
+  Error: '<path d="M5 19l4-11 4 6 6-10-4 13-4-6z"/>',
+  Escalation: '<path d="M12 4l6 15-6-5-6 5z"/>',
+  Conditional: '<rect x="6" y="4" width="12" height="16"/><path d="M8.5 8h7M8.5 12h7M8.5 16h7"/>',
+  Compensation: '<path d="M11 6l-7 6 7 6zM20 6l-7 6 7 6z"/>',
+  Cancel: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11" stroke-width="3"/>',
+  Terminate: '<circle cx="12" cy="12" r="7" fill="#3B4B59"/>',
+  Multiple: '<path d="M12 4l8 6-3 9H7l-3-9z"/>',
+  ParallelMultiple: '<path d="M12 4v16M4 12h16" stroke-width="3"/>',
+};
+const GATEWAY_MARKS = {
+  Exclusive: '<path d="M7 7l10 10M17 7L7 17" stroke-width="3"/>',
+  Parallel: '<path d="M12 5v14M5 12h14" stroke-width="3"/>',
+  Inclusive: '<circle cx="12" cy="12" r="6" stroke-width="2.5"/>',
+  Complex: '<path d="M12 5v14M5 12h14M7 7l10 10M17 7L7 17" stroke-width="2.4"/>',
+  Event: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="6.3"/><path d="M12 8.5l3.4 2.5-1.3 4h-4.2l-1.3-4z"/>',
+};
+const LOOP_MARKS = {
+  Standard: '<path d="M8 17a6 6 0 118 0"/><path d="M16 13v4h4"/>',
+  Parallel: '<path d="M8 6v12M12 6v12M16 6v12" stroke-width="2"/>',
+  Sequential: '<path d="M6 8h12M6 12h12M6 16h12" stroke-width="2"/>',
+};
+// Draws the kind as in BPMN: an icon in the corner of a task, a symbol inside an event, a marker inside a gateway.
+function refreshBpmn(cell) {
+  if (!cell?.isVertex()) return;
+  const m = meta.get(cell.id);
+  const tag = bpmnTypeTag(m?.ea);
+  graph.removeCellOverlays(cell);
+  if (!tag) return;
+  const g = cell.geometry;
+  const add = (image, align, vAlign, dx, dy) => graph.addCellOverlay(cell, new CellOverlay(image, null, align, vAlign, new Point(dx, dy), 'default'));
+  const value = tagValue(cell, tag);
+  const end = /End/.test(String(m.ea.stereotype));
+  if (tag === 'taskType') {
+    if (TASK_ICONS[value]) add(svgImage(TASK_ICONS[value], 16), 'left', 'top', 13, 12);
+    const loop = tagValue(cell, 'loopCharacteristics');
+    if (loop === 'Standard') add(svgImage(LOOP_MARKS.Standard, 14), 'center', 'bottom', 0, -9);
+    if (loop === 'MultiInstance') add(svgImage(tagValue(cell, 'isSequential') === 'true' ? LOOP_MARKS.Sequential : LOOP_MARKS.Parallel, 14), 'center', 'bottom', 0, -9);
+  } else if (tag === 'eventDefinition' && EVENT_ICONS[value]) {
+    add(svgImage(EVENT_ICONS[value], Math.max(10, Math.round(Math.min(g.width, g.height) * 0.6)), end && value !== 'Terminate' ? '#3B4B59' : 'none'), 'center', 'middle', 0, 0);
+  } else if (tag === 'gatewayType') {
+    const mark = value === 'Exclusive' || !value ? (tagValue(cell, 'markerVisible') === 'true' ? GATEWAY_MARKS.Exclusive : null) : GATEWAY_MARKS[value];
+    if (mark) add(svgImage(mark, Math.max(10, Math.round(Math.min(g.width, g.height) * 0.55))), 'center', 'middle', 0, 0);
+  }
+  // The marks never catch the mouse: the element under them stays easy to select and drag.
+  graph.getView().getState(cell)?.overlays?.forEach((shape) => { if (shape?.node) shape.node.style.pointerEvents = 'none'; });
+}
+const refreshAllBpmn = () => Object.values(graph.getDataModel().cells).forEach((c) => { if (c.isVertex() && bpmnTypeTag(meta.get(c.id)?.ea)) refreshBpmn(c); });
+graph.getView().addListener(InternalEvent.SCALE, refreshAllBpmn);
+graph.getView().addListener(InternalEvent.SCALE_AND_TRANSLATE, refreshAllBpmn);
+graph.addListener(InternalEvent.CELLS_RESIZED, refreshAllBpmn);
+refreshAllBpmn();
+
+// The kind of a BPMN element in the General tab: a pick-list bound to its tagged value.
+function bpmnTypeRow(cell) {
+  const tag = bpmnTypeTag(meta.get(cell.id).ea);
+  const def = (meta.get(cell.id).ea.tags || []).find((x) => x.name === tag);
+  const values = def?.values?.length ? def.values : BPMN_VALUES[tag];
+  const value = tagValue(cell, tag) || values[0];
+  const s = el('select', { onchange: (ev) => {
+    const e = editOf(cell.id);
+    if (ev.target.value === (def?.value ?? '')) delete e.tags[tag]; else e.tags[tag] = ev.target.value;
+    // An exclusive gateway shows its X when the marker is on.
+    if (tag === 'gatewayType' && ev.target.value === 'Exclusive' && tagValue(cell, 'markerVisible') !== 'true') e.tags.markerVisible = 'true';
+    refreshBpmn(cell);
+  } });
+  for (const v of values) { const o = el('option', { value: v }, t[`bpmn_${v}`] || v); if (v === value) o.selected = true; s.append(o); }
+  return row(t[`bpmn_${tag}`], 'model', s);
+}
+
+// --- connecting: a blue arrow on the element under the mouse, dragged to another element ---------------------------
+
+const connector = graph.getPlugin('ConnectionHandler');
+connector.connectImage = svgImage('<circle cx="12" cy="12" r="11" fill="#0E4A6B" stroke="none"/><path d="M6.5 12h10M12.5 7.5l4.5 4.5-4.5 4.5" stroke="#FFFFFF" stroke-width="2.4"/>', 22);
+connector.marker.hotspot = 1;
+connector.getIconPosition = (icon, state) => {
+  const s = graph.getView().scale;
+  const top = isLifeline(meta.get(state.cell.id)?.ea) ? state.y + 25 * s : state.getCenterY();
+  return new Point(state.x + state.width - icon.bounds.width / 2, top - icon.bounds.height / 2);
+};
 
 // --- toolbox and new connectors ----------------------------------------------------------------------------------
 
