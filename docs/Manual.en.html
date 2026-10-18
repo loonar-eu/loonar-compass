@@ -394,6 +394,15 @@
   <tr><td>Space key</td><td>The space key, for example <code>ARCH</code></td></tr>
   <tr><td>Parent page ID</td><td>Optional: the ID of the page under which new pages are created</td></tr>
 </table>
+<p><b>Confluence Cloud: where the details come from.</b></p>
+<ol>
+  <li><b>Token</b>: it is created on your Atlassian account, not in Confluence. Open <code>https://id.atlassian.com/manage-profile/security/api-tokens</code> (Atlassian account → Security → API tokens). Atlassian may first ask you to confirm it is you with a code sent to your email.</li>
+  <li>Click <b>Create API token</b> (the plain one, not <b>Create API token with scopes</b>), give it a name, for example Loonar Compass, and choose how long it is valid: one week by default, at most one year. Click <b>Create</b> and copy the token: Atlassian shows it only once. When it expires, create a new one and paste it in card 6.</li>
+  <li><b>Email</b>: the email address of the Atlassian account the token belongs to.</li>
+  <li><b>Address</b>: your site with <code>/wiki</code>, for example <code>https://your-site.atlassian.net/wiki</code>.</li>
+  <li><b>Space key</b>: it is in the address of any page of the space, after <code>/spaces/</code> (for example <code>…/wiki/spaces/PM/…</code> gives <code>PM</code>), and under <b>Space settings</b>.</li>
+  <li><b>Parent page ID</b> (optional): the number in the address of the page, after <code>/pages/</code> (for example <code>…/pages/65818/…</code> gives <code>65818</code>).</li>
+</ol>
 <p>Save the card with the <b>Save and test Confluence connection</b> button.</p>
 <div class="prompt">Prepare a Confluence page describing the “Complaint handling” process with the diagram and publish it in the space.</div>
 

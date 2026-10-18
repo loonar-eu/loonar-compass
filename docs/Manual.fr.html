@@ -394,6 +394,15 @@
   <tr><td>Espace (clé)</td><td>La clé de l'espace, par exemple <code>ARCH</code></td></tr>
   <tr><td>Page parente (ID)</td><td>Facultatif : l'ID de la page sous laquelle les nouvelles pages sont créées</td></tr>
 </table>
+<p><b>Confluence Cloud : d'où viennent les informations.</b></p>
+<ol>
+  <li><b>Jeton</b> : il se crée sur votre compte Atlassian, pas dans Confluence. Ouvrez <code>https://id.atlassian.com/manage-profile/security/api-tokens</code> (compte Atlassian → Security → API tokens). Atlassian peut d'abord demander une confirmation par un code envoyé par e-mail.</li>
+  <li>Cliquez sur <b>Create API token</b> (le simple, pas <b>Create API token with scopes</b>), donnez-lui un nom, par exemple Loonar Compass, et choisissez sa validité : une semaine par défaut, un an au maximum. Cliquez sur <b>Create</b> et copiez le jeton : Atlassian ne l'affiche qu'une fois. Quand il expire, créez-en un nouveau et collez-le dans la carte 6.</li>
+  <li><b>E-mail</b> : l'adresse du compte Atlassian auquel appartient le jeton.</li>
+  <li><b>Adresse</b> : votre site suivi de <code>/wiki</code>, par exemple <code>https://votre-site.atlassian.net/wiki</code>.</li>
+  <li><b>Clé de l'espace</b> : elle figure dans l'adresse de chaque page de l'espace, après <code>/spaces/</code> (par exemple <code>…/wiki/spaces/PM/…</code> donne <code>PM</code>), et dans les <b>paramètres de l'espace</b>.</li>
+  <li><b>ID de la page parente</b> (facultatif) : le nombre dans l'adresse de la page, après <code>/pages/</code> (par exemple <code>…/pages/65818/…</code> donne <code>65818</code>).</li>
+</ol>
 <p>Enregistrez la carte avec le bouton <b>Enregistrer et tester la connexion à Confluence</b>.</p>
 <div class="prompt">Prépare une page Confluence décrivant le processus « Traitement des réclamations » avec son diagramme et publie-la dans l'espace.</div>
 
