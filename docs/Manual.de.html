@@ -348,7 +348,15 @@
 
 <h2 id="s10">10. Diagramme an Miro senden</h2>
 <p>Ein Diagramm aus EA kann als bearbeitbare Formen und Verbindungen in einem Rahmen mit dem Namen des Diagramms auf ein Miro-Board gelangen. Nur von EA nach Miro: Was auf dem Board geändert wird, gelangt nicht zurück ins Modell.</p>
-<p><b>Einrichtung, einmalig:</b> Öffnen Sie in Miro die Einstellungen Ihres Profils → <b>Your apps</b> → <b>Create new app</b>, erteilen Sie die Berechtigungen <code>boards:read</code> und <code>boards:write</code>, installieren Sie die App in Ihrem Team und kopieren Sie das Zugriffstoken. Fügen Sie es in den Einstellungen auf der Karte <b>„7. Miro“</b> ein und klicken Sie auf <b>Miro-Verbindung speichern und testen</b>. Das Token wird in der Windows-Anmeldeinformationsverwaltung gespeichert.</p>
+<p><b>Einrichtung, einmalig:</b></p>
+<ol>
+  <li>Öffnen Sie in Miro die Einstellungen Ihres Profils → <b>Your apps</b> → <b>Create new app</b>. Miro bittet zuerst darum, ein <b>Developer team</b> anzulegen (eine kostenlose Sandbox für Ihre Apps): Akzeptieren Sie die Bedingungen und legen Sie es an. In einer Organisation mit Enterprise-Plan richtet es der Administrator der Organisation ein.</li>
+  <li>Geben Sie der App einen Namen (zum Beispiel Loonar Compass) und <b>lassen Sie „Expire user authorization token“ deaktiviert</b>: Ein ablaufendes Token funktioniert nach einer Stunde nicht mehr.</li>
+  <li>Wählen Sie unter <b>Permissions</b> <code>boards:read</code> und <code>boards:write</code>.</li>
+  <li>Klicken Sie auf <b>Install app and get OAuth token</b> und wählen Sie die Organisation und das Team, deren Boards die Anwendung verwenden darf (für einen ersten Test das Developer team). Kopieren Sie das Token.</li>
+  <li>Fügen Sie es in den Einstellungen auf der Karte <b>„7. Miro“</b> ein und klicken Sie auf <b>Miro-Verbindung speichern und testen</b>. Das Token wird in der Windows-Anmeldeinformationsverwaltung gespeichert.</li>
+</ol>
+<p>Diagramme können nur auf Boards des Teams gelangen, in dem die App installiert ist; für eine andere Organisation installieren Sie die App auch dort (mit derselben Schaltfläche).</p>
 <p><b>Senden:</b></p>
 <ol>
   <li>Klicken Sie unter einem Diagramm im Chat auf <b>An Miro senden</b>.</li>

@@ -350,7 +350,15 @@
 
 <h2 id="s10">10. Wysyłanie diagramów do Miro</h2>
 <p>Diagram z EA może trafić na tablicę Miro jako edytowalne kształty i połączenia w ramce z nazwą diagramu. Tylko z EA do Miro: to, co ktoś zmieni na tablicy, nie wraca do modelu.</p>
-<p><b>Konfiguracja, jednorazowo:</b> w Miro otwórz ustawienia profilu → <b>Your apps</b> → <b>Create new app</b>, nadaj uprawnienia <code>boards:read</code> i <code>boards:write</code>, zainstaluj aplikację w swoim zespole i skopiuj token dostępu. Wklej go w Ustawieniach, karta <b>„7. Miro”</b>, i kliknij <b>Zapisz i sprawdź połączenie z Miro</b>. Token jest przechowywany w Menedżerze poświadczeń Windows.</p>
+<p><b>Konfiguracja, jednorazowo:</b></p>
+<ol>
+  <li>W Miro otwórz ustawienia profilu → <b>Your apps</b> → <b>Create new app</b>. Miro najpierw prosi o założenie <b>Developer team</b> (darmowej piaskownicy na Twoje aplikacje): zaakceptuj warunki i utwórz go. W organizacji na planie Enterprise zakłada go administrator organizacji.</li>
+  <li>Nadaj aplikacji nazwę (na przykład Loonar Compass) i <b>nie zaznaczaj „Expire user authorization token”</b>: wygasający token przestaje działać po godzinie.</li>
+  <li>W sekcji <b>Permissions</b> zaznacz <code>boards:read</code> i <code>boards:write</code>.</li>
+  <li>Kliknij <b>Install app and get OAuth token</b> i wybierz organizację oraz zespół, których tablic aplikacja może używać (na pierwszy test: Developer team). Skopiuj token.</li>
+  <li>Wklej go w Ustawieniach, karta <b>„7. Miro”</b>, i kliknij <b>Zapisz i sprawdź połączenie z Miro</b>. Token jest przechowywany w Menedżerze poświadczeń Windows.</li>
+</ol>
+<p>Diagramy trafiają tylko na tablice zespołu, w którym aplikacja jest zainstalowana; żeby wysyłać do innej organizacji, zainstaluj aplikację także tam (tym samym przyciskiem).</p>
 <p><b>Wysyłanie:</b></p>
 <ol>
   <li>Kliknij <b>Wyślij do Miro</b> pod diagramem w rozmowie.</li>

@@ -347,7 +347,15 @@
 
 <h2 id="s10">10. Sending diagrams to Miro</h2>
 <p>A diagram from EA can go to a Miro board as editable shapes and connectors in a frame with the diagram's name. Only from EA to Miro: what people change on the board does not come back to the model.</p>
-<p><b>Setup, once:</b> in Miro, open the settings of your profile → <b>Your apps</b> → <b>Create new app</b>, give it the <code>boards:read</code> and <code>boards:write</code> permissions, install it in your team and copy the access token. Paste it in Settings, card <b>“7. Miro”</b>, and click <b>Save and test Miro connection</b>. The token is kept in Windows Credential Manager.</p>
+<p><b>Setup, once:</b></p>
+<ol>
+  <li>In Miro, open the settings of your profile → <b>Your apps</b> → <b>Create new app</b>. Miro first asks you to create a <b>Developer team</b> (a free sandbox for your apps); accept its terms and create it. In an organization on the Enterprise plan, the organization's admin sets it up.</li>
+  <li>Give the app a name (for example Loonar Compass) and <b>leave “Expire user authorization token” unchecked</b>: an expiring token stops working after an hour.</li>
+  <li>Under <b>Permissions</b>, select <code>boards:read</code> and <code>boards:write</code>.</li>
+  <li>Click <b>Install app and get OAuth token</b> and choose the organization and team whose boards the application may use (for a first test, the Developer team). Copy the token.</li>
+  <li>Paste it in Settings, card <b>“7. Miro”</b>, and click <b>Save and test Miro connection</b>. The token is kept in Windows Credential Manager.</li>
+</ol>
+<p>Diagrams can go only to boards of the team the app is installed in; to use another organization, install the app there too (the same button).</p>
 <p><b>Sending:</b></p>
 <ol>
   <li>Click <b>Send to Miro</b> under a diagram in the chat.</li>

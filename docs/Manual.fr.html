@@ -347,7 +347,15 @@
 
 <h2 id="s10">10. Envoyer des diagrammes vers Miro</h2>
 <p>Un diagramme d'EA peut aller sur un tableau Miro sous forme de formes et de connecteurs modifiables, dans un cadre portant le nom du diagramme. Seulement d'EA vers Miro : ce qui est modifié sur le tableau ne revient pas dans le modèle.</p>
-<p><b>Configuration, une seule fois :</b> dans Miro, ouvrez les paramètres de votre profil → <b>Your apps</b> → <b>Create new app</b>, accordez les autorisations <code>boards:read</code> et <code>boards:write</code>, installez l'application dans votre équipe et copiez le jeton d'accès. Collez-le dans les Paramètres, carte <b>« 7. Miro »</b>, puis cliquez sur <b>Enregistrer et tester la connexion à Miro</b>. Le jeton est conservé dans le Gestionnaire d'identification de Windows.</p>
+<p><b>Configuration, une seule fois :</b></p>
+<ol>
+  <li>Dans Miro, ouvrez les paramètres de votre profil → <b>Your apps</b> → <b>Create new app</b>. Miro demande d'abord de créer une <b>Developer team</b> (un bac à sable gratuit pour vos applications) : acceptez ses conditions et créez-la. Dans une organisation au plan Enterprise, c'est l'administrateur de l'organisation qui la met en place.</li>
+  <li>Donnez un nom à l'application (par exemple Loonar Compass) et <b>laissez « Expire user authorization token » décoché</b> : un jeton qui expire cesse de fonctionner au bout d'une heure.</li>
+  <li>Sous <b>Permissions</b>, cochez <code>boards:read</code> et <code>boards:write</code>.</li>
+  <li>Cliquez sur <b>Install app and get OAuth token</b> et choisissez l'organisation et l'équipe dont l'application peut utiliser les tableaux (pour un premier test, la Developer team). Copiez le jeton.</li>
+  <li>Collez-le dans les Paramètres, carte <b>« 7. Miro »</b>, puis cliquez sur <b>Enregistrer et tester la connexion à Miro</b>. Le jeton est conservé dans le Gestionnaire d'identification de Windows.</li>
+</ol>
+<p>Les diagrammes ne peuvent aller que sur les tableaux de l'équipe où l'application est installée ; pour une autre organisation, installez-la aussi là-bas (avec le même bouton).</p>
 <p><b>Envoi :</b></p>
 <ol>
   <li>Cliquez sur <b>Envoyer vers Miro</b> sous un diagramme dans la conversation.</li>
