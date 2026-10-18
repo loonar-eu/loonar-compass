@@ -31,8 +31,8 @@
 <link rel="icon" href="../../../favicon.svg" type="image/svg+xml">
 <link rel="icon" href="../../../favicon-32.png" type="image/png" sizes="32x32">
 <link rel="apple-touch-icon" href="../../../apple-touch-icon.png">
-<link rel="stylesheet" href="../../../assets/style.css?v=5">
-<script src="../../../assets/site.js?v=5" defer></script>
+<link rel="stylesheet" href="../../../assets/style.css?v=6">
+<script src="../../../assets/site.js?v=6" defer></script>
 </head>
 <body id="top">
 <a class="skip" href="#main">Skip to content</a>
@@ -54,7 +54,7 @@
       <details class="docs-ver"><summary>Version: 0.5 (latest)</summary><ul><li><a href="./" aria-current="page">0.5 (latest)</a></li><li><a href="../../0.4/en/">0.4</a></li><li><a href="../../0.3/en/">0.3</a></li></ul></details>
       <p class="docs-toc-h">On this page</p>
       <ol class="docs-toc"><li><a href="#s1">1. What Loonar Compass is</a></li><li class="docs-toc-other"><a href="install.html#s2">2. Requirements <span aria-hidden="true">↗</span></a></li><li class="docs-toc-other"><a href="install.html#s3">3. Installation <span aria-hidden="true">↗</span></a></li><li><a href="#s4">4. Application window and navigation</a></li><li><a href="#s5">5. Settings and language</a></li><li><a href="#s6">6. Talking to the assistant</a></li><li><a href="#s7">7. Working with the Enterprise Architect model</a></li><li><a href="#s8">8. Working with the open EA window</a></li><li><a href="#s9">9. Documents: Word, Excel, images, Confluence</a></li><li><a href="#s10">10. Document templates</a></li><li><a href="#s11">11. Assistant memory</a></li><li><a href="#s12">12. Approving changes and the audit log</a></li><li><a href="#s13">13. Conversations: history, search, background work</a></li><li><a href="#s14">14. Data, security and privacy</a></li><li><a href="#s15">15. Troubleshooting</a></li><li><a href="#s16">16. Reporting bugs and new releases</a></li><li class="docs-toc-other"><a href="install.html#s17">17. Updating and uninstalling <span aria-hidden="true">↗</span></a></li><li><a href="#s18">18. License, trademarks and contact</a></li></ol>
-      <p class="docs-pdf"><a href="Manual.en.pdf" download>Download as PDF (whole guide)</a></p>
+      
     </aside>
     <article class="docs-body">
       
@@ -266,6 +266,15 @@
   <tr><td>Space key</td><td>The space key, for example <code>ARCH</code></td></tr>
   <tr><td>Parent page ID</td><td>Optional: the ID of the page under which new pages are created</td></tr>
 </table>
+<p><b>Confluence Cloud: where the details come from.</b></p>
+<ol>
+  <li><b>Token</b>: it is created on your Atlassian account, not in Confluence. Open <code>https://id.atlassian.com/manage-profile/security/api-tokens</code> (Atlassian account → Security → API tokens). Atlassian may first ask you to confirm it is you with a code sent to your email.</li>
+  <li>Click <b>Create API token</b> (the plain one, not <b>Create API token with scopes</b>), give it a name, for example Loonar Compass, and choose how long it is valid: one week by default, at most one year. Click <b>Create</b> and copy the token: Atlassian shows it only once. When it expires, create a new one and paste it in card 6.</li>
+  <li><b>Email</b>: the email address of the Atlassian account the token belongs to.</li>
+  <li><b>Address</b>: your site with <code>/wiki</code>, for example <code>https://your-site.atlassian.net/wiki</code>.</li>
+  <li><b>Space key</b>: it is in the address of any page of the space, after <code>/spaces/</code> (for example <code>…/wiki/spaces/PM/…</code> gives <code>PM</code>), and under <b>Space settings</b>.</li>
+  <li><b>Parent page ID</b> (optional): the number in the address of the page, after <code>/pages/</code> (for example <code>…/pages/65818/…</code> gives <code>65818</code>).</li>
+</ol>
 <p>Save the card with the <b>Save and test Confluence connection</b> button.</p>
 <div class="prompt">Prepare a Confluence page describing the “Complaint handling” process with the diagram and publish it in the space.</div>
 <h2 id="s10">10. Document templates</h2>

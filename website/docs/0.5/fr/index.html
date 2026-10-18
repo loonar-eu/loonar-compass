@@ -31,8 +31,8 @@
 <link rel="icon" href="../../../favicon.svg" type="image/svg+xml">
 <link rel="icon" href="../../../favicon-32.png" type="image/png" sizes="32x32">
 <link rel="apple-touch-icon" href="../../../apple-touch-icon.png">
-<link rel="stylesheet" href="../../../assets/style.css?v=5">
-<script src="../../../assets/site.js?v=5" defer></script>
+<link rel="stylesheet" href="../../../assets/style.css?v=6">
+<script src="../../../assets/site.js?v=6" defer></script>
 </head>
 <body id="top">
 <a class="skip" href="#main">Aller au contenu</a>
@@ -54,7 +54,7 @@
       <details class="docs-ver"><summary>Version: 0.5 (la plus récente)</summary><ul><li><a href="./" aria-current="page">0.5 (la plus récente)</a></li><li><a href="../../0.4/fr/">0.4</a></li><li><a href="../../0.3/fr/">0.3</a></li></ul></details>
       <p class="docs-toc-h">Sur cette page</p>
       <ol class="docs-toc"><li><a href="#s1">1. Présentation de Loonar Compass</a></li><li class="docs-toc-other"><a href="install.html#s2">2. Configuration requise <span aria-hidden="true">↗</span></a></li><li class="docs-toc-other"><a href="install.html#s3">3. Installation <span aria-hidden="true">↗</span></a></li><li><a href="#s4">4. Fenêtre de l&#x27;application et navigation</a></li><li><a href="#s5">5. Paramètres et langue</a></li><li><a href="#s6">6. Conversation avec l&#x27;assistant</a></li><li><a href="#s7">7. Travail avec le modèle Enterprise Architect</a></li><li><a href="#s8">8. Collaboration avec la fenêtre EA ouverte</a></li><li><a href="#s9">9. Documents : Word, Excel, images, Confluence</a></li><li><a href="#s10">10. Modèles de documents</a></li><li><a href="#s11">11. Mémoire de l&#x27;assistant</a></li><li><a href="#s12">12. Validation des modifications et journal des modifications</a></li><li><a href="#s13">13. Conversations : historique, recherche, travail en arrière-plan</a></li><li><a href="#s14">14. Données, sécurité et confidentialité</a></li><li><a href="#s15">15. Résolution des problèmes</a></li><li><a href="#s16">16. Signalement de bugs et nouvelles versions</a></li><li class="docs-toc-other"><a href="install.html#s17">17. Mise à jour et désinstallation <span aria-hidden="true">↗</span></a></li><li><a href="#s18">18. Licence, marques et contact</a></li></ol>
-      <p class="docs-pdf"><a href="Manual.fr.pdf" download>Télécharger en PDF (guide complet)</a></p>
+      
     </aside>
     <article class="docs-body">
       
@@ -267,6 +267,15 @@
   <tr><td>Espace (clé)</td><td>La clé de l'espace, par exemple <code>ARCH</code></td></tr>
   <tr><td>Page parente (ID)</td><td>Facultatif : l'ID de la page sous laquelle les nouvelles pages sont créées</td></tr>
 </table>
+<p><b>Confluence Cloud : d'où viennent les informations.</b></p>
+<ol>
+  <li><b>Jeton</b> : il se crée sur votre compte Atlassian, pas dans Confluence. Ouvrez <code>https://id.atlassian.com/manage-profile/security/api-tokens</code> (compte Atlassian → Security → API tokens). Atlassian peut d'abord demander une confirmation par un code envoyé par e-mail.</li>
+  <li>Cliquez sur <b>Create API token</b> (le simple, pas <b>Create API token with scopes</b>), donnez-lui un nom, par exemple Loonar Compass, et choisissez sa validité : une semaine par défaut, un an au maximum. Cliquez sur <b>Create</b> et copiez le jeton : Atlassian ne l'affiche qu'une fois. Quand il expire, créez-en un nouveau et collez-le dans la carte 6.</li>
+  <li><b>E-mail</b> : l'adresse du compte Atlassian auquel appartient le jeton.</li>
+  <li><b>Adresse</b> : votre site suivi de <code>/wiki</code>, par exemple <code>https://votre-site.atlassian.net/wiki</code>.</li>
+  <li><b>Clé de l'espace</b> : elle figure dans l'adresse de chaque page de l'espace, après <code>/spaces/</code> (par exemple <code>…/wiki/spaces/PM/…</code> donne <code>PM</code>), et dans les <b>paramètres de l'espace</b>.</li>
+  <li><b>ID de la page parente</b> (facultatif) : le nombre dans l'adresse de la page, après <code>/pages/</code> (par exemple <code>…/pages/65818/…</code> donne <code>65818</code>).</li>
+</ol>
 <p>Enregistrez la carte avec le bouton <b>Enregistrer et tester la connexion à Confluence</b>.</p>
 <div class="prompt">Prépare une page Confluence décrivant le processus « Traitement des réclamations » avec son diagramme et publie-la dans l'espace.</div>
 <h2 id="s10">10. Modèles de documents</h2>
