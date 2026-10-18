@@ -33,11 +33,26 @@ const meta = new Map(); // cell id -> {kind: 'element'|'connector', ea: {...}, i
 const original = new Map(); // cell id -> {name, x, y, w, h, points}
 
 const BPMN = new Set(['Activity', 'StartEvent', 'EndEvent', 'IntermediateEvent', 'Gateway', 'Pool', 'Lane', 'SequenceFlow', 'MessageFlow']);
+// Notes show their text (EA keeps it in the notes, which may hold simple HTML formatting).
+const isNote = (ea) => ea && (ea.type === 'Note' || ea.type === 'Text');
+const plainNotes = (s) => String(s || '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 function vertexStyle(el) {
   const st = el.stereotype || '';
   if (isLifeline(el)) return { fillColor: '#FFFFFF', fillOpacity: 0, strokeColor: 'none', verticalAlign: 'top', overflow: 'fill', whiteSpace: 'wrap', fontSize: 12 };
+  if (el.type === 'StateNode') {
+    // Pseudostates: initial (filled), final (ring), choice (diamond).
+    if ([3, 100].includes(el.subtype)) return { shape: 'ellipse', perimeter: 'ellipsePerimeter', fillColor: '#1F2A33', strokeColor: '#1F2A33', verticalLabelPosition: 'bottom', verticalAlign: 'top', fontSize: 11, resizable: false };
+    if ([4, 101].includes(el.subtype)) return { shape: 'doubleEllipse', perimeter: 'ellipsePerimeter', fillColor: '#FFFFFF', strokeColor: '#1F2A33', strokeWidth: 2, verticalLabelPosition: 'bottom', verticalAlign: 'top', fontSize: 11, resizable: false };
+    if (el.subtype === 11) return { shape: 'rhombus', perimeter: 'rhombusPerimeter', fillColor: '#FFFFFF', strokeColor: '#1F2A33', verticalLabelPosition: 'bottom', verticalAlign: 'top', fontSize: 11 };
+    return { shape: 'ellipse', perimeter: 'ellipsePerimeter', fillColor: '#FFFFFF', strokeColor: '#1F2A33' };
+  }
+  if (el.type === 'State') return { rounded: true, arcSize: 30, fillColor: '#FFF8D6', strokeColor: '#B8A26A', whiteSpace: 'wrap', fontSize: 12 };
+  if (['Node', 'Device', 'ExecutionEnvironment'].includes(el.type)) {
+    return { fillColor: el.type === 'Device' ? '#EEF3F7' : '#F4F7FA', strokeColor: '#0E4A6B', strokeWidth: 2, verticalAlign: 'top', spacingTop: 6, fontStyle: 1, whiteSpace: 'wrap', shadow: true };
+  }
+  if (el.type === 'Artifact') return { fillColor: '#FFFFFF', strokeColor: '#55667A', whiteSpace: 'wrap', fontSize: 12 };
   if (el.type === 'InteractionFragment') return { fillColor: 'none', strokeColor: '#55667A', align: 'left', verticalAlign: 'top', spacingLeft: 6, spacingTop: 4, fontSize: 11 };
   if (el.type === 'Event' || st.endsWith('Event')) {
     const end = st.includes('End');
@@ -70,7 +85,9 @@ function edgeStyle(c) {
     case 'Realisation': case 'Realization': return { ...s, endArrow: 'block', endFill: false, endSize: 12, dashed: true };
     case 'Aggregation': return { ...s, endArrow: 'diamond', endFill: c.subtype === 'Strong', endSize: 14 };
     case 'Dependency': case 'Usage': return { ...s, endArrow: 'open', dashed: true };
-    case 'ControlFlow': case 'ObjectFlow': case 'StateFlow': return { ...s, endArrow: 'block', endFill: true };
+    case 'ControlFlow': case 'ObjectFlow': return { ...s, endArrow: 'block', endFill: true };
+    case 'StateFlow': return { ...s, endArrow: 'open', endFill: false };
+    case 'Package': return { ...s, endArrow: 'open', dashed: true };
     default: return st === 'SequenceFlow' ? { ...s, endArrow: 'block', endFill: true } : s;
   }
 }
@@ -86,6 +103,8 @@ graph.getLabel = (cell) => {
   const m = meta.get(cell.id);
   if (m && cell.isVertex() && isLifeline(m.ea)) return `<div class="ll${m.ea.type === 'Actor' ? ' actor' : ''}"><div class="hd">${esc(cell.value)}</div><div class="ln"></div></div>`;
   if (m && isMessage(cell)) return `${seqOrder.indexOf(cell) + 1}: ${esc(cell.value)}`;
+  const keyword = { Device: '«device»', ExecutionEnvironment: '«executionEnvironment»', Artifact: '«artifact»' }[m?.ea.type];
+  if (m && cell.isVertex() && keyword) return `<div style="text-align:center"><div style="font-size:10px;font-weight:400;color:#55667A">${keyword}</div>${esc(cell.value)}</div>`;
   if (m && m.kind === 'element' && ['Class', 'Interface', 'Enumeration', 'DataType'].includes(m.ea.type)) return classLabel(cell, m.ea);
   return m && cell.isVertex() ? esc(cell.value) : baseGetLabel(cell);
 };
@@ -103,6 +122,7 @@ graph.batchUpdate(() => {
   // Larger elements first, so frames and subprocesses stay behind their contents.
   const order = [...data.elements].sort((a, b) => b.width * b.height - a.width * a.height);
   for (const el of order) {
+    if (isNote(el)) el.name = plainNotes((el.props || {}).notes);
     const style = vertexStyle(el);
     const fill = (el.props || {}).bgcolor || (el.props || {}).color;
     if (fill) style.fillColor = fill;
@@ -618,7 +638,7 @@ for (const tool of data.toolbox) {
         height = Math.max(...lines.map((c) => c.geometry.height));
       }
     }
-    const ea = { type: tool.type, stereotype: tool.stereotype || '', attributes: [], operations: [], props: {}, tags: [], attribute_list: [], operation_list: [] };
+    const ea = { type: tool.type, stereotype: tool.stereotype || '', subtype: tool.subtype || 0, attributes: [], operations: [], props: {}, tags: [], attribute_list: [], operation_list: [] };
     let v;
     graph.batchUpdate(() => {
       v = graph.insertVertex({ parent, id: `n${++counter}`, value: tool.name, position: [x, y], size: [tool.width, height], style: vertexStyle(ea) });
@@ -703,7 +723,7 @@ function changes() {
       const g = cell.geometry;
       const box = { left: round(g.x), top: round(g.y), width: round(g.width), height: round(g.height) };
       if (m.isNew) {
-        out.created.push({ key: cell.id, name: String(cell.value || ''), type: m.ea.type, stereotype: m.ea.stereotype, ...box });
+        out.created.push({ key: cell.id, name: String(cell.value || ''), type: m.ea.type, stereotype: m.ea.stereotype, subtype: m.ea.subtype || 0, ...box });
         continue;
       }
       if (m.placed) {
@@ -712,7 +732,10 @@ function changes() {
       }
       const o = original.get(cell.id);
       if (box.left !== o.x || box.top !== o.y || box.width !== o.w || box.height !== o.h) out.moved.push({ id: m.ea.id, ...box });
-      if (String(cell.value) !== o.name) out.renamed.push({ id: m.ea.id, name: String(cell.value) });
+      if (String(cell.value) !== o.name) {
+        if (isNote(m.ea)) out.updated.push({ id: m.ea.id, fields: { notes: String(cell.value) }, tags: {} });
+        else out.renamed.push({ id: m.ea.id, name: String(cell.value) });
+      }
     } else if (cell.isEdge()) {
       if (!cell.source || !cell.target) continue;
       const points = (cell.geometry.points || []).map((p) => [round(p.x), round(p.y)]);
@@ -818,6 +841,22 @@ if (data.selftest === 'props') {
     editOf(edge.id).tags.reviewed = 'yes';
     editOf(edge.id).line_style = 'orthogonal_square';
     document.getElementById('status').textContent = JSON.stringify(changes()).slice(0, 300);
+    setTimeout(() => document.getElementById('save').click(), 1000);
+  }, 1500);
+} else if (data.selftest === 'types') {
+  // Every element of the toolbox once, the first two joined with the first kind of connector.
+  setTimeout(() => {
+    const added = [];
+    document.querySelectorAll('#toolbox button').forEach((b, i) => {
+      b.click();
+      const cell = graph.getSelectionCell();
+      graph.stopEditing(false);
+      if (!cell.value) graph.getDataModel().setValue(cell, `T${i + 1}`);
+      added.push(cell);
+    });
+    const ct = data.connector_types[0];
+    const e = graph.insertEdge({ parent, id: 'n99', value: '', source: added[0], target: added[1], style: edgeStyle(ct) });
+    meta.set(e.id, { kind: 'connector', ea: { type: ct.type, stereotype: ct.stereotype || '', props: {}, tags: [] }, isNew: true });
     setTimeout(() => document.getElementById('save').click(), 1000);
   }, 1500);
 } else if (data.selftest === 'seq') {

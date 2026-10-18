@@ -154,7 +154,7 @@ pub fn model(cfg: &AppConfig, diagram_id: i64) -> Result<Value> {
     for r in query_rows(cfg, &format!(
         "select o.object_id, o.name, o.object_type, o.stereotype, o.parentid, d.rectleft, d.recttop, d.rectright, d.rectbottom, \
          o.alias, o.note, o.pdata5, o.status, o.version, o.author, o.phase, o.complexity, o.abstract, o.ea_guid, \
-         o.createddate, o.modifieddate, o.backcolor, d.objectstyle, p.name \
+         o.createddate, o.modifieddate, o.backcolor, d.objectstyle, p.name, o.ntype \
          from t_diagramobjects d join t_object o on o.object_id = d.object_id left join t_package p on p.package_id = o.package_id \
          where d.diagram_id = {diagram_id} order by d.sequence"
     ))? {
@@ -162,7 +162,7 @@ pub fn model(cfg: &AppConfig, diagram_id: i64) -> Result<Value> {
         let (left, top, right, bottom) = (int(&r[5]), int(&r[6]).abs(), int(&r[7]), int(&r[8]).abs());
         bpmn |= BPMN_STEREOTYPES.contains(&r[3].as_str());
         elements.push(json!({
-            "id": id, "name": r[1], "type": r[2], "stereotype": r[3], "parent": int(&r[4]),
+            "id": id, "name": r[1], "type": r[2], "stereotype": r[3], "parent": int(&r[4]), "subtype": int(&r[24]),
             "left": left, "top": top.min(bottom), "width": (right - left).abs(), "height": (bottom - top).abs(),
             "attributes": attributes.remove(&id).unwrap_or_default(),
             "operations": operations.remove(&id).unwrap_or_default(),
@@ -270,6 +270,9 @@ fn toolbox(diagram_type: &str, bpmn: bool) -> (Value, Value) {
     let tool = |label: &str, name: &str, kind: &str, stereotype: &str, w: i64, h: i64| {
         json!({ "label": label, "name": name, "type": kind, "stereotype": stereotype, "width": w, "height": h })
     };
+    let node = |label: &str, subtype: i64, size: i64| {
+        json!({ "label": label, "name": "", "type": "StateNode", "stereotype": "", "subtype": subtype, "width": size, "height": size })
+    };
     let conn = |label: &str, kind: &str, stereotype: &str| json!({ "label": label, "type": kind, "stereotype": stereotype });
     if bpmn || diagram_type.starts_with("BPMN") {
         return (
@@ -295,12 +298,46 @@ fn toolbox(diagram_type: &str, bpmn: bool) -> (Value, Value) {
                 { "label": crate::i18n::tr("Reply"), "type": "Sequence", "stereotype": "", "sort": "Synchronous", "reply": true },
             ]),
         ),
+        "Statechart" | "State Machine" => (
+            json!([
+                tool(crate::i18n::tr("State"), crate::i18n::tr("New state"), "State", "", 130, 60),
+                node(crate::i18n::tr("Initial"), 3, 24),
+                node(crate::i18n::tr("Final"), 4, 28),
+                node(crate::i18n::tr("Choice"), 11, 36),
+                tool(crate::i18n::tr("Note"), "", "Note", "", 160, 60),
+            ]),
+            json!([conn(crate::i18n::tr("Transition"), "StateFlow", "")]),
+        ),
+        "Package" => (
+            json!([tool(crate::i18n::tr("Package"), crate::i18n::tr("New package"), "Package", "", 160, 100), tool(crate::i18n::tr("Note"), "", "Note", "", 160, 60)]),
+            json!([conn(crate::i18n::tr("Dependency"), "Dependency", ""), conn("«import»", "Package", "import"), conn("«merge»", "Package", "merge")]),
+        ),
+        "Deployment" => (
+            json!([
+                tool(crate::i18n::tr("Node"), crate::i18n::tr("New node"), "Node", "", 180, 110),
+                tool(crate::i18n::tr("Device"), crate::i18n::tr("New device"), "Device", "", 180, 110),
+                tool(crate::i18n::tr("Execution environment"), crate::i18n::tr("New execution environment"), "ExecutionEnvironment", "", 180, 110),
+                tool(crate::i18n::tr("Artifact"), crate::i18n::tr("New artifact"), "Artifact", "", 140, 60),
+                tool(crate::i18n::tr("Component"), crate::i18n::tr("New component"), "Component", "", 160, 80),
+            ]),
+            json!([
+                conn(crate::i18n::tr("Communication path"), "Association", ""),
+                conn("«deploy»", "Dependency", "deploy"),
+                conn(crate::i18n::tr("Dependency"), "Dependency", ""),
+            ]),
+        ),
         "Use Case" => (
             json!([tool(crate::i18n::tr("Actor"), crate::i18n::tr("New actor"), "Actor", "", 40, 80), tool(crate::i18n::tr("Use case"), crate::i18n::tr("New use case"), "UseCase", "", 150, 70), tool(crate::i18n::tr("Note"), "", "Note", "", 160, 60)]),
             json!([conn(crate::i18n::tr("Association"), "Association", ""), conn("«include»", "Dependency", "include"), conn("«extend»", "Dependency", "extend")]),
         ),
         "Activity" => (
-            json!([tool(crate::i18n::tr("Action"), crate::i18n::tr("New action"), "Action", "", 110, 50), tool(crate::i18n::tr("Decision"), "", "Decision", "", 40, 40), tool(crate::i18n::tr("Note"), "", "Note", "", 160, 60)]),
+            json!([
+                tool(crate::i18n::tr("Action"), crate::i18n::tr("New action"), "Action", "", 110, 50),
+                node(crate::i18n::tr("Initial"), 100, 24),
+                node(crate::i18n::tr("Final"), 101, 28),
+                tool(crate::i18n::tr("Decision"), "", "Decision", "", 40, 40),
+                tool(crate::i18n::tr("Note"), "", "Note", "", 160, 60),
+            ]),
             json!([conn(crate::i18n::tr("Control flow"), "ControlFlow", "")]),
         ),
         "Component" => (
@@ -401,6 +438,14 @@ pub fn to_ops(model: &Value, changes: &Value) -> Vec<Value> {
     for c in list("created") {
         let key = c["key"].as_str().unwrap_or("new").to_string();
         let mut op = json!({ "op": "create_element", "key": key, "package": package, "name": c["name"], "type": c["type"] });
+        // A note shows its notes, not its name.
+        if c["type"] == "Note" || c["type"] == "Text" {
+            op["notes"] = c["name"].clone();
+            op["name"] = json!("");
+        }
+        if c["subtype"].as_i64().is_some_and(|n| n > 0) {
+            op["subtype"] = c["subtype"].clone();
+        }
         if c["stereotype"].as_str().is_some_and(|s| !s.is_empty()) {
             op["stereotype"] = c["stereotype"].clone();
         }

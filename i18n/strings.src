@@ -955,3 +955,19 @@ Operation of the receiver ‖ Operacja odbiorcy ‖ Operation des Empfängers �
 Order ‖ Kolejność ‖ Reihenfolge ‖ Ordre
 Reply ‖ Odpowiedź ‖ Antwort ‖ Réponse
 Synchronous ‖ Synchroniczny ‖ Synchron ‖ Synchrone
+Artifact ‖ Artefakt ‖ Artefakt ‖ Artefact
+Choice ‖ Wybór ‖ Auswahl ‖ Choix
+Communication path ‖ Ścieżka komunikacji ‖ Kommunikationspfad ‖ Chemin de communication
+Device ‖ Urządzenie ‖ Gerät ‖ Équipement
+Execution environment ‖ Środowisko wykonawcze ‖ Ausführungsumgebung ‖ Environnement d'exécution
+Final ‖ Koniec ‖ Ende ‖ Fin
+Initial ‖ Początek ‖ Start ‖ Début
+New artifact ‖ Nowy artefakt ‖ Neues Artefakt ‖ Nouvel artefact
+New device ‖ Nowe urządzenie ‖ Neues Gerät ‖ Nouvel équipement
+New execution environment ‖ Nowe środowisko wykonawcze ‖ Neue Ausführungsumgebung ‖ Nouvel environnement d'exécution
+New node ‖ Nowy węzeł ‖ Neuer Knoten ‖ Nouveau nœud
+New package ‖ Nowy pakiet ‖ Neues Paket ‖ Nouveau paquetage
+New state ‖ Nowy stan ‖ Neuer Zustand ‖ Nouvel état
+Node ‖ Węzeł ‖ Knoten ‖ Nœud
+State ‖ Stan ‖ Zustand ‖ État
+Transition ‖ Przejście ‖ Transition ‖ Transition

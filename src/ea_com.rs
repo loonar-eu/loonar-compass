@@ -663,6 +663,26 @@ impl Job<'_> {
                 let (id, guid, real) = (diagram.int("DiagramID")?, diagram.text("DiagramGUID")?, diagram.text("Name")?);
                 self.register(&op["key"], Kind::Diagram, &diagram, id, guid, real);
             }
+            "create_element" if op["type"] == "Package" && op["parent_element"].is_null() => {
+                // A package shown on a diagram: a real package (t_package) whose element is the one placed on diagrams.
+                let title = text_field(op, "name");
+                let parent = self.package(&op["package"])?;
+                let packages = parent.obj("Packages")?;
+                let package = packages
+                    .call("AddNew", &[s(&title), s("Package")])?
+                    .object()
+                    .ok_or_else(|| anyhow!("{}", crate::i18n::fmt("EA did not create package '{0}' (no lock on the parent package?).", &[title.clone()])))?;
+                package.update(&crate::i18n::fmt("package '{0}'", &[title.clone()]))?;
+                packages.call("Refresh", &[])?;
+                let element = package.obj("Element")?;
+                let notes = text_field(op, "notes");
+                if !notes.is_empty() {
+                    element.set("Notes", s(&notes))?;
+                    element.update(crate::i18n::tr("package notes"))?;
+                }
+                let (id, guid, real) = (element.int("ElementID")?, element.text("ElementGUID")?, element.text("Name")?);
+                self.register(&op["key"], Kind::Element, &element, id, guid, real);
+            }
             "create_element" => {
                 let title = text_field(op, "name");
                 let (kind, stereotype) = (text_field(op, "type"), text_field(op, "stereotype"));
@@ -683,6 +703,10 @@ impl Job<'_> {
                 let notes = text_field(op, "notes");
                 if !notes.is_empty() {
                     element.set("Notes", s(&notes))?;
+                }
+                // Kind of a pseudostate (StateNode): 3 initial, 4 final, 11 choice; 100 / 101 initial / final of an activity.
+                if let Some(n) = int_of(&op["subtype"]) {
+                    element.set("Subtype", i(n))?;
                 }
                 element.update(&crate::i18n::fmt("element '{0}'", &[title.clone()]))?;
                 if !op["color"].is_null() {
