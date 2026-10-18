@@ -42,7 +42,7 @@ GOATCOUNTER = "loonar"   # GoatCounter site code (https://loonar.goatcounter.com
 SUPPORT_URL = "https://suppi.pl/loonar"
 LINKEDIN_URL = "https://pl.linkedin.com/in/glowackimariusz"
 # -----------------------------------------------------------------------------------------
-ASSET_V = "5"  # raise after every change of assets/style.css or assets/site.js (cache busting)
+ASSET_V = "6"  # raise after every change of assets/style.css or assets/site.js (cache busting)
 
 SETUP = SETUP_URL.rsplit("/", 1)[1]
 REPO = SETUP_URL.split("/releases/")[0]
@@ -316,6 +316,8 @@ def header(t, lang, home, switch, nav=True):
     navhtml = ''
     if nav:
         items = ''.join(f'<li><a href="{home}#{i}">{n}</a></li>' for i, n in zip(NAV_IDS, t["nav"]))
+        # The documentation is the last item of the menu; the separate link shows only when the menu is hidden.
+        items += f'<li><a href="{switch["P"]}docs/latest/{lang}/">{docs.T[lang]["docs"]}</a></li>'
         navhtml = f'\n    <nav class="main-nav" aria-label="{MAINNAV[lang]}"><ul>{items}</ul></nav>'
     return f'''<a class="skip" href="#main">{t["skip"]}</a>
 <header class="site-header">
