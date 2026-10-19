@@ -104,7 +104,7 @@ pub fn model(cfg: &AppConfig, diagram_id: i64) -> Result<Value> {
     // Class members: the text shown in the compartments, and the fields the properties panel edits.
     let mut attributes: std::collections::HashMap<i64, Vec<String>> = Default::default();
     let mut attribute_list: std::collections::HashMap<i64, Vec<Value>> = Default::default();
-    for r in query_rows(cfg, &format!("select object_id, name, type, scope, id, \"default\", isstatic from t_attribute where object_id in {on_diagram} order by object_id, pos"))? {
+    for r in query_rows(cfg, &format!("select object_id, name, type, scope, id, \"Default\", isstatic from t_attribute where object_id in {on_diagram} order by object_id, pos"))? {
         let kind = if r[2].is_empty() { String::new() } else { format!(": {}", r[2]) };
         attributes.entry(int(&r[0])).or_default().push(format!("{} {}{kind}", visibility(&r[3]), r[1]));
         attribute_list.entry(int(&r[0])).or_default().push(json!({
@@ -742,6 +742,25 @@ mod tests {
     fn bend_points_come_with_y_downwards() {
         assert_eq!(parse_path("120:-80;300:-80;"), vec![[120, 80], [300, 80]]);
         assert!(parse_path("").is_empty());
+    }
+
+    /// Every diagram of a model in the settings opens in the editor (read only). Run with LOONAR_TEST_PROPS (an
+    /// app.properties, e.g. one pointing to a PostgreSQL model): `cargo test diagrams_open_from_settings -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "requires LOONAR_TEST_PROPS"]
+    fn diagrams_open_from_settings() {
+        let props = std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS");
+        let cfg = AppConfig::load(std::path::Path::new(&props)).unwrap();
+        let limit = std::env::var("LOONAR_TEST_LIMIT").ok().and_then(|v| v.parse().ok()).unwrap_or(40);
+        let ids = query_rows(&cfg, &format!("select diagram_id, diagram_type from t_diagram order by diagram_id desc limit {limit}")).unwrap();
+        let mut failed = Vec::new();
+        for r in &ids {
+            if let Err(e) = model(&cfg, r[0].parse().unwrap()) {
+                failed.push(format!("{} ({}): {e:#}", r[0], r[1]));
+            }
+        }
+        println!("diagrams: {}, failed: {}", ids.len(), failed.len());
+        assert!(failed.is_empty(), "{failed:#?}");
     }
 
     /// A relationship created and given a direction in the same batch (the editor's new connector edited in the

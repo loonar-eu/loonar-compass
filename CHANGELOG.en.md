@@ -2,6 +2,10 @@
 
 All notable changes to Loonar Compass (named Loonar EA Assistant until version 0.3).
 
+## Version 0.6.1 (2026-10-19)
+
+- Fix: the diagram editor did not open diagrams of a model in a PostgreSQL database (error “column \"default\" does not exist”). Models in .qea/.qeax files worked.
+
 ## Version 0.6 (2026-10-18)
 
 Diagram editor:

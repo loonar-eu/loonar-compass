@@ -2,6 +2,10 @@
 
 Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen Loonar EA Assistant).
 
+## Version 0.6.1 (2026-10-19)
+
+- Korrektur: Der Diagrammeditor öffnete keine Diagramme eines Modells in einer PostgreSQL-Datenbank (Fehler „column \"default\" does not exist“). Modelle in .qea/.qeax-Dateien funktionierten.
+
 ## Version 0.6 (2026-10-18)
 
 Diagrammeditor:

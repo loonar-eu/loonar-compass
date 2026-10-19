@@ -2,6 +2,10 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
+## Wersja 0.6.1 (2026-10-19)
+
+- Poprawka: edytor diagramów nie otwierał diagramów modelu w bazie PostgreSQL (błąd „column \"default\" does not exist”). Modele w plikach .qea/.qeax działały.
+
 ## Wersja 0.6 (2026-10-18)
 
 Edytor diagramów:
