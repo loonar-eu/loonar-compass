@@ -631,7 +631,7 @@ def changelog_html(text):
         if s.startswith("## "):
             flush()
             head_text = s[3:]
-            m = re.search(r"(\d+\.\d+)", head_text)
+            m = re.search(r"(\d+\.\d+(?:\.\d+)?)", head_text)
             anchor = f' id="{version_anchor(m.group(1))}"' if m else ""
             out.append(f"<h2{anchor}>{md_inline(head_text)}</h2>")
         elif s.startswith("- "):
