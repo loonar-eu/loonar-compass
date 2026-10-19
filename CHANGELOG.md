@@ -2,6 +2,10 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
+## Wersja 0.6.3 (2026-10-19)
+
+- Edytor diagramów: zapis do EA przenosi linie dokładnie tak, jak je widać w edytorze (poziome i pionowe odcinki, miejsca styku z elementami), także dla nowych relacji. Wcześniej EA dostawało tylko ręcznie przesunięte punkty i rysowało linie na skos.
+
 ## Wersja 0.6.2 (2026-10-19)
 
 - Poprawka: rozwidlenie / scalenie (fork/join) na diagramie aktywności EA rysowało poziomo, choć miało być pionowe. Orientację ustawia teraz aplikacja z kształtu elementu (wyższy niż szerszy = pionowy).

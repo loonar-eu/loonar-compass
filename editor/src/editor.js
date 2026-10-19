@@ -842,6 +842,16 @@ document.querySelectorAll('[data-action]').forEach((b) => b.addEventListener('cl
 // --- saving: only what changed goes back to the application -----------------------------------------------------------
 
 const round = (n) => Math.round(n);
+// The route of an edge as the editor draws it, in diagram coordinates: bend points, and where it starts and ends.
+function drawnRoute(cell) {
+  const state = graph.getView().getState(cell);
+  const abs = state?.absolutePoints;
+  if (!abs || abs.length < 2 || abs.some((p) => !p)) return null;
+  const s = graph.getView().scale;
+  const tr = graph.getView().translate;
+  const at = (p) => [Math.round(p.x / s - tr.x), Math.round(p.y / s - tr.y)];
+  return { points: abs.slice(1, -1).map(at), start: at(abs[0]), end: at(abs[abs.length - 1]) };
+}
 function changes() {
   const out = {
     action: 'save', moved: [], renamed: [], routed: [], created: [], connected: [], removed: [], hidden: [], deleted: [], deleted_connectors: [],
@@ -882,11 +892,13 @@ function changes() {
     } else if (cell.isEdge()) {
       if (!cell.source || !cell.target) continue;
       const points = (cell.geometry.points || []).map((p) => [round(p.x), round(p.y)]);
+      // The route as drawn (orthogonal lines are computed by the editor): EA gets exactly that, bends and touch points.
+      const drawn = drawnRoute(cell);
       if (m.isNew) {
         const message = isMessage(cell)
           ? { sequence: seqOrder.indexOf(cell) + 1, message_sort: current(cell, 'message_sort'), is_return: !!current(cell, 'is_return') }
           : {};
-        out.connected.push({ key: newKey(cell), type: m.ea.type, stereotype: m.ea.stereotype, name: String(cell.value || ''), source: key(cell.source), target: key(cell.target), points, ...message });
+        out.connected.push({ key: newKey(cell), type: m.ea.type, stereotype: m.ea.stereotype, name: String(cell.value || ''), source: key(cell.source), target: key(cell.target), points, ...message, ...(isMessage(cell) || !drawn ? {} : { route: drawn }) });
         continue;
       }
       // Messages: their place is their number (below), not a route.
@@ -896,7 +908,8 @@ function changes() {
         continue;
       }
       const o = original.get(cell.id);
-      if (JSON.stringify(points) !== o.points) out.routed.push({ id: m.ea.id, points });
+      if (drawn && JSON.stringify(drawn.points) !== o.points) out.routed.push({ id: m.ea.id, ...drawn });
+      else if (!drawn && JSON.stringify(points) !== o.points) out.routed.push({ id: m.ea.id, points });
     }
   }
   // Properties from the panel (new objects by their key: they are created first).
@@ -986,6 +999,9 @@ if (data.selftest === 'props') {
     document.getElementById('status').textContent = JSON.stringify(changes()).slice(0, 300);
     setTimeout(() => document.getElementById('save').click(), 1000);
   }, 1500);
+} else if (data.selftest === 'route') {
+  // Saving as drawn: every route goes to EA.
+  setTimeout(() => document.getElementById('save').click(), 1500);
 } else if (data.selftest === 'newrel') {
   // A new relationship with its direction set before saving (the way the connect arrow creates it).
   setTimeout(() => {

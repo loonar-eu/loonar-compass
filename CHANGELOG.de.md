@@ -2,6 +2,10 @@
 
 Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen Loonar EA Assistant).
 
+## Version 0.6.3 (2026-10-19)
+
+- Diagrammeditor: Beim Speichern in EA bleiben die Linien genau so, wie der Editor sie zeigt (waagerechte und senkrechte Abschnitte, Berührungspunkte mit den Elementen), auch bei neuen Beziehungen. Vorher erhielt EA nur von Hand verschobene Punkte und zeichnete die Linien schräg.
+
 ## Version 0.6.2 (2026-10-19)
 
 - Korrektur: Eine Gabelung/Vereinigung (Fork/Join) im EA-Aktivitätsdiagramm wurde waagerecht gezeichnet, obwohl sie senkrecht sein sollte. Die Ausrichtung setzt die Anwendung jetzt aus der Form (höher als breit = senkrecht).

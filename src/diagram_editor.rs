@@ -498,8 +498,23 @@ pub fn to_ops(model: &Value, changes: &Value) -> Vec<Value> {
     for c in list("renamed") {
         ops.push(json!({ "op": "update_element", "element": c["id"], "name": c["name"] }));
     }
+    // Routes as drawn in the editor (new relationships by their key, after they are created).
+    let route = |connector: &Value, r: &Value| {
+        let mut op = json!({ "op": "route_connector", "diagram": diagram, "connector": connector, "points": r["points"] });
+        for end in ["start", "end"] {
+            if r[end].is_array() {
+                op[end] = r[end].clone();
+            }
+        }
+        op
+    };
+    for c in list("connected") {
+        if c["route"].is_object() {
+            ops.push(route(&json!(format!("#{}", c["key"].as_str().unwrap_or(""))), &c["route"]));
+        }
+    }
     for c in list("routed") {
-        ops.push(json!({ "op": "route_connector", "diagram": diagram, "connector": c["id"], "points": c["points"] }));
+        ops.push(route(&c["id"], &c));
     }
     // Properties from the panel: fields of the model, then what applies to this diagram only.
     let with_fields = |op: &str, target: &str, c: &Value| -> Option<Value> {

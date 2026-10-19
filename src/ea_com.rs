@@ -1105,7 +1105,11 @@ impl Job<'_> {
                 // Route of one connector on a diagram: bend points and the points where it touches the elements.
                 // Coordinates as in "place" (the diagram's top left corner is 0,0, Y axis pointing down); EA stores vertical ones with a minus sign.
                 let diagram = self.diagram(&op["diagram"])?;
-                let cid = int_field(op, "connector")?;
+                // A relationship created earlier in this batch can be given by its key.
+                let cid = match is_key(&op["connector"]) {
+                    Some(key) => self.from_key(key, Kind::Connector)?.int("ConnectorID")?,
+                    None => int_field(op, "connector")?,
+                };
                 let connector = self
                     .repo
                     .call("GetConnectorByID", &[i(cid)])

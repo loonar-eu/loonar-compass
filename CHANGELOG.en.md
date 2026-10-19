@@ -2,6 +2,10 @@
 
 All notable changes to Loonar Compass (named Loonar EA Assistant until version 0.3).
 
+## Version 0.6.3 (2026-10-19)
+
+- Diagram editor: saving to EA keeps the lines exactly as the editor shows them (horizontal and vertical segments, where they touch the elements), also for new relationships. Before, EA got only the points moved by hand and drew the lines diagonally.
+
 ## Version 0.6.2 (2026-10-19)
 
 - Fix: a fork/join on an EA activity diagram was drawn horizontal although it was meant to be vertical. The application now sets the orientation from the shape (taller than wide = vertical).

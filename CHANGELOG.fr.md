@@ -2,6 +2,10 @@
 
 Toutes les modifications importantes de l'application Loonar Compass (nommée Loonar EA Assistant jusqu'à la version 0.3).
 
+## Version 0.6.3 (2026-10-19)
+
+- Éditeur de diagrammes : l'enregistrement dans EA conserve les lignes exactement comme l'éditeur les affiche (segments horizontaux et verticaux, points de contact avec les éléments), aussi pour les nouvelles relations. Avant, EA ne recevait que les points déplacés à la main et traçait les lignes en biais.
+
 ## Version 0.6.2 (2026-10-19)
 
 - Correction : une bifurcation/jonction (fork/join) d'un diagramme d'activité EA était dessinée horizontalement alors qu'elle devait être verticale. L'application fixe maintenant l'orientation d'après la forme (plus haute que large = verticale).
