@@ -2,6 +2,11 @@
 
 Toutes les modifications importantes de l'application Loonar Compass (nommée Loonar EA Assistant jusqu'à la version 0.3).
 
+## Version 0.6.2 (2026-10-19)
+
+- Correction : une bifurcation/jonction (fork/join) d'un diagramme d'activité EA était dessinée horizontalement alors qu'elle devait être verticale. L'application fixe maintenant l'orientation d'après la forme (plus haute que large = verticale).
+- Éditeur de diagrammes : « Bifurcation / jonction » dans la boîte à outils du diagramme d'activité.
+
 ## Version 0.6.1 (2026-10-19)
 
 - Correction : l'éditeur de diagrammes n'ouvrait pas les diagrammes d'un modèle dans une base PostgreSQL (erreur « column \"default\" does not exist »). Les modèles en fichiers .qea/.qeax fonctionnaient.

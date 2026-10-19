@@ -2,6 +2,11 @@
 
 All notable changes to Loonar Compass (named Loonar EA Assistant until version 0.3).
 
+## Version 0.6.2 (2026-10-19)
+
+- Fix: a fork/join on an EA activity diagram was drawn horizontal although it was meant to be vertical. The application now sets the orientation from the shape (taller than wide = vertical).
+- Diagram editor: "Fork / join" in the activity diagram toolbox.
+
 ## Version 0.6.1 (2026-10-19)
 
 - Fix: the diagram editor did not open diagrams of a model in a PostgreSQL database (error “column \"default\" does not exist”). Models in .qea/.qeax files worked.

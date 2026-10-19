@@ -2,6 +2,11 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
+## Wersja 0.6.2 (2026-10-19)
+
+- Poprawka: rozwidlenie / scalenie (fork/join) na diagramie aktywności EA rysowało poziomo, choć miało być pionowe. Orientację ustawia teraz aplikacja z kształtu elementu (wyższy niż szerszy = pionowy).
+- Edytor diagramów: „Rozwidlenie / scalenie” w przyborniku diagramu aktywności.
+
 ## Wersja 0.6.1 (2026-10-19)
 
 - Poprawka: edytor diagramów nie otwierał diagramów modelu w bazie PostgreSQL (błąd „column \"default\" does not exist”). Modele w plikach .qea/.qeax działały.

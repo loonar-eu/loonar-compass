@@ -2,6 +2,11 @@
 
 Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen Loonar EA Assistant).
 
+## Version 0.6.2 (2026-10-19)
+
+- Korrektur: Eine Gabelung/Vereinigung (Fork/Join) im EA-Aktivitätsdiagramm wurde waagerecht gezeichnet, obwohl sie senkrecht sein sollte. Die Ausrichtung setzt die Anwendung jetzt aus der Form (höher als breit = senkrecht).
+- Diagrammeditor: „Gabelung / Vereinigung“ in der Werkzeugleiste des Aktivitätsdiagramms.
+
 ## Version 0.6.1 (2026-10-19)
 
 - Korrektur: Der Diagrammeditor öffnete keine Diagramme eines Modells in einer PostgreSQL-Datenbank (Fehler „column \"default\" does not exist“). Modelle in .qea/.qeax-Dateien funktionierten.

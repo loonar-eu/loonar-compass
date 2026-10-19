@@ -444,6 +444,17 @@ impl Job<'_> {
         Ok(())
     }
 
+    /// Fork/join (Synchronization): EA draws it vertical when t_object.ntype = 1 and horizontal when 0; the size on the
+    /// diagram does not decide it (EAExample.qea, 2026-10-19). Set from the box: taller than wide = vertical.
+    fn orient_sync(&self, element: &Disp, width: i32, height: i32) -> Result<()> {
+        if element.text("Type")? != "Synchronization" {
+            return Ok(());
+        }
+        let id = element.int("ElementID")?;
+        self.repo.call("Execute", &[s(&format!("UPDATE t_object SET NType = {} WHERE Object_ID = {id}", if height > width { 1 } else { 0 }))])?;
+        Ok(())
+    }
+
     /// Element/connector from an MDG profile: ALWAYS a base UML type + stereotype. AddNew with a qualified type
     /// ("BPMN2.0::StartEvent") leaves an orphaned object without a package in the database (verified 2026-10-13).
     fn new_typed(&self, collection: &Disp, name: &str, kind: &str, stereotype: &str) -> Result<Disp> {
@@ -751,6 +762,7 @@ impl Job<'_> {
                     .object()
                     .ok_or_else(|| anyhow!("{}", crate::i18n::tr("EA did not add the element to the diagram.")))?;
                 object.set("ElementID", i(element.int("ElementID")?))?;
+                self.orient_sync(&element, right - left, bottom - top)?;
                 if !op["bgcolor"].is_null() {
                     object.set("BackgroundColor", i(color(&op["bgcolor"])?))?;
                 }
@@ -1257,6 +1269,8 @@ impl Job<'_> {
                 object.set("top", i(-new_top))?;
                 object.set("bottom", i(-(new_top + height)))?;
                 object.update(crate::i18n::tr("position and size on the diagram"))?;
+                let element = self.element(&op["element"])?;
+                self.orient_sync(&element, width, height)?;
             }
             "remove_from_diagram" => {
                 // Removes an element from the diagram: the element stays in the model.

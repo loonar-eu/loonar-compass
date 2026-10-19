@@ -337,6 +337,7 @@ fn toolbox(diagram_type: &str, bpmn: bool) -> (Value, Value) {
                 node(crate::i18n::tr("Initial"), 100, 24),
                 node(crate::i18n::tr("Final"), 101, 28),
                 tool(crate::i18n::tr("Decision"), "", "Decision", "", 40, 40),
+                tool(crate::i18n::tr("Fork / join"), "", "Synchronization", "", 8, 80),
                 tool(crate::i18n::tr("Note"), "", "Note", "", 160, 60),
             ]),
             json!([conn(crate::i18n::tr("Control flow"), "ControlFlow", "")]),

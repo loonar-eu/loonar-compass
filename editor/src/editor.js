@@ -49,6 +49,7 @@ function vertexStyle(el) {
     if (el.subtype === 11) return { shape: 'rhombus', perimeter: 'rhombusPerimeter', fillColor: '#FFFFFF', strokeColor: '#1F2A33', verticalLabelPosition: 'bottom', verticalAlign: 'top', fontSize: 11 };
     return { shape: 'ellipse', perimeter: 'ellipsePerimeter', fillColor: '#FFFFFF', strokeColor: '#1F2A33' };
   }
+  if (el.type === 'Synchronization') return { fillColor: '#1F2A33', strokeColor: '#1F2A33', noLabel: true };
   if (el.type === 'State') return { rounded: true, arcSize: 30, fillColor: '#FFF8D6', strokeColor: '#B8A26A', whiteSpace: 'wrap', fontSize: 12 };
   if (['Node', 'Device', 'ExecutionEnvironment'].includes(el.type)) {
     return { fillColor: el.type === 'Device' ? '#EEF3F7' : '#F4F7FA', strokeColor: '#0E4A6B', strokeWidth: 2, verticalAlign: 'top', spacingTop: 6, fontStyle: 1, whiteSpace: 'wrap', shadow: true };
