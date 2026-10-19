@@ -2,6 +2,13 @@
 
 All notable changes to Loonar Compass (named Loonar EA Assistant until version 0.3).
 
+## Version 0.6.4 (2026-10-19)
+
+- Drawing from a picture: the assistant reproduces the layout of the attachment (rows, order, position relative to neighbours, how lines run) instead of laying the diagram out anew; it measures the picture first, keeps at least 40 px between elements, and afterwards checks every relationship first, then the layout (at most two rounds of corrections).
+- A line style for the whole diagram is applied after the relationships are created and keeps lines routed by hand.
+- An object node (ObjectNode) of an activity diagram is saved as an EA object instead of stopping the save.
+- The assistant's short notes between steps are in the language of the conversation.
+
 ## Version 0.6.3 (2026-10-19)
 
 - Diagram editor: saving to EA keeps the lines exactly as the editor shows them (horizontal and vertical segments, where they touch the elements), also for new relationships. Before, EA got only the points moved by hand and drew the lines diagonally.

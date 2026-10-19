@@ -70,7 +70,7 @@ fn system_prompt(cfg: &AppConfig) -> String {
         docs = docs_url(),
         memories = memory::prompt_section(&cfg.memory_dir, &cfg.model_label()),
         MODEL_STORE = format!("{} The model of this conversation: {}.", if cfg.uses_file() { MODEL_IN_FILE } else { MODEL_IN_POSTGRES }, cfg.model_label()),
-        LANGUAGE_RULE = format!("Response language: {} (the language selected in the application). Answer in it unless the user writes to you in a different language; then answer in the user's language. Create documents, pages and images in the response language unless the user asks for a different one.", i18n::current().english_name()),
+        LANGUAGE_RULE = format!("Response language: {} (the language selected in the application). Answer in it unless the user writes to you in a different language; then answer in the user's language. Create documents, pages and images in the response language unless the user asks for a different one. This applies to everything you write, also short notes between tool calls.", i18n::current().english_name()),
         templates = templates::prompt_section(&cfg.templates_dir),
     )
 }
@@ -109,6 +109,19 @@ and the user can also save it to disk). When the user wants to see or download a
 When the user asks for a change in the model or to draw something (from a photo, a sketch, a description, an attached file), \
 do it yourself with the ea_write tool instead of describing how to do it manually or with a script. From a photo or file, read the elements, \
 their types, names, connections and layout, and then recreate them in EA. \
+When you draw from an attached picture (a photo, screenshot, scan, sketch), the picture's layout is the specification: reproduce it \
+as closely as you can and do not invent a layout of your own. Before writing, measure the picture: list every element with its type, \
+name and its box in picture pixels (left, top, width, height), and every connection with its source, target, label and route \
+(straight, or each bend, e.g. 'up from the decision, right above everything, down into the merge'). Then convert with one scale and \
+one offset for the whole picture (diagram px = picture px x scale + offset), keeping the same rows, columns, order and relative sizes \
+(a tall thin bar stays tall and thin, a node under another stays under it). \
+Choose the scale so that every gap between neighbouring elements is at least 40 px (arrows must stay visible); when the \
+picture is cramped, widen the gaps rather than shrink the elements, keeping rows, columns and order. Route each connector as it runs in the picture with \
+route_connector bend points, horizontal and vertical segments where the picture has them. Changes the user asks for (e.g. a start \
+node instead of a parameter, leaving out the frame) are made in the place of what they replace; everything else stays where the \
+picture has it. After ea_show_diagram, first check every connection against the picture (source, target, label: the meaning comes first, a wrong connection is worse than any layout), then compare your diagram with the picture element by element (row, order, position relative to \
+neighbours, direction and bends of every line) and fix the differences before you present it (at most two rounds of corrections; then present the diagram and name what still differs); do not tidy or 'improve' the layout \
+unless the user asked for it. \
 Before writing, check with db_query what is already in the model (packages, ids) to pick the right place and not duplicate names. \
 Read the model with understanding: before you answer a question about a diagram or package, fetch its elements, types and connections \
 and describe what they represent, not the raw rows. \
@@ -4827,6 +4840,33 @@ mod tests {
         println!("model response: {}", text_of(&response["content"]));
         assert!(kinds.contains(&"image"), "the message contains no image");
     }
+    /// Drawing from an image, end to end with the real model: the user's request with an attached picture, on the
+    /// model of LOONAR_TEST_PROPS (use a copy), auto approval. Prints the answer and the images the assistant showed
+    /// (they stay in the attachments folder). Variables: LOONAR_TEST_PROPS, LOONAR_ATTACHMENT (a file in the
+    /// attachments folder of those settings), LOONAR_PROMPT. Uses API tokens.
+    /// Run with: `cargo test draw_from_image -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "requires an API key, EA and LOONAR_TEST_PROPS"]
+    fn draw_from_image() {
+        let cfg = AppConfig::load(Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("settings");
+        let attachment = std::env::var("LOONAR_ATTACHMENT").expect("LOONAR_ATTACHMENT");
+        let prompt = std::env::var("LOONAR_PROMPT").expect("LOONAR_PROMPT");
+        let messages = vec![Message { role: "user".into(), text: prompt, attachments: vec![attachment], created: chrono::Utc::now().to_rfc3339() }];
+        let approver = tools::Approver::new(ApprovalMode::Auto, Box::new(|_| true));
+        let (_tx, inbox) = mpsc::channel();
+        let cancel = AtomicBool::new(false);
+        let emit = |event: WorkerEvent| match event {
+            WorkerEvent::Text(text) => println!("ANSWER: {text}"),
+            WorkerEvent::Images(images) => println!("IMAGES: {images:?}"),
+            WorkerEvent::StepStart(step) => println!("STEP: {step}"),
+            WorkerEvent::StepEnd { ok, detail } => println!("  -> {ok} {}", detail.chars().take(200).collect::<String>()),
+            _ => {}
+        };
+        let result = run_turn(&cfg, &messages, &approver, &inbox, &cancel, &emit);
+        ea::shutdown();
+        result.expect("turn");
+    }
+
     /// Settings tests (the same ones the "Save and test" buttons run) on the saved configuration.
     /// Run with: `cargo test settings_tests_pass -- --ignored --nocapture`.
     #[test]

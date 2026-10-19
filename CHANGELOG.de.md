@@ -2,6 +2,13 @@
 
 Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen Loonar EA Assistant).
 
+## Version 0.6.4 (2026-10-19)
+
+- Zeichnen nach einem Bild: Der Assistent übernimmt das Layout des Anhangs (Zeilen, Reihenfolge, Lage zu den Nachbarn, Verlauf der Linien), statt das Diagramm neu anzuordnen; er misst das Bild zuerst aus, hält mindestens 40 px Abstand zwischen Elementen und prüft danach zuerst jede Beziehung, dann das Layout (höchstens zwei Korrekturrunden).
+- Ein Linienstil für das ganze Diagramm wird nach dem Anlegen der Beziehungen angewendet und behält von Hand geführte Linien.
+- Ein Objektknoten (ObjectNode) im Aktivitätsdiagramm wird als EA-Objekt gespeichert, statt das Speichern abzubrechen.
+- Kurze Notizen des Assistenten zwischen den Schritten sind in der Sprache der Unterhaltung.
+
 ## Version 0.6.3 (2026-10-19)
 
 - Diagrammeditor: Beim Speichern in EA bleiben die Linien genau so, wie der Editor sie zeigt (waagerechte und senkrechte Abschnitte, Berührungspunkte mit den Elementen), auch bei neuen Beziehungen. Vorher erhielt EA nur von Hand verschobene Punkte und zeichnete die Linien schräg.

@@ -2,6 +2,13 @@
 
 Toutes les modifications importantes de l'application Loonar Compass (nommée Loonar EA Assistant jusqu'à la version 0.3).
 
+## Version 0.6.4 (2026-10-19)
+
+- Dessin d'après une image : l'assistant reproduit la disposition de la pièce jointe (rangées, ordre, position par rapport aux voisins, tracé des lignes) au lieu de réorganiser le diagramme ; il mesure d'abord l'image, garde au moins 40 px entre les éléments, puis vérifie d'abord chaque relation, ensuite la disposition (deux séries de corrections au plus).
+- Un style de ligne pour tout le diagramme s'applique après la création des relations et conserve les lignes tracées à la main.
+- Un nœud d'objet (ObjectNode) d'un diagramme d'activité est enregistré comme objet EA au lieu d'interrompre l'enregistrement.
+- Les courtes notes de l'assistant entre les étapes sont dans la langue de la conversation.
+
 ## Version 0.6.3 (2026-10-19)
 
 - Éditeur de diagrammes : l'enregistrement dans EA conserve les lignes exactement comme l'éditeur les affiche (segments horizontaux et verticaux, points de contact avec les éléments), aussi pour les nouvelles relations. Avant, EA ne recevait que les points déplacés à la main et traçait les lignes en biais.

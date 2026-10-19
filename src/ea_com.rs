@@ -96,6 +96,8 @@ impl Kind {
 
 /// State of one job (list of operations).
 struct Job<'a> {
+    /// Connectors given their own route in this batch: a line style does not overwrite it.
+    routed: std::collections::HashSet<i32>,
     repo: &'a Disp,
     security: bool,
     /// Keys from the job ("#pkg") pointing to objects created earlier in the same job.
@@ -121,9 +123,13 @@ pub fn run_request(repo: &Disp, user: &str, ops: &[Value], rollback_key: Option<
     result["security"] = json!(security);
     result["user"] = json!(if security { user } else { "" });
 
-    let mut job = Job { repo, security, keys: HashMap::new(), locked: HashMap::new(), created: Vec::new(), warnings: Vec::new() };
+    let mut job = Job { repo, security, keys: HashMap::new(), locked: HashMap::new(), created: Vec::new(), warnings: Vec::new(), routed: Default::default() };
     let mut failed = None;
-    for (index, op) in ops.iter().enumerate() {
+    // Line styles go last: they apply to the connectors of the diagram, which may be created later in the same
+    // batch (a model often puts the style first).
+    let order: Vec<usize> = (0..ops.len()).filter(|i| ops[*i]["op"] != "set_line_style").chain((0..ops.len()).filter(|i| ops[*i]["op"] == "set_line_style")).collect();
+    for index in order {
+        let op = &ops[index];
         if let Err(e) = job.op(op) {
             let mut error = e.to_string();
             // On a refusal caused by a lock: who locks the objects of this operation (read from the model's lock table).
@@ -458,7 +464,8 @@ impl Job<'_> {
     /// Element/connector from an MDG profile: ALWAYS a base UML type + stereotype. AddNew with a qualified type
     /// ("BPMN2.0::StartEvent") leaves an orphaned object without a package in the database (verified 2026-10-13).
     fn new_typed(&self, collection: &Disp, name: &str, kind: &str, stereotype: &str) -> Result<Disp> {
-        let mut kind = kind.to_string();
+        // An object node of an activity is EA's Object (AddNew rejects "ObjectNode" in a package).
+        let mut kind = if kind == "ObjectNode" { "Object".to_string() } else { kind.to_string() };
         let mut stereotype = stereotype.to_string();
         if kind.contains("::") {
             if stereotype.is_empty() {
@@ -1177,6 +1184,7 @@ impl Job<'_> {
                 }
                 link.set("Geometry", s(&format!("{};", geometry.join(";"))))?;
                 link.update(crate::i18n::tr("connector route"))?;
+                self.routed.insert(cid);
                 diagram.update(crate::i18n::tr("diagram"))?;
             }
             "set_line_style" => {
@@ -1217,6 +1225,8 @@ impl Job<'_> {
                         bail!("{}", crate::i18n::fmt("None of the given connectors joins elements that are on diagram id={0}.", &[diagram.int("DiagramID")?.to_string()]));
                     }
                 }
+                // A route given in this batch wins over a style of the whole diagram (no error when nothing is left).
+                connectors.retain(|c| !self.routed.contains(c));
                 let links = diagram.obj("DiagramLinks")?;
                 links.call("Refresh", &[])?;
                 let existing = links.items()?;
@@ -1229,6 +1239,11 @@ impl Job<'_> {
                             link
                         }
                     };
+                    // A style for the whole diagram keeps lines that already have their own route (bend points);
+                    // naming the connectors changes them too.
+                    if wanted.is_none() && !link.text("Path").unwrap_or_default().trim().is_empty() {
+                        continue;
+                    }
                     let mut parts: Vec<String> = link
                         .text("Style")?
                         .split(';')

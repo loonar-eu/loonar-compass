@@ -2,6 +2,13 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
+## Wersja 0.6.4 (2026-10-19)
+
+- Rysowanie z obrazka: asystent odwzorowuje układ załącznika (rzędy, kolejność, położenie względem sąsiadów, przebieg linii) zamiast układać diagram od nowa; mierzy obrazek przed rysowaniem, zostawia co najmniej 40 px odstępu między elementami, a po narysowaniu sprawdza najpierw każdą relację, potem układ (najwyżej dwie rundy poprawek).
+- Styl linii całego diagramu stosuje się po utworzeniu relacji i nie kasuje linii poprowadzonych ręcznie.
+- Węzeł obiektu (ObjectNode) w diagramie aktywności zapisuje się jako obiekt EA, zamiast przerywać zapis.
+- Krótkie komentarze asystenta między krokami są w języku rozmowy.
+
 ## Wersja 0.6.3 (2026-10-19)
 
 - Edytor diagramów: zapis do EA przenosi linie dokładnie tak, jak je widać w edytorze (poziome i pionowe odcinki, miejsca styku z elementami), także dla nowych relacji. Wcześniej EA dostawało tylko ręcznie przesunięte punkty i rysowało linie na skos.
