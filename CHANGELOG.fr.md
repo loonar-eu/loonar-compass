@@ -2,6 +2,17 @@
 
 Toutes les modifications importantes de l'application Loonar Compass (nommée Loonar EA Assistant jusqu'à la version 0.3).
 
+## Version 0.6.5 (2026-10-20)
+
+- Le compte EA appartient au modèle, pas à l'application : le compte et le mot de passe EA se règlent dans la carte « 2. Modèle », avec le fichier ou la base. La carte « 3. Enterprise Architect » ne contient que le chemin d'EA.exe et « Enregistrer et tester l'accès à EA ».
+- Fichier et base : case « La sécurité est activée dans le modèle (comptes utilisateurs EA) ». Sans elle, les champs du compte et du mot de passe sont désactivés et EA ouvre le modèle sans connexion.
+- Nouvelle option « Le modèle exige un verrou pour modifier (Require User Lock to Edit) » : avec elle, l'assistant verrouille les paquetages et éléments qu'il modifie, puis libère les verrous ; sans elle, il ne verrouille pas.
+- Le test des paramètres du modèle et du modèle d'une conversation enregistre un paquetage de test dans le modèle, le vérifie et le supprime aussitôt.
+- Une nouvelle conversation commence par la confirmation de son modèle (« Confirmer le modèle et commencer »). Le modèle est ensuite fixé et affiché en lecture seule ; changer le modèle par défaut dans les paramètres ne modifie pas les conversations en cours.
+- Correction : une conversation apparaît dans la liste dès son premier message. Avant, une conversation où l'assistant travaillait encore manquait dans la liste.
+- Correction : les partitions (couloirs) d'un diagramme d'activité plus hautes que larges sont dessinées verticalement dans EA, avec le nom en haut.
+- Correction : l'aperçu d'un diagramme ouvert dans la fenêtre EA montre l'état après la dernière écriture (EA recharge le diagramme avant d'exporter l'image).
+
 ## Version 0.6.4 (2026-10-19)
 
 - Dessin d'après une image : l'assistant reproduit la disposition de la pièce jointe (rangées, ordre, position par rapport aux voisins, tracé des lignes) au lieu de réorganiser le diagramme ; il mesure d'abord l'image, garde au moins 40 px entre les éléments, puis vérifie d'abord chaque relation, ensuite la disposition (deux séries de corrections au plus).

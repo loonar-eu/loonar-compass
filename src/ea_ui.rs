@@ -99,11 +99,11 @@ pub fn has_model_open(target: &Target) -> bool {
 
 /// Runs a write job in the user's EA window (an EA file the user has open: a second EA instance must not
 /// open the same `.qea` file). The reply has the same form as from the background session.
-pub fn run_in_window(target: &Target, user: String, ops: Vec<Value>, rollback_key: Option<String>, keep_locks: bool, timeout: Duration) -> Result<Value> {
+pub fn run_in_window(target: &Target, user: String, ops: Vec<Value>, rollback_key: Option<String>, keep_locks: bool, locks: bool, timeout: Duration) -> Result<Value> {
     let target = target.clone();
     with_running_ea(timeout, move |repo| {
         same_model(repo, &target)?;
-        Ok(crate::ea_com::run_request(repo, &user, &ops, rollback_key.as_deref(), keep_locks))
+        Ok(crate::ea_com::run_request(repo, &user, &ops, rollback_key.as_deref(), keep_locks, locks))
     })
 }
 

@@ -597,6 +597,8 @@ struct Form {
     ea_path: String,
     ea_user: String,
     ea_password: String,
+    model_security: bool,
+    ea_locks: bool,
     approval_mode: String,
     confluence_url: String,
     confluence_user: String,
@@ -621,6 +623,8 @@ impl Form {
             db_sslmode: c.db_sslmode.as_str().into(),
             ea_path: c.ea_path.display().to_string(),
             ea_user: c.ea_user.clone(),
+            model_security: !c.ea_user.trim().is_empty(),
+            ea_locks: c.ea_locks,
             approval_mode: c.approval_mode.as_str().into(),
             confluence_url: c.confluence_url.clone(),
             confluence_user: c.confluence_user.clone(),
@@ -642,6 +646,7 @@ impl Form {
             db_sslmode: "prefer".into(),
             ea_path: DEFAULT_EA_PATH.into(),
             ea_user: String::new(),
+            ea_locks: true,
             approval_mode: "ask".into(),
             ui_language: i18n::current().code().into(),
             ..Default::default()
@@ -760,6 +765,8 @@ struct App {
     settings_rx: mpsc::Receiver<(usize, Result<String, String>)>,
     /// Window with the model of the current conversation (opened from the header or the new-conversation card).
     conn: Option<ConnEditor>,
+    /// Id of the empty conversation whose model the user confirmed: only then the conversation starts.
+    confirmed_session: String,
     /// The diagram editor window that is open: the diagram and the changes come back when it closes.
     editor_rx: Option<mpsc::Receiver<Result<Option<(Value, Value)>, String>>>,
     /// "Tidy with AI" in the diagram editor: the request goes to the conversation once the editor's changes are saved.
@@ -899,6 +906,7 @@ impl App {
             session: Session::new(),
             sessions,
             conn: None,
+            confirmed_session: String::new(),
             editor_rx: None,
             tidy_request: None,
             miro: None,
@@ -1347,6 +1355,23 @@ impl App {
         self.steps.clear();
     }
 
+    /// Whether the conversation may start: it has messages (its model is fixed), or the user confirmed the model.
+    fn model_confirmed(&self) -> bool {
+        !self.session.messages.is_empty() || self.confirmed_session == self.session.id
+    }
+
+    /// Confirms the model of the new conversation: it is fixed from now on and the conversation starts.
+    fn confirm_model(&mut self) {
+        let Some(base) = self.cfg.clone() else { return };
+        let choice = self.session.model.clone().unwrap_or_else(|| ModelChoice::of(&base));
+        if let Err(e) = choice.apply(&base) {
+            self.status = format!("{e:#}");
+            return;
+        }
+        self.session.model = Some(choice);
+        self.confirmed_session = self.session.id.clone();
+    }
+
     /// Sets the model of the current conversation; a conversation with messages is saved at once.
     fn set_session_model(&mut self, choice: ModelChoice) {
         let label = choice.label();
@@ -1363,7 +1388,7 @@ impl App {
 
     /// An EA file dropped on the window: the model of an empty conversation, otherwise a new conversation with this file.
     fn use_model_file(&mut self, path: &Path) {
-        let choice = ModelChoice::File { path: path.display().to_string(), ea_user: String::new() };
+        let choice = ModelChoice::File { path: path.display().to_string(), ea_user: String::new(), locks: true };
         if !self.session.messages.is_empty() {
             self.switch_to(Session::new());
             self.pending.clear();
@@ -1391,7 +1416,8 @@ impl App {
             editor.test = None;
         }
         let default = ModelChoice::of(&base);
-        let has_messages = !self.session.messages.is_empty();
+        // The model is fixed once the conversation started (confirmed or with messages): the window only shows it.
+        let locked = !self.session.messages.is_empty() || self.confirmed_session == self.session.id;
         let mut open = true;
         let mut action = "";
         egui::Window::new(crate::i18n::tr("Model of this conversation"))
@@ -1405,17 +1431,23 @@ impl App {
             .show(ctx, |ui| {
                 ui.label(egui::RichText::new(crate::i18n::tr("Model of this conversation")).font(egui::FontId::new(17.0, egui::FontFamily::Name(markdown::BOLD_FAMILY.into()))));
                 ui.add_space(8.0);
-                if has_messages {
-                    ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Earlier answers in this conversation refer to the model it used then; a change applies to the next messages.")).small().color(theme::WORKING)).wrap());
+                if locked {
+                    ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("The model is fixed for this conversation (view only). To work with another model, start a new conversation.")).small().color(theme::WORKING)).wrap());
                     ui.add_space(4.0);
                 }
+                ui.add_enabled_ui(!locked, |ui| {
                 ui.radio_value(&mut editor.use_default, true, crate::i18n::fmt("Default from the settings: {0}", &[default.label()])).on_hover_text(default.describe());
                 ui.radio_value(&mut editor.use_default, false, crate::i18n::tr("Another model"));
                 if !editor.use_default {
                     ui.add_space(4.0);
                     ui.horizontal_wrapped(|ui| {
                         ui.radio_value(&mut editor.source, "postgres".to_string(), crate::i18n::tr("PostgreSQL database"));
-                        ui.radio_value(&mut editor.source, "file".to_string(), crate::i18n::tr("EA file (.qea, .qeax)"));
+                        if ui.radio_value(&mut editor.source, "file".to_string(), crate::i18n::tr("EA file (.qea, .qeax)")).clicked() {
+                            // A file has an EA account only when it has security enabled: the account of a database does
+                            // not carry over (it would ask for a password the file does not need).
+                            editor.ea_user.clear();
+                            editor.model_security = false;
+                        }
                     });
                     let chosen = editor.choice(&default).ok();
                     egui::Grid::new("conn_fields").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
@@ -1434,7 +1466,6 @@ impl App {
                                 }
                             });
                             ui.end_row();
-                            row_hint(ui, crate::i18n::tr("EA user account"), &mut editor.ea_user, crate::i18n::tr("only if the file has security enabled"));
                         } else {
                             row_hint(ui, crate::i18n::tr("Server"), &mut editor.host, crate::i18n::tr("e.g. 127.0.0.1"));
                             row(ui, crate::i18n::tr("Port"), &mut editor.port);
@@ -1461,9 +1492,14 @@ impl App {
                                     }
                                 });
                             ui.end_row();
+                        }
+                        ui.label("");
+                        ui.checkbox(&mut editor.model_security, crate::i18n::tr("The model has security enabled (EA user accounts)"));
+                        ui.end_row();
+                        if editor.model_security {
                             row(ui, crate::i18n::tr("EA user account"), &mut editor.ea_user);
                         }
-                        if !editor.ea_user.trim().is_empty() {
+                        if editor.model_security && !editor.ea_user.trim().is_empty() {
                             match chosen.as_ref().filter(|c| !c.uses_settings_ea_account(&base)) {
                                 Some(c) => row_secret(ui, crate::i18n::tr("EA account password"), &mut editor.ea_password, secrets::exists(&c.ea_secret_name())),
                                 None => {
@@ -1474,6 +1510,9 @@ impl App {
                             }
                         }
                     });
+                    if editor.model_security {
+                        ui.checkbox(&mut editor.locks, crate::i18n::tr("The model requires a lock to edit (Require User Lock to Edit)"));
+                    }
                 }
                 ui.add_space(6.0);
                 match &editor.status {
@@ -1489,7 +1528,14 @@ impl App {
                     }
                 }
                 ui.add_space(4.0);
+                });
                 ui.horizontal(|ui| {
+                    if locked {
+                        if ui.button(crate::i18n::tr("Close")).clicked() {
+                            action = "cancel";
+                        }
+                        return;
+                    }
                     if ui.button(crate::i18n::tr("Save")).clicked() {
                         action = "save";
                     }
@@ -1508,6 +1554,8 @@ impl App {
         if action == "test" {
             let editor = self.conn.as_mut().expect("editor");
             let tested = editor.choice(&default).and_then(|choice| {
+                // The write test logs in to EA with the stored password: the typed one is saved first.
+                editor.save_secrets(&choice, &base)?;
                 let mut cfg = choice.apply(&base)?;
                 if !editor.password.is_empty() {
                     cfg.db_password = editor.password.clone();
@@ -1519,7 +1567,8 @@ impl App {
                     let (tx, rx) = mpsc::channel();
                     let wake = ctx.clone();
                     std::thread::spawn(move || {
-                        let _ = tx.send(check_model(&cfg).map_err(|e| format!("{e:#}")));
+                        let result = check_model(&cfg).and_then(|read| Ok(format!("{read} {}", check_write(&cfg)?)));
+                        let _ = tx.send(result.map_err(|e| format!("{e:#}")));
                         wake.request_repaint();
                     });
                     editor.test = Some(rx);
@@ -1896,6 +1945,21 @@ impl App {
                 }
                 updates.push(("model.source", "file".to_string()));
                 updates.push(("model.file", file.display().to_string()));
+                // The EA account belongs to the file: only a file with security has one.
+                if f.model_security {
+                    if f.ea_user.trim().is_empty() {
+                        bail!("{}", crate::i18n::fmt("EA user account is required", &[]));
+                    }
+                    updates.push(("ea.user", f.ea_user.trim().to_string()));
+                    updates.push(("ea.locks", f.ea_locks.to_string()));
+                    if !f.ea_password.is_empty() {
+                        secrets::set(secrets::EA_PASSWORD, &f.ea_password)?;
+                        self.form.ea_password.clear();
+                    }
+                } else {
+                    updates.push(("ea.user", String::new()));
+                    self.form.ea_user.clear();
+                }
             }
             GROUP_DB => {
                 updates.push(("model.source", "postgres".to_string()));
@@ -1908,6 +1972,22 @@ impl App {
                 updates.push(("db.name", f.db_name.trim().to_string()));
                 updates.push(("db.user", f.db_user.trim().to_string()));
                 updates.push(("db.sslmode", config::SslMode::parse(&f.db_sslmode)?.as_str().to_string()));
+                // The EA account belongs to the model database: only a model with security has one.
+                if f.model_security {
+                    if f.ea_user.trim().is_empty() {
+                        bail!("{}", crate::i18n::fmt("EA user account is required", &[]));
+                    }
+                    updates.push(("ea.user", f.ea_user.trim().to_string()));
+                    updates.push(("ea.locks", f.ea_locks.to_string()));
+                    if !f.ea_password.is_empty() {
+                        secrets::set(secrets::EA_PASSWORD, &f.ea_password)?;
+                        self.form.ea_password.clear();
+                    }
+                } else {
+                    updates.push(("ea.user", String::new()));
+                    updates.push(("ea.locks", "false".to_string()));
+                    self.form.ea_user.clear();
+                }
                 if !f.db_password.is_empty() {
                     // EA's connection string is a ;-separated list without quoting: such a password would break it.
                     if f.db_password.contains(';') {
@@ -1923,16 +2003,7 @@ impl App {
                 }
             }
             GROUP_EA => {
-                let file_model = self.cfg.as_ref().is_some_and(AppConfig::uses_file);
-                if f.ea_user.trim().is_empty() && !file_model {
-                    bail!("{}", crate::i18n::fmt("EA user account is required", &[]));
-                }
                 updates.push(("ea.path", f.ea_path.trim().to_string()));
-                updates.push(("ea.user", f.ea_user.trim().to_string()));
-                if !f.ea_password.is_empty() {
-                    secrets::set(secrets::EA_PASSWORD, &f.ea_password)?;
-                    self.form.ea_password.clear();
-                }
             }
             GROUP_MIRO => {
                 if !f.miro_token.is_empty() {
@@ -2148,6 +2219,10 @@ impl App {
     }
 
     fn send(&mut self, ctx: &egui::Context) {
+        if !self.model_confirmed() {
+            self.status = crate::i18n::tr("Confirm the model of the conversation first.").into();
+            return;
+        }
         let text = std::mem::take(&mut self.input);
         let attachments: Vec<String> = self.pending.drain(..).map(|(stored, _)| stored).collect();
         if text.trim().is_empty() && attachments.is_empty() {
@@ -2167,6 +2242,12 @@ impl App {
         if is_default_title(&self.session.title) {
             self.session.title = title_hint.chars().take(50).collect();
         }
+        // On the list at once (not only after the first answer): a conversation left while Claude works must stay
+        // reachable.
+        if let Err(e) = self.session.save(&cfg.history_dir) {
+            self.status = crate::i18n::fmt("History: {0}", &[(e).to_string()]);
+        }
+        self.sessions = Session::list(&cfg.history_dir).into_iter().map(|(_, s)| s).collect();
 
         // The assistant is already working: the message goes to the queue and the worker thread passes it to the model
         // at the next step, without interrupting the work (as in Claude Code).
@@ -2310,8 +2391,12 @@ impl App {
             ui.vertical(|ui| {
                 settings_group(ui, crate::i18n::tr("2. Model"), inner_width, |ui| {
                     ui.horizontal_wrapped(|ui| {
-                        ui.radio_value(&mut self.form.model_source, "postgres".to_string(), crate::i18n::tr("PostgreSQL database"));
-                        ui.radio_value(&mut self.form.model_source, "file".to_string(), crate::i18n::tr("EA file (.qea, .qeax)"));
+                        // A result of the other source's test would read as this one's.
+                        if ui.radio_value(&mut self.form.model_source, "postgres".to_string(), crate::i18n::tr("PostgreSQL database")).changed()
+                            | ui.radio_value(&mut self.form.model_source, "file".to_string(), crate::i18n::tr("EA file (.qea, .qeax)")).changed()
+                        {
+                            self.group_status[GROUP_DB] = GroupStatus::Idle;
+                        }
                     });
                     ui.add_space(4.0);
                     if self.form.model_source == "file" {
@@ -2335,6 +2420,16 @@ impl App {
                             });
                             ui.end_row();
                         });
+                        ui.add_space(8.0);
+                        ui.separator();
+                        ui.add_space(4.0);
+                        ui.checkbox(&mut self.form.model_security, crate::i18n::tr("The model has security enabled (EA user accounts)"));
+                        egui::Grid::new("settings_file_account").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
+                            ea_account_rows(ui, &mut self.form.ea_user, &mut self.form.ea_password, secrets::exists(secrets::EA_PASSWORD), self.form.model_security);
+                        });
+                        ui.add_enabled(self.form.model_security, egui::Checkbox::new(&mut self.form.ea_locks, crate::i18n::tr("The model requires a lock to edit (Require User Lock to Edit)")));
+                        ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("When on, the assistant locks the packages and elements it changes and releases the locks afterwards.")).small().color(theme::MUTED)).wrap());
+                        ui.add_space(4.0);
                         ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("The assistant reads the file directly (read-only). Changes are saved by Enterprise Architect: through your EA window when you have this file open there, otherwise by EA in the background. A .qea file is for one person; .qeax is for a small team sharing the file.")).small().color(theme::MUTED)).wrap());
                         self.group_footer(ui, &ctx, GROUP_DB, crate::i18n::tr("Save and test the file"));
                         return;
@@ -2362,6 +2457,15 @@ impl App {
                         ui.end_row();
                     });
                     ui.add(egui::Label::new(egui::RichText::new(sslmode_hint(&self.form.db_sslmode)).small().color(theme::MUTED)).wrap());
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.add_space(4.0);
+                    ui.checkbox(&mut self.form.model_security, crate::i18n::tr("The model has security enabled (EA user accounts)"));
+                    egui::Grid::new("settings_db_account").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
+                        ea_account_rows(ui, &mut self.form.ea_user, &mut self.form.ea_password, secrets::exists(secrets::EA_PASSWORD), self.form.model_security);
+                    });
+                    ui.add_enabled(self.form.model_security, egui::Checkbox::new(&mut self.form.ea_locks, crate::i18n::tr("The model requires a lock to edit (Require User Lock to Edit)")));
+                    ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("When on, the assistant locks the packages and elements it changes and releases the locks afterwards.")).small().color(theme::MUTED)).wrap());
                     self.group_footer(ui, &ctx, GROUP_DB, crate::i18n::tr("Save and test connection"));
                 });
                 ui.add_space(12.0);
@@ -2378,20 +2482,9 @@ impl App {
                             }
                         });
                         ui.end_row();
-                        if self.form.model_source == "file" {
-                            row_hint(ui, crate::i18n::tr("EA user account"), &mut self.form.ea_user, crate::i18n::tr("only if the file has security enabled"));
-                        } else {
-                            row(ui, crate::i18n::tr("EA user account"), &mut self.form.ea_user);
-                        }
-                        if self.form.model_source == "file" && self.form.ea_user.trim().is_empty() {
-                            label_cell(ui, crate::i18n::tr("EA account password"));
-                            ui.add_enabled(false, egui::TextEdit::singleline(&mut String::new()).desired_width(SETTINGS_FIELD_WIDTH));
-                            ui.end_row();
-                        } else {
-                            row_secret(ui, crate::i18n::tr("EA account password"), &mut self.form.ea_password, secrets::exists(secrets::EA_PASSWORD));
-                        }
                     });
-                    self.group_footer(ui, &ctx, GROUP_EA, crate::i18n::tr("Save and test EA login"));
+                    ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("The EA account is set with the model (card 2): it belongs to the model file or database.")).small().color(theme::MUTED)).wrap());
+                    self.group_footer(ui, &ctx, GROUP_EA, crate::i18n::tr("Save and test EA access"));
                 });
             });
         });
@@ -3041,6 +3134,8 @@ struct ConnEditor {
     sslmode: String,
     ea_user: String,
     ea_password: String,
+    model_security: bool,
+    locks: bool,
     status: GroupStatus,
     test: Option<mpsc::Receiver<Result<String, String>>>,
 }
@@ -3059,15 +3154,19 @@ impl ConnEditor {
             sslmode: "prefer".into(),
             ea_user: current.ea_user().to_string(),
             ea_password: String::new(),
+            model_security: !current.ea_user().is_empty(),
+            locks: true,
             status: GroupStatus::Idle,
             test: None,
         };
         match current {
-            ModelChoice::File { path, .. } => {
+            ModelChoice::File { path, locks, .. } => {
+                editor.locks = *locks;
                 editor.source = "file".into();
                 editor.file = path.clone();
             }
-            ModelChoice::Database { name, host, port, user, sslmode, .. } => {
+            ModelChoice::Database { name, host, port, user, sslmode, locks, .. } => {
+                editor.locks = *locks;
                 editor.host = host.clone();
                 editor.port = port.to_string();
                 editor.name = name.clone();
@@ -3087,6 +3186,10 @@ impl ConnEditor {
         }
         let ea_user = self.ea_user.trim().to_string();
         if self.source == "file" {
+            let ea_user = if self.model_security { ea_user } else { String::new() };
+            if self.model_security && ea_user.is_empty() {
+                bail!("{}", crate::i18n::fmt("EA user account is required", &[]));
+            }
             let path = PathBuf::from(self.file.trim().trim_matches('"'));
             if !config::is_model_file(&path) {
                 bail!("{}", crate::i18n::tr("Choose an Enterprise Architect project file .qea or .qeax"));
@@ -3094,13 +3197,14 @@ impl ConnEditor {
             if !path.is_file() {
                 bail!("{}", crate::i18n::fmt("file {0} does not exist", &[path.display().to_string()]));
             }
-            return Ok(ModelChoice::File { path: path.display().to_string(), ea_user });
+            return Ok(ModelChoice::File { path: path.display().to_string(), ea_user, locks: self.model_security && self.locks });
         }
         let port: u16 = self.port.trim().parse().context(crate::i18n::tr("Database port: enter a number"))?;
         if self.name.trim().is_empty() || self.user.trim().is_empty() {
             bail!("{}", crate::i18n::fmt("Database name and database user are required", &[]));
         }
-        if ea_user.is_empty() {
+        let ea_user = if self.model_security { ea_user } else { String::new() };
+        if self.model_security && ea_user.is_empty() {
             bail!("{}", crate::i18n::fmt("EA user account is required", &[]));
         }
         Ok(ModelChoice::Database {
@@ -3110,6 +3214,7 @@ impl ConnEditor {
             user: self.user.trim().to_string(),
             sslmode: config::SslMode::parse(&self.sslmode)?.as_str().to_string(),
             ea_user,
+            locks: self.model_security && self.locks,
         })
     }
 
@@ -3167,6 +3272,50 @@ fn check_model(cfg: &AppConfig) -> anyhow::Result<String> {
     Ok(message)
 }
 
+/// Write test: creates a test package under the model root, checks that it is in the model and deletes it.
+fn check_write(cfg: &AppConfig) -> anyhow::Result<String> {
+    if !cfg.ea_path.is_file() {
+        bail!("{}", crate::i18n::fmt("file {0} does not exist", &[(cfg.ea_path.display()).to_string()]));
+    }
+    let rows = tools::query_rows(cfg, "select min(package_id) from t_package where parent_id = 0")?;
+    let root: i64 = rows.first().and_then(|r| r[0].parse().ok()).context(crate::i18n::tr("the model has no root package"))?;
+    let name = format!("Loonar Compass write test {}", chrono::Local::now().format("%H%M%S"));
+    let options = ea::BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false };
+    let created = ea::run_batch(cfg, &[json!({ "op": "create_package", "key": "pkg", "parent": root, "name": name })], &options)
+        .context(crate::i18n::tr("Write test: EA could not save a test package in the model"))?;
+    let id = created["created"].as_array().and_then(|c| c.first()).and_then(|c| c["id"].as_i64()).context(crate::i18n::tr("Write test: EA did not return the test package"))?;
+    let found = tools::query_rows(cfg, &format!("select count(*) from t_package where package_id = {id}"))?;
+    let deleted = ea::run_batch(cfg, &[json!({ "op": "delete_package", "package": id })], &ea::BatchOptions::default());
+    if found.first().map(|r| r[0].as_str()) != Some("1") {
+        bail!("{}", crate::i18n::tr("Write test: the test package is not in the model after saving"));
+    }
+    deleted.context(crate::i18n::tr("Write test: the test package was saved but could not be deleted; delete it in EA"))?;
+    let left = tools::query_rows(cfg, &format!("select count(*) from t_package where package_id = {id}"))?;
+    if left.first().map(|r| r[0].as_str()) != Some("0") {
+        bail!("{}", crate::i18n::tr("Write test: the test package was saved but could not be deleted; delete it in EA"));
+    }
+    match created["user"].as_str().filter(|user| !user.is_empty()) {
+        Some(user) => Ok(crate::i18n::fmt("Write test passed: a test package was saved as {0}, checked and deleted.", &[user.to_string()])),
+        None => Ok(crate::i18n::tr("Write test passed: a test package was saved, checked and deleted.").into()),
+    }
+}
+
+/// EA account rows (account and password); disabled for a file without security.
+fn ea_account_rows(ui: &mut egui::Ui, user: &mut String, password: &mut String, stored: bool, enabled: bool) {
+    label_cell(ui, crate::i18n::tr("EA user account"));
+    if enabled {
+        ui.add(egui::TextEdit::singleline(user).desired_width(SETTINGS_FIELD_WIDTH));
+        ui.end_row();
+        row_secret(ui, crate::i18n::tr("EA account password"), password, stored);
+    } else {
+        ui.add_enabled(false, egui::TextEdit::singleline(&mut String::new()).desired_width(SETTINGS_FIELD_WIDTH));
+        ui.end_row();
+        label_cell(ui, crate::i18n::tr("EA account password"));
+        ui.add_enabled(false, egui::TextEdit::singleline(&mut String::new()).desired_width(SETTINGS_FIELD_WIDTH));
+        ui.end_row();
+    }
+}
+
 /// Tests a saved settings group in action. Called in a worker thread (the EA test takes several dozen seconds).
 fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> {
     match group {
@@ -3176,7 +3325,11 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
             let response = client.send_value("Answer in one word.", &[json!({ "role": "user", "content": "ping" })], None)?;
             Ok(crate::i18n::fmt("Saved. The key works: model {0} replied.", &[(response["model"].as_str().unwrap_or(config::CLAUDE_MODEL)).to_string()]))
         }
-        GROUP_DB => check_model(cfg).map(|message| crate::i18n::fmt("Saved. {0}", &[message])),
+        GROUP_DB => {
+            let message = check_model(cfg)?;
+            let written = check_write(cfg)?;
+            Ok(crate::i18n::fmt("Saved. {0}", &[format!("{message} {written}")]))
+        }
         GROUP_MIRO => {
             let token = secrets::get(secrets::MIRO_TOKEN).context(crate::i18n::tr("no Miro access token in the settings"))?;
             let boards = miro::Client::new(&token)?.check()?;
@@ -4311,6 +4464,7 @@ impl eframe::App for App {
                     let text_height = layouter(ui, &self.input, field_width - 8.0).size().y;
                     let row = egui::vec2(ui.available_width(), (text_height + 8.0).clamp(26.0, 150.0));
                     ui.allocate_ui_with_layout(row, egui::Layout::left_to_right(egui::Align::TOP), |ui| {
+                        let confirmed = self.model_confirmed();
                         let edit = egui::TextEdit::multiline(&mut self.input)
                             .id(input_id)
                             .frame(false)
@@ -4321,6 +4475,8 @@ impl eframe::App for App {
                             // The hint is light grey so it does not look like text typed by the user.
                             .hint_text(egui::RichText::new(if hovering {
                                 crate::i18n::tr("Drop files here…")
+                            } else if !confirmed {
+                                crate::i18n::tr("First confirm the model of the conversation above…")
                             } else if busy {
                                 crate::i18n::tr("Add a message: Claude will take it into account while working…")
                             } else {
@@ -4437,6 +4593,7 @@ impl eframe::App for App {
                 let mut page_folder_request: Option<String> = None;
 
                 let mut open_conn_empty = false;
+                let mut confirm_request = false;
                 egui::CentralPanel::default()
                     .frame(egui::Frame::none().fill(theme::BACKGROUND).inner_margin(egui::Margin { left: 22.0, right: 8.0, top: 10.0, bottom: 0.0 }))
                     .show(ctx, |ui| {
@@ -4464,8 +4621,19 @@ impl eframe::App for App {
                                 };
                                 ui.label(egui::RichText::new(text).color(theme::TEXT)).on_hover_text(choice.describe());
                                 ui.add_space(4.0);
-                                if ui.button(crate::i18n::tr("Choose another model…")).clicked() {
-                                    open_conn_empty = true;
+                                if self.confirmed_session == self.session.id {
+                                    ui.label(egui::RichText::new(crate::i18n::tr("The model is fixed for this conversation. To work with another model, start a new conversation.")).small().color(theme::MUTED));
+                                } else {
+                                    ui.horizontal(|ui| {
+                                        if ui.button(crate::i18n::tr("Choose another model…")).clicked() {
+                                            open_conn_empty = true;
+                                        }
+                                        let start = egui::Button::new(egui::RichText::new(crate::i18n::tr("Confirm the model and start")).color(egui::Color32::WHITE)).fill(theme::NAV);
+                                        if ui.add(start).clicked() {
+                                            confirm_request = true;
+                                        }
+                                    });
+                                    ui.label(egui::RichText::new(crate::i18n::tr("After confirming, the model of the conversation cannot be changed.")).small().color(theme::MUTED));
                                 }
                             }
                         });
@@ -4726,6 +4894,9 @@ impl eframe::App for App {
                 if open_conn_empty {
                     self.open_conn_editor();
                 }
+                if confirm_request {
+                    self.confirm_model();
+                }
                 if let Some(id) = edit_request {
                     self.open_diagram_editor(ctx, id);
                 }
@@ -4976,5 +5147,22 @@ mod tests {
         assert_eq!(consumed.get(), 2);
         assert!(drain_inbox(&rx, Path::new("."), &emit).unwrap().is_empty());
         assert_eq!(consumed.get(), 2);
+    }
+}
+
+#[cfg(test)]
+mod write_check_tests {
+    use super::*;
+
+    /// Write test of the settings (LOONAR_TEST_PROPS = app.properties of a test model; never a shared model).
+    #[test]
+    #[ignore]
+    fn write_test_from_settings() {
+        let props = std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS");
+        let cfg = AppConfig::load(std::path::Path::new(&props)).unwrap();
+        println!("{}", check_model(&cfg).unwrap());
+        let result = check_write(&cfg);
+        ea::shutdown();
+        println!("{}", result.unwrap());
     }
 }

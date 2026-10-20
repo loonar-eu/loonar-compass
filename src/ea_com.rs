@@ -100,6 +100,8 @@ struct Job<'a> {
     routed: std::collections::HashSet<i32>,
     repo: &'a Disp,
     security: bool,
+    /// Lock what is changed (with security; off for a database model without "Require User Lock to Edit").
+    locks: bool,
     /// Keys from the job ("#pkg") pointing to objects created earlier in the same job.
     keys: HashMap<String, (Kind, Disp)>,
     /// Objects that existed before the job and were locked by us (their locks are released at the end).
@@ -109,7 +111,7 @@ struct Job<'a> {
 }
 
 /// Runs a job in the open session. `user` is the account from the settings (compared with the logged-in one).
-pub fn run_request(repo: &Disp, user: &str, ops: &[Value], rollback_key: Option<&str>, keep_locks: bool) -> Value {
+pub fn run_request(repo: &Disp, user: &str, ops: &[Value], rollback_key: Option<&str>, keep_locks: bool, locks: bool) -> Value {
     let mut result = json!({
         "ok": false, "user": null, "security": false, "created": [], "warnings": [],
         "error": null, "failed_op": null, "rolled_back": false, "session_lost": false
@@ -123,7 +125,7 @@ pub fn run_request(repo: &Disp, user: &str, ops: &[Value], rollback_key: Option<
     result["security"] = json!(security);
     result["user"] = json!(if security { user } else { "" });
 
-    let mut job = Job { repo, security, keys: HashMap::new(), locked: HashMap::new(), created: Vec::new(), warnings: Vec::new(), routed: Default::default() };
+    let mut job = Job { repo, security, locks, keys: HashMap::new(), locked: HashMap::new(), created: Vec::new(), warnings: Vec::new(), routed: Default::default() };
     let mut failed = None;
     // Line styles go last: they apply to the connectors of the diagram, which may be created later in the same
     // batch (a model often puts the style first).
@@ -265,7 +267,7 @@ impl Job<'_> {
     /// Lock on an object that existed before this job (Require User Lock to Edit).
     /// ApplyUserLock on an object already locked by us REMOVES the lock, hence Release first, then Apply.
     fn lock_existing(&mut self, object: &Disp, kind: Kind, id: i32) -> Result<()> {
-        if !self.security {
+        if !self.security || !self.locks {
             return Ok(());
         }
         let key = format!("{}:{id}", kind.name());
@@ -458,6 +460,22 @@ impl Job<'_> {
         }
         let id = element.int("ElementID")?;
         self.repo.call("Execute", &[s(&format!("UPDATE t_object SET NType = {} WHERE Object_ID = {id}", if height > width { 1 } else { 0 }))])?;
+        Ok(())
+    }
+
+    /// Activity partition (swimlane, also a BPMN pool/lane): EA draws it vertical (name on top) when the diagram
+    /// object's style has VPartition=1, otherwise horizontal (name rotated on the left) whatever its size
+    /// (EAExample.qea, 2026-10-20). Set from the box: taller than wide = vertical.
+    fn orient_partition(&self, element: &Disp, object: &Disp, width: i32, height: i32) -> Result<()> {
+        if element.text("Type")? != "ActivityPartition" {
+            return Ok(());
+        }
+        let mut style: String = object.text("Style")?.split(';').filter(|part| !part.is_empty() && !part.starts_with("VPartition=")).map(|part| format!("{part};")).collect();
+        if height > width {
+            style.push_str("VPartition=1;");
+        }
+        object.set("Style", s(&style))?;
+        object.update(crate::i18n::tr("diagram object style"))?;
         Ok(())
     }
 
@@ -779,6 +797,7 @@ impl Job<'_> {
                     object.set("Style", s(&style))?;
                     object.update(crate::i18n::tr("diagram object style"))?;
                 }
+                self.orient_partition(&element, &object, right - left, bottom - top)?;
             }
             "diagram_style" => {
                 let diagram = self.diagram(&op["diagram"])?;
@@ -1290,6 +1309,7 @@ impl Job<'_> {
                 object.update(crate::i18n::tr("position and size on the diagram"))?;
                 let element = self.element(&op["element"])?;
                 self.orient_sync(&element, width, height)?;
+                self.orient_partition(&element, &object, width, height)?;
             }
             "remove_from_diagram" => {
                 // Removes an element from the diagram: the element stays in the model.

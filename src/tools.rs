@@ -783,6 +783,9 @@ fn ea_show_diagram(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
     std::fs::create_dir_all(&ctx.cfg.attachments_dir).context(crate::i18n::tr("attachments folder"))?;
     let stored = format!("{}_{}.png", uuid::Uuid::new_v4().simple(), crate::history::sanitize_name(name));
     let path = ctx.cfg.attachments_dir.join(&stored);
+    // A diagram open in the user's EA window is exported from that window's copy: reload it first, or the image
+    // shows the diagram from before the last write (e.g. without the routes just saved).
+    let _ = crate::ea_ui::refresh_after_write(&crate::ea_ui::Target::of(ctx.cfg), vec![id as i32], Vec::new());
     let op = json!({ "op": "export_diagram", "diagram": id, "path": path.to_string_lossy() });
     ea::run_batch(ctx.cfg, &[op], &BatchOptions::default())?;
 

@@ -2,6 +2,17 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
+## Wersja 0.6.5 (2026-10-20)
+
+- Konto EA należy do modelu, nie do aplikacji: konto i hasło EA ustawia się w karcie „2. Model”, przy pliku albo bazie. Karta „3. Enterprise Architect” ma tylko ścieżkę do EA.exe i przycisk „Zapisz i sprawdź dostęp do EA”.
+- Plik i baza: pole wyboru „Model ma włączone zabezpieczenia (konta użytkowników EA)”. Bez niego pola konta i hasła są nieaktywne, a EA otwiera model bez logowania.
+- Nowa opcja „Model wymaga blokady do edycji (Require User Lock to Edit)”: z nią asystent blokuje zmieniane pakiety i elementy, a potem zwalnia blokady; bez niej nie blokuje.
+- Test ustawień modelu i modelu rozmowy zapisuje do modelu pakiet próbny, sprawdza go i od razu usuwa.
+- Nowa rozmowa zaczyna się od zatwierdzenia modelu („Zatwierdź model i rozpocznij”). Potem model rozmowy jest ustalony i widoczny tylko do podglądu; zmiana modelu domyślnego w ustawieniach nie zmienia trwających rozmów.
+- Poprawka: rozmowa trafia na listę od razu po pierwszej wiadomości. Wcześniej rozmowa, w której asystent jeszcze pracował, nie była widoczna na liście.
+- Poprawka: partycje (tory) diagramu aktywności wyższe niż szersze rysują się w EA pionowo, z nazwą u góry.
+- Poprawka: podgląd diagramu otwartego w oknie EA pokazuje stan po ostatnim zapisie (EA przeładowuje diagram przed eksportem obrazka).
+
 ## Wersja 0.6.4 (2026-10-19)
 
 - Rysowanie z obrazka: asystent odwzorowuje układ załącznika (rzędy, kolejność, położenie względem sąsiadów, przebieg linii) zamiast układać diagram od nowa; mierzy obrazek przed rysowaniem, zostawia co najmniej 40 px odstępu między elementami, a po narysowaniu sprawdza najpierw każdą relację, potem układ (najwyżej dwie rundy poprawek).

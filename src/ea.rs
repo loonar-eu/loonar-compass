@@ -106,6 +106,7 @@ struct Request {
     ops: Vec<Value>,
     rollback_key: Option<String>,
     keep_locks: bool,
+    locks: bool,
     reply: mpsc::Sender<Value>,
 }
 
@@ -160,7 +161,7 @@ fn worker_loop(login: Login, inbox: mpsc::Receiver<Request>) {
             }
         }
         let open = repo.as_ref().expect("EA session open");
-        let result = ea_com::run_request(open, &login.user, &request.ops, request.rollback_key.as_deref(), request.keep_locks);
+        let result = ea_com::run_request(open, &login.user, &request.ops, request.rollback_key.as_deref(), request.keep_locks, request.locks);
         if result["session_lost"] == true {
             repo = None;
         }
@@ -178,8 +179,10 @@ pub fn run_batch(cfg: &AppConfig, ops: &[Value], options: &BatchOptions) -> Resu
     if ops.is_empty() {
         bail!("{}", crate::i18n::tr("empty list of operations"));
     }
-    // An EA file without security opens without an account; a database always needs one.
-    let anonymous = cfg.uses_file() && cfg.ea_user.trim().is_empty();
+    // A model (file or database) without security opens without an account.
+    let anonymous = cfg.ea_user.trim().is_empty();
+    // Whether the model (file or database) requires a user lock to edit: from its settings (on by default).
+    let locks = cfg.ea_locks;
     let login = Login {
         connection: connection_string(cfg),
         user: cfg.ea_user.clone(),
@@ -189,6 +192,9 @@ pub fn run_batch(cfg: &AppConfig, ops: &[Value], options: &BatchOptions) -> Resu
             // Tests and development builds may use a separate EA account of the test model (never in a release build).
             match std::env::var("LOONAR_TEST_EA_PASSWORD") {
                 Ok(password) if cfg!(any(test, debug_assertions)) => password,
+                // A file without security opens with any account, so a missing password does not stop it; a file with
+                // security then reports EA's own login error.
+                _ if cfg.uses_file() => secrets::get(&cfg.ea_password_key).unwrap_or_default(),
                 _ => secrets::get(&cfg.ea_password_key)?,
             }
         },
@@ -201,7 +207,7 @@ pub fn run_batch(cfg: &AppConfig, ops: &[Value], options: &BatchOptions) -> Resu
         let target = crate::ea_ui::Target::of(cfg);
         if crate::ea_ui::has_model_open(&target) {
             WORKER.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).take();
-            let result = crate::ea_ui::run_in_window(&target, cfg.ea_user.clone(), ops.to_vec(), options.rollback_key.clone(), options.keep_locks, timeout())?;
+            let result = crate::ea_ui::run_in_window(&target, cfg.ea_user.clone(), ops.to_vec(), options.rollback_key.clone(), options.keep_locks, locks, timeout())?;
             return check_result(ops, result);
         }
     }
@@ -216,7 +222,7 @@ pub fn run_batch(cfg: &AppConfig, ops: &[Value], options: &BatchOptions) -> Resu
     }
 
     let (reply, answer) = mpsc::channel();
-    let request = Request { ops: ops.to_vec(), rollback_key: options.rollback_key.clone(), keep_locks: options.keep_locks, reply };
+    let request = Request { ops: ops.to_vec(), rollback_key: options.rollback_key.clone(), keep_locks: options.keep_locks, locks, reply };
     let sent = guard.as_ref().expect("EA thread").requests.send(request).is_ok();
     let result = if sent { answer.recv_timeout(timeout()) } else { Err(mpsc::RecvTimeoutError::Disconnected) };
     let result = match result {
@@ -968,5 +974,35 @@ mod tests {
         assert_eq!(q("select count(*) from t_seclocks l join t_secuser u on u.userid = l.userid where u.userlogin = 'claude'")[0][0], "0", "claude account locks after the write");
         assert_eq!(q("select count(*) from t_object where package_id = 0")[0][0], "0", "objects without a package");
         println!("locks and objects without a package after the whole cycle: 0");
+    }
+}
+
+#[cfg(test)]
+mod partition_probe {
+    use super::*;
+    use serde_json::json;
+
+    /// Tall activity partitions come out vertical (LOONAR_TEST_PROPS = a test copy; LOONAR_PROBE_PNG = image to look at).
+    #[test]
+    #[ignore]
+    fn vertical_partitions() {
+        let props = std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS");
+        let cfg = AppConfig::load(std::path::Path::new(&props)).unwrap();
+        let root: i64 = crate::tools::query_rows(&cfg, "select min(package_id) from t_package where parent_id = 0").unwrap()[0][0].parse().unwrap();
+        let ops = vec![
+            json!({"op":"create_package","key":"pkg","parent":root,"name":"ZZ_partition_probe"}),
+            json!({"op":"create_diagram","key":"dia","package":"#pkg","name":"Probe","type":"Activity"}),
+            json!({"op":"create_element","key":"a","package":"#pkg","name":"LaneA","type":"ActivityPartition"}),
+            json!({"op":"create_element","key":"b","package":"#pkg","name":"LaneB","type":"ActivityPartition"}),
+            json!({"op":"place","diagram":"#dia","element":"#a","left":20,"top":20,"width":200,"height":500}),
+            json!({"op":"place","diagram":"#dia","element":"#b","left":240,"top":20,"width":500,"height":200}),
+        ];
+        let created = run_batch(&cfg, &ops, &BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("creation");
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).unwrap()["id"].as_i64().unwrap();
+        if let Ok(out) = std::env::var("LOONAR_PROBE_PNG") {
+            run_batch(&cfg, &[json!({"op":"export_diagram","diagram":id_of("dia"),"path":out})], &BatchOptions::default()).expect("export");
+        }
+        run_batch(&cfg, &[json!({"op":"delete_package","package":id_of("pkg")})], &BatchOptions::default()).expect("cleanup");
+        shutdown();
     }
 }

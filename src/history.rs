@@ -22,6 +22,9 @@ pub enum ModelChoice {
         path: String,
         #[serde(default)]
         ea_user: String,
+        /// The file requires a user lock to edit ("Require User Lock to Edit").
+        #[serde(default = "locks_default")]
+        locks: bool,
     },
     /// A model in a PostgreSQL database. Passwords are not stored here: the settings' passwords when the connection is
     /// the one from the settings, otherwise Credential Manager entries named after the connection.
@@ -35,14 +38,21 @@ pub enum ModelChoice {
         sslmode: String,
         #[serde(default)]
         ea_user: String,
+        /// The model requires a user lock to edit ("Require User Lock to Edit").
+        #[serde(default = "locks_default")]
+        locks: bool,
     },
+}
+
+fn locks_default() -> bool {
+    true
 }
 
 impl ModelChoice {
     /// The model the settings point to (for new conversations and conversations from before version 0.5).
     pub fn of(cfg: &crate::config::AppConfig) -> Self {
         if cfg.uses_file() {
-            Self::File { path: cfg.model_file.display().to_string(), ea_user: cfg.ea_user.clone() }
+            Self::File { path: cfg.model_file.display().to_string(), ea_user: cfg.ea_user.clone(), locks: cfg.ea_locks }
         } else {
             Self::Database {
                 name: cfg.db_name.clone(),
@@ -51,6 +61,7 @@ impl ModelChoice {
                 user: cfg.db_user.clone(),
                 sslmode: cfg.db_sslmode.as_str().to_string(),
                 ea_user: cfg.ea_user.clone(),
+                locks: cfg.ea_locks,
             }
         }
     }
@@ -106,7 +117,8 @@ impl ModelChoice {
     pub fn apply(&self, base: &crate::config::AppConfig) -> Result<crate::config::AppConfig> {
         let mut cfg = base.clone();
         match self {
-            Self::File { path, .. } => {
+            Self::File { path, locks, .. } => {
+                cfg.ea_locks = *locks;
                 let file = PathBuf::from(path);
                 if !file.is_file() {
                     anyhow::bail!("{}", crate::i18n::fmt("The model file of this conversation no longer exists: {0}. Choose another model in the conversation header.", &[path.clone()]));
@@ -114,7 +126,8 @@ impl ModelChoice {
                 cfg.model_source = crate::config::ModelSource::File;
                 cfg.model_file = file;
             }
-            Self::Database { name, host, port, user, sslmode, .. } => {
+            Self::Database { name, host, port, user, sslmode, locks, .. } => {
+                cfg.ea_locks = *locks;
                 cfg.model_source = crate::config::ModelSource::Postgres;
                 cfg.db_name = name.clone();
                 cfg.db_host = host.clone();
@@ -283,17 +296,18 @@ mod tests {
         let same = default.apply(&base).unwrap();
         assert_eq!((same.db_name.as_str(), same.db_password.as_str(), same.ea_password_key.as_str()), ("ea", "secret", crate::config::secrets::EA_PASSWORD));
 
-        let other = ModelChoice::Database { name: "ea2".into(), host: "srv".into(), port: 5432, user: "reader".into(), sslmode: "require".into(), ea_user: "claude".into() };
+        let other = ModelChoice::Database { name: "ea2".into(), host: "srv".into(), port: 5432, user: "reader".into(), sslmode: "require".into(), ea_user: "claude".into(), locks: false };
         assert!(!other.uses_settings_database(&base));
         let cfg = other.apply(&base).unwrap();
         assert_eq!(cfg.db_name, "ea2");
+        assert!(!cfg.ea_locks, "the lock option of the conversation model");
         assert_eq!(cfg.db_sslmode, crate::config::SslMode::Require);
         assert_eq!(other.db_secret_name().unwrap(), "db_password:reader@srv:5432/ea2");
         assert_eq!(cfg.ea_password_key, "ea_password:claude@ea2@srv:5432", "another model has its own EA password entry");
 
         let file = std::env::temp_dir().join(format!("loonar-model-choice-{}.qea", std::process::id()));
         std::fs::write(&file, b"x").unwrap();
-        let in_file = ModelChoice::File { path: file.display().to_string(), ea_user: String::new() };
+        let in_file = ModelChoice::File { path: file.display().to_string(), ea_user: String::new(), locks: true };
         let cfg = in_file.apply(&base).unwrap();
         assert!(cfg.uses_file() && cfg.model_file == file && cfg.ea_user.is_empty());
         assert_eq!(in_file.label(), file.file_name().unwrap().to_string_lossy());

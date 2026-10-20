@@ -2,6 +2,17 @@
 
 Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen Loonar EA Assistant).
 
+## Version 0.6.5 (2026-10-20)
+
+- Das EA-Konto gehört zum Modell, nicht zur App: EA-Konto und Passwort werden in der Karte „2. Modell“ bei Datei oder Datenbank eingestellt. Die Karte „3. Enterprise Architect“ enthält nur den Pfad zu EA.exe und „Speichern und EA-Zugriff prüfen“.
+- Datei und Datenbank: Kontrollkästchen „Im Modell ist Security aktiviert (EA-Benutzerkonten)“. Ohne es sind Konto- und Passwortfelder deaktiviert, und EA öffnet das Modell ohne Anmeldung.
+- Neue Option „Das Modell erfordert eine Sperre zum Bearbeiten (Require User Lock to Edit)“: damit sperrt der Assistent die geänderten Pakete und Elemente und gibt die Sperren danach frei; ohne sie sperrt er nicht.
+- Der Test der Modelleinstellungen und des Modells einer Unterhaltung speichert ein Testpaket im Modell, prüft es und löscht es sofort.
+- Eine neue Unterhaltung beginnt mit der Bestätigung ihres Modells („Modell bestätigen und beginnen“). Danach ist das Modell festgelegt und nur noch sichtbar; eine Änderung des Standardmodells in den Einstellungen ändert laufende Unterhaltungen nicht.
+- Korrektur: Eine Unterhaltung erscheint gleich nach der ersten Nachricht in der Liste. Vorher fehlte eine Unterhaltung, in der der Assistent noch arbeitete.
+- Korrektur: Partitionen (Swimlanes) im Aktivitätsdiagramm, die höher als breit sind, zeichnet EA senkrecht, mit dem Namen oben.
+- Korrektur: Die Vorschau eines im EA-Fenster geöffneten Diagramms zeigt den Stand nach dem letzten Schreiben (EA lädt das Diagramm vor dem Bildexport neu).
+
 ## Version 0.6.4 (2026-10-19)
 
 - Zeichnen nach einem Bild: Der Assistent übernimmt das Layout des Anhangs (Zeilen, Reihenfolge, Lage zu den Nachbarn, Verlauf der Linien), statt das Diagramm neu anzuordnen; er misst das Bild zuerst aus, hält mindestens 40 px Abstand zwischen Elementen und prüft danach zuerst jede Beziehung, dann das Layout (höchstens zwei Korrekturrunden).

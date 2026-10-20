@@ -2,6 +2,17 @@
 
 All notable changes to Loonar Compass (named Loonar EA Assistant until version 0.3).
 
+## Version 0.6.5 (2026-10-20)
+
+- The EA account belongs to the model, not to the app: the EA account and password are set in card "2. Model", with the file or database. Card "3. Enterprise Architect" has only the path to EA.exe and "Save and test EA access".
+- File and database: a checkbox "The model has security enabled (EA user accounts)". Without it the account and password fields are disabled and EA opens the model without a login.
+- New option "The model requires a lock to edit (Require User Lock to Edit)": with it the assistant locks the packages and elements it changes and releases the locks afterwards; without it, it does not lock.
+- The test of the model settings and of a conversation's model saves a test package in the model, checks it and deletes it at once.
+- A new conversation starts with confirming its model ("Confirm the model and start"). The conversation's model is then fixed and shown read-only; changing the default model in the settings does not change conversations in progress.
+- Fix: a conversation appears on the list right after its first message. Before, a conversation in which the assistant was still working was missing from the list.
+- Fix: activity diagram partitions (swimlanes) taller than wide are drawn vertical in EA, with the name on top.
+- Fix: the preview of a diagram open in the EA window shows the state after the last write (EA reloads the diagram before exporting the image).
+
 ## Version 0.6.4 (2026-10-19)
 
 - Drawing from a picture: the assistant reproduces the layout of the attachment (rows, order, position relative to neighbours, how lines run) instead of laying the diagram out anew; it measures the picture first, keeps at least 40 px between elements, and afterwards checks every relationship first, then the layout (at most two rounds of corrections).

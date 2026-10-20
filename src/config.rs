@@ -128,6 +128,8 @@ pub struct AppConfig {
     pub ea_user: String,
     /// Credential Manager entry with the EA account password (the settings' account, or a conversation's own account).
     pub ea_password_key: String,
+    /// The model (file or database) has "Require User Lock to Edit": the assistant locks what it changes (default on).
+    pub ea_locks: bool,
     pub approval_mode: ApprovalMode,
     pub history_dir: PathBuf,
     pub attachments_dir: PathBuf,
@@ -264,7 +266,7 @@ impl AppConfig {
             }),
             ea_user: get_or("ea.user", ""),
             ea_password_key: secrets::EA_PASSWORD.to_string(),
-            // Package locking on write is always on (no option in the settings).
+            ea_locks: get_or("ea.locks", "true") != "false",
             approval_mode: ApprovalMode::parse(&get_or("approval.mode", "ask"))?,
             history_dir: base_dir.join(get_or("history.dir", "history")),
             attachments_dir: base_dir.join(get_or("attachments.dir", "attachments")),
