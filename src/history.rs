@@ -66,6 +66,21 @@ impl ModelChoice {
         }
     }
 
+    /// The same model (file or database), whatever the account or options: a conversation belongs to the project
+    /// open in EA when this holds.
+    pub fn same_project(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::File { path: a, .. }, Self::File { path: b, .. }) => {
+                let canonical = |p: &str| std::fs::canonicalize(p).map(|p| p.to_string_lossy().to_lowercase()).unwrap_or_else(|_| p.to_lowercase());
+                canonical(a) == canonical(b)
+            }
+            (Self::Database { name: a, host: ha, port: pa, .. }, Self::Database { name: b, host: hb, port: pb, .. }) => {
+                a.eq_ignore_ascii_case(b) && ha.eq_ignore_ascii_case(hb) && pa == pb
+            }
+            _ => false,
+        }
+    }
+
     /// The EA account of this model (empty for a file without security).
     pub fn ea_user(&self) -> &str {
         match self {

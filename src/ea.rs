@@ -64,6 +64,18 @@ pub struct BatchOptions {
     pub keep_locks: bool,
 }
 
+static IN_EA_TAB: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Compass runs in a tab of the user's EA window: writes to the model that window has open go through it (also for a
+/// database), so the user sees them at once and no second EA instance is started.
+pub fn set_in_ea_tab() {
+    IN_EA_TAB.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn in_ea_tab() -> bool {
+    IN_EA_TAB.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// What EA opens: the path of an EA file, or the connection string of the model database built from the database
 /// settings (EA needs the database account in it). The port follows a comma (`SRC=server,port@database`), the same way
 /// EA itself writes it.
@@ -203,7 +215,7 @@ pub fn run_batch(cfg: &AppConfig, ops: &[Value], options: &BatchOptions) -> Resu
 
     // An EA file the user has open is written through the user's EA window: a second EA instance must not open
     // the same file (a .qea file is meant for one user). The background session for it, if any, is closed.
-    if cfg.uses_file() {
+    if cfg.uses_file() || IN_EA_TAB.load(std::sync::atomic::Ordering::Relaxed) {
         let target = crate::ea_ui::Target::of(cfg);
         if crate::ea_ui::has_model_open(&target) {
             WORKER.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).take();

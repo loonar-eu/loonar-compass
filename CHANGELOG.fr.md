@@ -2,6 +2,22 @@
 
 Toutes les modifications importantes de l'application Loonar Compass (nommée Loonar EA Assistant jusqu'à la version 0.3).
 
+## Version 0.7 (2026-10-21)
+
+Compass dans Enterprise Architect :
+
+- Complément EA : le bouton « Loonar Compass » du ruban Start (groupe Add-Ins) ouvre Compass dans un onglet de la fenêtre EA. Le programme d'installation propose « Ajouter Loonar Compass à Enterprise Architect » ; cela fonctionne avec toute installation d'EA, y compris une version d'essai.
+- Dans EA, Compass travaille toujours sur le projet ouvert dans cette fenêtre EA (fichier ou base) : aucun modèle à choisir, rien à confirmer. La liste ne montre que les conversations de ce projet ; ouvrir un autre projet dans EA bascule Compass. Sans projet ouvert, Compass ne fonctionne pas.
+- Les écritures passent par la même fenêtre EA : les modifications apparaissent aussitôt dans le navigateur et les diagrammes.
+- « Afficher le diagramme » et « Modifier le diagramme » ouvrent le diagramme dans EA, sans images dans le chat.
+- Menu contextuel d'un élément, paquetage ou diagramme : « Ajouter à la conversation Compass » insère une référence dans le message, p. ex. « Paquetage : Shop (id 5) ».
+- Mise en page étroite à ancrer près du modèle : icônes en bas, liste des conversations au-dessus du chat, pages défilant horizontalement et verticalement.
+- Dans EA, les paramètres ne gardent que Claude, l'approbation, Confluence et Miro ; le modèle et EA viennent du projet ouvert.
+
+Partout :
+
+- Dictionnaire : clic droit sur un mot souligné dans le champ de message → « Ajouter au dictionnaire ». Une expression polonaise entre dans le dictionnaire Windows sous toutes ses formes (singulier et pluriel, du nominatif au vocatif).
+
 ## Version 0.6.5 (2026-10-20)
 
 - Le compte EA appartient au modèle, pas à l'application : le compte et le mot de passe EA se règlent dans la carte « 2. Modèle », avec le fichier ou la base. La carte « 3. Enterprise Architect » ne contient que le chemin d'EA.exe et « Enregistrer et tester l'accès à EA ».

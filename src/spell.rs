@@ -58,6 +58,12 @@ impl SpellChecker {
         None
     }
 
+    /// Adds a word to the user's Windows dictionary of this language (it is then accepted in every application).
+    pub fn add(&self, word: &str) -> bool {
+        // SAFETY: standard COM call.
+        unsafe { self.checker.Add(&HSTRING::from(word)).is_ok() }
+    }
+
     /// Ranges of misspelled words as byte positions in `text`.
     pub fn errors(&self, text: &str) -> Vec<Range<usize>> {
         let mut found = Vec::new();

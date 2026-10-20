@@ -17,6 +17,12 @@ fn with_running_ea<T: Send + 'static>(timeout: Duration, f: impl FnOnce(&Disp) -
         use windows::Win32::System::Com::{CLSIDFromProgID, CoInitializeEx, IDispatch, COINIT_APARTMENTTHREADED};
         use windows::Win32::System::Ole::GetActiveObject;
         let result = (|| -> Result<T> {
+            // In a tab of EA: exactly the EA window that hosts Compass (its add-in registered the repository in the
+            // Running Object Table), not the first EA found in the system.
+            if let Some(name) = ROT_NAME.get() {
+                let repo = Disp(unsafe { repository_from_rot(name)? });
+                return f(&repo);
+            }
             // SAFETY: COM initialization in this thread and retrieval of the object registered by the running EA.
             let app = unsafe {
                 let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
@@ -36,6 +42,52 @@ fn with_running_ea<T: Send + 'static>(timeout: Duration, f: impl FnOnce(&Disp) -
         let _ = tx.send(result);
     });
     rx.recv_timeout(timeout).map_err(|_| anyhow!("{}", crate::i18n::tr("the EA window is not responding (a dialog box may be open)")))?
+}
+
+static ROT_NAME: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// Compass in a tab of EA: the name under which that EA's add-in registered its repository (`--ea-rot`).
+pub fn set_rot_name(name: &str) {
+    let _ = ROT_NAME.set(name.to_string());
+}
+
+/// References the EA add-in sent with "Add to the Compass conversation" (an element, package or diagram picked in
+/// the EA window), taken out of their hand-over file. Empty outside a tab of EA.
+pub fn take_references() -> Vec<String> {
+    let Some(name) = ROT_NAME.get() else { return Vec::new() };
+    let file = std::env::temp_dir().join(format!("loonar-ea-insert-{name}.txt"));
+    let Ok(text) = std::fs::read_to_string(&file) else { return Vec::new() };
+    let _ = std::fs::remove_file(&file);
+    text.lines().map(str::trim).filter(|line| !line.is_empty()).map(str::to_string).collect()
+}
+
+/// The repository registered in the Running Object Table under the item moniker `!name`.
+///
+/// # Safety
+/// COM calls; the thread is initialised for COM here.
+unsafe fn repository_from_rot(name: &str) -> Result<windows::Win32::System::Com::IDispatch> {
+    use windows::core::Interface;
+    use windows::Win32::System::Com::{CoInitializeEx, CoTaskMemFree, CreateBindCtx, GetRunningObjectTable, IDispatch, IMoniker, COINIT_APARTMENTTHREADED};
+    let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+    let gone = || anyhow!("{}", crate::i18n::tr("the Enterprise Architect window of this Compass tab is no longer available"));
+    let rot = GetRunningObjectTable(0).map_err(|_| gone())?;
+    let monikers = rot.EnumRunning().map_err(|_| gone())?;
+    let context = CreateBindCtx(0)?;
+    let wanted = format!("!{name}");
+    loop {
+        let mut item: [Option<IMoniker>; 1] = [None];
+        if monikers.Next(&mut item, None).is_err() {
+            break;
+        }
+        let Some(moniker) = item[0].take() else { break };
+        let Ok(display) = moniker.GetDisplayName(&context, None) else { continue };
+        let text = display.to_string().unwrap_or_default();
+        CoTaskMemFree(Some(display.0 as _));
+        if text.eq_ignore_ascii_case(&wanted) {
+            return Ok(rot.GetObject(&moniker).map_err(|_| gone())?.cast::<IDispatch>()?);
+        }
+    }
+    Err(gone())
 }
 
 /// The model's connection without credentials: EA connection strings may contain `PWD=`/`Password=`, and this

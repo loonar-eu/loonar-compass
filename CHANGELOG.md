@@ -2,6 +2,22 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
+## Wersja 0.7 (2026-10-21)
+
+Compass w Enterprise Architect:
+
+- Add-in do EA: przycisk „Loonar Compass” na wstążce Start (grupa Add-Ins) otwiera Compass jako zakładkę w oknie EA. Instalator ma pole „Dodaj Loonar Compass do Enterprise Architect”; działa z każdą instalacją EA, także wersją próbną.
+- W EA Compass pracuje zawsze na projekcie otwartym w tym oknie EA (pliku lub bazie): bez wybierania modelu i bez zatwierdzania. Lista pokazuje tylko rozmowy tego projektu, a zmiana projektu w EA przełącza Compass. Bez otwartego projektu Compass nie działa.
+- Zapisy idą przez to samo okno EA, więc zmiany widać od razu w drzewie i na diagramach.
+- „Pokaż diagram” i „Edytuj diagram” otwierają diagram w EA, bez obrazków w czacie.
+- Menu kontekstowe elementu, pakietu lub diagramu: „Dodaj do rozmowy w Compass” wstawia do wiadomości wskazanie obiektu, np. «Pakiet: Sklep (id 5)».
+- Wąski układ do zadokowania obok modelu: ikony na dole, lista rozmów nad czatem, przewijanie stron w poziomie i pionie.
+- W ustawieniach w EA zostają tylko Claude, tryb zatwierdzania, Confluence i Miro; model i EA wynikają z otwartego projektu.
+
+Wszędzie:
+
+- Słownik: prawy przycisk na podkreślonym słowie w polu wiadomości → „Dodaj do słownika”. Polskie wyrażenie trafia do słownika Windows we wszystkich formach (liczba pojedyncza i mnoga, od mianownika do wołacza).
+
 ## Wersja 0.6.5 (2026-10-20)
 
 - Konto EA należy do modelu, nie do aplikacji: konto i hasło EA ustawia się w karcie „2. Model”, przy pliku albo bazie. Karta „3. Enterprise Architect” ma tylko ścieżkę do EA.exe i przycisk „Zapisz i sprawdź dostęp do EA”.

@@ -795,6 +795,15 @@ fn ea_show_diagram(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
     }
     // Which diagram the image shows: the chat offers "Edit diagram" for it.
     let _ = std::fs::write(ctx.cfg.attachments_dir.join(format!("{stored}.diagram")), id.to_string());
+    // In a tab of EA the diagram is shown in EA itself; the image only lets the model check its work.
+    if ea::in_ea_tab() {
+        crate::ea_ui::open_diagram(&crate::ea_ui::Target::of(ctx.cfg), id as i32)?;
+        return Ok(ToolOutput {
+            text: format!("Diagram \"{name}\" (id {id}) is now open in the user's Enterprise Architect window, next to this chat. The attached image is only for your own check: the user does not see it in the chat, so refer to the diagram in EA."),
+            images: vec![stored],
+            files: Vec::new(),
+        });
+    }
     Ok(ToolOutput {
         text: format!("Diagram \"{name}\" (id {id}) is in the attached image. The user sees the same image in the chat and can save it to disk."),
         images: vec![stored],

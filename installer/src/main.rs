@@ -38,6 +38,8 @@ const APP_NAME: &str = config::APP_NAME;
 const PUBLISHER: &str = "Loonar Mariusz Głowacki";
 const APP_EXE: &str = "LoonarCompass.exe";
 const UNINSTALL_EXE: &str = "uninstall.exe";
+/// The Enterprise Architect add-in (a tab and a ribbon button of EA that host Compass).
+const ADDIN_DLL: &str = "LoonarCompass.EAAddin.dll";
 const LICENSE_FILE: &str = "LICENSE.txt";
 /// The Polish license is the binding text; it is installed next to the translation in the chosen language.
 const LICENSE_PL_FILE: &str = "LICENSE.pl.txt";
@@ -95,6 +97,7 @@ fn app_version() -> &'static str {
 
 // Installer contents, prepared by build_installer.ps1 (installer\build.rs checks that they exist).
 const PAYLOAD_APP: &[u8] = include_bytes!("../payload/app.exe");
+const PAYLOAD_ADDIN: &[u8] = include_bytes!("../payload/LoonarCompass.EAAddin.dll");
 const PAYLOAD_NOTICES: &[u8] = include_bytes!("../payload/THIRD-PARTY-NOTICES.txt");
 
 /// License and changelog in four languages (the user guide is on the website).
@@ -129,7 +132,7 @@ fn manual_file(lang: Lang) -> String {
 /// Every file the setup puts into the program folder (the application first: if it is running, an uninstallation
 /// stops before touching anything else).
 fn program_file_names() -> Vec<String> {
-    [APP_EXE, LICENSE_FILE, LICENSE_PL_FILE, CHANGELOG_FILE, NOTICES_FILE, UNINSTALL_EXE]
+    [APP_EXE, ADDIN_DLL, LICENSE_FILE, LICENSE_PL_FILE, CHANGELOG_FILE, NOTICES_FILE, UNINSTALL_EXE]
         .into_iter()
         .map(String::from)
         .chain(Lang::ALL.into_iter().map(manual_file))
@@ -505,6 +508,60 @@ mod reg {
             return check(rc, subkey);
         }
         Ok(())
+    }
+}
+
+/// Registration of the EA add-in for the current user: COM classes in HKCU\Software\Classes (64- and 32-bit
+/// views) and the entry EA reads at start. EA finds add-ins in the registry, so the folder EA is installed in
+/// does not matter (also for a trial).
+mod ea_addin {
+    use super::reg::{self, Root};
+    use anyhow::Result;
+    use std::path::Path;
+
+    const ASSEMBLY: &str = "LoonarCompass.EAAddin, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null";
+    const CLASSES: [(&str, &str, &str); 2] = [
+        ("LoonarCompass.Addin", "LoonarCompass.Addin", "{6C1E5B7A-3D2F-4B8E-9A41-2F7C0D5E8B13}"),
+        ("LoonarCompass.Tab", "LoonarCompass.CompassTab", "{9B4D2E61-7A3C-4F15-8E2B-5D0C6A1F9E47}"),
+    ];
+    const ADDINS: [&str; 2] = [r"Software\Sparx Systems\EAAddins64\LoonarCompass", r"Software\Sparx Systems\EAAddins\LoonarCompass"];
+
+    pub fn register(dll: &Path) -> Result<()> {
+        let code_base = format!("file:///{}", dll.display().to_string().replace('\\', "/").replace(' ', "%20"));
+        let root = Root::CurrentUser;
+        for (prog_id, class, clsid) in CLASSES {
+            reg::set_string(root, &format!(r"Software\Classes\{prog_id}"), "", class)?;
+            reg::set_string(root, &format!(r"Software\Classes\{prog_id}\CLSID"), "", clsid)?;
+            for view in [r"Software\Classes\CLSID", r"Software\Classes\Wow6432Node\CLSID"] {
+                let key = format!(r"{view}\{clsid}");
+                reg::set_string(root, &key, "", class)?;
+                reg::set_string(root, &format!(r"{key}\ProgId"), "", prog_id)?;
+                let server = format!(r"{key}\InprocServer32");
+                reg::set_string(root, &server, "", "mscoree.dll")?;
+                reg::set_string(root, &server, "ThreadingModel", "Both")?;
+                reg::set_string(root, &server, "Class", class)?;
+                reg::set_string(root, &server, "Assembly", ASSEMBLY)?;
+                reg::set_string(root, &server, "RuntimeVersion", "v4.0.30319")?;
+                reg::set_string(root, &server, "CodeBase", &code_base)?;
+                reg::set_string(root, &format!(r"{key}\Implemented Categories\{{62C8FE65-4EBB-45e7-B440-6E39B2CDBF29}}"), "", "")?;
+            }
+        }
+        for key in ADDINS {
+            reg::set_string(root, key, "", "LoonarCompass.Addin")?;
+        }
+        Ok(())
+    }
+
+    pub fn unregister() {
+        let root = Root::CurrentUser;
+        for (prog_id, _, clsid) in CLASSES {
+            let _ = reg::delete_key(root, &format!(r"Software\Classes\{prog_id}"));
+            let _ = reg::delete_key(root, &format!(r"Software\Classes\CLSID\{clsid}"));
+            let _ = reg::delete_key(root, &format!(r"Software\Classes\Wow6432Node\CLSID\{clsid}"));
+        }
+        for key in ADDINS {
+            let _ = reg::delete_key(root, key);
+        }
     }
 }
 
@@ -1022,6 +1079,10 @@ fn install_program(plan: &ProgramPlan, progress: &Progress) -> Result<Vec<String
     }
     write_file(&dir.join(CHANGELOG_FILE), payload_changelog(plan.lang))?;
     write_file(&dir.join(NOTICES_FILE), PAYLOAD_NOTICES)?;
+    // Written always (it is registered in EA only when chosen): an update of the program updates the add-in too.
+    write_file(&dir.join(ADDIN_DLL), PAYLOAD_ADDIN).with_context(|| {
+        crate::i18n::fmt("cannot write {0} (if Enterprise Architect is running, close it and try again)", &[ADDIN_DLL.to_string()])
+    })?;
     // The user guide is on the website now: PDFs left by earlier versions are removed.
     for lang in Lang::ALL {
         let _ = std::fs::remove_file(dir.join(manual_file(lang)));
@@ -1266,6 +1327,8 @@ struct Report {
 #[derive(Clone)]
 struct InstallPlan {
     program: ProgramPlan,
+    /// Register the add-in in Enterprise Architect for the user who installs.
+    ea_addin: bool,
     config: ConfigForm,
     /// Installations just for the current user that the new one replaces.
     replaces: Vec<(&'static Product, Installed)>,
@@ -1287,6 +1350,13 @@ fn install(plan: &InstallPlan, hwnd: isize, progress: &Progress) -> Result<Repor
     };
     progress.set(0.86, crate::i18n::tr("Saving settings…"));
     done.extend(save_user_settings(&plan.config, program.lang)?);
+    // The add-in is registered for the user (not in the elevated copy: its registry part would belong to the administrator).
+    if plan.ea_addin {
+        ea_addin::register(&program.dir.join(ADDIN_DLL))?;
+        done.push(crate::i18n::tr("Loonar Compass in Enterprise Architect (Start ribbon → Add-Ins)").to_string());
+    } else {
+        ea_addin::unregister();
+    }
     let mut warnings = Vec::new();
     for (product, old) in &plan.replaces {
         progress.set(0.92, crate::i18n::tr("Removing the earlier version…"));
@@ -1310,6 +1380,7 @@ fn uninstall(target: &Installed, remove_data: bool, remove_secrets: bool, hwnd: 
         remove_program(target.scope, &target.dir, &part)?
     };
     let mut warnings = Vec::new();
+    ea_addin::unregister();
     progress.set(0.85, crate::i18n::tr("Cleaning up user data…"));
     // Read before the data folder goes: the names of the secrets saved for conversation connections.
     let connection_secrets = secrets::connection_names(&config::user_data_dir());
@@ -1446,6 +1517,7 @@ struct Setup {
     dir: String,
     start_menu: bool,
     desktop: bool,
+    ea_addin: bool,
     config: ConfigForm,
     /// Uninstallation: whether to also remove user data and secrets.
     remove_data: bool,
@@ -1759,6 +1831,7 @@ impl Setup {
             dir: dir.display().to_string(),
             start_menu: true,
             desktop: true,
+            ea_addin: true,
             config,
             remove_data: false,
             remove_secrets: false,
@@ -1814,7 +1887,7 @@ impl Setup {
                 replaces.push((&CURRENT, own.clone()));
             }
         }
-        InstallPlan { program, config: self.config.clone(), replaces }
+        InstallPlan { program, ea_addin: self.ea_addin, config: self.config.clone(), replaces }
     }
 
     /// Language change on the first page: the wizard, license and changelog switch to the new language at once.
@@ -2205,6 +2278,10 @@ impl Setup {
         ui.label(bold(crate::i18n::tr("Shortcuts"), 14.5));
         ui.checkbox(&mut self.start_menu, crate::i18n::tr("Start menu (application, user guide, uninstall)"));
         ui.checkbox(&mut self.desktop, crate::i18n::tr("Desktop"));
+        ui.add_space(10.0);
+        ui.label(bold(crate::i18n::tr("Enterprise Architect"), 14.5));
+        ui.checkbox(&mut self.ea_addin, crate::i18n::tr("Add Loonar Compass to Enterprise Architect (a tab next to the model, button on the Start ribbon)"));
+        muted(ui, crate::i18n::tr("Works with any Enterprise Architect installation, also a trial. Restart EA after the installation."));
         ui.add_space(6.0);
         muted(ui, crate::i18n::tr("Windows 11 does not allow installers to pin programs to the taskbar. After installation, start the application, right-click its icon on the taskbar and choose \"Pin to taskbar\"."));
         ui.add_space(6.0);

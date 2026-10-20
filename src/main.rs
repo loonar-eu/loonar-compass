@@ -552,11 +552,29 @@ fn main() -> eframe::Result {
         i18n::set(i18n::Lang::parse(saved.get("ui.language").map(String::as_str).unwrap_or("pl")));
     }
 
-    let options = || eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1100.0, 760.0])
-            .with_min_inner_size([900.0, 600.0])
-            .with_icon(Arc::new(egui::IconData { rgba: ICON_RGBA.to_vec(), width: 256, height: 256 })),
+    // In a tab of Enterprise Architect (`--ea-tab`, started by the EA add-in): a window without a frame that the add-in
+    // docks into the tab; writes go through that EA window.
+    let in_ea_tab = args.iter().any(|a| a == "--ea-tab");
+    if in_ea_tab {
+        ea::set_in_ea_tab();
+        if let Some(name) = args.iter().position(|a| a == "--ea-rot").and_then(|i| args.get(i + 1)) {
+            ea_ui::set_rot_name(name);
+        }
+    }
+    let options = move || eframe::NativeOptions {
+        viewport: if in_ea_tab {
+            egui::ViewportBuilder::default()
+                .with_inner_size([520.0, 700.0])
+                .with_min_inner_size([200.0, 200.0])
+                .with_decorations(false)
+                .with_taskbar(false)
+                .with_icon(Arc::new(egui::IconData { rgba: ICON_RGBA.to_vec(), width: 256, height: 256 }))
+        } else {
+            egui::ViewportBuilder::default()
+                .with_inner_size([1100.0, 760.0])
+                .with_min_inner_size([900.0, 600.0])
+                .with_icon(Arc::new(egui::IconData { rgba: ICON_RGBA.to_vec(), width: 256, height: 256 }))
+        },
         ..Default::default()
     };
     window::run(config::APP_NAME, options, move |cc| {
@@ -748,6 +766,9 @@ struct App {
     spell_text: String,
     /// Byte ranges of misspelled words in the message field.
     spell_errors: Vec<std::ops::Range<usize>>,
+    /// Forms of an expression being added to the dictionary (Claude inflects a Polish one), and the expression.
+    dictionary_rx: Option<mpsc::Receiver<Result<Vec<String>, String>>>,
+    dictionary_word: String,
     /// Whether Ctrl+V was held down in the previous frame (a paste counts once per key press).
     paste_down: bool,
     /// Demo mode: put the cursor in the message field (for screenshots with a blinking cursor).
@@ -767,6 +788,8 @@ struct App {
     conn: Option<ConnEditor>,
     /// Id of the empty conversation whose model the user confirmed: only then the conversation starts.
     confirmed_session: String,
+    /// In a tab of EA: the project that EA window has open. Every conversation there uses it (none = Compass does not work).
+    ea_project: Option<ModelChoice>,
     /// The diagram editor window that is open: the diagram and the changes come back when it closes.
     editor_rx: Option<mpsc::Receiver<Result<Option<(Value, Value)>, String>>>,
     /// "Tidy with AI" in the diagram editor: the request goes to the conversation once the editor's changes are saved.
@@ -907,6 +930,7 @@ impl App {
             sessions,
             conn: None,
             confirmed_session: String::new(),
+            ea_project: None,
             editor_rx: None,
             tidy_request: None,
             miro: None,
@@ -929,6 +953,8 @@ impl App {
             spell_ready: false,
             spell_text: String::new(),
             spell_errors: Vec::new(),
+            dictionary_rx: None,
+            dictionary_word: String::new(),
             paste_down: false,
             demo_focus: false,
             background: Vec::new(),
@@ -944,6 +970,12 @@ impl App {
     /// `--open-last` loads the last conversation. `--demo-busy` and `--input-file` exist only in development
     /// builds (for screenshots).
     fn apply_start_options(&mut self, args: &[String]) {
+        // Started from the EA add-in: a new conversation with the model open in that EA window (still to be confirmed).
+        if let Some(file) = args.iter().position(|a| a == "--ea-model").and_then(|i| args.get(i + 1)) {
+            let connection = std::fs::read_to_string(file).unwrap_or_default();
+            let _ = std::fs::remove_file(file);
+            self.use_ea_window_model(connection.trim());
+        }
         if let Some(view) = args.iter().position(|a| a == "--view").and_then(|i| args.get(i + 1)) {
             self.view = match view.as_str() {
                 "settings" => View::Settings,
@@ -1008,6 +1040,14 @@ impl App {
                 return;
             }
         };
+        // In a tab of EA the diagram is edited in EA itself: it opens there, next to the Compass tab.
+        if ea::in_ea_tab() {
+            self.status = match crate::ea_ui::open_diagram(&crate::ea_ui::Target::of(&cfg), diagram_id as i32) {
+                Ok(()) => crate::i18n::tr("The diagram is open in Enterprise Architect.").into(),
+                Err(e) => format!("{e:#}"),
+            };
+            return;
+        }
         let (tx, rx) = mpsc::channel();
         let wake = ctx.clone();
         std::thread::spawn(move || {
@@ -1355,8 +1395,40 @@ impl App {
         self.steps.clear();
     }
 
+    /// A new conversation with the model the user's EA window has open: an EA file by its path, a database when it is
+    /// the database of the settings (another database needs its connection chosen in the conversation's model window).
+    fn use_ea_window_model(&mut self, connection: &str) {
+        let Some(base) = self.cfg.clone() else { return };
+        if !self.session.messages.is_empty() {
+            self.switch_to(Session::new());
+        }
+        let file = PathBuf::from(connection);
+        let default = ModelChoice::of(&base);
+        let choice = if config::is_model_file(&file) && file.is_file() {
+            match &default {
+                // The file of the settings keeps its EA account and lock option.
+                ModelChoice::File { path, .. } if std::fs::canonicalize(path).ok() == std::fs::canonicalize(&file).ok() => default.clone(),
+                _ => ModelChoice::File { path: file.display().to_string(), ea_user: String::new(), locks: base.ea_locks },
+            }
+        } else if !base.uses_file() && !base.db_name.is_empty() && connection.to_lowercase().contains(&base.db_name.to_lowercase()) {
+            default.clone()
+        } else {
+            self.status = crate::i18n::tr("The model open in EA is not the database from the settings: choose its connection in \"Choose another model…\".").into();
+            return;
+        };
+        // In a tab of EA the project of that window decides: no choice and no confirmation.
+        if ea::in_ea_tab() {
+            self.ea_project = Some(choice.clone());
+            self.confirmed_session = self.session.id.clone();
+        }
+        self.session.model = Some(choice);
+    }
+
     /// Whether the conversation may start: it has messages (its model is fixed), or the user confirmed the model.
     fn model_confirmed(&self) -> bool {
+        if ea::in_ea_tab() {
+            return self.ea_project.is_some();
+        }
         !self.session.messages.is_empty() || self.confirmed_session == self.session.id
     }
 
@@ -2067,6 +2139,94 @@ impl App {
         });
     }
 
+    /// What can be added to the dictionary from the message field: the selected text, otherwise the underlined words.
+    fn dictionary_candidates(&self, ctx: &egui::Context, id: egui::Id) -> Vec<String> {
+        if self.spell.is_none() {
+            return Vec::new();
+        }
+        if let Some(range) = egui::TextEdit::load_state(ctx, id).and_then(|state| state.cursor.char_range()) {
+            let (a, b) = (range.primary.index.min(range.secondary.index), range.primary.index.max(range.secondary.index));
+            let selected: String = self.input.chars().skip(a).take(b - a).collect();
+            if !selected.trim().is_empty() {
+                return vec![selected.trim().to_string()];
+            }
+        }
+        let mut words: Vec<String> = Vec::new();
+        for range in &self.spell_errors {
+            let word = self.input[range.clone()].to_string();
+            if !words.contains(&word) {
+                words.push(word);
+            }
+        }
+        words.truncate(8);
+        words
+    }
+
+    /// Adds an expression to the dictionary. Claude recognises its language: a Polish one is added in all its forms
+    /// (singular and plural, every case from the nominative to the vocative), so none of them is underlined.
+    fn add_to_dictionary(&mut self, ctx: &egui::Context, expression: String) {
+        let Some(cfg) = self.cfg.clone() else { return };
+        let (tx, rx) = mpsc::channel();
+        let wake = ctx.clone();
+        let text = expression.clone();
+        std::thread::spawn(move || {
+            let result = (|| -> anyhow::Result<Vec<String>> {
+                let key = secrets::get(secrets::CLAUDE_API_KEY)?;
+                let client = claude::ClaudeClient::new(key, cfg.claude_model.clone(), 1500, cfg.claude_workspace_id.clone())?;
+                let prompt = format!(
+                    "Expression: \"{text}\". If it is Polish, list all its inflected forms: singular and plural, in all seven cases \
+                     (mianownik, dopełniacz, celownik, biernik, narzędnik, miejscownik, wołacz); inflect a multi-word expression as a \
+                     whole (all its words agree). If it has no plural, give the singular forms only. If it is not Polish, give only \
+                     the expression itself. Answer with JSON only: {{\"language\": \"<ISO code>\", \"forms\": [\"...\"]}}"
+                );
+                let response = client.send_value("You are a precise linguist. You answer with JSON only.", &[json!({ "role": "user", "content": prompt })], None)?;
+                let answer = response["content"].as_array().and_then(|c| c.iter().find_map(|b| b["text"].as_str())).unwrap_or("").to_string();
+                let start = answer.find('{').context(crate::i18n::tr("Claude did not return the forms"))?;
+                let end = answer.rfind('}').context(crate::i18n::tr("Claude did not return the forms"))?;
+                let value: Value = serde_json::from_str(&answer[start..=end])?;
+                let mut forms: Vec<String> = value["forms"].as_array().into_iter().flatten().filter_map(|f| f.as_str()).map(str::to_string).collect();
+                forms.push(text.clone());
+                Ok(forms)
+            })();
+            let _ = tx.send(result.map_err(|e| format!("{e:#}")));
+            wake.request_repaint();
+        });
+        self.dictionary_rx = Some(rx);
+        self.dictionary_word = expression.clone();
+        self.status = crate::i18n::fmt("Adding \"{0}\" to the dictionary…", &[expression]);
+    }
+
+    /// Receives the forms from Claude and adds every word of them to the Windows dictionary.
+    fn poll_dictionary(&mut self) {
+        let Some(rx) = &self.dictionary_rx else { return };
+        let Ok(result) = rx.try_recv() else { return };
+        self.dictionary_rx = None;
+        match result {
+            Ok(forms) => {
+                let mut words: Vec<String> = Vec::new();
+                for form in &forms {
+                    for word in form.split(|c: char| c.is_whitespace() || c == '-').map(|w| w.trim_matches(|c: char| !c.is_alphanumeric())) {
+                        if !word.is_empty() && !words.iter().any(|w| w == word) {
+                            words.push(word.to_string());
+                        }
+                    }
+                }
+                let added = self.spell.as_ref().map_or(0, |checker| words.iter().filter(|w| checker.add(w)).count());
+                // The dictionary list of Compass: what was added and when (the words themselves are in the Windows dictionary).
+                if let Some(cfg) = &self.cfg {
+                    let line = format!("{}\t{}\t{}\n", chrono::Local::now().format("%Y-%m-%d %H:%M"), self.dictionary_word, words.join(", "));
+                    use std::io::Write;
+                    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(cfg.base_dir.join("dictionary.txt")) {
+                        let _ = file.write_all(line.as_bytes());
+                    }
+                }
+                self.spell_text.clear();
+                self.status = crate::i18n::fmt("Added to the dictionary: \"{0}\" ({1} forms).", &[self.dictionary_word.clone(), added.to_string()]);
+            }
+            Err(e) => self.status = crate::i18n::fmt("Could not add to the dictionary: {0}", &[e]),
+        }
+    }
+
     /// Recomputes spelling errors in the message field, but only when the text has changed.
     fn refresh_spelling(&mut self) {
         if !self.spell_ready {
@@ -2220,7 +2380,11 @@ impl App {
 
     fn send(&mut self, ctx: &egui::Context) {
         if !self.model_confirmed() {
-            self.status = crate::i18n::tr("Confirm the model of the conversation first.").into();
+            self.status = if ea::in_ea_tab() {
+                crate::i18n::tr("Compass in EA works with the project open in Enterprise Architect: open an EA file or a database from the settings.").into()
+            } else {
+                crate::i18n::tr("Confirm the model of the conversation first.").into()
+            };
             return;
         }
         let text = std::mem::take(&mut self.input);
@@ -2234,7 +2398,7 @@ impl App {
             return;
         };
         if self.session.model.is_none() {
-            self.session.model = Some(ModelChoice::of(&cfg));
+            self.session.model = Some(self.ea_project.clone().unwrap_or_else(|| ModelChoice::of(&cfg)));
         }
         let title_hint = if text.trim().is_empty() { crate::i18n::tr("Attachment").to_string() } else { text.clone() };
         let message = Message { role: "user".into(), text, attachments, created: chrono::Utc::now().to_rfc3339() };
@@ -2388,6 +2552,8 @@ impl App {
             });
             ui.add_space(8.0);
 
+            // In a tab of EA the model is the project open in EA and EA is the one running: nothing to set here.
+            if !ea::in_ea_tab() {
             ui.vertical(|ui| {
                 settings_group(ui, crate::i18n::tr("2. Model"), inner_width, |ui| {
                     ui.horizontal_wrapped(|ui| {
@@ -2487,6 +2653,7 @@ impl App {
                     self.group_footer(ui, &ctx, GROUP_EA, crate::i18n::tr("Save and test EA access"));
                 });
             });
+            }
         });
 
         ui.add_space(12.0);
@@ -3588,7 +3755,8 @@ fn run_turn(
                         }
                     }
                     blocks.push(text_block(&output.text));
-                    if !output.images.is_empty() {
+                    // In a tab of EA the diagram itself is open in EA: its image is only for the model's own check.
+                    if !output.images.is_empty() && !ea::in_ea_tab() {
                         emit(WorkerEvent::Images(output.images));
                     }
                     if !output.files.is_empty() {
@@ -3912,6 +4080,11 @@ fn save_filter_name(stored: &str) -> &'static str {
 }
 
 /// Frame of the Settings, Changelog and About views: warm background and page margins.
+/// Scrolling of a page: in the narrow tab of EA also sideways (pages are wider than the tab).
+fn page_scroll() -> egui::ScrollArea {
+    if ea::in_ea_tab() { egui::ScrollArea::both().auto_shrink([false, false]) } else { egui::ScrollArea::vertical().auto_shrink([false, false]) }
+}
+
 fn page_frame() -> egui::Frame {
     egui::Frame::none().fill(theme::BACKGROUND).inner_margin(egui::Margin { left: 28.0, right: 12.0, top: 22.0, bottom: 10.0 })
 }
@@ -4052,13 +4225,54 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_dictionary();
+        // In a tab of EA: objects the user points at in EA ("Add to the Compass conversation") go into the message.
+        if ea::in_ea_tab() {
+            for reference in ea_ui::take_references() {
+                if !self.input.is_empty() && !self.input.ends_with(' ') && !self.input.ends_with('\n') {
+                    self.input.push(' ');
+                }
+                self.input.push_str(&reference);
+                self.input.push(' ');
+                self.view = View::Chat;
+            }
+            ctx.request_repaint_after(std::time::Duration::from_millis(500));
+        }
         self.poll_events(ctx);
         self.poll_background(ctx);
         self.poll_relang(ctx);
         let busy = self.busy();
 
+        // In a narrow tab of EA: the views as a row of icons at the bottom, the conversations above the chat, no footer.
+        let narrow = ea::in_ea_tab();
+        if narrow {
+            egui::TopBottomPanel::bottom("nav_bottom")
+                .show_separator_line(false)
+                .frame(egui::Frame::none().fill(theme::NAV).inner_margin(egui::Margin::symmetric(8.0, 6.0)))
+                .show(ctx, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        let fallback_of = |tip: &str| tip.chars().take(2).collect::<String>();
+                        for (view, glyph, tip) in [
+                            (View::Chat, icons::CHAT, crate::i18n::tr("Chat")),
+                            (View::Settings, icons::SETTINGS, crate::i18n::tr("Settings")),
+                            (View::Memory, icons::MEMORY, crate::i18n::tr("Assistant memory")),
+                            (View::Templates, icons::TEMPLATES, crate::i18n::tr("Document templates")),
+                            (View::Audit, icons::AUDIT, crate::i18n::tr("Model audit log")),
+                            (View::Changelog, icons::CHANGELOG, crate::i18n::tr("Changelog")),
+                            (View::Report, icons::REPORT, crate::i18n::tr("Report a bug")),
+                            (View::Support, icons::HEART, crate::i18n::tr("Support the project")),
+                            (View::Info, icons::INFO, crate::i18n::tr("About")),
+                        ] {
+                            if nav_button(ui, glyph, &fallback_of(tip), tip, self.view == view, None) {
+                                self.view = view;
+                            }
+                        }
+                    });
+                });
+        }
         // Navigation bar on the left (Loonar navy): logo, views as icons, "About" at the bottom.
         // Added first, so it takes the full height of the window.
+        if !narrow {
         egui::SidePanel::left("nav")
             .exact_width(60.0)
             .resizable(false)
@@ -4100,8 +4314,10 @@ impl eframe::App for App {
                     }
                 });
             });
+        }
 
-        // Owner bar at the bottom of every view.
+        // Owner bar at the bottom of every view (not in the narrow tab of EA).
+        if !narrow {
         egui::TopBottomPanel::bottom("footer")
             .show_separator_line(false)
             .frame(egui::Frame::none().fill(theme::BACKGROUND).inner_margin(egui::Margin::symmetric(14.0, 5.0)))
@@ -4115,16 +4331,35 @@ impl eframe::App for App {
                     );
                 });
             });
+        }
         self.splash_ui(ctx);
 
         if self.view == View::Chat {
-            egui::SidePanel::left("history")
-                .default_width(250.0)
-                .frame(egui::Frame::none().fill(theme::SIDEBAR).inner_margin(egui::Margin::symmetric(10.0, 12.0)))
-                .show(ctx, |ui| {
+            let history_ui = |ui: &mut egui::Ui| {
                 // The conversation list also works while the assistant is working: you can start a new conversation or go back
                 // to another one, and the work already started continues in the background.
                 ui.scope(|ui| {
+                    // Narrow tab of EA: search and "+" in one row, no title (the list takes a few rows only).
+                    if narrow {
+                        ui.horizontal(|ui| {
+                            let new = ui
+                                .add(egui::Button::new(icons::text(icons::ADD, "+", 13.0)).min_size(egui::vec2(26.0, 26.0)))
+                                .on_hover_text(crate::i18n::tr("New conversation"));
+                            if new.clicked() {
+                                self.switch_to(Session::new());
+                                self.pending.clear();
+                                self.renaming = None;
+                            }
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.search)
+                                    .hint_text(egui::RichText::new(crate::i18n::tr("Search conversations…")).color(theme::HINT))
+                                    .margin(egui::Margin::symmetric(6.0, 3.0))
+                                    .desired_width(f32::INFINITY),
+                            );
+                        });
+                        ui.add_space(2.0);
+                    }
+                    if !narrow {
                     ui.horizontal(|ui| {
                         ui.add_space(4.0);
                         ui.label(egui::RichText::new(crate::i18n::tr("Conversations")).font(egui::FontId::new(17.0, egui::FontFamily::Name(markdown::BOLD_FAMILY.into()))));
@@ -4148,6 +4383,7 @@ impl eframe::App for App {
                             .desired_width(f32::INFINITY),
                     );
                     ui.add_space(8.0);
+                    }
 
                     let query = self.search.trim().to_lowercase();
                     let mut open: Option<Session> = None;
@@ -4162,10 +4398,14 @@ impl eframe::App for App {
                             if !query.is_empty() && !session_matches(s, &query) {
                                 continue;
                             }
+                            // In a tab of EA: only the conversations of the project that window has open.
+                            if ea::in_ea_tab() && !matches!((&s.model, &self.ea_project), (Some(m), Some(p)) if m.same_project(p)) {
+                                continue;
+                            }
                             shown += 1;
                             // Group header (the list is sorted newest first).
                             let group = session_group(s);
-                            if group != last_group {
+                            if group != last_group && !narrow {
                                 ui.add_space(if last_group.is_empty() { 0.0 } else { 8.0 });
                                 ui.horizontal(|ui| {
                                     ui.add_space(10.0);
@@ -4243,13 +4483,21 @@ impl eframe::App for App {
                         }
                     }
                 });
-            });
+            };
+            let frame = egui::Frame::none().fill(theme::SIDEBAR).inner_margin(egui::Margin::symmetric(10.0, 12.0));
+            if narrow {
+                // About three conversations high (the rest scrolls): together with the chat header ~15-20% of the tab.
+                let compact = egui::Frame::none().fill(theme::SIDEBAR).inner_margin(egui::Margin::symmetric(6.0, 4.0));
+                egui::TopBottomPanel::top("history_top").resizable(true).default_height(118.0).min_height(60.0).frame(compact).show(ctx, history_ui);
+            } else {
+                egui::SidePanel::left("history").default_width(250.0).frame(frame).show(ctx, history_ui);
+            }
         }
 
         match self.view {
             View::Changelog => {
                 egui::CentralPanel::default().frame(page_frame()).show(ctx, |ui| {
-                    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                    page_scroll().show(ui, |ui| {
                         ui.set_max_width(900.0);
                         markdown::show(ui, changelog_text(), "changelog");
                     });
@@ -4257,7 +4505,7 @@ impl eframe::App for App {
             }
             View::Templates => {
                 egui::CentralPanel::default().frame(page_frame()).show(ctx, |ui| {
-                    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                    page_scroll().show(ui, |ui| {
                         ui.set_max_width(900.0);
                         self.templates_ui(ui);
                     });
@@ -4265,7 +4513,7 @@ impl eframe::App for App {
             }
             View::Audit => {
                 egui::CentralPanel::default().frame(page_frame()).show(ctx, |ui| {
-                    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                    page_scroll().show(ui, |ui| {
                         ui.set_max_width(900.0);
                         self.audit_ui(ui);
                     });
@@ -4273,7 +4521,7 @@ impl eframe::App for App {
             }
             View::Report => {
                 egui::CentralPanel::default().frame(page_frame()).show(ctx, |ui| {
-                    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                    page_scroll().show(ui, |ui| {
                         ui.set_max_width(820.0);
                         self.report_ui(ui);
                     });
@@ -4281,7 +4529,7 @@ impl eframe::App for App {
             }
             View::Memory => {
                 egui::CentralPanel::default().frame(page_frame()).show(ctx, |ui| {
-                    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                    page_scroll().show(ui, |ui| {
                         ui.set_max_width(900.0);
                         self.memory_ui(ui);
                     });
@@ -4289,7 +4537,7 @@ impl eframe::App for App {
             }
             View::Support => {
                 egui::CentralPanel::default().frame(page_frame()).show(ctx, |ui| {
-                    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                    page_scroll().show(ui, |ui| {
                         ui.set_max_width(760.0);
                         support_ui(ui);
                     });
@@ -4297,7 +4545,7 @@ impl eframe::App for App {
             }
             View::Info => {
                 egui::CentralPanel::default().frame(page_frame()).show(ctx, |ui| {
-                    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                    page_scroll().show(ui, |ui| {
                         ui.set_max_width(900.0);
                         info_ui(ui);
                     });
@@ -4322,7 +4570,7 @@ impl eframe::App for App {
                 self.miro_window(ctx);
                 egui::TopBottomPanel::top("chat_header")
                     .show_separator_line(false)
-                    .frame(egui::Frame::none().fill(theme::BACKGROUND).inner_margin(egui::Margin::symmetric(22.0, 12.0)))
+                    .frame(egui::Frame::none().fill(theme::BACKGROUND).inner_margin(if ea::in_ea_tab() { egui::Margin::symmetric(10.0, 4.0) } else { egui::Margin::symmetric(22.0, 12.0) }))
                     .show(ctx, |ui| {
                         ui.horizontal(|ui| {
                             let title = if self.session.messages.is_empty() { crate::i18n::tr("New conversation") } else { shown_title(&self.session.title) };
@@ -4494,6 +4742,18 @@ impl eframe::App for App {
                                 .show(ui, |ui| ui.add(edit))
                                 .inner
                         };
+                        // Right click: underlined words (or the selected text) can be added to the dictionary.
+                        let candidates = self.dictionary_candidates(ctx, resp.id);
+                        if !candidates.is_empty() {
+                            resp.context_menu(|ui| {
+                                for word in &candidates {
+                                    if ui.add_enabled(self.dictionary_rx.is_none(), egui::Button::new(crate::i18n::fmt("Add \"{0}\" to the dictionary", &[word.clone()]))).clicked() {
+                                        self.add_to_dictionary(ctx, word.clone());
+                                        ui.close_menu();
+                                    }
+                                }
+                            });
+                        }
                         if enter {
                             self.send(ctx);
                             resp.request_focus();
@@ -4505,9 +4765,11 @@ impl eframe::App for App {
                         if icon_button(ui, icons::PASTE, crate::i18n::tr("Paste"), crate::i18n::tr("Paste an image or files from the clipboard (Ctrl+V)")).clicked() {
                             paste = true;
                         }
-                        ui.add(egui::Label::new(
-                            egui::RichText::new(crate::i18n::tr("Drag files into the window to attach them")).small().color(theme::HINT),
-                        ).truncate());
+                        if !ea::in_ea_tab() {
+                            ui.add(egui::Label::new(
+                                egui::RichText::new(crate::i18n::tr("Drag files into the window to attach them")).small().color(theme::HINT),
+                            ).truncate());
+                        }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             // Sending also works while the assistant is working: the message goes to the queue.
                             let send = egui::Button::new(icons::text(icons::SEND, crate::i18n::tr("Send"), 14.0).color(egui::Color32::WHITE))
@@ -4599,11 +4861,16 @@ impl eframe::App for App {
                     .show(ctx, |ui| {
                     if self.session.messages.is_empty() {
                         ui.vertical_centered(|ui| {
-                            ui.add_space(ui.available_height() * 0.30);
-                            let logo = logo_texture(ctx);
-                            ui.add(egui::Image::new(&logo).fit_to_exact_size(egui::vec2(56.0, 56.0)).rounding(12.0));
-                            ui.add_space(10.0);
-                            ui.label(egui::RichText::new(crate::i18n::tr("How can I help?")).font(egui::FontId::new(24.0, egui::FontFamily::Name(markdown::BOLD_FAMILY.into()))));
+                            // The start screen is about 280 px tall: centred in a big window, from the top in a low one
+                            // (an EA tab), so the confirm button is never under the message field.
+                            ui.add_space(((ui.available_height() - 280.0) * 0.45).max(8.0));
+                            // The narrow tab of EA has no room for the logo and the big title.
+                            if !ea::in_ea_tab() {
+                                let logo = logo_texture(ctx);
+                                ui.add(egui::Image::new(&logo).fit_to_exact_size(egui::vec2(56.0, 56.0)).rounding(12.0));
+                                ui.add_space(10.0);
+                                ui.label(egui::RichText::new(crate::i18n::tr("How can I help?")).font(egui::FontId::new(24.0, egui::FontFamily::Name(markdown::BOLD_FAMILY.into()))));
+                            }
                             ui.add_space(4.0);
                             ui.label(
                                 egui::RichText::new(crate::i18n::tr("Ask about the Enterprise Architect model, request a diagram, or attach a file, photo or sketch."))
@@ -4612,7 +4879,7 @@ impl eframe::App for App {
                             // The model of the new conversation: the default from the settings unless another one is chosen.
                             if let Some(base) = &self.cfg {
                                 let default = ModelChoice::of(base);
-                                let choice = self.session.model.clone().unwrap_or_else(|| default.clone());
+                                let choice = self.session.model.clone().or_else(|| self.ea_project.clone()).unwrap_or_else(|| default.clone());
                                 ui.add_space(18.0);
                                 let text = if choice == default {
                                     crate::i18n::fmt("This conversation will use the default model from the settings: {0}", &[choice.label()])
@@ -4621,7 +4888,9 @@ impl eframe::App for App {
                                 };
                                 ui.label(egui::RichText::new(text).color(theme::TEXT)).on_hover_text(choice.describe());
                                 ui.add_space(4.0);
-                                if self.confirmed_session == self.session.id {
+                                if ea::in_ea_tab() {
+                                    ui.label(egui::RichText::new(crate::i18n::tr("Compass works with the project open in this Enterprise Architect window.")).small().color(theme::MUTED));
+                                } else if self.confirmed_session == self.session.id {
                                     ui.label(egui::RichText::new(crate::i18n::tr("The model is fixed for this conversation. To work with another model, start a new conversation.")).small().color(theme::MUTED));
                                 } else {
                                     ui.horizontal(|ui| {

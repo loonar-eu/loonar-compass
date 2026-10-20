@@ -168,6 +168,10 @@ try {
     # The application is embedded in the installer, so it must be signed before the installer is built.
     Invoke-Sign (Join-Path $payload 'app.exe')
     Copy-Item $notices (Join-Path $payload 'THIRD-PARTY-NOTICES.txt') -Force
+    # The Enterprise Architect add-in (.NET Framework compiler that comes with Windows).
+    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'eaaddin\build.ps1')
+    if ($LASTEXITCODE -ne 0) { throw 'EA add-in build failed' }
+    Copy-Item (Join-Path $root 'eaaddin\LoonarCompass.EAAddin.dll') (Join-Path $payload 'LoonarCompass.EAAddin.dll') -Force
     # License and changelog in 4 languages (pl = the base files without a language suffix); the user guide is on the website.
     foreach ($lang in 'pl', 'en', 'de', 'fr') {
         $suffix = if ($lang -eq 'pl') { '' } else { ".$lang" }
