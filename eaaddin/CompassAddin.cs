@@ -40,16 +40,11 @@ namespace LoonarCompass
 
         public object EA_GetMenuItems(object repository, string location, string menuName)
         {
-            if (menuName == "")
-                return Menu;
-            if (menuName == Menu)
-            {
-                // Right-click on an element, package or diagram (browser or diagram): point Compass at it.
-                if (location == "TreeView" || location == "Diagram")
-                    return new string[] { L10n.Get(AddReference), L10n.Get(OpenTab) };
-                return new string[] { L10n.Get(OpenTab), L10n.Get(OpenWindow) };
-            }
-            return "";
+            // Right-click on an element, package or diagram: one item that points Compass at it.
+            if (location == "TreeView" || location == "Diagram")
+                return menuName == "" ? L10n.Get(AddReference) : "";
+            // Ribbon: one button that opens Compass in EA (the standalone app is started from the Start menu).
+            return menuName == "" ? "Loonar Compass" : "";
         }
 
         public void EA_GetMenuState(object repository, string location, string menuName, string itemName, ref bool isEnabled, ref bool isChecked)
@@ -69,11 +64,6 @@ namespace LoonarCompass
                     string reference = Reference(repository);
                     if (reference != null && current != null)
                         current.Send(reference);
-                    return;
-                }
-                if (itemName == L10n.Get(OpenWindow))
-                {
-                    Process.Start(new ProcessStartInfo(CompassTab.Exe(), CompassTab.Arguments(connection, null)) { UseShellExecute = false });
                     return;
                 }
                 dynamic repo = repository;
@@ -108,7 +98,7 @@ namespace LoonarCompass
             if (current != null && !current.IsDisposed)
                 current.Start(Connection(repository), repository);
             else if (Environment.GetEnvironmentVariable("LOONAR_ADDIN_AUTOTAB") == "1")
-                EA_MenuClick(repository, "MainMenu", Menu, L10n.Get(OpenTab));
+                EA_MenuClick(repository, "MainMenu", "", "Loonar Compass");
         }
 
         /// <summary>The project closed in EA: Compass does not work without one, so it closes.</summary>
@@ -121,6 +111,9 @@ namespace LoonarCompass
 
         public void EA_Disconnect()
         {
+            // EA closes: Compass closes with it (it saves its conversation).
+            if (current != null && !current.IsDisposed)
+                current.Stop("");
             GC.Collect();
             GC.WaitForPendingFinalizers();
         }
@@ -378,7 +371,8 @@ namespace LoonarCompass
                 return;
             }
             // A window Compass replaced (e.g. after switching the graphics renderer) is docked again.
-            if (child != IntPtr.Zero && !IsWindow(child))
+            IntPtr main = process.MainWindowHandle;
+            if (child != IntPtr.Zero && (!IsWindow(child) || (main != IntPtr.Zero && main != child && IsWindowVisible(main) && !IsWindowVisible(child))))
             {
                 Log.Write("Docked window is gone, looking again");
                 child = IntPtr.Zero;

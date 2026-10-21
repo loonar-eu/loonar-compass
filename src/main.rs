@@ -4879,7 +4879,20 @@ impl eframe::App for App {
                         if busy {
                             ui.add(egui::Spinner::new().size(12.0));
                         }
-                        ui.label(egui::RichText::new(&self.status).small().color(theme::MUTED));
+                        // In a tab of EA the step list is in System Output: here the last step in one line.
+                        let last_step = self.steps.last().filter(|_| ea::in_ea_tab()).map(|s| match &s.result {
+                            None => format!("▶ {}", s.text),
+                            Some((true, detail, _)) => format!("✓ {}", if detail.is_empty() { &s.text } else { detail }),
+                            Some((false, detail, _)) => format!("✗ {detail}"),
+                        });
+                        match last_step {
+                            Some(line) => {
+                                ui.add(egui::Label::new(egui::RichText::new(line.replace('\n', " ")).small().color(theme::MUTED)).truncate());
+                            }
+                            None => {
+                                ui.label(egui::RichText::new(&self.status).small().color(theme::MUTED));
+                            }
+                        }
                     });
                 });
 
