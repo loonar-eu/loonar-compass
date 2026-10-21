@@ -18,7 +18,7 @@ if ($Unregister) {
     return
 }
 $Dll = (Resolve-Path $Dll).Path
-$codeBase = ([Uri]$Dll).AbsoluteUri
+$codeBase = 'file:///' + $Dll.Replace('', '/')  # not URL-escaped: with %20 .NET does not find a folder with spaces
 $assembly = [Reflection.AssemblyName]::GetAssemblyName($Dll).FullName
 foreach ($c in $classes) {
     Set-Default "$root\$($c.ProgId)" $c.Class
