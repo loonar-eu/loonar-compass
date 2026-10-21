@@ -51,6 +51,20 @@ pub fn set_rot_name(name: &str) {
     let _ = ROT_NAME.set(name.to_string());
 }
 
+/// A line for the "Loonar Compass" tab of EA's System Output (the add-in shows what the assistant does there).
+/// Nothing outside a tab of EA.
+pub fn output(text: &str) {
+    let Some(name) = ROT_NAME.get() else { return };
+    let file = std::env::temp_dir().join(format!("loonar-ea-output-{name}.txt"));
+    let line = format!("{}  {}
+", chrono::Local::now().format("%H:%M:%S"), text.replace('
+', " "));
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(file) {
+        let _ = f.write_all(line.as_bytes());
+    }
+}
+
 /// References the EA add-in sent with "Add to the Compass conversation" (an element, package or diagram picked in
 /// the EA window), taken out of their hand-over file. Empty outside a tab of EA.
 pub fn take_references() -> Vec<String> {

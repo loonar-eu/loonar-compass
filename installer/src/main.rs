@@ -495,6 +495,23 @@ mod reg {
         check(rc, name)
     }
 
+    /// Creates an empty key (no default value), like regasm does.
+    pub fn create_key(root: Root, subkey: &str) -> Result<()> {
+        let mut key = HKEY::default();
+        // SAFETY: plain call with a zero-terminated key name; the handle is closed at once.
+        let rc = unsafe {
+            windows::Win32::System::Registry::RegCreateKeyExW(
+                hkey(root), &HSTRING::from(subkey), 0, None, windows::Win32::System::Registry::REG_OPTION_NON_VOLATILE,
+                windows::Win32::System::Registry::KEY_WRITE, None, &mut key, None,
+            )
+        };
+        check(rc, subkey)?;
+        unsafe {
+            let _ = windows::Win32::System::Registry::RegCloseKey(key);
+        }
+        Ok(())
+    }
+
     /// Deletes the key with all its values and subkeys; a missing key is not an error.
     pub fn delete_key(root: Root, subkey: &str) -> Result<()> {
         let key = HSTRING::from(subkey);
@@ -544,7 +561,7 @@ mod ea_addin {
                 reg::set_string(root, &server, "Assembly", ASSEMBLY)?;
                 reg::set_string(root, &server, "RuntimeVersion", "v4.0.30319")?;
                 reg::set_string(root, &server, "CodeBase", &code_base)?;
-                reg::set_string(root, &format!(r"{key}\Implemented Categories\{{62C8FE65-4EBB-45e7-B440-6E39B2CDBF29}}"), "", "")?;
+                reg::create_key(root, &format!(r"{key}\Implemented Categories\{{62C8FE65-4EBB-45e7-B440-6E39B2CDBF29}}"))?;
             }
         }
         for key in ADDINS {

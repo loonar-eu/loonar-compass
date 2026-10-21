@@ -1817,13 +1817,16 @@ impl App {
                     changed = true;
                 }
                 Ok(WorkerEvent::Status(status)) => self.status = status,
-                Ok(WorkerEvent::StepStart(text)) => self.steps.push(Step {
+                Ok(WorkerEvent::StepStart(text)) => self.steps.push({
+                    ea_ui::output(&format!("▶ {text}"));
+                    Step {
                     clock: chrono::Local::now().format("%H:%M:%S").to_string(),
                     started: std::time::Instant::now(),
                     text,
                     result: None,
-                }),
+                }}),
                 Ok(WorkerEvent::StepEnd { ok, detail }) => {
+                    ea_ui::output(&format!("{} {detail}", if ok { "✓" } else { "✗" }));
                     if let Some(step) = self.steps.iter_mut().rev().find(|s| s.result.is_none()) {
                         step.result = Some((ok, detail, step.started.elapsed().as_secs_f32()));
                     }
@@ -1834,10 +1837,12 @@ impl App {
                     self.status = crate::i18n::tr("Claude is waiting for your approval to save.").into();
                 }
                 Ok(WorkerEvent::Done) => {
+                    ea_ui::output(&format!("■ {}", crate::i18n::fmt("Answer ready: \"{0}\"", &[shown_title(&self.session.title)])));
                     finished = true;
                     break;
                 }
                 Ok(WorkerEvent::Failed(error)) => {
+                    ea_ui::output(&format!("✗ {error}"));
                     failure = Some(error);
                     finished = true;
                     break;
@@ -1906,17 +1911,25 @@ impl App {
         let stars = embedded_png(ctx, "splash_stars", SPLASH_STARS_PNG);
         let white = egui::Color32::WHITE;
         let soft = egui::Color32::from_rgb(200, 216, 232);
-        egui::Area::new(egui::Id::new("splash"))
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .order(egui::Order::Foreground)
-            .show(ctx, |ui| {
+        // A window narrower than the card (a tab of EA): the whole card is scaled down to fit, not cut off.
+        let screen_rect = ctx.screen_rect();
+        let scale = ((screen_rect.width() - 16.0) / 700.0).min((screen_rect.height() - 16.0) / 392.0).min(1.0).max(0.2);
+        let area = egui::Area::new(egui::Id::new("splash")).order(egui::Order::Foreground);
+        let area = if scale < 1.0 { area.fixed_pos(egui::pos2(0.0, 0.0)) } else { area.anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0]) };
+        if scale < 1.0 {
+            let offset = screen_rect.center() - egui::vec2(350.0, 196.0) * scale;
+            ctx.set_transform_layer(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("splash")), egui::emath::TSTransform::new(offset.to_vec2(), scale));
+        }
+        area.show(ctx, |ui| {
                 ui.set_opacity((left / 0.4).clamp(0.0, 1.0) as f32);
                 // Card proportions as in the background graphic (1078x604).
                 let (rect, _) = ui.allocate_exact_size(egui::vec2(700.0, 392.0), egui::Sense::hover());
 
                 // Dimming of the window under the card and the card shadow.
-                let screen = ui.painter().with_clip_rect(ctx.screen_rect());
-                screen.rect_filled(ctx.screen_rect(), 0.0, egui::Color32::from_white_alpha(170));
+                // Under a scaled layer the window is larger in the card's coordinates.
+                let cover = if scale < 1.0 { egui::Rect::from_center_size(rect.center(), screen_rect.size() / scale * 1.2) } else { ctx.screen_rect() };
+                let screen = ui.painter().with_clip_rect(cover);
+                screen.rect_filled(cover, 0.0, egui::Color32::from_white_alpha(170));
                 screen.add(
                     egui::epaint::Shadow {
                         offset: egui::vec2(0.0, 10.0),
@@ -2379,6 +2392,9 @@ impl App {
     }
 
     fn send(&mut self, ctx: &egui::Context) {
+        if ea::in_ea_tab() && !self.input.trim().is_empty() {
+            ea_ui::output(&format!("» {}", self.input.trim().chars().take(140).collect::<String>()));
+        }
         if !self.model_confirmed() {
             self.status = if ea::in_ea_tab() {
                 crate::i18n::tr("Compass in EA works with the project open in Enterprise Architect: open an EA file or a database from the settings.").into()

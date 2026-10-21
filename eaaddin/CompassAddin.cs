@@ -197,9 +197,70 @@ namespace LoonarCompass
             return (rotName != null ? "--ea-tab --ea-rot " + rotName + " " : "") + "--ea-model \"" + file + "\"";
         }
 
+        /// <summary>EA's repository of this window (for the "Loonar Compass" tab of System Output).</summary>
+        object repo;
+        const string OutputTab = "Loonar Compass";
+
+        /// <summary>A line in the "Loonar Compass" tab of System Output (and in the add-in log).</summary>
+        void Out(string text)
+        {
+            Log.Write(text);
+            try
+            {
+                dynamic r = repo;
+                if (r != null)
+                    r.WriteOutput(OutputTab, text, 0);
+            }
+            catch
+            {
+            }
+        }
+
+        /// <summary>What Compass did (steps of the assistant), handed over in a file and shown in System Output.</summary>
+        void ForwardOutput()
+        {
+            if (rotName == null)
+                return;
+            string file = Path.Combine(Path.GetTempPath(), "loonar-ea-output-" + rotName + ".txt");
+            if (!File.Exists(file))
+                return;
+            string[] lines;
+            try
+            {
+                lines = File.ReadAllLines(file);
+                File.Delete(file);
+            }
+            catch
+            {
+                return;
+            }
+            try
+            {
+                dynamic r = repo;
+                foreach (string line in lines)
+                    if (line.Trim().Length > 0)
+                        r.WriteOutput(OutputTab, line, 0);
+            }
+            catch
+            {
+            }
+        }
+
         public void Start(string connection, object repository)
         {
+            repo = repository;
+            try
+            {
+                dynamic r = repository;
+                r.CreateOutputTab(OutputTab);
+                r.EnsureOutputVisible(OutputTab);
+            }
+            catch
+            {
+            }
             Log.Write("Start: " + (connection.Length > 80 ? connection.Substring(0, 80) : connection));
+            // The file name, or the database part of a connection (never the password).
+            project = connection.Contains(" --- ") ? connection.Substring(0, connection.IndexOf(" --- ")) : Path.GetFileName(connection);
             Stop("");
             note.Text = L10n.Get("Starting Loonar Compass…");
             // Compass must write through THIS EA window, not the first EA found in the system: the repository is
@@ -257,6 +318,8 @@ namespace LoonarCompass
 
         public void Stop(string message)
         {
+            if (process != null)
+                Out(DateTime.Now.ToString("HH:mm:ss") + "  " + L10n.Get("Loonar Compass closed"));
             Log.Write("Stop, process running: " + (process != null));
             finder.Stop();
             Process running = process;
@@ -286,8 +349,16 @@ namespace LoonarCompass
             note.Visible = true;
         }
 
+        string project = "";
+
+        string ProjectName()
+        {
+            return project.Length > 120 ? project.Substring(0, 120) : project;
+        }
+
         void Dock_()
         {
+            ForwardOutput();
             if (process == null)
                 return;
             process.Refresh();
@@ -307,7 +378,16 @@ namespace LoonarCompass
                 finder.Interval = 200;
             }
             if (child != IntPtr.Zero)
+            {
+                // EA may re-create the tab's window (docking, floating): Compass goes back into it.
+                if (GetParent(child) != Handle)
+                {
+                    Log.Write("Compass window left the tab, docking again");
+                    SetParent(child, Handle);
+                    Fit();
+                }
                 return;
+            }
             IntPtr window = process.MainWindowHandle;
             if (window == IntPtr.Zero || !IsWindowVisible(window))
             {
@@ -319,7 +399,7 @@ namespace LoonarCompass
                 return;
             }
             child = window;
-            Log.Write("Docking window " + window + " of process " + process.Id);
+            Out(DateTime.Now.ToString("HH:mm:ss") + "  " + L10n.Get("Loonar Compass is working with the project") + ": " + ProjectName());
             long style = GetWindowLongPtr(child, GWL_STYLE).ToInt64();
             style = (style & ~(WS_POPUP | WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU)) | WS_CHILD;
             SetWindowLongPtr(child, GWL_STYLE, new IntPtr(style));
@@ -338,6 +418,16 @@ namespace LoonarCompass
         {
             if (child != IntPtr.Zero)
                 MoveWindow(child, 0, 0, ClientSize.Width, ClientSize.Height, true);
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            if (child != IntPtr.Zero)
+            {
+                SetParent(child, Handle);
+                Fit();
+            }
         }
 
         protected override void OnResize(EventArgs e)
@@ -391,6 +481,8 @@ namespace LoonarCompass
         static extern int GetRunningObjectTable(int reserved, out IRunningObjectTable rot);
         [DllImport("ole32.dll", CharSet = CharSet.Unicode)]
         static extern int CreateItemMoniker(string delimiter, string item, out IMoniker moniker);
+        [DllImport("user32.dll")]
+        static extern IntPtr GetParent(IntPtr window);
         [DllImport("user32.dll")]
         static extern bool IsWindow(IntPtr window);
         [DllImport("user32.dll")]
@@ -448,6 +540,8 @@ namespace LoonarCompass
                 case "Connector": return lang == "de" ? "Beziehung" : lang == "fr" ? "Relation" : "Relacja";
                 case "Attribute": return lang == "de" ? "Attribut" : lang == "fr" ? "Attribut" : "Atrybut";
                 case "Operation": return lang == "de" ? "Operation" : lang == "fr" ? "Opération" : "Operacja";
+                case "Loonar Compass is working with the project": return lang == "de" ? "Loonar Compass arbeitet mit dem Projekt" : lang == "fr" ? "Loonar Compass travaille sur le projet" : "Loonar Compass pracuje na projekcie";
+                case "Loonar Compass closed": return lang == "de" ? "Loonar Compass geschlossen" : lang == "fr" ? "Loonar Compass fermé" : "Loonar Compass zamknięty";
                 case "Loonar Compass was closed.": return lang == "de" ? "Loonar Compass wurde geschlossen." : lang == "fr" ? "Loonar Compass a été fermé." : "Loonar Compass został zamknięty.";
                 case "Loonar Compass did not open its window.": return lang == "de" ? "Loonar Compass hat sein Fenster nicht geöffnet." : lang == "fr" ? "Loonar Compass n'a pas ouvert sa fenêtre." : "Loonar Compass nie otworzył okna.";
             }
