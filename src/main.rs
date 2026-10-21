@@ -4289,12 +4289,15 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_dictionary();
         // In a window of EA: a click in Compass takes the keyboard (EA keeps it after the user switched docked panels).
-        if ea::in_ea_tab() && ctx.input(|i| i.pointer.any_pressed()) && !ea_ui::keyboard_is_ours() {
+        if ea::in_ea_tab() {
             use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-            if let Ok(handle) = _frame.window_handle() {
-                if let RawWindowHandle::Win32(window) = handle.as_raw() {
-                    ea_ui::take_keyboard(window.hwnd.get());
-                }
+            let own = match _frame.window_handle().map(|h| h.as_raw()) {
+                Ok(RawWindowHandle::Win32(window)) => window.hwnd.get(),
+                _ => 0,
+            };
+            ea_ui::set_own_window(own);
+            if own != 0 && ctx.input(|i| i.pointer.any_pressed()) && !ea_ui::keyboard_is_ours() {
+                ea_ui::take_keyboard(own);
             }
         }
         // In a tab of EA: objects the user points at in EA ("Add to the Compass conversation") go into the message.

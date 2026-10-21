@@ -305,8 +305,7 @@ namespace LoonarCompass
             if (rotName == null)
                 return;
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "loonar-ea-insert-" + rotName + ".txt"), reference + Environment.NewLine);
-            if (child != IntPtr.Zero)
-                SetFocus(child);
+            GiveKeyboard();
         }
 
         void Revoke()
@@ -427,9 +426,7 @@ namespace LoonarCompass
             SetWindowLongPtr(child, GWL_STYLE, new IntPtr(style));
             SetParent(child, Handle);
             // A window of another process gets the keyboard only when both UI threads share their input state.
-            uint pid;
-            attached = GetWindowThreadProcessId(child, out pid);
-            AttachThreadInput(GetCurrentThreadId(), attached, true);
+            GiveKeyboard();
             note.Visible = false;
             Fit();
             // The timer keeps watching whether Compass is still running and follows the size of EA's panel.
@@ -498,6 +495,8 @@ namespace LoonarCompass
         {
             if (child == IntPtr.Zero)
                 return;
+            // Join the input of EA's and Compass's threads again (EA may drop it when panels are switched) and move
+            // the focus. Only the add-in joins them: Compass itself only sets the focus.
             uint pid;
             uint thread = GetWindowThreadProcessId(child, out pid);
             if (attached != 0)

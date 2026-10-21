@@ -53,6 +53,13 @@ pub fn set_rot_name(name: &str) {
 
 /// In a tab of EA: whether the keyboard is in the Compass window (Windows does not report a child window of
 /// another process as focused, so the focus window of the foreground thread is checked).
+static OWN_WINDOW: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
+
+/// The window Compass draws in (docked in EA): the keyboard must be there, not in a helper window of the process.
+pub fn set_own_window(window: isize) {
+    OWN_WINDOW.store(window, std::sync::atomic::Ordering::Relaxed);
+}
+
 pub fn keyboard_is_ours() -> bool {
     #[repr(C)]
     struct GuiThreadInfo {
@@ -80,6 +87,10 @@ pub fn keyboard_is_ours() -> bool {
         if GetGUIThreadInfo(thread, &mut info) == 0 || info.focus == 0 {
             return false;
         }
+        let own = OWN_WINDOW.load(std::sync::atomic::Ordering::Relaxed);
+        if own != 0 {
+            return info.focus == own;
+        }
         let mut process = 0u32;
         GetWindowThreadProcessId(info.focus, &mut process);
         process == std::process::id()
@@ -101,11 +112,8 @@ pub fn take_keyboard(window: isize) {
     }
     // SAFETY: plain WinAPI calls without pointers to our data.
     unsafe {
-        let ea_thread = GetWindowThreadProcessId(GetForegroundWindow(), std::ptr::null_mut());
-        let own = GetCurrentThreadId();
-        if ea_thread != 0 && ea_thread != own {
-            AttachThreadInput(own, ea_thread, 1);
-        }
+        // The add-in joins the input of both threads (once); here only the focus moves.
+        let _ = (GetForegroundWindow, GetWindowThreadProcessId, AttachThreadInput, GetCurrentThreadId);
         SetFocus(window);
     }
 }
