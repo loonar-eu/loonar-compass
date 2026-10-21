@@ -2,6 +2,10 @@
 
 Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen Loonar EA Assistant).
 
+## Version 0.7.4 (2026-10-21)
+
+- Korrektur: Compass in EA folgt wieder jeder Größenänderung seines Bereichs (in 0.7.3 behielt es die Größe vom Öffnen).
+
 ## Version 0.7.3 (2026-10-21)
 
 - Compass in EA: Tippen funktioniert nach „Zur Compass-Unterhaltung hinzufügen“, nach einem Klick in den Browser oder ein Diagramm und nach dem Wechsel der Bereiche (die Tastatur geht an das Compass-Fenster).

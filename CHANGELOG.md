@@ -2,6 +2,10 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
+## Wersja 0.7.4 (2026-10-21)
+
+- Poprawka: Compass w EA znów dopasowuje się do rozmiaru panelu przy każdej jego zmianie (w 0.7.3 zostawał w rozmiarze z otwarcia).
+
 ## Wersja 0.7.3 (2026-10-21)
 
 - Compass w EA: pisanie działa po „Dodaj do rozmowy w Compass”, po kliknięciu w drzewo lub diagram i po przełączeniu paneli (klawiatura trafia do okna Compassa).

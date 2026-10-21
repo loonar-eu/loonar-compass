@@ -2,6 +2,10 @@
 
 All notable changes to Loonar Compass (named Loonar EA Assistant until version 0.3).
 
+## Version 0.7.4 (2026-10-21)
+
+- Fix: Compass in EA again follows every change of its panel's size (in 0.7.3 it kept the size it opened with).
+
 ## Version 0.7.3 (2026-10-21)
 
 - Compass in EA: typing works after "Add to the Compass conversation", after clicking the browser or a diagram and after switching panels (the keyboard goes to the Compass window).

@@ -448,7 +448,10 @@ namespace LoonarCompass
             if (GetWindowRect(Handle, out own))
             {
                 int right = int.MaxValue, bottom = int.MaxValue;
-                for (IntPtr p = host; p != IntPtr.Zero; p = GetParent(p))
+                // Up the real parents only (GetAncestor stops at the top-level window; GetParent would go on to an
+                // owner window, often hidden and empty, and the size would come out as zero).
+                IntPtr desktop = GetDesktopWindow();
+                for (IntPtr p = host; p != IntPtr.Zero && p != desktop; p = GetAncestor(p, 1))
                 {
                     RECT c;
                     if (!GetClientRect(p, out c))
@@ -477,6 +480,10 @@ namespace LoonarCompass
         struct POINT { public int X, Y; }
         [DllImport("user32.dll")]
         static extern bool GetWindowRect(IntPtr window, out RECT rect);
+        [DllImport("user32.dll")]
+        static extern IntPtr GetAncestor(IntPtr window, uint flags);
+        [DllImport("user32.dll")]
+        static extern IntPtr GetDesktopWindow();
         [DllImport("user32.dll")]
         static extern bool ClientToScreen(IntPtr window, ref POINT point);
         [DllImport("user32.dll")]
