@@ -122,6 +122,57 @@ pub fn output(text: &str) {
     }
 }
 
+/// Whether reads of a database model go through EA's own connection (Compass in a window of EA): the database
+/// open in EA needs no connection or password in Compass's settings.
+pub fn reads_through_ea() -> bool {
+    ROT_NAME.get().is_some()
+}
+
+/// A read-only query run by the EA window of this Compass tab (Repository.SQLQuery): column names and rows.
+pub fn sql_query(sql: &str, limit: usize) -> Result<(Vec<String>, Vec<Vec<Option<String>>>, bool)> {
+    let sql = sql.to_string();
+    let xml = with_running_ea(Duration::from_secs(60), move |repo| Ok(repo.call("SQLQuery", &[crate::com::s(&sql)])?.text()))?;
+    Ok(parse_sql_xml(&xml, limit))
+}
+
+/// EA's SQLQuery result: `<EADATA><Dataset_0><Data><Row><col>value</col>…</Row>…`. Columns in the order of the
+/// first row; a column missing in a row is NULL.
+fn parse_sql_xml(xml: &str, limit: usize) -> (Vec<String>, Vec<Vec<Option<String>>>, bool) {
+    let unescape = |v: &str| v.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&");
+    let mut columns: Vec<String> = Vec::new();
+    let mut rows = Vec::new();
+    let mut truncated = false;
+    for block in xml.split("<Row>").skip(1) {
+        let body = block.split("</Row>").next().unwrap_or("");
+        let mut cells: Vec<(String, Option<String>)> = Vec::new();
+        let mut rest = body;
+        while let Some(start) = rest.find('<') {
+            let after = &rest[start + 1..];
+            let Some(end) = after.find('>') else { break };
+            let tag = &after[..end];
+            if tag.ends_with('/') {
+                cells.push((tag.trim_end_matches('/').trim().to_string(), None));
+                rest = &after[end + 1..];
+                continue;
+            }
+            let close = format!("</{tag}>");
+            let content = &after[end + 1..];
+            let Some(stop) = content.find(&close) else { break };
+            cells.push((tag.to_string(), Some(unescape(&content[..stop]))));
+            rest = &content[stop + close.len()..];
+        }
+        if columns.is_empty() {
+            columns = cells.iter().map(|(name, _)| name.clone()).collect();
+        }
+        if rows.len() == limit {
+            truncated = true;
+            break;
+        }
+        rows.push(columns.iter().map(|c| cells.iter().find(|(name, _)| name.eq_ignore_ascii_case(c)).and_then(|(_, v)| v.clone())).collect());
+    }
+    (columns, rows, truncated)
+}
+
 /// References the EA add-in sent with "Add to the Compass conversation" (an element, package or diagram picked in
 /// the EA window), taken out of their hand-over file. Empty outside a tab of EA.
 pub fn take_references() -> Vec<String> {

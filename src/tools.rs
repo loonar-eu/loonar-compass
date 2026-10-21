@@ -1060,6 +1060,11 @@ struct Selected {
 /// Runs a read-only query on the model (database or file) and returns at most `limit` rows.
 fn select(cfg: &AppConfig, sql: &str, limit: usize) -> Result<Selected> {
     let mut out = Selected { columns: Vec::new(), rows: Vec::new(), truncated: false };
+    // Compass in a window of EA: a database model is read through EA's own connection (no settings needed).
+    if !cfg.uses_file() && crate::ea_ui::reads_through_ea() {
+        let (columns, rows, truncated) = crate::ea_ui::sql_query(sql, limit)?;
+        return Ok(Selected { columns, rows, truncated });
+    }
     if cfg.uses_file() {
         let conn = open_model_file(&cfg.model_file)?;
         let mut run = || -> rusqlite::Result<()> {

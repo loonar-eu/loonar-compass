@@ -1412,6 +1412,9 @@ impl App {
             }
         } else if !base.uses_file() && !base.db_name.is_empty() && connection.to_lowercase().contains(&base.db_name.to_lowercase()) {
             default.clone()
+        } else if let Some(choice) = ea::in_ea_tab().then(|| database_of_connection(connection)).flatten() {
+            // Any other database open in EA: read and written through EA itself, so nothing else is needed.
+            choice
         } else {
             self.status = crate::i18n::tr("The model open in EA is not the database from the settings: choose its connection in \"Choose another model…\".").into();
             return;
@@ -3464,6 +3467,26 @@ fn check_model(cfg: &AppConfig) -> anyhow::Result<String> {
         message.push_str(crate::i18n::tr("The database account is a superuser; a normal account with read and write rights on the model tables is enough and safer."));
     }
     Ok(message)
+}
+
+/// The database of an EA connection string (`name --- DBType=..;Connect=..;SRC=host[,port]@database;UID=user;..`).
+fn database_of_connection(connection: &str) -> Option<ModelChoice> {
+    let field = |key: &str| connection.split(';').find_map(|part| part.trim().strip_prefix(key).map(str::to_string));
+    let src = field("SRC=")?;
+    let (server, name) = src.split_once('@')?;
+    let (host, port) = match server.split_once(',').or_else(|| server.split_once(':')) {
+        Some((h, p)) => (h.to_string(), p.trim().parse().unwrap_or(5432)),
+        None => (server.to_string(), 5432),
+    };
+    Some(ModelChoice::Database {
+        name: name.trim().to_string(),
+        host: host.trim().to_string(),
+        port,
+        user: field("UID=").unwrap_or_default(),
+        sslmode: "prefer".into(),
+        ea_user: String::new(),
+        locks: true,
+    })
 }
 
 /// Write test: creates a test package under the model root, checks that it is in the model and deletes it.

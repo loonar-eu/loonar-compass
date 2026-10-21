@@ -169,6 +169,8 @@ namespace LoonarCompass
         Process process;
         IntPtr child = IntPtr.Zero;
         uint attached;
+        IntPtr candidate = IntPtr.Zero;
+        DateTime candidateSince;
         int rotCookie;
         string rotName;
         readonly Timer finder = new Timer { Interval = 200 };
@@ -379,7 +381,9 @@ namespace LoonarCompass
             }
             // A window Compass replaced (e.g. after switching the graphics renderer) is docked again.
             IntPtr main = process.MainWindowHandle;
-            if (child != IntPtr.Zero && (!IsWindow(child) || (main != IntPtr.Zero && main != child && IsWindowVisible(main) && !IsWindowVisible(child))))
+            // A docked window is a child, so a visible top-level window of Compass is a new one (Compass replaced its
+            // window after start): that one goes into the panel.
+            if (child != IntPtr.Zero && (!IsWindow(child) || (main != IntPtr.Zero && main != child && IsWindowVisible(main))))
             {
                 Log.Write("Docked window is gone, looking again");
                 child = IntPtr.Zero;
@@ -398,6 +402,15 @@ namespace LoonarCompass
                 return;
             }
             IntPtr window = process.MainWindowHandle;
+            // Docked only when the same visible window has been there for a second (not a window about to be replaced).
+            if (window != IntPtr.Zero && IsWindowVisible(window) && window != candidate)
+            {
+                candidate = window;
+                candidateSince = DateTime.Now;
+                return;
+            }
+            if (window != IntPtr.Zero && (DateTime.Now - candidateSince).TotalMilliseconds < 1000)
+                return;
             if (window == IntPtr.Zero || !IsWindowVisible(window))
             {
                 if ((DateTime.Now - started).TotalSeconds > 60)
