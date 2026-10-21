@@ -97,6 +97,20 @@ pub fn keyboard_is_ours() -> bool {
     }
 }
 
+/// The size of a window's client area in physical pixels.
+pub fn client_size(window: isize) -> Option<(i32, i32)> {
+    #[link(name = "user32")]
+    extern "system" {
+        fn GetClientRect(window: isize, rect: *mut [i32; 4]) -> i32;
+    }
+    if window == 0 {
+        return None;
+    }
+    let mut rect = [0i32; 4];
+    // SAFETY: a local four-integer RECT.
+    (unsafe { GetClientRect(window, &mut rect) } != 0).then(|| (rect[2] - rect[0], rect[3] - rect[1])).filter(|(w, h)| *w > 0 && *h > 0)
+}
+
 /// Gives the keyboard to the Compass window docked in EA (joins its input with the thread that has the keyboard now).
 pub fn take_keyboard(window: isize) {
     #[link(name = "user32")]
