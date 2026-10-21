@@ -6,12 +6,13 @@ Toutes les modifications importantes de l'application Loonar Compass (nommée Lo
 
 Compass dans Enterprise Architect :
 
-- Complément EA : le bouton « Loonar Compass » du ruban Start (groupe Add-Ins) ouvre Compass dans un onglet de la fenêtre EA. Le programme d'installation propose « Ajouter Loonar Compass à Enterprise Architect » ; cela fonctionne avec toute installation d'EA, y compris une version d'essai.
+- Complément EA : le bouton « Loonar Compass » du ruban Start (groupe Add-Ins) ouvre Compass dans une fenêtre ancrée d'EA, au même endroit que Properties (EA retient où vous la placez). Le programme d'installation propose « Ajouter Loonar Compass à Enterprise Architect » ; cela fonctionne avec toute installation d'EA, y compris une version d'essai.
+- System Output a un onglet « Loonar Compass » : vos messages et les étapes de l'assistant (lectures du modèle, écritures dans EA, résultats) avec l'heure. Le chat garde une ligne avec la dernière étape.
 - Dans EA, Compass travaille toujours sur le projet ouvert dans cette fenêtre EA (fichier ou base) : aucun modèle à choisir, rien à confirmer. La liste ne montre que les conversations de ce projet ; ouvrir un autre projet dans EA bascule Compass. Sans projet ouvert, Compass ne fonctionne pas.
 - Les écritures passent par la même fenêtre EA : les modifications apparaissent aussitôt dans le navigateur et les diagrammes.
 - « Afficher le diagramme » et « Modifier le diagramme » ouvrent le diagramme dans EA, sans images dans le chat.
 - Menu contextuel d'un élément, paquetage ou diagramme : « Ajouter à la conversation Compass » insère une référence dans le message, p. ex. « Paquetage : Shop (id 5) ».
-- Mise en page étroite à ancrer près du modèle : icônes en bas, liste des conversations au-dessus du chat, pages défilant horizontalement et verticalement.
+- Mise en page de la fenêtre ancrée : police plus petite, conversations du projet dans une liste déroulante avec « + », icônes des vues en bas, pages défilant horizontalement et verticalement ; Ctrl+V colle images, fichiers et texte.
 - Dans EA, les paramètres ne gardent que Claude, l'approbation, Confluence et Miro ; le modèle et EA viennent du projet ouvert.
 
 Partout :

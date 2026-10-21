@@ -86,6 +86,30 @@ pub fn keyboard_is_ours() -> bool {
     }
 }
 
+/// Gives the keyboard to the Compass window docked in EA (joins its input with the thread that has the keyboard now).
+pub fn take_keyboard(window: isize) {
+    #[link(name = "user32")]
+    extern "system" {
+        fn GetForegroundWindow() -> isize;
+        fn GetWindowThreadProcessId(window: isize, process: *mut u32) -> u32;
+        fn AttachThreadInput(from: u32, to: u32, attach: i32) -> i32;
+        fn SetFocus(window: isize) -> isize;
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetCurrentThreadId() -> u32;
+    }
+    // SAFETY: plain WinAPI calls without pointers to our data.
+    unsafe {
+        let ea_thread = GetWindowThreadProcessId(GetForegroundWindow(), std::ptr::null_mut());
+        let own = GetCurrentThreadId();
+        if ea_thread != 0 && ea_thread != own {
+            AttachThreadInput(own, ea_thread, 1);
+        }
+        SetFocus(window);
+    }
+}
+
 /// A line for the "Loonar Compass" tab of EA's System Output (the add-in shows what the assistant does there).
 /// Nothing outside a tab of EA.
 pub fn output(text: &str) {

@@ -6,12 +6,13 @@ Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen
 
 Compass in Enterprise Architect:
 
-- EA-Add-in: Die Schaltfläche „Loonar Compass“ im Menüband Start (Gruppe Add-Ins) öffnet Compass als Tab im EA-Fenster. Das Installationsprogramm hat die Option „Loonar Compass zu Enterprise Architect hinzufügen“; sie funktioniert mit jeder EA-Installation, auch mit einer Testversion.
+- EA-Add-in: Die Schaltfläche „Loonar Compass“ im Menüband Start (Gruppe Add-Ins) öffnet Compass als angedocktes Fenster in EA, an derselben Stelle wie Properties (EA merkt sich, wo Sie es ablegen). Das Installationsprogramm hat die Option „Loonar Compass zu Enterprise Architect hinzufügen“; sie funktioniert mit jeder EA-Installation, auch mit einer Testversion.
+- System Output hat einen Tab „Loonar Compass“: Ihre Nachrichten und die Schritte des Assistenten (Lesen des Modells, Schreiben in EA, Ergebnisse) mit Uhrzeit. Im Chat bleibt eine Zeile mit dem letzten Schritt.
 - In EA arbeitet Compass immer mit dem in diesem EA-Fenster geöffneten Projekt (Datei oder Datenbank): kein Modell zu wählen, nichts zu bestätigen. Die Liste zeigt nur die Unterhaltungen dieses Projekts; ein anderes Projekt in EA schaltet Compass um. Ohne geöffnetes Projekt arbeitet Compass nicht.
 - Schreibvorgänge laufen über dasselbe EA-Fenster, Änderungen erscheinen sofort im Browser und in Diagrammen.
 - „Diagramm zeigen“ und „Diagramm bearbeiten“ öffnen das Diagramm in EA, ohne Bilder im Chat.
 - Kontextmenü eines Elements, Pakets oder Diagramms: „Zur Compass-Unterhaltung hinzufügen“ fügt einen Verweis in die Nachricht ein, z. B. «Paket: Shop (id 5)».
-- Schmales Layout zum Andocken neben dem Modell: Symbole unten, Unterhaltungsliste über dem Chat, Seiten scrollen seitlich und vertikal.
+- Layout des angedockten Fensters: kleinere Schrift, Unterhaltungen des Projekts in einer Auswahlliste mit „+“, Ansichtssymbole unten, Seiten scrollen seitlich und vertikal; Strg+V fügt Bilder, Dateien und Text ein.
 - In EA enthalten die Einstellungen nur Claude, Freigabe, Confluence und Miro; Modell und EA ergeben sich aus dem geöffneten Projekt.
 
 Überall:

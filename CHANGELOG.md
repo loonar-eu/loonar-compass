@@ -6,12 +6,13 @@ Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Lo
 
 Compass w Enterprise Architect:
 
-- Add-in do EA: przycisk „Loonar Compass” na wstążce Start (grupa Add-Ins) otwiera Compass jako zakładkę w oknie EA. Instalator ma pole „Dodaj Loonar Compass do Enterprise Architect”; działa z każdą instalacją EA, także wersją próbną.
+- Add-in do EA: przycisk „Loonar Compass” na wstążce Start (grupa Add-Ins) otwiera Compass jako okno dokowane w EA, w tym samym miejscu co Properties (EA zapamiętuje, gdzie je położysz). Instalator ma pole „Dodaj Loonar Compass do Enterprise Architect”; działa z każdą instalacją EA, także wersją próbną.
+- System Output ma zakładkę „Loonar Compass”: Twoje wiadomości i kolejne kroki asystenta (odczyty modelu, zapisy do EA, wyniki) z godziną. W czacie zostaje tylko jedna linia z ostatnim krokiem.
 - W EA Compass pracuje zawsze na projekcie otwartym w tym oknie EA (pliku lub bazie): bez wybierania modelu i bez zatwierdzania. Lista pokazuje tylko rozmowy tego projektu, a zmiana projektu w EA przełącza Compass. Bez otwartego projektu Compass nie działa.
 - Zapisy idą przez to samo okno EA, więc zmiany widać od razu w drzewie i na diagramach.
 - „Pokaż diagram” i „Edytuj diagram” otwierają diagram w EA, bez obrazków w czacie.
 - Menu kontekstowe elementu, pakietu lub diagramu: „Dodaj do rozmowy w Compass” wstawia do wiadomości wskazanie obiektu, np. «Pakiet: Sklep (id 5)».
-- Wąski układ do zadokowania obok modelu: ikony na dole, lista rozmów nad czatem, przewijanie stron w poziomie i pionie.
+- Układ okna dokowanego: mniejsza czcionka, rozmowy projektu na liście rozwijanej z przyciskiem „+”, ikony widoków na dole, przewijanie stron w poziomie i pionie; Ctrl+V wkleja zdjęcia, pliki i tekst.
 - W ustawieniach w EA zostają tylko Claude, tryb zatwierdzania, Confluence i Miro; model i EA wynikają z otwartego projektu.
 
 Wszędzie:

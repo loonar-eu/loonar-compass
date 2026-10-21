@@ -6,12 +6,13 @@ All notable changes to Loonar Compass (named Loonar EA Assistant until version 0
 
 Compass in Enterprise Architect:
 
-- EA add-in: the "Loonar Compass" button on the Start ribbon (Add-Ins group) opens Compass as a tab in the EA window. The installer has an "Add Loonar Compass to Enterprise Architect" option; it works with any EA installation, also a trial.
+- EA add-in: the "Loonar Compass" button on the Start ribbon (Add-Ins group) opens Compass as a docked window in EA, in the same place as Properties (EA remembers where you put it). The installer has an "Add Loonar Compass to Enterprise Architect" option; it works with any EA installation, also a trial.
+- System Output has a "Loonar Compass" tab: your messages and the assistant's steps (model reads, writes to EA, results) with the time. The chat keeps one line with the last step.
 - In EA, Compass always works with the project open in that EA window (file or database): no model to choose and nothing to confirm. The list shows only the conversations of that project, and opening another project in EA switches Compass. Without an open project Compass does not work.
 - Writes go through the same EA window, so changes show at once in the browser and on diagrams.
 - "Show diagram" and "Edit diagram" open the diagram in EA, without images in the chat.
 - Context menu of an element, package or diagram: "Add to the Compass conversation" puts a reference to the object into the message, e.g. «Package: Shop (id 5)».
-- A narrow layout to dock next to the model: icons at the bottom, the conversation list above the chat, pages scroll sideways and up and down.
+- Layout of the docked window: a smaller font, the project's conversations in a drop-down with a "+" button, view icons at the bottom, pages scroll sideways and up and down; Ctrl+V pastes pictures, files and text.
 - In EA the settings keep only Claude, change approval, Confluence and Miro; the model and EA come from the open project.
 
 Everywhere:

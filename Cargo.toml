@@ -25,6 +25,7 @@ postgres = "0.19"
 native-tls = "0.2"
 postgres-native-tls = "0.5"
 # EA file models (.qea/.qeax are SQLite databases), read-only; SQLite is compiled in (no DLL next to the program).
+raw-window-handle = "0.6"
 rusqlite = { version = "0.32", features = ["bundled", "hooks"] }
 # Diagram editor window: WebView2 (the Edge engine built into Windows) with the bundled maxGraph editor.
 wry = "0.57"

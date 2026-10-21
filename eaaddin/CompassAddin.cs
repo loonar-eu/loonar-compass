@@ -445,17 +445,38 @@ namespace LoonarCompass
             {
                 int ev = m.WParam.ToInt32() & 0xFFFF;
                 if (ev == WM_LBUTTONDOWN || ev == WM_RBUTTONDOWN || ev == WM_MBUTTONDOWN)
-                    SetFocus(child);
+                    GiveKeyboard();
             }
             base.WndProc(ref m);
+        }
+
+        /// <summary>Joins the input of EA's and Compass's UI threads again and gives Compass the keyboard. EA hides and
+        /// shows the panel when the user switches docked windows (e.g. Notes), which may leave the input detached.</summary>
+        void GiveKeyboard()
+        {
+            if (child == IntPtr.Zero)
+                return;
+            uint pid;
+            uint thread = GetWindowThreadProcessId(child, out pid);
+            if (attached != 0)
+                AttachThreadInput(GetCurrentThreadId(), attached, false);
+            attached = thread;
+            AttachThreadInput(GetCurrentThreadId(), attached, true);
+            SetFocus(child);
+        }
+
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            base.OnVisibleChanged(e);
+            if (Visible)
+                GiveKeyboard();
         }
 
         /// <summary>A click in the tab gives the Compass window the keyboard focus.</summary>
         protected override void OnGotFocus(EventArgs e)
         {
             base.OnGotFocus(e);
-            if (child != IntPtr.Zero)
-                SetFocus(child);
+            GiveKeyboard();
         }
 
         protected override void Dispose(bool disposing)
