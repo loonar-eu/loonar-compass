@@ -43,13 +43,7 @@ namespace LoonarCompass
             // Right-click on an element, package or diagram: "Loonar Compass" → "Add to the Compass conversation"
             // (EA shows add-in entries of a context menu under the add-in's own submenu).
             if (location == "TreeView" || location == "Diagram")
-            {
-                if (menuName == "")
-                    return Menu;
-                if (menuName == Menu)
-                    return new string[] { L10n.Get(AddReference) };
-                return "";
-            }
+                return menuName == "" ? L10n.Get(AddReference) : "";
             // Ribbon: one button that opens Compass in EA (the standalone app is started from the Start menu).
             return menuName == "" ? "Loonar Compass" : "";
         }
@@ -393,6 +387,7 @@ namespace LoonarCompass
             }
             if (child != IntPtr.Zero)
             {
+                FollowPanel();
                 // EA may re-create the tab's window (docking, floating): Compass goes back into it.
                 if (GetParent(child) != Handle)
                 {
@@ -424,9 +419,30 @@ namespace LoonarCompass
             AttachThreadInput(GetCurrentThreadId(), attached, true);
             note.Visible = false;
             Fit();
-            // The timer keeps watching whether Compass is still running.
-            finder.Interval = 1000;
+            // The timer keeps watching whether Compass is still running and follows the size of EA's panel.
+            finder.Interval = 400;
         }
+
+        /// <summary>EA clips the add-in control to its panel instead of resizing it when the panel gets narrower: the
+        /// control (and Compass in it) follows the size of the window EA put it in.</summary>
+        void FollowPanel()
+        {
+            IntPtr host = GetParent(Handle);
+            RECT area;
+            if (host == IntPtr.Zero || !GetClientRect(host, out area))
+                return;
+            int w = area.Right - area.Left, h = area.Bottom - area.Top;
+            if (w > 0 && h > 0 && (w != Width || h != Height))
+            {
+                SetBounds(0, 0, w, h);
+                Fit();
+            }
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct RECT { public int Left, Top, Right, Bottom; }
+        [DllImport("user32.dll")]
+        static extern bool GetClientRect(IntPtr window, out RECT rect);
 
         void Fit()
         {

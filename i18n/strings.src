@@ -1034,3 +1034,9 @@ Works with any Enterprise Architect installation, also a trial. Restart EA after
 Enterprise Architect ‖ Enterprise Architect ‖ Enterprise Architect ‖ Enterprise Architect
 Answer ready: "{0}" ‖ Odpowiedź gotowa: „{0}” ‖ Antwort fertig: „{0}“ ‖ Réponse prête : « {0} »
 No conversations with this project yet ‖ Brak rozmów z tym projektem ‖ Noch keine Unterhaltungen mit diesem Projekt ‖ Aucune conversation avec ce projet
+terms in the project glossary ‖ pojęcia w słowniku projektu ‖ Begriffe im Projektglossar ‖ termes du glossaire du projet
+glossary term '{0}' ‖ pojęcie słownika „{0}” ‖ Glossarbegriff „{0}“ ‖ terme du glossaire « {0} »
+The term and its forms are already in the project glossary. ‖ Pojęcie i jego formy są już w słowniku projektu. ‖ Der Begriff und seine Formen sind bereits im Projektglossar. ‖ Le terme et ses formes sont déjà dans le glossaire du projet.
+Added to the project glossary: {0} ‖ Dodano do słownika projektu: {0} ‖ Zum Projektglossar hinzugefügt: {0} ‖ Ajouté au glossaire du projet : {0}
+Add "{0}" to the EA project glossary ‖ Dodaj „{0}” do słownika projektu EA ‖ „{0}“ zum EA-Projektglossar hinzufügen ‖ Ajouter « {0} » au glossaire du projet EA
+Add the term "{0}" to the EA project glossary with all its forms. Ask me for its meaning and type if you do not know them. ‖ Dodaj pojęcie „{0}” do słownika projektu EA ze wszystkimi formami odmiany. Jeśli nie znasz jego definicji i typu, zapytaj mnie o nie. ‖ Füge den Begriff „{0}“ mit allen Formen zum EA-Projektglossar hinzu. Frag mich nach Bedeutung und Typ, wenn du sie nicht kennst. ‖ Ajoute le terme « {0} » au glossaire du projet EA avec toutes ses formes. Demande-moi sa définition et son type si tu ne les connais pas.

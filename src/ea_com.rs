@@ -1080,6 +1080,32 @@ impl Job<'_> {
                 let (id, guid, real) = (copy.int("PackageID")?, copy.text("PackageGUID")?, copy.text("Name")?);
                 self.register(&op["key"], Kind::Package, &copy, id, guid, real);
             }
+            "add_glossary_term" => {
+                // Project glossary (Glossary window: Term / Type / Meaning). EA highlights a term in notes only in exactly
+                // the form written in the glossary, so every inflected form is its own entry with the same meaning.
+                let terms = self.repo.obj("Terms")?;
+                let kind = { let k = text_field(op, "type"); if k.is_empty() { "Slownik".to_string() } else { k } };
+                let meaning = text_field(op, "meaning");
+                let mut forms: Vec<String> = vec![text_field(op, "term")];
+                forms.extend(op["forms"].as_array().into_iter().flatten().filter_map(|f| f.as_str()).map(|f| f.trim().to_string()));
+                let existing: Vec<String> = terms.items()?.iter().filter_map(|t| t.text("Term").ok()).map(|t| t.to_lowercase()).collect();
+                let mut added = Vec::new();
+                for form in forms {
+                    if form.is_empty() || existing.contains(&form.to_lowercase()) || added.iter().any(|a: &String| a.eq_ignore_ascii_case(&form)) {
+                        continue;
+                    }
+                    let term = terms.call_obj("AddNew", &[s(&form), s(&kind)])?;
+                    term.set("Meaning", s(&meaning))?;
+                    term.update(&crate::i18n::fmt("glossary term '{0}'", &[form.clone()]))?;
+                    added.push(form);
+                }
+                terms.call("Refresh", &[])?;
+                if added.is_empty() {
+                    self.warnings.push(crate::i18n::tr("The term and its forms are already in the project glossary.").to_string());
+                } else {
+                    self.warnings.push(crate::i18n::fmt("Added to the project glossary: {0}", &[added.join(", ")]));
+                }
+            }
             "create_baseline" => {
                 // Package version (baseline) saved in the model: for comparing and restoring in EA (Manage Baselines).
                 // Restoring through COM (DoBaselineMerge) hangs EA on an invisible dialog, so it is not offered.

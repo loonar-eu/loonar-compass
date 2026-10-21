@@ -2,6 +2,13 @@
 
 All notable changes to Loonar Compass (named Loonar EA Assistant until version 0.3).
 
+## Version 0.7.1 (2026-10-21)
+
+- EA project glossary: the assistant adds a term with its meaning and type (by default "Slownik"); a Polish term goes in with all its forms (singular and plural, from the nominative to the vocative), so EA highlights every form in notes. In the message field: right-click a word → "Add to the EA project glossary", or ask in the conversation.
+- Compass in EA follows the width of its panel: text wraps instead of disappearing on the right.
+- Context menu of an element, package or diagram: "Add to the Compass conversation" is again directly under Specialize.
+- The keyboard works after switching EA panels (e.g. Notes → Compass); Compass closes together with EA.
+
 ## Version 0.7 (2026-10-21)
 
 Compass in Enterprise Architect:

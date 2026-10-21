@@ -54,6 +54,7 @@ pub const MODEL_OPS: &[&str] = &[
     "delete_operation",
     "clone_package",
     "create_baseline",
+    "add_glossary_term",
 ];
 
 #[derive(Default)]
@@ -351,6 +352,7 @@ pub fn describe(ops: &[Value]) -> String {
         "delete_operation" => crate::i18n::tr("operations DELETED"),
         "clone_package" => crate::i18n::tr("package copies (with all contents)"),
         "create_baseline" => crate::i18n::tr("package baselines (saved versions)"),
+        "add_glossary_term" => crate::i18n::tr("terms in the project glossary"),
         "remove_from_diagram" => crate::i18n::tr("elements removed from diagrams (they stay in the model)"),
         "diagram_style" => crate::i18n::tr("diagram style settings"),
         "set_composite" => crate::i18n::tr("element-to-diagram links"),
@@ -1016,5 +1018,27 @@ mod partition_probe {
         }
         run_batch(&cfg, &[json!({"op":"delete_package","package":id_of("pkg")})], &BatchOptions::default()).expect("cleanup");
         shutdown();
+    }
+}
+
+#[cfg(test)]
+mod glossary_probe {
+    use super::*;
+    use serde_json::json;
+
+    /// A term with its forms goes into the project glossary (LOONAR_TEST_PROPS = a test copy).
+    #[test]
+    #[ignore]
+    fn glossary_term_with_forms() {
+        let props = std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS");
+        let cfg = AppConfig::load(std::path::Path::new(&props)).unwrap();
+        let op = json!({"op":"add_glossary_term","term":"zamek","type":"Technical","meaning":"element techniczny utrzymujący zabezpieczenie środowiska",
+                        "forms":["zamka","zamkowi","zamkiem","zamku","zamki","zamków","zamkom","zamkami","zamkach"]});
+        let result = run_batch(&cfg, &[op.clone()], &BatchOptions::default()).expect("glossary");
+        let again = run_batch(&cfg, &[op], &BatchOptions::default()).expect("glossary again");
+        shutdown();
+        println!("{} | {}", result["warnings"], again["warnings"]);
+        let rows = crate::tools::query_rows(&cfg, "select count(*) from t_glossary where meaning like 'element techniczny%'").unwrap();
+        assert_eq!(rows[0][0], "10");
     }
 }

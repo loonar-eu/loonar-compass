@@ -4817,17 +4817,25 @@ impl eframe::App for App {
                                 .show(ui, |ui| ui.add(edit))
                                 .inner
                         };
-                        // Right click: underlined words (or the selected text) can be added to the dictionary.
+                        // Right click: underlined words (or the selected text) can be added to the dictionary or the EA glossary.
                         let candidates = self.dictionary_candidates(ctx, resp.id);
+                        let mut glossary_request: Option<String> = None;
                         if !candidates.is_empty() {
                             resp.context_menu(|ui| {
                                 for word in &candidates {
+                                    if ui.button(crate::i18n::fmt("Add \"{0}\" to the EA project glossary", &[word.clone()])).clicked() {
+                                        glossary_request = Some(word.clone());
+                                        ui.close_menu();
+                                    }
                                     if ui.add_enabled(self.dictionary_rx.is_none(), egui::Button::new(crate::i18n::fmt("Add \"{0}\" to the dictionary", &[word.clone()]))).clicked() {
                                         self.add_to_dictionary(ctx, word.clone());
                                         ui.close_menu();
                                     }
                                 }
                             });
+                        }
+                        if let Some(word) = glossary_request {
+                            self.ask_in_conversation(ctx, crate::i18n::fmt("Add the term \"{0}\" to the EA project glossary with all its forms. Ask me for its meaning and type if you do not know them.", &[word]));
                         }
                         if enter {
                             self.send(ctx);

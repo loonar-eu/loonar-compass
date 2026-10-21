@@ -2,6 +2,13 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
+## Wersja 0.7.1 (2026-10-21)
+
+- Słownik projektu EA (Glossary): asystent dodaje pojęcie z definicją i typem (domyślnie „Slownik”); polskie pojęcie trafia we wszystkich formach (liczba pojedyncza i mnoga, od mianownika do wołacza), więc EA podświetla w notatkach każdą odmianę. W polu wiadomości: prawy przycisk na słowie → „Dodaj do słownika projektu EA”, albo prośba w rozmowie.
+- Compass w EA dopasowuje się do szerokości panelu: tekst zawija się zamiast znikać z prawej strony.
+- Menu podręczne elementu, pakietu i diagramu: „Dodaj do rozmowy w Compass” znów bezpośrednio w Specialize.
+- Klawiatura działa po przełączeniu paneli EA (np. Notes → Compass); Compass zamyka się razem z EA.
+
 ## Wersja 0.7 (2026-10-21)
 
 Compass w Enterprise Architect:
