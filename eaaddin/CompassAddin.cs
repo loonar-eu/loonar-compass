@@ -40,9 +40,16 @@ namespace LoonarCompass
 
         public object EA_GetMenuItems(object repository, string location, string menuName)
         {
-            // Right-click on an element, package or diagram: one item that points Compass at it.
+            // Right-click on an element, package or diagram: "Loonar Compass" → "Add to the Compass conversation"
+            // (EA shows add-in entries of a context menu under the add-in's own submenu).
             if (location == "TreeView" || location == "Diagram")
-                return menuName == "" ? L10n.Get(AddReference) : "";
+            {
+                if (menuName == "")
+                    return Menu;
+                if (menuName == Menu)
+                    return new string[] { L10n.Get(AddReference) };
+                return "";
+            }
             // Ribbon: one button that opens Compass in EA (the standalone app is started from the Start menu).
             return menuName == "" ? "Loonar Compass" : "";
         }
@@ -50,8 +57,7 @@ namespace LoonarCompass
         public void EA_GetMenuState(object repository, string location, string menuName, string itemName, ref bool isEnabled, ref bool isChecked)
         {
             isEnabled = !string.IsNullOrEmpty(Connection(repository));
-            if (itemName == L10n.Get(AddReference))
-                isEnabled = current != null && !current.IsDisposed && current.Running;
+
         }
 
         public void EA_MenuClick(object repository, string location, string menuName, string itemName)
@@ -62,7 +68,14 @@ namespace LoonarCompass
                 if (itemName == L10n.Get(AddReference))
                 {
                     string reference = Reference(repository);
-                    if (reference != null && current != null)
+                    if (reference == null)
+                        return;
+                    // Compass not open yet: it opens first, then takes the reference.
+                    if (current == null || current.IsDisposed)
+                        EA_MenuClick(repository, "MainMenu", "", "Loonar Compass");
+                    else
+                        ((dynamic)repository).ShowAddinWindow("Loonar Compass");
+                    if (current != null)
                         current.Send(reference);
                     return;
                 }
