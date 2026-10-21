@@ -390,7 +390,14 @@ namespace LoonarCompass
             }
             if (child != IntPtr.Zero)
             {
-                FollowPanel();
+                try
+                {
+                    FollowPanel();
+                }
+                catch (Exception e)
+                {
+                    Log.Write("FollowPanel failed: " + e.Message);
+                }
                 // EA may re-create the tab's window (docking, floating): Compass goes back into it.
                 if (GetParent(child) != Handle)
                 {
@@ -467,11 +474,16 @@ namespace LoonarCompass
                     h = Math.Min(h, bottom - own.Top);
                 }
             }
-            if (w > 0 && h > 0 && (w != Width || h != Height))
-            {
-                SetBounds(0, 0, w, h);
+            int cw, ch;
+            if (w > 0 && h > 0 && OwnSize(out cw, out ch) && (w != cw || h != ch))
+                MoveWindow(Handle, 0, 0, w, h, true);
+            // EA resizes this control itself (without OnResize reaching Compass): Compass always gets its size.
+            RECT inner;
+            int ow, oh;
+            bool sized = OwnSize(out ow, out oh);
+            bool got = GetWindowRect(child, out inner);
+            if (sized)
                 Fit();
-            }
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -489,11 +501,38 @@ namespace LoonarCompass
         [DllImport("user32.dll")]
         static extern bool GetClientRect(IntPtr window, out RECT rect);
 
+        /// <summary>The real size of this control's window (WinForms' ClientSize lags when EA resizes it).</summary>
+        bool OwnSize(out int w, out int h)
+        {
+            RECT c;
+            w = h = 0;
+            if (!IsHandleCreated || !GetClientRect(Handle, out c))
+                return false;
+            w = c.Right - c.Left;
+            h = c.Bottom - c.Top;
+            return w > 0 && h > 0;
+        }
+
+        /// <summary>Every Compass window in this control gets its size: Compass may put more than one window here at
+        /// start, and the one drawing the chat is not always the one docked first.</summary>
         void Fit()
         {
-            if (child != IntPtr.Zero)
-                MoveWindow(child, 0, 0, ClientSize.Width, ClientSize.Height, true);
+            int w, h;
+            if (!OwnSize(out w, out h))
+                return;
+            for (IntPtr c = GetWindow(Handle, GW_CHILD); c != IntPtr.Zero; c = GetWindow(c, GW_HWNDNEXT))
+            {
+                if (c == note.Handle)
+                    continue;
+                RECT r;
+                if (GetWindowRect(c, out r) && (r.Right - r.Left != w || r.Bottom - r.Top != h))
+                    MoveWindow(c, 0, 0, w, h, true);
+            }
         }
+
+        const uint GW_CHILD = 5, GW_HWNDNEXT = 2;
+        [DllImport("user32.dll")]
+        static extern IntPtr GetWindow(IntPtr window, uint command);
 
         protected override void OnHandleCreated(EventArgs e)
         {

@@ -4303,6 +4303,7 @@ impl eframe::App for App {
                 let ppp = ctx.pixels_per_point();
                 let drawn = ctx.screen_rect().size() * ppp;
                 if (drawn.x - w as f32).abs() > 2.0 || (drawn.y - h as f32).abs() > 2.0 {
+                    ea_ui::debug(&format!("size: window {w}x{h}, drawn {:.0}x{:.0}, ppp {ppp}", drawn.x, drawn.y));
                     ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(w as f32 / ppp, h as f32 / ppp)));
                 }
             }

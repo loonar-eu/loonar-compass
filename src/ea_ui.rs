@@ -97,6 +97,18 @@ pub fn keyboard_is_ours() -> bool {
     }
 }
 
+/// A diagnostic line in %TEMP%\loonar-compass-debug.log (EA mode only, small).
+pub fn debug(text: &str) {
+    let file = std::env::temp_dir().join("loonar-compass-debug.log");
+    if std::fs::metadata(&file).map(|m| m.len() > 100_000).unwrap_or(false) {
+        let _ = std::fs::remove_file(&file);
+    }
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(file) {
+        let _ = writeln!(f, "{} {text}", chrono::Local::now().format("%H:%M:%S%.3f"));
+    }
+}
+
 /// The size of a window's client area in physical pixels.
 pub fn client_size(window: isize) -> Option<(i32, i32)> {
     #[link(name = "user32")]
