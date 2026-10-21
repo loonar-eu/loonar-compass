@@ -2,6 +2,11 @@
 
 All notable changes to Loonar Compass (named Loonar EA Assistant until version 0.3).
 
+## Version 0.7.2 (2026-10-21)
+
+- Compass in EA works with any database open in EA, also one not in the settings: it reads the model through EA's own connection, with no passwords or configuration.
+- The Compass window always docks in EA's panel (before, it sometimes stayed beside it as a separate window).
+
 ## Version 0.7.1 (2026-10-21)
 
 - EA project glossary: the assistant adds a term with its meaning and type (by default "Slownik"); a Polish term goes in with all its forms (singular and plural, from the nominative to the vocative), so EA highlights every form in notes. In the message field: right-click a word → "Add to the EA project glossary", or ask in the conversation.

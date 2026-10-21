@@ -2,6 +2,11 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
+## Wersja 0.7.2 (2026-10-21)
+
+- Compass w EA pracuje z każdą bazą otwartą w EA, także spoza ustawień: czyta model przez połączenie samego EA, bez haseł i konfiguracji.
+- Okno Compassa zawsze dokuje się w panelu EA (wcześniej czasem zostawało obok jako osobne okno).
+
 ## Wersja 0.7.1 (2026-10-21)
 
 - Słownik projektu EA (Glossary): asystent dodaje pojęcie z definicją i typem (domyślnie „Slownik”); polskie pojęcie trafia we wszystkich formach (liczba pojedyncza i mnoga, od mianownika do wołacza), więc EA podświetla w notatkach każdą odmianę. W polu wiadomości: prawy przycisk na słowie → „Dodaj do słownika projektu EA”, albo prośba w rozmowie.
