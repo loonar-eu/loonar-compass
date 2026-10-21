@@ -2557,6 +2557,15 @@ fn mode_label(mode: &str) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    /// Registers the add-in of the installed copy (manual: `cargo test register_installed_addin -- --ignored`).
+    #[test]
+    #[ignore]
+    fn register_installed_addin() {
+        let dll = std::path::PathBuf::from(std::env::var("LOCALAPPDATA").unwrap()).join(r"Programs\Loonar Compass").join(super::ADDIN_DLL);
+        super::ea_addin::register(&dll).expect("registration");
+        println!("{:?}", super::reg::get_string(super::reg::Root::CurrentUser, r"Software\Classes\CLSID\{6C1E5B7A-3D2F-4B8E-9A41-2F7C0D5E8B13}\InprocServer32", "CodeBase"));
+    }
+
     use super::*;
 
     const LOG: &str = "# Changelog\n\nIntroduction.\n\n## Version 0.3 (2026-11-01)\n\n- three\n\n## Version 0.2 (2026-10-15)\n\nGroup:\n\n- two\n\n## Version 0.1 (2026-10-13)\n\n- one\n";
