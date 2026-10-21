@@ -329,7 +329,7 @@ fn apply_theme(ctx: &egui::Context) {
             egui::TextStyle::Small => 12.0,
             egui::TextStyle::Monospace => 14.0,
             _ => 15.0,
-        };
+        } - if ea::in_ea_tab() { 2.0 } else { 0.0 }; // a narrow tab of EA: 2 pt smaller, like EA's own windows
     }
     ctx.set_style(style);
 }
@@ -1837,7 +1837,7 @@ impl App {
                     self.status = crate::i18n::tr("Claude is waiting for your approval to save.").into();
                 }
                 Ok(WorkerEvent::Done) => {
-                    ea_ui::output(&format!("■ {}", crate::i18n::fmt("Answer ready: \"{0}\"", &[shown_title(&self.session.title)])));
+                    ea_ui::output(&format!("■ {}", crate::i18n::fmt("Answer ready: \"{0}\"", &[shown_title(&self.session.title).to_string()])));
                     finished = true;
                     break;
                 }
@@ -1900,6 +1900,10 @@ impl App {
     /// Splash screen: a card with the star-map background (globe grid and compass rose) and the logo mark,
     /// application name and version, owner details at the bottom. Disappears after SPLASH_SECS (with a short fade-out).
     fn splash_ui(&mut self, ctx: &egui::Context) {
+        // No splash in a window of EA: it does not fit there and EA has just been started anyway.
+        if ea::in_ea_tab() {
+            return;
+        }
         let now = ctx.input(|i| i.time);
         let start = *self.splash_start.get_or_insert(now);
         let left = SPLASH_SECS - (now - start);
@@ -2313,6 +2317,13 @@ impl App {
             return;
         }
         let Ok(files) = clipboard.get().file_list() else {
+            // In a tab of EA the windowing library may not see Ctrl+V: text is pasted here.
+            if ea::in_ea_tab() {
+                if let Some(text) = clipboard.get_text().ok().map(|t| t.replace("\r\n", "\n")).filter(|t| !t.is_empty()) {
+                    self.input.push_str(&text);
+                    return;
+                }
+            }
             self.status = crate::i18n::tr("The clipboard contains no image or files.").into();
             return;
         };
@@ -4235,6 +4246,18 @@ fn row_secret(ui: &mut egui::Ui, label: &str, value: &mut String, stored: bool) 
 }
 
 impl eframe::App for App {
+    /// In a tab of EA the window is a child of EA's window: Windows does not report it as focused, and egui would
+    /// then hide the text cursor. It counts as focused there.
+    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        if ea::in_ea_tab() {
+            let ours = ea_ui::keyboard_is_ours();
+            raw_input.focused = ours;
+            if let Some(viewport) = raw_input.viewports.get_mut(&raw_input.viewport_id) {
+                viewport.focused = Some(ours);
+            }
+        }
+    }
+
     /// Closing the window: the EA session first, so the EA process does not stay in the background holding a license.
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         ea::shutdown();
@@ -4355,25 +4378,45 @@ impl eframe::App for App {
                 // The conversation list also works while the assistant is working: you can start a new conversation or go back
                 // to another one, and the work already started continues in the background.
                 ui.scope(|ui| {
-                    // Narrow tab of EA: search and "+" in one row, no title (the list takes a few rows only).
+                    // Narrow tab of EA: one row with a drop-down of the project's conversations and "+".
                     if narrow {
+                        let mut pick: Option<Session> = None;
+                        let mut new_one = false;
                         ui.horizontal(|ui| {
-                            let new = ui
-                                .add(egui::Button::new(icons::text(icons::ADD, "+", 13.0)).min_size(egui::vec2(26.0, 26.0)))
-                                .on_hover_text(crate::i18n::tr("New conversation"));
-                            if new.clicked() {
-                                self.switch_to(Session::new());
-                                self.pending.clear();
-                                self.renaming = None;
-                            }
-                            ui.add(
-                                egui::TextEdit::singleline(&mut self.search)
-                                    .hint_text(egui::RichText::new(crate::i18n::tr("Search conversations…")).color(theme::HINT))
-                                    .margin(egui::Margin::symmetric(6.0, 3.0))
-                                    .desired_width(f32::INFINITY),
-                            );
+                            let width = (ui.available_width() - 40.0).max(80.0);
+                            let current = if self.session.messages.is_empty() { crate::i18n::tr("New conversation").to_string() } else { shown_title(&self.session.title).to_string() };
+                            egui::ComboBox::from_id_salt("conversation_pick")
+                                .width(width)
+                                .selected_text(egui::RichText::new(current).color(theme::TEXT))
+                                .show_ui(ui, |ui| {
+                                    let mut any = false;
+                                    for s in &self.sessions {
+                                        if !matches!((&s.model, &self.ea_project), (Some(m), Some(p)) if m.same_project(p)) {
+                                            continue;
+                                        }
+                                        any = true;
+                                        if ui.selectable_label(s.id == self.session.id, shown_title(&s.title)).clicked() {
+                                            pick = Some(s.clone());
+                                        }
+                                    }
+                                    if !any {
+                                        ui.label(egui::RichText::new(crate::i18n::tr("No conversations with this project yet")).color(theme::MUTED));
+                                    }
+                                });
+                            new_one = ui
+                                .add(egui::Button::new(icons::text(icons::ADD, "+", 13.0)).min_size(egui::vec2(28.0, 28.0)))
+                                .on_hover_text(crate::i18n::tr("New conversation"))
+                                .clicked();
                         });
-                        ui.add_space(2.0);
+                        if let Some(s) = pick {
+                            self.switch_to(s);
+                        }
+                        if new_one {
+                            self.switch_to(Session::new());
+                            self.pending.clear();
+                            self.renaming = None;
+                        }
+                        return;
                     }
                     if !narrow {
                     ui.horizontal(|ui| {
@@ -4504,7 +4547,7 @@ impl eframe::App for App {
             if narrow {
                 // About three conversations high (the rest scrolls): together with the chat header ~15-20% of the tab.
                 let compact = egui::Frame::none().fill(theme::SIDEBAR).inner_margin(egui::Margin::symmetric(6.0, 4.0));
-                egui::TopBottomPanel::top("history_top").resizable(true).default_height(118.0).min_height(60.0).frame(compact).show(ctx, history_ui);
+                egui::TopBottomPanel::top("history_top").resizable(false).frame(compact).show(ctx, history_ui);
             } else {
                 egui::SidePanel::left("history").default_width(250.0).frame(frame).show(ctx, history_ui);
             }
@@ -4584,19 +4627,25 @@ impl eframe::App for App {
                 let mut open_conn = false;
                 self.conn_window(ctx);
                 self.miro_window(ctx);
+                // In a tab of EA the header only shows that Claude is working.
+                if !ea::in_ea_tab() || busy {
                 egui::TopBottomPanel::top("chat_header")
                     .show_separator_line(false)
                     .frame(egui::Frame::none().fill(theme::BACKGROUND).inner_margin(if ea::in_ea_tab() { egui::Margin::symmetric(10.0, 4.0) } else { egui::Margin::symmetric(22.0, 12.0) }))
                     .show(ctx, |ui| {
                         ui.horizontal(|ui| {
-                            let title = if self.session.messages.is_empty() { crate::i18n::tr("New conversation") } else { shown_title(&self.session.title) };
-                            ui.add(
-                                egui::Label::new(egui::RichText::new(title).font(egui::FontId::new(16.0, egui::FontFamily::Name(markdown::BOLD_FAMILY.into()))))
-                                    .truncate(),
-                            );
+                            // In a tab of EA the title is in the conversation drop-down above: no room for it next to the badges.
+                            if !ea::in_ea_tab() {
+                                let title = if self.session.messages.is_empty() { crate::i18n::tr("New conversation") } else { shown_title(&self.session.title) };
+                                ui.add(
+                                    egui::Label::new(egui::RichText::new(title).font(egui::FontId::new(16.0, egui::FontFamily::Name(markdown::BOLD_FAMILY.into()))))
+                                        .truncate(),
+                                );
+                            }
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if let Some(base) = &self.cfg {
-                                    let choice = self.session.model.clone().unwrap_or_else(|| ModelChoice::of(base));
+                                // In a tab of EA the model is always the project open in EA: nothing to show.
+                                if let Some(base) = self.cfg.as_ref().filter(|_| !ea::in_ea_tab()) {
+                                    let choice = self.session.model.clone().or_else(|| self.ea_project.clone()).unwrap_or_else(|| ModelChoice::of(base));
                                     let chip = ui
                                         .button(egui::RichText::new(crate::i18n::fmt("Model: {0}", &[choice.label()])).small())
                                         .on_hover_text(crate::i18n::fmt("{0}\nClick to see or change the model of this conversation.", &[choice.describe()]));
@@ -4619,6 +4668,7 @@ impl eframe::App for App {
                         let rect = ui.max_rect();
                         ui.painter().hline(rect.x_range(), rect.bottom() + 11.5, egui::Stroke::new(1.0_f32, theme::BORDER));
                     });
+                }
                 if open_conn {
                     self.open_conn_editor();
                 }
@@ -5076,7 +5126,8 @@ impl eframe::App for App {
                                 ui.add_space(if is_user { 14.0 } else { 18.0 });
                             }
                             // Steps of the assistant's work: what it is doing now and what it has already done in this turn, with time and result.
-                            if !self.steps.is_empty() {
+                            // In a tab of EA they are in EA's System Output ("Loonar Compass" tab), not in the chat.
+                            if !self.steps.is_empty() && !ea::in_ea_tab() {
                                 // Steps card: expanded while working, collapsed to one line when finished
                                 // (clicking the header toggles it; the user's choice applies until the next response).
                                 let toggle_id = egui::Id::new(("steps_open", &self.steps[0].clock, &self.session.id));

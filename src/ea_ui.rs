@@ -51,14 +51,47 @@ pub fn set_rot_name(name: &str) {
     let _ = ROT_NAME.set(name.to_string());
 }
 
+/// In a tab of EA: whether the keyboard is in the Compass window (Windows does not report a child window of
+/// another process as focused, so the focus window of the foreground thread is checked).
+pub fn keyboard_is_ours() -> bool {
+    #[repr(C)]
+    struct GuiThreadInfo {
+        cb: u32,
+        flags: u32,
+        active: isize,
+        focus: isize,
+        capture: isize,
+        menu_owner: isize,
+        move_size: isize,
+        caret: isize,
+        caret_rect: [i32; 4],
+    }
+    #[link(name = "user32")]
+    extern "system" {
+        fn GetForegroundWindow() -> isize;
+        fn GetWindowThreadProcessId(window: isize, process: *mut u32) -> u32;
+        fn GetGUIThreadInfo(thread: u32, info: *mut GuiThreadInfo) -> i32;
+    }
+    // SAFETY: plain WinAPI calls with a local, correctly sized structure.
+    unsafe {
+        let foreground = GetForegroundWindow();
+        let thread = GetWindowThreadProcessId(foreground, std::ptr::null_mut());
+        let mut info = GuiThreadInfo { cb: std::mem::size_of::<GuiThreadInfo>() as u32, flags: 0, active: 0, focus: 0, capture: 0, menu_owner: 0, move_size: 0, caret: 0, caret_rect: [0; 4] };
+        if GetGUIThreadInfo(thread, &mut info) == 0 || info.focus == 0 {
+            return false;
+        }
+        let mut process = 0u32;
+        GetWindowThreadProcessId(info.focus, &mut process);
+        process == std::process::id()
+    }
+}
+
 /// A line for the "Loonar Compass" tab of EA's System Output (the add-in shows what the assistant does there).
 /// Nothing outside a tab of EA.
 pub fn output(text: &str) {
     let Some(name) = ROT_NAME.get() else { return };
     let file = std::env::temp_dir().join(format!("loonar-ea-output-{name}.txt"));
-    let line = format!("{}  {}
-", chrono::Local::now().format("%H:%M:%S"), text.replace('
-', " "));
+    let line = format!("{}  {}\n", chrono::Local::now().format("%H:%M:%S"), text.replace('\n', " "));
     use std::io::Write;
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(file) {
         let _ = f.write_all(line.as_bytes());

@@ -77,11 +77,18 @@ namespace LoonarCompass
                     return;
                 }
                 dynamic repo = repository;
-                object control = repo.AddTab("Loonar Compass", "LoonarCompass.Tab");
+                // A dockable window like Properties (EA remembers where the user put it), not a tab among the diagrams.
+                if (current != null && !current.IsDisposed)
+                {
+                    repo.ShowAddinWindow("Loonar Compass");
+                    return;
+                }
+                object control = repo.AddWindow("Loonar Compass", "LoonarCompass.Tab");
                 CompassTab tab = control as CompassTab;
                 if (tab == null)
-                    throw new InvalidOperationException("EA did not create the Compass tab.");
+                    throw new InvalidOperationException("EA did not create the Compass window.");
                 current = tab;
+                repo.ShowAddinWindow("Loonar Compass");
                 tab.Start(connection, repository);
             }
             catch (Exception e)
