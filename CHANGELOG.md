@@ -2,6 +2,12 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
+## Wersja 0.7.3 (2026-10-21)
+
+- Compass w EA: pisanie działa po „Dodaj do rozmowy w Compass”, po kliknięciu w drzewo lub diagram i po przełączeniu paneli (klawiatura trafia do okna Compassa).
+- Okno Compassa mieści się w widocznej części panelu EA, więc dolny pasek ikon zostaje na ekranie.
+- Błędne zapytanie asystenta do bazy otwartej w EA nie zatrzymuje już EA okienkiem błędu: Compass zamyka je sam i przekazuje treść błędu asystentowi, który poprawia zapytanie.
+
 ## Wersja 0.7.2 (2026-10-21)
 
 - Compass w EA pracuje z każdą bazą otwartą w EA, także spoza ustawień: czyta model przez połączenie samego EA, bez haseł i konfiguracji.

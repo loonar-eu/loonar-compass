@@ -442,6 +442,28 @@ namespace LoonarCompass
             if (host == IntPtr.Zero || !GetClientRect(host, out area))
                 return;
             int w = area.Right - area.Left, h = area.Bottom - area.Top;
+            // The part actually visible: EA's containers (tabbed panels) may be larger than what they show, so the
+            // control is limited to the intersection of all its parents' client areas, up to EA's main window.
+            RECT own;
+            if (GetWindowRect(Handle, out own))
+            {
+                int right = int.MaxValue, bottom = int.MaxValue;
+                for (IntPtr p = host; p != IntPtr.Zero; p = GetParent(p))
+                {
+                    RECT c;
+                    if (!GetClientRect(p, out c))
+                        break;
+                    POINT corner = new POINT { X = c.Right, Y = c.Bottom };
+                    ClientToScreen(p, ref corner);
+                    right = Math.Min(right, corner.X);
+                    bottom = Math.Min(bottom, corner.Y);
+                }
+                if (right != int.MaxValue)
+                {
+                    w = Math.Min(w, right - own.Left);
+                    h = Math.Min(h, bottom - own.Top);
+                }
+            }
             if (w > 0 && h > 0 && (w != Width || h != Height))
             {
                 SetBounds(0, 0, w, h);
@@ -451,6 +473,12 @@ namespace LoonarCompass
 
         [StructLayout(LayoutKind.Sequential)]
         struct RECT { public int Left, Top, Right, Bottom; }
+        [StructLayout(LayoutKind.Sequential)]
+        struct POINT { public int X, Y; }
+        [DllImport("user32.dll")]
+        static extern bool GetWindowRect(IntPtr window, out RECT rect);
+        [DllImport("user32.dll")]
+        static extern bool ClientToScreen(IntPtr window, ref POINT point);
         [DllImport("user32.dll")]
         static extern bool GetClientRect(IntPtr window, out RECT rect);
 

@@ -2,6 +2,12 @@
 
 All notable changes to Loonar Compass (named Loonar EA Assistant until version 0.3).
 
+## Version 0.7.3 (2026-10-21)
+
+- Compass in EA: typing works after "Add to the Compass conversation", after clicking the browser or a diagram and after switching panels (the keyboard goes to the Compass window).
+- The Compass window fits the visible part of the EA panel, so the bottom icon bar stays on screen.
+- A wrong query of the assistant to a database open in EA no longer stops EA with an error box: Compass closes it and passes the error to the assistant, which corrects the query.
+
 ## Version 0.7.2 (2026-10-21)
 
 - Compass in EA works with any database open in EA, also one not in the settings: it reads the model through EA's own connection, with no passwords or configuration.

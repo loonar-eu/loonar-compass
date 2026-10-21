@@ -2,6 +2,12 @@
 
 Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen Loonar EA Assistant).
 
+## Version 0.7.3 (2026-10-21)
+
+- Compass in EA: Tippen funktioniert nach „Zur Compass-Unterhaltung hinzufügen“, nach einem Klick in den Browser oder ein Diagramm und nach dem Wechsel der Bereiche (die Tastatur geht an das Compass-Fenster).
+- Das Compass-Fenster passt in den sichtbaren Teil des EA-Bereichs, die untere Symbolleiste bleibt sichtbar.
+- Eine fehlerhafte Abfrage des Assistenten an eine in EA geöffnete Datenbank hält EA nicht mehr mit einem Fehlerfenster an: Compass schließt es und gibt den Fehler an den Assistenten weiter, der die Abfrage korrigiert.
+
 ## Version 0.7.2 (2026-10-21)
 
 - Compass in EA arbeitet mit jeder in EA geöffneten Datenbank, auch einer, die nicht in den Einstellungen steht: Es liest das Modell über die Verbindung von EA selbst, ohne Passwörter und Konfiguration.

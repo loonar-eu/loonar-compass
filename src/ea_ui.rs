@@ -139,8 +139,94 @@ pub fn reads_through_ea() -> bool {
 /// A read-only query run by the EA window of this Compass tab (Repository.SQLQuery): column names and rows.
 pub fn sql_query(sql: &str, limit: usize) -> Result<(Vec<String>, Vec<Vec<Option<String>>>, bool)> {
     let sql = sql.to_string();
-    let xml = with_running_ea(Duration::from_secs(60), move |repo| Ok(repo.call("SQLQuery", &[crate::com::s(&sql)])?.text()))?;
-    Ok(parse_sql_xml(&xml, limit))
+    // EA shows a wrong query's error in a message box and waits for a click (SuppressEADialogs does not stop it):
+    // while the query runs, such a box of this EA is closed here and its text goes back as the error.
+    let ea_pid: u32 = ROT_NAME.get().and_then(|n| n.rsplit('.').next()).and_then(|p| p.parse().ok()).unwrap_or(0);
+    let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let caught = std::sync::Arc::new(std::sync::Mutex::new(None::<String>));
+    let watcher = {
+        let (done, caught) = (done.clone(), caught.clone());
+        std::thread::spawn(move || {
+            while !done.load(std::sync::atomic::Ordering::Relaxed) {
+                if let Some(text) = close_error_box(ea_pid) {
+                    *caught.lock().unwrap_or_else(|p| p.into_inner()) = Some(text);
+                }
+                std::thread::sleep(Duration::from_millis(150));
+            }
+        })
+    };
+    let xml = with_running_ea(Duration::from_secs(60), move |repo| Ok(repo.call("SQLQuery", &[crate::com::s(&sql)])?.text()));
+    done.store(true, std::sync::atomic::Ordering::Relaxed);
+    let _ = watcher.join();
+    if let Some(error) = caught.lock().unwrap_or_else(|p| p.into_inner()).take() {
+        bail!("{}", error.lines().filter(|l| !l.trim().is_empty()).collect::<Vec<_>>().join(" "));
+    }
+    Ok(parse_sql_xml(&xml?, limit))
+}
+
+/// Closes a message box of the given EA process that reports a database/SQL error; returns its text.
+fn close_error_box(ea_pid: u32) -> Option<String> {
+    #[link(name = "user32")]
+    extern "system" {
+        fn EnumWindows(callback: extern "system" fn(isize, isize) -> i32, param: isize) -> i32;
+        fn EnumChildWindows(parent: isize, callback: extern "system" fn(isize, isize) -> i32, param: isize) -> i32;
+        fn GetWindowThreadProcessId(window: isize, process: *mut u32) -> u32;
+        fn GetClassNameW(window: isize, name: *mut u16, max: i32) -> i32;
+        fn GetWindowTextW(window: isize, text: *mut u16, max: i32) -> i32;
+        fn IsWindowVisible(window: isize) -> i32;
+        fn PostMessageW(window: isize, message: u32, w: usize, l: isize) -> i32;
+    }
+    struct Search {
+        pid: u32,
+        found: Vec<isize>,
+    }
+    fn class_of(window: isize) -> String {
+        let mut buffer = [0u16; 64];
+        // SAFETY: the buffer and its size match.
+        let n = unsafe { GetClassNameW(window, buffer.as_mut_ptr(), 64) };
+        String::from_utf16_lossy(&buffer[..n.max(0) as usize])
+    }
+    fn text_of(window: isize) -> String {
+        let mut buffer = vec![0u16; 4096];
+        // SAFETY: the buffer and its size match.
+        let n = unsafe { GetWindowTextW(window, buffer.as_mut_ptr(), 4096) };
+        String::from_utf16_lossy(&buffer[..n.max(0) as usize])
+    }
+    extern "system" fn top(window: isize, param: isize) -> i32 {
+        // SAFETY: param points to the Search below for the duration of EnumWindows.
+        let search = unsafe { &mut *(param as *mut Search) };
+        let mut pid = 0u32;
+        unsafe { GetWindowThreadProcessId(window, &mut pid) };
+        if pid == search.pid && unsafe { IsWindowVisible(window) } != 0 && class_of(window) == "#32770" {
+            search.found.push(window);
+        }
+        1
+    }
+    extern "system" fn child(window: isize, param: isize) -> i32 {
+        // SAFETY: param points to the String below for the duration of EnumChildWindows.
+        let text = unsafe { &mut *(param as *mut String) };
+        if class_of(window) == "Static" {
+            text.push_str(&text_of(window));
+            text.push('\n');
+        }
+        1
+    }
+    if ea_pid == 0 {
+        return None;
+    }
+    let mut search = Search { pid: ea_pid, found: Vec::new() };
+    // SAFETY: the callback only uses the Search passed in, which outlives the call.
+    unsafe { EnumWindows(top, &mut search as *mut Search as isize) };
+    for window in search.found {
+        let mut text = String::new();
+        unsafe { EnumChildWindows(window, child, &mut text as *mut String as isize) };
+        if text.contains("SQL") || text.contains("Database API") {
+            // IDOK on the box's own OK button.
+            unsafe { PostMessageW(window, 0x0111, 1, 0) };
+            return Some(text);
+        }
+    }
+    None
 }
 
 /// EA's SQLQuery result: `<EADATA><Dataset_0><Data><Row><col>value</col>…</Row>…`. Columns in the order of the
@@ -400,5 +486,24 @@ mod tests {
         let result = super::context(&super::Target { db_name: String::new(), file: None });
         println!("{result:?} ({} ms)", started.elapsed().as_millis());
         assert!(started.elapsed().as_secs() < 12);
+    }
+}
+#[cfg(test)]
+mod error_box_probe {
+    /// Closes an SQL error box of an EA process (LOONAR_TEST_EA_PID) and prints its text.
+    #[test]
+    #[ignore]
+    fn closes_sql_error_box() {
+        let pid: u32 = std::env::var("LOONAR_TEST_EA_PID").unwrap().parse().unwrap();
+        let mut text = None;
+        for _ in 0..200 {
+            text = super::close_error_box(pid);
+            if text.is_some() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        }
+        println!("caught: {text:?}");
+        assert!(text.is_some());
     }
 }
