@@ -527,7 +527,8 @@ mod ea_addin {
     const ADDINS: [&str; 2] = [r"Software\Sparx Systems\EAAddins64\LoonarCompass", r"Software\Sparx Systems\EAAddins\LoonarCompass"];
 
     pub fn register(dll: &Path) -> Result<()> {
-        let code_base = format!("file:///{}", dll.display().to_string().replace('\\', "/").replace(' ', "%20"));
+        // Not URL-escaped: the .NET loader takes the path as written (with "%20" it does not find a folder with spaces).
+        let code_base = format!("file:///{}", dll.display().to_string().replace('\\', "/"));
         let root = Root::CurrentUser;
         for (prog_id, class, clsid) in CLASSES {
             reg::set_string(root, &format!(r"Software\Classes\{prog_id}"), "", class)?;
