@@ -2,6 +2,11 @@
 
 All notable changes to Loonar Compass (named Loonar EA Assistant until version 0.3).
 
+## Version 0.7.5 (2026-10-22)
+
+- Fix: Compass in EA fills its whole panel and follows every change of its size, also in a floating window and in a tab group.
+- "About" and the footer show the full version number (e.g. 0.7.5).
+
 ## Version 0.7.4 (2026-10-21)
 
 - Fix: Compass in EA again follows every change of its panel's size (in 0.7.3 it kept the size it opened with).

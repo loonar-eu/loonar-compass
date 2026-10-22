@@ -2,6 +2,11 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
+## Wersja 0.7.5 (2026-10-22)
+
+- Poprawka: Compass w EA wypełnia cały panel i dopasowuje się przy każdej zmianie jego rozmiaru, także w oknie pływającym i w grupie zakładek.
+- Okno „Informacje” i stopka pokazują pełny numer wersji (np. 0.7.5).
+
 ## Wersja 0.7.4 (2026-10-21)
 
 - Poprawka: Compass w EA znów dopasowuje się do rozmiaru panelu przy każdej jego zmianie (w 0.7.3 zostawał w rozmiarze z otwarcia).

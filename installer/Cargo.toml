@@ -1,6 +1,6 @@
 [package]
 name = "loonar-compass-setup"
-version = "0.7.4"
+version = "0.7.5"
 edition = "2021"
 description = "Loonar Compass setup wizard"
 publish = false
