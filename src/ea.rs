@@ -396,7 +396,8 @@ mod tests {
     }
 
     fn test_config() -> AppConfig {
-        let props = Path::new(env!("CARGO_MANIFEST_DIR")).join("app.properties");
+        // LOONAR_TEST_PROPS points the whole series at another model (a second database or a file copy).
+        let props = std::env::var("LOONAR_TEST_PROPS").map(std::path::PathBuf::from).unwrap_or_else(|_| Path::new(env!("CARGO_MANIFEST_DIR")).join("app.properties"));
         let mut cfg = AppConfig::load(&props).expect("app.properties");
         if let Ok(user) = std::env::var("LOONAR_TEST_EA_USER") {
             cfg.ea_user = user;
@@ -698,6 +699,89 @@ mod tests {
         run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &BatchOptions::default()).expect("deleting the test package");
         shutdown();
         assert_eq!(after[0], vec!["8".to_string(), sub.to_string()]);
+    }
+
+    /// Governance on a real model: seeded defects are found by the linter, the organization's rules work, the gap analysis
+    /// sees new / retired / changed elements and the write preview shows before → after. Run on a database and on a file copy:
+    /// `cargo test ea_governance -- --ignored --nocapture` (LOONAR_TEST_PROPS = another model).
+    #[test]
+    #[ignore = "requires EA, a license and the model database from app.properties"]
+    fn ea_governance() {
+        let cfg = test_config();
+        let _ea = CloseEa;
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).expect(sql);
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id limit 1")[0][0].parse().unwrap();
+        let name = format!("ZZ_test_mostu_gov_{}", chrono::Local::now().format("%H%M%S"));
+        let ops = vec![
+            json!({"op":"create_package","key":"pkg","parent":root,"name":name}),
+            json!({"op":"create_package","key":"asis","parent":"#pkg","name":"As-is"}),
+            json!({"op":"create_package","key":"tobe","parent":"#pkg","name":"To-be"}),
+            json!({"op":"create_package","key":"empty","parent":"#asis","name":"Empty"}),
+            json!({"op":"create_diagram","key":"dia","package":"#asis","name":"Components","type":"Component"}),
+            json!({"op":"create_diagram","key":"blank","package":"#asis","name":"Blank","type":"Component"}),
+            json!({"op":"create_element","key":"c1","package":"#asis","name":"Class1","type":"Class"}),
+            json!({"op":"create_element","key":"orders","package":"#asis","name":"OrderService","type":"Component","notes":"Takes orders."}),
+            json!({"op":"create_element","key":"billing","package":"#asis","name":"Billing","type":"Component","notes":"Invoices."}),
+            json!({"op":"create_element","key":"legacy","package":"#asis","name":"LegacyFax","type":"Component","notes":"Old fax gateway."}),
+            json!({"op":"create_element","key":"api","package":"#asis","name":"OrderApi","type":"Interface","notes":"REST."}),
+            json!({"op":"place","diagram":"#dia","element":"#orders","left":40,"top":40,"width":140,"height":70}),
+            json!({"op":"place","diagram":"#dia","element":"#billing","left":260,"top":40,"width":140,"height":70}),
+            json!({"op":"place","diagram":"#dia","element":"#api","left":40,"top":200,"width":140,"height":70}),
+            json!({"op":"create_connector","source":"#orders","target":"#billing","type":"Dependency"}),
+            json!({"op":"create_connector","source":"#orders","target":"#billing","type":"Dependency"}),
+            json!({"op":"create_connector","source":"#billing","target":"#api","type":"Realisation"}),
+            json!({"op":"create_connector","source":"#legacy","target":"#legacy","type":"Dependency"}),
+            json!({"op":"create_element","key":"orders2","package":"#tobe","name":"OrderService","type":"Component","notes":"Takes orders online."}),
+            json!({"op":"create_element","key":"billing2","package":"#tobe","name":"Billing","type":"Component","notes":"Invoices."}),
+            json!({"op":"create_element","key":"pay","package":"#tobe","name":"PaymentGateway","type":"Component","notes":"Cards."}),
+            json!({"op":"create_connector","source":"#orders2","target":"#pay","type":"Dependency"}),
+        ];
+        let created = run_batch(&cfg, &ops, &BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("creation");
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).expect(key)["id"].as_i64().unwrap();
+        let (pkg, asis, tobe, orders) = (id_of("pkg"), id_of("asis"), id_of("tobe"), id_of("orders"));
+
+        let started = Instant::now();
+        let lint = crate::governance::lint(&json!({"package": asis}), &cfg);
+        let rules = json!({
+            "naming": [{"applies_to": "Component", "pattern": "*Service", "message": "a component name ends with Service"}],
+            "required_tags": [{"applies_to": "Component", "tag": "Owner"}],
+            "allowed_relations": [{"connector_type": "Realisation", "source": "Component", "target": "Class"}]
+        });
+        let ruled = crate::governance::lint(&json!({"package": asis, "rules": rules, "skip": ["missing_notes"]}), &cfg);
+        let gap = crate::governance::gap(&json!({"as_is": asis, "to_be": tobe}), &cfg);
+        let preview = crate::governance::preview(&cfg, &[
+            json!({"op":"update_element","element":orders,"name":"OrderingService","notes":"New."}),
+            json!({"op":"create_element","name":"Audit","type":"Component","package":asis}),
+            json!({"op":"delete","element":orders}),
+        ]);
+        let elapsed = started.elapsed().as_millis();
+        run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &BatchOptions::default()).expect("deleting the test package");
+        shutdown();
+
+        let lint = lint.expect("lint");
+        let ruled = ruled.expect("lint with rules");
+        let gap = gap.expect("gap");
+        println!("--- lint ({elapsed} ms for all checks) ---\n{lint}\n--- with rules ---\n{ruled}\n--- gap ---\n{gap}\n--- preview ---\n{preview}");
+        let has = |text: &str, rule: &str, what: &str| text.lines().any(|l| l.contains(&format!("| {rule} |")) && l.contains(what));
+        assert!(has(&lint, "default_name", "Class1"), "default name");
+        assert!(has(&lint, "orphan", "Class1"), "orphan");
+        assert!(!has(&lint, "orphan", "OrderService"), "an element on a diagram is not an orphan");
+        assert!(has(&lint, "missing_notes", "Class1"), "missing notes");
+        assert!(has(&lint, "duplicate_relation", "OrderService → Billing"), "duplicate relationship");
+        assert!(has(&lint, "self_relation", "LegacyFax → LegacyFax"), "self relationship");
+        assert!(has(&lint, "empty_package", "Empty"), "empty package");
+        assert!(has(&lint, "empty_diagram", "Blank"), "empty diagram");
+        assert!(!has(&lint, "empty_diagram", "Components"), "a diagram with elements is not empty");
+        assert!(has(&ruled, "naming", "Billing") && !has(&ruled, "naming", "OrderService"), "naming rule");
+        assert!(has(&ruled, "required_tag", "Billing"), "required tag");
+        assert!(has(&ruled, "invalid_relation", "Billing → OrderApi"), "allowed relationships");
+        assert!(!ruled.contains("| missing_notes |"), "skipped rule");
+        assert!(gap.lines().any(|l| l.contains("PaymentGateway")), "new in to-be");
+        assert!(gap.lines().any(|l| l.contains("LegacyFax")), "retired from as-is");
+        assert!(gap.lines().any(|l| l.contains("OrderService") && l.contains("Billing")), "changed relationships");
+        assert!(preview.contains("\"OrderService\"") && preview.contains("\"OrderingService\""), "before → after of a name");
+        assert!(preview.lines().any(|l| l.starts_with('+') && l.contains("Audit")), "a new element");
+        assert!(preview.lines().any(|l| l.starts_with('−')), "a deletion");
     }
 
     /// Changing the position and size of an element on a diagram (set_bounds) on a real EA; the connector must stay.

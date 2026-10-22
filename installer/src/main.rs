@@ -2318,7 +2318,7 @@ impl Setup {
             egui::Grid::new("cfg_claude").num_columns(2).min_col_width(190.0).spacing([10.0, 6.0]).show(ui, |ui| {
                 field(ui, crate::i18n::tr("Claude API key"), &mut c.api_key, true);
             });
-            muted(ui, crate::i18n::tr("To answer, the app sends the conversation, attachments, remembered notes, templates, model query results and diagram images to Anthropic (Claude API) using your key. Loonar does not receive this data."));
+            muted(ui, crate::i18n::fmt("To answer, the app sends the conversation, attachments, remembered notes, templates, model query results and diagram images to {0} using your key. Loonar does not receive this data.", &["Anthropic / OpenAI".to_string()]).as_str());
             ui.add_space(6.0);
             ui.label(bold(crate::i18n::tr("Model"), 14.5));
             ui.horizontal_wrapped(|ui| {

@@ -2,7 +2,7 @@
 
 Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen Loonar EA Assistant).
 
-## Version 0.7.6 (2026-10-22)
+## Version 0.8 (2026-10-22)
 
 - KI-Modell wählbar: Anbieter Anthropic (Claude) oder OpenAI, beliebiges Modell (aus der Liste oder eigene ID) und Aufwandsstufe (von „Standard des Modells“ bis max). Standard unverändert: Claude Haiku 5.5. Jeder Anbieter hat einen eigenen API-Schlüssel in der Anmeldeinformationsverwaltung; Daten gehen nur an den gewählten.
 - Einstellungen ohne Kartennummern; die erste Karte heißt „KI-Modell“.

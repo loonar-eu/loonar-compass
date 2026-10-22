@@ -220,6 +220,97 @@ operation optionally narrows the result down to operations whose name contains t
             }
         },
         {
+            "name": "jira_search",
+            "description": "Searches Jira issues with JQL (Jira from the settings) and returns key, type, status, priority, assignee, summary, labels and update date. \
+Use it when the user refers to the backlog, a sprint, an epic or issues, e.g. project = ARCH AND status != Done ORDER BY updated DESC, or text ~ \"payment\". \
+Read single issues with jira_issue.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "jql": { "type": "string", "description": "JQL query." },
+                    "max": { "type": "integer", "description": "At most this many issues, 1-100 (default 30)." }
+                },
+                "required": ["jql"]
+            }
+        },
+        {
+            "name": "jira_issue",
+            "description": "Reads one Jira issue: summary, type, status, priority, assignee, parent, labels, components, versions, the full description, \
+linked issues, web links (also links to model elements) and the latest comments. Use it as context: e.g. draw a use case, component or BPMN diagram \
+from a story, check whether the model covers an epic, or find the model elements an issue is about.",
+            "input_schema": {
+                "type": "object",
+                "properties": { "key": { "type": "string", "description": "Issue key, e.g. ARCH-123." } },
+                "required": ["key"]
+            }
+        },
+        {
+            "name": "jira_create_issue",
+            "description": "Creates a Jira issue (e.g. from model elements, lint findings or a gap analysis). The user always approves it before it is sent. \
+Optionally adds a web link, e.g. to the model element (title \"EA: name\", url ea://{GUID}); afterwards you may save the issue key on the element \
+(ea_write, a tagged value such as Jira = ARCH-123).",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "project": { "type": "string", "description": "Project key; empty = the default project from the settings." },
+                    "type": { "type": "string", "description": "Issue type name, e.g. Task, Story, Bug, Epic (default Task)." },
+                    "summary": { "type": "string" },
+                    "description": { "type": "string", "description": "Plain text; one paragraph per line." },
+                    "labels": { "type": "array", "items": { "type": "string" } },
+                    "parent": { "type": "string", "description": "Optionally the parent issue (epic or story) key." },
+                    "link_url": { "type": "string" },
+                    "link_title": { "type": "string" }
+                },
+                "required": ["summary"]
+            }
+        },
+        {
+            "name": "jira_comment",
+            "description": "Adds a comment and/or a web link to an existing Jira issue. The user always approves it before it is sent.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "key": { "type": "string" },
+                    "comment": { "type": "string" },
+                    "link_url": { "type": "string" },
+                    "link_title": { "type": "string" }
+                },
+                "required": ["key"]
+            }
+        },
+        {
+            "name": "model_lint",
+            "description": "Model linter (governance) without AI guessing: deterministic checks of a package with all its subpackages. \
+Finds default or empty names (Class1, Activity 2), elements without a description, orphaned elements (no relationships and on no diagram), \
+duplicate names, relationships to non-existent elements, duplicate relationships and self-relationships, empty packages and diagrams, \
+and the organization's rules from governance.json (or given in 'rules'): naming conventions, required tagged values and allowed relationships (MDG / metamodel). \
+Each finding has a severity (error, warning, info), the rule, the object id and the problem. Present the findings grouped by severity with concrete fix proposals; \
+fix them only after the user agrees (ea_write). On request turn the result into an Excel workbook or a document.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "package": { "type": "integer", "description": "package_id of the checked package (subpackages are included)." },
+                    "skip": { "type": "array", "items": { "type": "string" }, "description": "Rules to leave out, e.g. [\"missing_notes\"]. Rules: default_name, missing_notes, orphan, duplicate_name, naming, required_tag, broken_connector, self_relation, duplicate_relation, invalid_relation, empty_package, empty_diagram." },
+                    "rules": { "type": "object", "description": "Optionally rules instead of governance.json: {\"naming\": [{\"applies_to\": \"Class\" or \"«stereotype»\", \"pattern\": \"*Service\" (wildcards * ?), \"message\": \"…\"}], \"required_tags\": [{\"applies_to\": \"…\", \"tag\": \"Owner\"}], \"allowed_relations\": [{\"connector_type\": \"Realisation\", \"source\": \"Component\", \"target\": \"Interface\"}]} (a relationship type listed there is allowed only between the listed ends)." }
+                },
+                "required": ["package"]
+            }
+        },
+        {
+            "name": "gap_analysis",
+            "description": "Gap analysis between two packages (with subpackages), e.g. as-is vs to-be architecture: matches elements by name and type and returns \
+what is new (only in to-be), what is to retire (only in as-is) and what changed (stereotype, description, relationships added or removed). \
+Present it as a gap table; on request save it as an Excel workbook (create_spreadsheet) or a document.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "as_is": { "type": "integer", "description": "package_id of the current state (as-is)." },
+                    "to_be": { "type": "integer", "description": "package_id of the target state (to-be)." }
+                },
+                "required": ["as_is", "to_be"]
+            }
+        },
+        {
             "name": "impact_analysis",
             "description": "Change impact analysis: starting from the given element, follows relationships in depth (level by level) and returns all affected elements \
 with the level, type, package, the relationship through which the impact arrives and the path, plus the diagrams they appear on. \
@@ -404,6 +495,12 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             Ok(format!("Saved template \"{name}\" (file {file} in the templates folder).").into())
         }
         "impact_analysis" => impact_analysis(input, ctx.cfg).map(Into::into),
+        "model_lint" => crate::governance::lint(input, ctx.cfg).map(Into::into),
+        "jira_search" => jira(ctx.cfg)?.search(input["jql"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["jql".to_string()]))?, input["max"].as_u64().unwrap_or(30) as usize).map(Into::into),
+        "jira_issue" => jira(ctx.cfg)?.issue(input["key"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["key".to_string()]))?.trim()).map(Into::into),
+        "jira_create_issue" => jira_create_issue(input, ctx).map(Into::into),
+        "jira_comment" => jira_comment(input, ctx).map(Into::into),
+        "gap_analysis" => crate::governance::gap(input, ctx.cfg).map(Into::into),
         "operation_usage" => operation_usage(input, ctx.cfg).map(Into::into),
         "ea_ui" => {
             let db = &crate::ea_ui::Target::of(ctx.cfg);
@@ -476,6 +573,66 @@ pub fn page_images_dir(attachments_dir: &std::path::Path, stored_page: &str) -> 
 }
 
 /// Confluence page: source (.confluence.md), page code for the source editor (.confluence.xml) and images in a folder next to them.
+/// Connection to Jira from the settings.
+fn jira(cfg: &AppConfig) -> Result<crate::jira::Connection> {
+    if cfg.jira_url.trim().is_empty() {
+        bail!("{}", crate::i18n::tr("Jira is not configured: enter its address and token in Settings → Jira"));
+    }
+    let token = crate::config::secrets::get(crate::config::secrets::JIRA_TOKEN).context(crate::i18n::tr("no Jira token in the settings"))?;
+    Ok(crate::jira::Connection { base_url: cfg.jira_url.clone(), user: cfg.jira_user.clone(), token })
+}
+
+/// New Jira issue: always with the user's consent (the content leaves the application).
+fn jira_create_issue(input: &Value, ctx: &ToolContext) -> Result<String> {
+    let connection = jira(ctx.cfg)?;
+    let project = input["project"].as_str().map(str::trim).filter(|p| !p.is_empty()).unwrap_or(ctx.cfg.jira_project.trim()).to_string();
+    if project.is_empty() {
+        bail!("{}", crate::i18n::tr("no Jira project: give 'project' or set the default project in Settings → Jira"));
+    }
+    let summary = input["summary"].as_str().unwrap_or("").trim().to_string();
+    let issue_type = input["type"].as_str().unwrap_or("Task").to_string();
+    let description = input["description"].as_str().unwrap_or("").to_string();
+    let labels: Vec<String> = input["labels"].as_array().into_iter().flatten().filter_map(|v| v.as_str()).map(String::from).collect();
+    let parent = input["parent"].as_str();
+    let link = input["link_url"].as_str().filter(|s| !s.trim().is_empty());
+    ctx.approver.confirm_always(&crate::i18n::fmt("Create a Jira issue in project {0}:\n{1}: {2}\n\n{3}", &[project.clone(), issue_type.clone(), summary.clone(), shorten_for_approval(&description)]))?;
+    let (key, url) = connection.create_issue(&project, &issue_type, &summary, &description, &labels, parent)?;
+    if let Some(link) = link {
+        connection.add_web_link(&key, link, input["link_title"].as_str().unwrap_or(link))?;
+    }
+    Ok(crate::i18n::fmt("Created the Jira issue {0}: {1}", &[key, url]))
+}
+
+/// Comment or web link on an existing issue: always with the user's consent.
+fn jira_comment(input: &Value, ctx: &ToolContext) -> Result<String> {
+    let connection = jira(ctx.cfg)?;
+    let key = input["key"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["key".to_string()]))?.trim().to_string();
+    let comment = input["comment"].as_str().unwrap_or("").trim().to_string();
+    let link = input["link_url"].as_str().map(str::trim).filter(|s| !s.is_empty()).map(String::from);
+    if comment.is_empty() && link.is_none() {
+        bail!("{}", crate::i18n::tr("give 'comment' or 'link_url'"));
+    }
+    let mut what = Vec::new();
+    if !comment.is_empty() {
+        what.push(shorten_for_approval(&comment));
+    }
+    if let Some(link) = &link {
+        what.push(format!("🔗 {link}"));
+    }
+    ctx.approver.confirm_always(&crate::i18n::fmt("Add to the Jira issue {0}:\n{1}", &[key.clone(), what.join("\n")]))?;
+    if !comment.is_empty() {
+        connection.add_comment(&key, &comment)?;
+    }
+    if let Some(link) = &link {
+        connection.add_web_link(&key, link, input["link_title"].as_str().unwrap_or(link))?;
+    }
+    Ok(crate::i18n::fmt("Updated the Jira issue {0}: {1}", &[key.clone(), connection.browse(&key)]))
+}
+
+fn shorten_for_approval(text: &str) -> String {
+    if text.chars().count() > 600 { format!("{}…", text.chars().take(600).collect::<String>()) } else { text.to_string() }
+}
+
 fn create_confluence_page(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
     let title = input["title"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["title".to_string()]))?;
     let markdown = input["markdown"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["markdown".to_string()]))?;
@@ -877,7 +1034,7 @@ fn ea_write(input: &Value, ctx: &ToolContext) -> Result<String> {
         }
     }
     check_unchanged(ctx.cfg, &input["expect_unchanged"])?;
-    let summary = crate::i18n::fmt("Saving to the EA model:\n{0}", &[ea::describe(ops)]);
+    let summary = crate::i18n::fmt("Saving to the EA model:\n{0}\n\nBefore → after:\n{1}", &[ea::describe(ops), crate::governance::preview(ctx.cfg, ops)]);
     let destructive = destructive_details(ctx.cfg, ops);
     if destructive.is_empty() {
         ctx.approver.confirm(&summary)?;

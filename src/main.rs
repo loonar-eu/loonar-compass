@@ -23,6 +23,8 @@ mod xlsx;
 mod report;
 mod spell;
 mod openai;
+mod governance;
+mod jira;
 mod templates;
 mod tools;
 mod window;
@@ -630,6 +632,10 @@ struct Form {
     confluence_space: String,
     confluence_parent: String,
     confluence_token: String,
+    jira_url: String,
+    jira_user: String,
+    jira_project: String,
+    jira_token: String,
     miro_token: String,
     ui_language: String,
 }
@@ -659,6 +665,9 @@ impl Form {
             confluence_user: c.confluence_user.clone(),
             confluence_space: c.confluence_space.clone(),
             confluence_parent: c.confluence_parent.clone(),
+            jira_url: c.jira_url.clone(),
+            jira_user: c.jira_user.clone(),
+            jira_project: c.jira_project.clone(),
             ui_language: c.ui_language.clone(),
             ..Default::default()
         }
@@ -794,7 +803,7 @@ struct App {
     /// Conversations in which the assistant finished working in the background and the user has not looked at yet (conversation ids).
     unseen: std::collections::HashSet<String>,
     /// Result of the last save and test of each of the four settings groups.
-    group_status: [GroupStatus; 6],
+    group_status: [GroupStatus; 7],
     /// Channel through which settings tests (run in the background) return their result: group number and message.
     settings_tx: mpsc::Sender<(usize, Result<String, String>)>,
     settings_rx: mpsc::Receiver<(usize, Result<String, String>)>,
@@ -2128,6 +2137,19 @@ impl App {
                     self.form.miro_token.clear();
                 }
             }
+            GROUP_JIRA => {
+                let url = f.jira_url.trim().trim_end_matches('/').to_string();
+                if !url.is_empty() {
+                    jira::check_base_url(&url)?;
+                }
+                updates.push(("jira.url", url));
+                updates.push(("jira.user", f.jira_user.trim().to_string()));
+                updates.push(("jira.project", f.jira_project.trim().to_uppercase()));
+                if !f.jira_token.is_empty() {
+                    secrets::set(secrets::JIRA_TOKEN, f.jira_token.trim())?;
+                    self.form.jira_token.clear();
+                }
+            }
             GROUP_CONFLUENCE => {
                 let url = f.confluence_url.trim().trim_end_matches('/').to_string();
                 if !url.is_empty() {
@@ -2601,7 +2623,7 @@ impl App {
                         }
                     });
                     ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Higher effort: more thorough answers and model work, more tokens and time. Lower: faster and cheaper.")).small().color(theme::MUTED)).wrap());
-                    ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("To answer, the app sends the conversation, attachments, remembered notes, templates, model query results and diagram images to Anthropic (Claude API) using your key. Loonar does not receive this data.")).small().color(theme::MUTED)).wrap());
+                    ui.add(egui::Label::new(egui::RichText::new(crate::i18n::fmt("To answer, the app sends the conversation, attachments, remembered notes, templates, model query results and diagram images to {0} using your key. Loonar does not receive this data.", &[if self.form.ai_provider == "openai" { "OpenAI (OpenAI API)".to_string() } else { "Anthropic (Claude API)".to_string() }])).small().color(theme::MUTED)).wrap());
                     self.group_footer(ui, &ctx, GROUP_CLAUDE, crate::i18n::tr("Save and test key"));
                 });
                 ui.add_space(12.0);
@@ -2766,6 +2788,21 @@ impl App {
                 row_hint(ui, crate::i18n::tr("Parent page ID"), &mut self.form.confluence_parent, crate::i18n::tr("optional, e.g. 123456789"));
             });
             self.group_footer(ui, &ctx2, GROUP_CONFLUENCE, crate::i18n::tr("Save and test Confluence connection"));
+        });
+        ui.add_space(12.0);
+        settings_group(ui, crate::i18n::tr("Jira"), inner_width * 2.0 + 44.0, |ui| {
+            ui.add(egui::Label::new(
+                egui::RichText::new(crate::i18n::tr("For using Jira issues as context (the assistant reads issues by key or JQL search) and, with your consent each time, creating issues, comments and links to model elements. Jira Cloud: the address https://company.atlassian.net, the account e-mail and an API token. Jira on your company's servers (Data Center): the address and a personal access token, with the e-mail field left empty. The token is kept in Windows Credential Manager."))
+                .color(theme::MUTED),
+            ).wrap());
+            ui.add_space(6.0);
+            egui::Grid::new("settings_jira").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
+                row_hint(ui, crate::i18n::tr("Jira address"), &mut self.form.jira_url, crate::i18n::tr("e.g. https://company.atlassian.net"));
+                row_hint(ui, crate::i18n::tr("Email (Cloud only)"), &mut self.form.jira_user, crate::i18n::tr("leave empty for a personal access token (PAT)"));
+                row_secret(ui, crate::i18n::tr("Token"), &mut self.form.jira_token, secrets::exists(secrets::JIRA_TOKEN));
+                row_hint(ui, crate::i18n::tr("Default project key"), &mut self.form.jira_project, crate::i18n::tr("e.g. ARCH"));
+            });
+            self.group_footer(ui, &ctx2, GROUP_JIRA, crate::i18n::tr("Save and test Jira connection"));
         });
         ui.add_space(12.0);
         settings_group(ui, crate::i18n::tr("Miro"), inner_width * 2.0 + 44.0, |ui| {
@@ -3301,6 +3338,7 @@ const GROUP_EA: usize = 2;
 const GROUP_APPROVAL: usize = 3;
 const GROUP_CONFLUENCE: usize = 4;
 const GROUP_MIRO: usize = 5;
+const GROUP_JIRA: usize = 6;
 
 /// "Send to Miro" window: the diagram, the board, and where on the board the frame goes (shown on a thumbnail
 /// of the board, where the user can move it).
@@ -3614,6 +3652,18 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
             let boards = miro::Client::new(&token)?.check()?;
             Ok(crate::i18n::fmt("Saved. Connected to Miro: boards available: {0}.", &[boards.to_string()]))
         }
+        GROUP_JIRA => {
+            if cfg.jira_url.trim().is_empty() {
+                return Ok(crate::i18n::tr("Saved. Without a Jira address the assistant does not use Jira.").into());
+            }
+            let token = secrets::get(secrets::JIRA_TOKEN).context(crate::i18n::tr("no Jira token in the settings"))?;
+            let connection = jira::Connection { base_url: cfg.jira_url.clone(), user: cfg.jira_user.clone(), token };
+            if cfg.jira_project.trim().is_empty() {
+                bail!("{}", crate::i18n::tr("enter the key of the default Jira project (e.g. ARCH)"));
+            }
+            let name = connection.check(&cfg.jira_project)?;
+            Ok(crate::i18n::fmt("Saved. Connected to Jira: project \"{0}\" ({1}) is available.", &[name, cfg.jira_project.trim().to_string()]))
+        }
         GROUP_CONFLUENCE => {
             if cfg.confluence_url.trim().is_empty() {
                 return Ok(crate::i18n::tr("Saved. Without a Confluence address, pages are prepared for you to paste into the source editor.").into());
@@ -3719,6 +3769,12 @@ fn tool_step(name: &str, input: &Value) -> String {
         "create_confluence_page" => crate::i18n::fmt("Confluence page: {0}", &[(input["title"].as_str().unwrap_or("")).to_string()]),
         "publish_confluence" => crate::i18n::fmt("Publishing to Confluence: {0}", &[(input["title"].as_str().or(input["page"].as_str()).unwrap_or("")).to_string()]),
         "confluence_pages" => crate::i18n::tr("List of published Confluence pages").to_string(),
+        "jira_search" => crate::i18n::fmt("Jira search: {0}", &[input["jql"].as_str().unwrap_or("").to_string()]),
+        "jira_issue" => crate::i18n::fmt("Reading the Jira issue {0}", &[input["key"].as_str().unwrap_or("").to_string()]),
+        "jira_create_issue" => crate::i18n::fmt("Creating a Jira issue: {0}", &[input["summary"].as_str().unwrap_or("").to_string()]),
+        "jira_comment" => crate::i18n::fmt("Updating the Jira issue {0}", &[input["key"].as_str().unwrap_or("").to_string()]),
+        "model_lint" => crate::i18n::fmt("Model check of package {0}", &[input["package"].to_string()]),
+        "gap_analysis" => crate::i18n::fmt("Gap analysis: package {0} (as-is) vs {1} (to-be)", &[input["as_is"].to_string(), input["to_be"].to_string()]),
         "read_template" => crate::i18n::fmt("Reading template: {0}", &[(input["name"].as_str().unwrap_or("")).to_string()]),
         "save_template" => crate::i18n::fmt("Saving template: {0}", &[(input["name"].as_str().unwrap_or("")).to_string()]),
         "impact_analysis" => crate::i18n::fmt("Impact analysis of element {0} (direction {1}, depth {2})", &[(input["element"]).to_string(), (input["direction"].as_str().unwrap_or("both")).to_string(), (input["depth"].as_i64().unwrap_or(3)).to_string()]),
@@ -3744,6 +3800,7 @@ fn tool_result_summary(name: &str, text: &str) -> String {
         "ea_show_diagram" | "render_image" => crate::i18n::tr("image ready").into(),
         "create_document" | "create_spreadsheet" | "create_confluence_page" => crate::i18n::tr("file ready").into(),
         "publish_confluence" => crate::i18n::tr("published in Confluence").into(),
+        "jira_create_issue" | "jira_comment" => crate::i18n::tr("saved in Jira").into(),
         "memory_save" | "memory_delete" | "save_template" => crate::i18n::tr("saved").into(),
         _ => crate::i18n::tr("done").into(),
     }
@@ -3764,6 +3821,10 @@ fn tool_status(name: &str, input: &Value) -> String {
         "impact_analysis" => crate::i18n::tr("The assistant is analyzing the impact of a change…").to_string(),
         "ea_ui" => crate::i18n::tr("The assistant is looking at the open EA window…").to_string(),
         "operation_usage" => crate::i18n::tr("The assistant is checking where operations are used…").to_string(),
+        "jira_search" | "jira_issue" => crate::i18n::tr("The assistant is reading Jira…").to_string(),
+        "jira_create_issue" | "jira_comment" => crate::i18n::tr("The assistant is writing to Jira…").to_string(),
+        "model_lint" => crate::i18n::tr("The assistant is checking the model quality…").to_string(),
+        "gap_analysis" => crate::i18n::tr("The assistant is comparing packages…").to_string(),
         other => crate::i18n::fmt("The assistant is using the tool {0}…", &[(other).to_string()]),
     }
 }

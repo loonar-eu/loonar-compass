@@ -158,6 +158,10 @@ pub struct AppConfig {
     pub confluence_user: String,
     pub confluence_space: String,
     pub confluence_parent: String,
+    /// Jira: address, account e-mail (Cloud; empty for a personal access token) and the default project key.
+    pub jira_url: String,
+    pub jira_user: String,
+    pub jira_project: String,
     /// The Miro board the last diagram went to (its id): offered first next time.
     pub miro_board: String,
     /// Registry of the pages published by the assistant (for refreshing).
@@ -304,6 +308,9 @@ impl AppConfig {
             confluence_user: get_or("confluence.user", ""),
             confluence_space: get_or("confluence.space", ""),
             confluence_parent: get_or("confluence.parent", ""),
+            jira_url: get_or("jira.url", ""),
+            jira_user: get_or("jira.user", ""),
+            jira_project: get_or("jira.project", ""),
             miro_board: get_or("miro.board", ""),
             confluence_pages_file: renamed(&base_dir, "confluence_strony.json", "confluence_pages.json"),
             base_dir,
@@ -391,8 +398,9 @@ pub mod secrets {
     pub const DB_PASSWORD: &str = "db_password";
     pub const CONFLUENCE_TOKEN: &str = "confluence_token";
     pub const MIRO_TOKEN: &str = "miro_token";
+    pub const JIRA_TOKEN: &str = "jira_token";
     /// Every secret the application stores (removed together on uninstall).
-    pub const ALL: [&str; 5] = [CLAUDE_API_KEY, EA_PASSWORD, DB_PASSWORD, CONFLUENCE_TOKEN, MIRO_TOKEN];
+    pub const ALL: [&str; 7] = [CLAUDE_API_KEY, OPENAI_API_KEY, EA_PASSWORD, DB_PASSWORD, CONFLUENCE_TOKEN, MIRO_TOKEN, JIRA_TOKEN];
 
     pub fn get(name: &str) -> Result<String> {
         if let Ok(value) = keyring::Entry::new(SERVICE, name).and_then(|e| e.get_password()) {

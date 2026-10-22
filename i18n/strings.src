@@ -671,7 +671,7 @@ The program hit an unexpected error and has to close. Your conversations and set
 The report (description, screenshots, optional technical information and your e-mail address) goes to Loonar Mariusz Głowacki and is used only to answer and improve the application; it is kept for up to 2 years after the matter is closed. Remove personal and confidential data from the screenshots before sending. ‖ Zgłoszenie (opis, zrzuty ekranu, opcjonalne informacje techniczne i Twój adres e-mail) trafia do Loonar Mariusz Głowacki i służy wyłącznie do odpowiedzi i poprawy aplikacji; jest przechowywane do 2 lat po zamknięciu sprawy. Przed wysłaniem usuń ze zrzutów dane osobowe i informacje poufne. ‖ Die Meldung (Beschreibung, Screenshots, optionale technische Angaben und Ihre E-Mail-Adresse) geht an Loonar Mariusz Głowacki und wird nur für die Antwort und die Verbesserung der Anwendung verwendet; sie wird bis zu 2 Jahre nach Abschluss der Angelegenheit aufbewahrt. Entfernen Sie vor dem Senden personenbezogene und vertrauliche Daten aus den Screenshots. ‖ Le signalement (description, captures d'écran, informations techniques facultatives et votre adresse e-mail) est envoyé à Loonar Mariusz Głowacki et sert uniquement à vous répondre et à améliorer l'application ; il est conservé jusqu'à 2 ans après la clôture du dossier. Retirez les données personnelles et confidentielles des captures avant l'envoi.
 The request is too large for the Claude API (413): the attachments may be too big. ‖ Zapytanie jest za duże dla Claude API (413): załączniki mogą być zbyt duże. ‖ Die Anfrage ist für die Claude-API zu groß (413): Die Anhänge sind möglicherweise zu groß. ‖ La requête est trop volumineuse pour l'API Claude (413) : les pièces jointes sont peut-être trop grandes.
 The settings file {0} contains an error: {1}. Correct the value and save the card again. ‖ Plik ustawień {0} zawiera błąd: {1}. Popraw wartość i zapisz kartę ponownie. ‖ Die Einstellungsdatei {0} enthält einen Fehler: {1}. Korrigieren Sie den Wert und speichern Sie die Karte erneut. ‖ Le fichier de paramètres {0} contient une erreur : {1}. Corrigez la valeur et enregistrez de nouveau la carte.
-To answer, the app sends the conversation, attachments, remembered notes, templates, model query results and diagram images to Anthropic (Claude API) using your key. Loonar does not receive this data. ‖ Aby odpowiedzieć, aplikacja wysyła do Anthropic (Claude API), z użyciem Twojego klucza, treść rozmowy, załączniki, zapamiętane notatki, szablony, wyniki zapytań do modelu i obrazy diagramów. Loonar nie otrzymuje tych danych. ‖ Um zu antworten, sendet die Anwendung mit Ihrem Schlüssel die Unterhaltung, Anhänge, gespeicherte Notizen, Vorlagen, Ergebnisse von Modellabfragen und Diagrammbilder an Anthropic (Claude-API). Loonar erhält diese Daten nicht. ‖ Pour répondre, l'application envoie à Anthropic (API Claude), avec votre clé, la conversation, les pièces jointes, les notes mémorisées, les modèles, les résultats des requêtes sur le modèle et les images des diagrammes. Loonar ne reçoit pas ces données.
+To answer, the app sends the conversation, attachments, remembered notes, templates, model query results and diagram images to {0} using your key. Loonar does not receive this data. ‖ Aby odpowiedzieć, aplikacja wysyła do {0}, z użyciem Twojego klucza, treść rozmowy, załączniki, zapamiętane notatki, szablony, wyniki zapytań do modelu i obrazy diagramów. Loonar nie otrzymuje tych danych. ‖ Um zu antworten, sendet die Anwendung mit Ihrem Schlüssel die Unterhaltung, Anhänge, gespeicherte Notizen, Vorlagen, Ergebnisse von Modellabfragen und Diagrammbilder an {0}. Loonar erhält diese Daten nicht. ‖ Pour répondre, l'application envoie à {0}, avec votre clé, la conversation, les pièces jointes, les notes mémorisées, les modèles, les résultats des requêtes sur le modèle et les images des diagrammes. Loonar ne reçoit pas ces données.
 Unsubscribe from the Loonar Compass newsletter ‖ Rezygnacja z newslettera Loonar Compass ‖ Abmeldung vom Loonar-Compass-Newsletter ‖ Désinscription de la newsletter Loonar Compass
 Your address is used only for news about new versions, based on your consent, until you withdraw it (untick the option and save, or write an e-mail). Controller: Loonar Mariusz Głowacki, mariusz@loonar.eu. ‖ Adres wykorzystamy wyłącznie do informacji o nowych wersjach, na podstawie Twojej zgody, do czasu jej wycofania (odznacz opcję i zapisz albo napisz e-mail). Administrator danych: Loonar Mariusz Głowacki, mariusz@loonar.eu. ‖ Ihre Adresse wird nur für Informationen zu neuen Versionen verwendet, auf Grundlage Ihrer Einwilligung, bis Sie diese widerrufen (Option abwählen und speichern oder eine E-Mail schreiben). Verantwortlicher: Loonar Mariusz Głowacki, mariusz@loonar.eu. ‖ Votre adresse n'est utilisée que pour les informations sur les nouvelles versions, sur la base de votre consentement, jusqu'à son retrait (décochez l'option et enregistrez, ou écrivez un e-mail). Responsable du traitement : Loonar Mariusz Głowacki, mariusz@loonar.eu.
 auto - saves without asking (publishing to Confluence still asks) ‖ auto – zapisy bez pytania (publikacja w Confluence nadal wymaga zgody) ‖ auto - Speichern ohne Rückfrage (Veröffentlichung in Confluence fragt weiterhin) ‖ auto - enregistrement sans validation (la publication dans Confluence demande toujours une validation)
@@ -1054,3 +1054,100 @@ connecting to the OpenAI API ‖ łączenie z API OpenAI ‖ Verbindung zur Open
 The OpenAI API rejected the API key (401). Check the OpenAI key in Settings → AI model. ‖ API OpenAI odrzuciło klucz (401). Sprawdź klucz OpenAI w Ustawieniach → Model AI. ‖ Die OpenAI-API hat den Schlüssel abgelehnt (401). Prüfen Sie den OpenAI-Schlüssel unter Einstellungen → KI-Modell. ‖ L'API OpenAI a refusé la clé (401). Vérifiez la clé OpenAI dans Paramètres → Modèle d'IA.
 The OpenAI API does not know the model {0} (404): {1} ‖ API OpenAI nie zna modelu {0} (404): {1} ‖ Die OpenAI-API kennt das Modell {0} nicht (404): {1} ‖ L'API OpenAI ne connaît pas le modèle {0} (404) : {1}
 the OpenAI API returned {0}: {1} ‖ API OpenAI zwróciło {0}: {1} ‖ die OpenAI-API hat {0} zurückgegeben: {1} ‖ l'API OpenAI a renvoyé {0} : {1}
+Columns: gap | name | type | package or differences ‖ Kolumny: luka | nazwa | typ | pakiet lub różnice ‖ Spalten: Lücke | Name | Typ | Paket oder Unterschiede ‖ Colonnes : écart | nom | type | paquetage ou différences
+Columns: severity | rule | id | kind | name | package | problem ‖ Kolumny: waga | reguła | id | rodzaj | nazwa | pakiet | problem ‖ Spalten: Schwere | Regel | ID | Art | Name | Paket | Problem ‖ Colonnes : gravité | règle | id | type | nom | paquetage | problème
+DELETE ‖ USUŃ ‖ LÖSCHEN ‖ SUPPRIMER
+Default or empty names ‖ Nazwy domyślne lub puste ‖ Standard- oder leere Namen ‖ Noms par défaut ou vides
+Duplicate names in one package ‖ Powtórzone nazwy w jednym pakiecie ‖ Doppelte Namen in einem Paket ‖ Noms en double dans un paquetage
+Duplicate relationships ‖ Powtórzone relacje ‖ Doppelte Beziehungen ‖ Relations en double
+Elements without a description ‖ Elementy bez opisu ‖ Elemente ohne Beschreibung ‖ Éléments sans description
+Empty diagrams ‖ Puste diagramy ‖ Leere Diagramme ‖ Diagrammes vides
+Empty packages ‖ Puste pakiety ‖ Leere Pakete ‖ Paquetages vides
+Gap analysis as-is (package {0}, {1} elements) vs to-be (package {2}, {3} elements): {4} new, {5} to retire, {6} changed, {7} unchanged. ‖ Analiza luk as-is (pakiet {0}, elementów: {1}) vs to-be (pakiet {2}, elementów: {3}): nowe: {4}, do wycofania: {5}, zmienione: {6}, bez zmian: {7}. ‖ Lückenanalyse Ist (Paket {0}, {1} Elemente) vs. Soll (Paket {2}, {3} Elemente): {4} neu, {5} abzulösen, {6} geändert, {7} unverändert. ‖ Analyse des écarts existant (paquetage {0}, {1} éléments) vs cible (paquetage {2}, {3} éléments) : {4} nouveaux, {5} à retirer, {6} modifiés, {7} inchangés.
+Missing required tagged values ‖ Brak wymaganych tagged values ‖ Fehlende Pflicht-Tagged-Values ‖ Tagged values obligatoires manquantes
+Model check of package {0}: {1} packages, {2} elements, {3} relationships checked; rule sets from governance.json: {4}. Findings: {5}. ‖ Kontrola modelu pakietu {0}: sprawdzono pakiety: {1}, elementy: {2}, relacje: {3}; zestawy reguł z governance.json: {4}. Ustalenia: {5}. ‖ Modellprüfung des Pakets {0}: {1} Pakete, {2} Elemente, {3} Beziehungen geprüft; Regelsätze aus governance.json: {4}. Befunde: {5}. ‖ Contrôle du modèle du paquetage {0} : {1} paquetages, {2} éléments, {3} relations vérifiés ; jeux de règles de governance.json : {4}. Constats : {5}.
+Naming convention violations ‖ Naruszenia konwencji nazewnictwa ‖ Verstöße gegen Namenskonventionen ‖ Violations des conventions de nommage
+No findings: the package meets all checked rules. ‖ Brak ustaleń: pakiet spełnia wszystkie sprawdzane reguły. ‖ Keine Befunde: das Paket erfüllt alle geprüften Regeln. ‖ Aucun constat : le paquetage respecte toutes les règles vérifiées.
+Orphaned elements (no relationships, on no diagram) ‖ Elementy osierocone (bez relacji, na żadnym diagramie) ‖ Verwaiste Elemente (ohne Beziehungen, auf keinem Diagramm) ‖ Éléments orphelins (sans relation, sur aucun diagramme)
+Relationships not allowed by the rules ‖ Relacje niedozwolone przez reguły ‖ Laut Regeln nicht erlaubte Beziehungen ‖ Relations interdites par les règles
+Relationships of an element to itself ‖ Relacje elementu do samego siebie ‖ Beziehungen eines Elements zu sich selbst ‖ Relations d'un élément vers lui-même
+Relationships to non-existent elements ‖ Relacje do nieistniejących elementów ‖ Beziehungen zu nicht vorhandenen Elementen ‖ Relations vers des éléments inexistants
+Saving to the EA model:\n{0}\n\nBefore → after:\n{1} ‖ Zapis do modelu EA:\n{0}\n\nPrzed → po:\n{1} ‖ Speichern im EA-Modell:\n{0}\n\nVorher → nachher:\n{1} ‖ Enregistrement dans le modèle EA :\n{0}\n\nAvant → après :\n{1}
+changed ‖ zmienione ‖ geändert ‖ modifié
+default or empty name ({0}) ‖ nazwa domyślna lub pusta ({0}) ‖ Standard- oder leerer Name ({0}) ‖ nom par défaut ou vide ({0})
+description changed ‖ zmieniony opis ‖ Beschreibung geändert ‖ description modifiée
+missing field 'as_is' (package_id) ‖ brak pola 'as_is' (package_id) ‖ Feld 'as_is' fehlt (package_id) ‖ champ 'as_is' manquant (package_id)
+missing field 'package' (package_id) ‖ brak pola 'package' (package_id) ‖ Feld 'package' fehlt (package_id) ‖ champ 'package' manquant (package_id)
+missing field 'to_be' (package_id) ‖ brak pola 'to_be' (package_id) ‖ Feld 'to_be' fehlt (package_id) ‖ champ 'to_be' manquant (package_id)
+missing tagged value {0} ‖ brak tagged value {0} ‖ Tagged Value {0} fehlt ‖ tagged value {0} manquante
+name does not match the pattern {0} ‖ nazwa nie pasuje do wzorca {0} ‖ Name entspricht nicht dem Muster {0} ‖ le nom ne correspond pas au modèle {0}
+no description ({0}) ‖ brak opisu ({0}) ‖ keine Beschreibung ({0}) ‖ pas de description ({0})
+no elements on the diagram ‖ brak elementów na diagramie ‖ keine Elemente im Diagramm ‖ aucun élément sur le diagramme
+no elements, diagrams or subpackages ‖ brak elementów, diagramów i podpakietów ‖ keine Elemente, Diagramme oder Unterpakete ‖ aucun élément, diagramme ou sous-paquetage
+no relationships and on no diagram ({0}) ‖ bez relacji i na żadnym diagramie ({0}) ‖ ohne Beziehungen und auf keinem Diagramm ({0}) ‖ sans relation et sur aucun diagramme ({0})
+no visible change ‖ brak widocznej zmiany ‖ keine sichtbare Änderung ‖ aucun changement visible
+only in as-is (to retire) ‖ tylko w as-is (do wycofania) ‖ nur im Ist (abzulösen) ‖ seulement dans l'existant (à retirer)
+only in to-be (new) ‖ tylko w to-be (nowe) ‖ nur im Soll (neu) ‖ seulement dans la cible (nouveau)
+relationships added: {0} ‖ dodane relacje: {0} ‖ hinzugefügte Beziehungen: {0} ‖ relations ajoutées : {0}
+relationships removed: {0} ‖ usunięte relacje: {0} ‖ entfernte Beziehungen: {0} ‖ relations supprimées : {0}
+stereotype {0} → {1} ‖ stereotyp {0} → {1} ‖ Stereotyp {0} → {1} ‖ stéréotype {0} → {1}
+there is no package with id {0} ‖ nie ma pakietu o id {0} ‖ es gibt kein Paket mit der ID {0} ‖ il n'y a pas de paquetage avec l'id {0}
+{0} elements of type {1} with this name in the package ‖ elementów typu {1} o tej nazwie w pakiecie: {0} ‖ {0} Elemente vom Typ {1} mit diesem Namen im Paket ‖ {0} éléments de type {1} portant ce nom dans le paquetage
+{0} from the element to itself ‖ {0} od elementu do niego samego ‖ {0} vom Element zu sich selbst ‖ {0} de l'élément vers lui-même
+{0} is not allowed between {1} ‖ {0} jest niedozwolona między {1} ‖ {0} ist zwischen {1} nicht erlaubt ‖ {0} n'est pas autorisée entre {1}
+{0} points to an element that does not exist ‖ {0} wskazuje na nieistniejący element ‖ {0} zeigt auf ein nicht vorhandenes Element ‖ {0} pointe vers un élément inexistant
+{0} repeated {1} times ‖ {0} powtórzona {1} razy ‖ {0} {1}-mal wiederholt ‖ {0} répétée {1} fois
+… and {0} more ‖ … i jeszcze {0} ‖ … und {0} weitere ‖ … et {0} de plus
+'{0}' is not a Jira issue key (e.g. ARCH-123) ‖ '{0}' nie jest kluczem zgłoszenia Jira (np. ARCH-123) ‖ '{0}' ist kein Jira-Vorgangsschlüssel (z. B. ARCH-123) ‖ '{0}' n'est pas une clé de ticket Jira (p. ex. ARCH-123)
+'{0}' is not a Jira project key ‖ '{0}' nie jest kluczem projektu Jira ‖ '{0}' ist kein Jira-Projektschlüssel ‖ '{0}' n'est pas une clé de projet Jira
+Add to the Jira issue {0}:\n{1} ‖ Dodać do zgłoszenia Jira {0}:\n{1} ‖ Zum Jira-Vorgang {0} hinzufügen:\n{1} ‖ Ajouter au ticket Jira {0} :\n{1}
+Columns: key | type | status | priority | assignee | summary | labels | updated ‖ Kolumny: klucz | typ | status | priorytet | przypisany | tytuł | etykiety | zmiana ‖ Spalten: Schlüssel | Typ | Status | Priorität | Bearbeiter | Zusammenfassung | Labels | geändert ‖ Colonnes : clé | type | statut | priorité | responsable | résumé | étiquettes | mis à jour
+Comments ({0}, the latest 10) ‖ Komentarze ({0}, ostatnie 10) ‖ Kommentare ({0}, die letzten 10) ‖ Commentaires ({0}, les 10 derniers)
+Create a Jira issue in project {0}:\n{1}: {2}\n\n{3} ‖ Utworzyć zgłoszenie Jira w projekcie {0}:\n{1}: {2}\n\n{3} ‖ Jira-Vorgang im Projekt {0} anlegen:\n{1}: {2}\n\n{3} ‖ Créer un ticket Jira dans le projet {0} :\n{1} : {2}\n\n{3}
+Created the Jira issue {0}: {1} ‖ Utworzono zgłoszenie Jira {0}: {1} ‖ Jira-Vorgang {0} angelegt: {1} ‖ Ticket Jira {0} créé : {1}
+Creating a Jira issue: {0} ‖ Tworzenie zgłoszenia Jira: {0} ‖ Jira-Vorgang wird angelegt: {0} ‖ Création d'un ticket Jira : {0}
+Default project key ‖ Domyślny klucz projektu ‖ Standard-Projektschlüssel ‖ Clé de projet par défaut
+For using Jira issues as context (the assistant reads issues by key or JQL search) and, with your consent each time, creating issues, comments and links to model elements. Jira Cloud: the address https://company.atlassian.net, the account e-mail and an API token. Jira on your company's servers (Data Center): the address and a personal access token, with the e-mail field left empty. The token is kept in Windows Credential Manager. ‖ Do korzystania ze zgłoszeń Jira jako kontekstu (asystent czyta zgłoszenia po kluczu lub wyszukiwaniu JQL) oraz, za każdym razem za Twoją zgodą, tworzenia zgłoszeń, komentarzy i linków do elementów modelu. Jira Cloud: adres https://firma.atlassian.net, e-mail konta i token API. Jira na serwerach firmy (Data Center): adres i osobisty token dostępu (PAT), pole e-mail puste. Token jest przechowywany w Menedżerze poświadczeń Windows. ‖ Um Jira-Vorgänge als Kontext zu nutzen (der Assistent liest Vorgänge per Schlüssel oder JQL-Suche) und, jedes Mal mit Ihrer Zustimmung, Vorgänge, Kommentare und Links zu Modellelementen anzulegen. Jira Cloud: die Adresse https://firma.atlassian.net, die Konto-E-Mail und ein API-Token. Jira auf den Servern Ihres Unternehmens (Data Center): die Adresse und ein persönliches Zugriffstoken, das E-Mail-Feld bleibt leer. Das Token wird in der Windows-Anmeldeinformationsverwaltung gespeichert. ‖ Pour utiliser les tickets Jira comme contexte (l'assistant lit les tickets par clé ou recherche JQL) et, avec votre accord à chaque fois, créer des tickets, des commentaires et des liens vers les éléments du modèle. Jira Cloud : l'adresse https://entreprise.atlassian.net, l'e-mail du compte et un jeton API. Jira sur les serveurs de votre entreprise (Data Center) : l'adresse et un jeton d'accès personnel, le champ e-mail vide. Le jeton est conservé dans le Gestionnaire d'identification Windows.
+Gap analysis: package {0} (as-is) vs {1} (to-be) ‖ Analiza luk: pakiet {0} (as-is) vs {1} (to-be) ‖ Lückenanalyse: Paket {0} (Ist) vs. {1} (Soll) ‖ Analyse des écarts : paquetage {0} (existant) vs {1} (cible)
+Jira ‖ Jira ‖ Jira ‖ Jira
+Jira address ‖ Adres Jira ‖ Jira-Adresse ‖ Adresse Jira
+Jira did not return the issue key ‖ Jira nie zwróciła klucza zgłoszenia ‖ Jira hat keinen Vorgangsschlüssel zurückgegeben ‖ Jira n'a pas renvoyé la clé du ticket
+Jira is not configured: enter its address and token in Settings → Jira ‖ Jira nie jest skonfigurowana: wpisz adres i token w Ustawieniach → Jira ‖ Jira ist nicht eingerichtet: Adresse und Token unter Einstellungen → Jira eingeben ‖ Jira n'est pas configuré : saisissez l'adresse et le jeton dans Paramètres → Jira
+Jira issues for "{0}": {1} ‖ Zgłoszenia Jira dla "{0}": {1} ‖ Jira-Vorgänge für "{0}": {1} ‖ Tickets Jira pour "{0}" : {1}
+Jira search: {0} ‖ Wyszukiwanie w Jira: {0} ‖ Jira-Suche: {0} ‖ Recherche Jira : {0}
+Linked issues ‖ Powiązane zgłoszenia ‖ Verknüpfte Vorgänge ‖ Tickets liés
+Model check of package {0} ‖ Kontrola modelu pakietu {0} ‖ Modellprüfung des Pakets {0} ‖ Contrôle du modèle du paquetage {0}
+Reading the Jira issue {0} ‖ Odczyt zgłoszenia Jira {0} ‖ Jira-Vorgang {0} wird gelesen ‖ Lecture du ticket Jira {0}
+Save and test Jira connection ‖ Zapisz i sprawdź połączenie z Jira ‖ Speichern und Jira-Verbindung testen ‖ Enregistrer et tester la connexion Jira
+Saved. Connected to Jira: project "{0}" ({1}) is available. ‖ Zapisano. Połączono z Jira: projekt "{0}" ({1}) jest dostępny. ‖ Gespeichert. Mit Jira verbunden: Projekt "{0}" ({1}) ist verfügbar. ‖ Enregistré. Connecté à Jira : le projet "{0}" ({1}) est disponible.
+Saved. Without a Jira address the assistant does not use Jira. ‖ Zapisano. Bez adresu Jira asystent nie korzysta z Jira. ‖ Gespeichert. Ohne Jira-Adresse nutzt der Assistent Jira nicht. ‖ Enregistré. Sans adresse Jira, l'assistant n'utilise pas Jira.
+The Jira address must start with https:// ‖ Adres Jira musi zaczynać się od https:// ‖ Die Jira-Adresse muss mit https:// beginnen ‖ L'adresse Jira doit commencer par https://
+The assistant is checking the model quality… ‖ Asystent sprawdza jakość modelu… ‖ Der Assistent prüft die Modellqualität… ‖ L'assistant vérifie la qualité du modèle…
+The assistant is comparing packages… ‖ Asystent porównuje pakiety… ‖ Der Assistent vergleicht Pakete… ‖ L'assistant compare des paquetages…
+The assistant is reading Jira… ‖ Asystent czyta Jira… ‖ Der Assistent liest Jira… ‖ L'assistant lit Jira…
+The assistant is writing to Jira… ‖ Asystent zapisuje w Jira… ‖ Der Assistent schreibt in Jira… ‖ L'assistant écrit dans Jira…
+Updated the Jira issue {0}: {1} ‖ Zaktualizowano zgłoszenie Jira {0}: {1} ‖ Jira-Vorgang {0} aktualisiert: {1} ‖ Ticket Jira {0} mis à jour : {1}
+Updating the Jira issue {0} ‖ Aktualizacja zgłoszenia Jira {0} ‖ Jira-Vorgang {0} wird aktualisiert ‖ Mise à jour du ticket Jira {0}
+Web links ‖ Linki ‖ Weblinks ‖ Liens web
+adding the comment ‖ dodawanie komentarza ‖ Kommentar hinzufügen ‖ ajout du commentaire
+adding the link ‖ dodawanie linku ‖ Link hinzufügen ‖ ajout du lien
+assignee ‖ przypisany ‖ Bearbeiter ‖ responsable
+checking the project ‖ sprawdzanie projektu ‖ Projekt prüfen ‖ vérification du projet
+components ‖ komponenty ‖ Komponenten ‖ composants
+creating the issue ‖ tworzenie zgłoszenia ‖ Vorgang anlegen ‖ création du ticket
+e.g. https://company.atlassian.net ‖ np. https://firma.atlassian.net ‖ z. B. https://firma.atlassian.net ‖ p. ex. https://entreprise.atlassian.net
+enter the key of the default Jira project (e.g. ARCH) ‖ wpisz klucz domyślnego projektu Jira (np. ARCH) ‖ Schlüssel des Standard-Jira-Projekts eingeben (z. B. ARCH) ‖ saisissez la clé du projet Jira par défaut (p. ex. ARCH)
+give 'comment' or 'link_url' ‖ podaj 'comment' lub 'link_url' ‖ 'comment' oder 'link_url' angeben ‖ indiquez 'comment' ou 'link_url'
+labels ‖ etykiety ‖ Labels ‖ étiquettes
+no Jira project: give 'project' or set the default project in Settings → Jira ‖ brak projektu Jira: podaj 'project' lub ustaw domyślny projekt w Ustawieniach → Jira ‖ kein Jira-Projekt: 'project' angeben oder Standardprojekt unter Einstellungen → Jira festlegen ‖ aucun projet Jira : indiquez 'project' ou définissez le projet par défaut dans Paramètres → Jira
+no Jira token in the settings ‖ brak tokenu Jira w ustawieniach ‖ kein Jira-Token in den Einstellungen ‖ aucun jeton Jira dans les paramètres
+parent ‖ nadrzędne ‖ übergeordnet ‖ parent
+priority ‖ priorytet ‖ Priorität ‖ priorité
+reading the issue ‖ odczyt zgłoszenia ‖ Vorgang lesen ‖ lecture du ticket
+saved in Jira ‖ zapisano w Jira ‖ in Jira gespeichert ‖ enregistré dans Jira
+searching issues ‖ wyszukiwanie zgłoszeń ‖ Vorgänge suchen ‖ recherche de tickets
+status ‖ status ‖ Status ‖ statut
+type ‖ typ ‖ Typ ‖ type
+versions ‖ wersje ‖ Versionen ‖ versions
+{0}: Jira replied {1}: {2} ‖ {0}: Jira odpowiedziała {1}: {2} ‖ {0}: Jira antwortete {1}: {2} ‖ {0} : Jira a répondu {1} : {2}
+{0}: no connection to Jira ‖ {0}: brak połączenia z Jira ‖ {0}: keine Verbindung zu Jira ‖ {0} : pas de connexion à Jira

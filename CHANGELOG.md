@@ -2,7 +2,7 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
-## Wersja 0.7.6 (2026-10-22)
+## Wersja 0.8 (2026-10-22)
 
 - Model AI do wyboru: dostawca Anthropic (Claude) albo OpenAI, dowolny model (lista albo własny identyfikator) i poziom wysiłku (od „domyślny dla modelu” do max). Domyślnie bez zmian: Claude Haiku 5.5. Każdy dostawca ma własny klucz API w Menedżerze poświadczeń; dane trafiają tylko do wybranego.
 - Ustawienia bez numeracji kart; pierwsza karta to „Model AI”.
