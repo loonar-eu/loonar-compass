@@ -1182,3 +1182,6 @@ there is no source {0} ‖ nie ma źródła {0} ‖ es gibt keine Quelle {0} ‖
 this needs the role {0} ‖ to wymaga roli {0} ‖ dafür ist die Rolle {0} nötig ‖ cela nécessite le rôle {0}
 type at least 2 characters ‖ wpisz co najmniej 2 znaki ‖ mindestens 2 Zeichen eingeben ‖ saisissez au moins 2 caractères
 {0} is not valid JSON ‖ {0} nie jest poprawnym JSON ‖ {0} ist kein gültiges JSON ‖ {0} n'est pas un JSON valide
+Endpoint ‖ Endpoint ‖ Endpunkt ‖ Point de terminaison
+The model endpoint must start with https:// (http:// only on this computer) ‖ Endpoint modelu musi zaczynać się od https:// (http:// tylko na tym komputerze) ‖ Der Modell-Endpunkt muss mit https:// beginnen (http:// nur auf diesem Rechner) ‖ Le point de terminaison du modèle doit commencer par https:// (http:// seulement sur cet ordinateur)
+empty = OpenAI; Azure, Ollama, LM Studio: base address …/v1 ‖ puste = OpenAI; Azure, Ollama, LM Studio: adres bazowy …/v1 ‖ leer = OpenAI; Azure, Ollama, LM Studio: Basisadresse …/v1 ‖ vide = OpenAI ; Azure, Ollama, LM Studio : adresse de base …/v1

@@ -132,6 +132,8 @@ pub struct AppConfig {
     pub ai_provider: String,
     /// OpenAI model id (used when the provider is OpenAI).
     pub openai_model: String,
+    /// Endpoint compatible with the OpenAI API (empty = OpenAI): Azure OpenAI, Ollama, LM Studio, a company gateway.
+    pub openai_url: String,
     pub claude_max_tokens: u32,
     /// Workspace ID from the Anthropic Console: required for an API key that is not scoped to a workspace
     /// (empty = the header is not sent).
@@ -290,6 +292,7 @@ impl AppConfig {
             claude_effort: get_or("claude.effort", ""),
             ai_provider: get_or("ai.provider", "anthropic"),
             openai_model: get_or("openai.model", OPENAI_MODELS[0]),
+            openai_url: get_or("openai.url", ""),
             claude_max_tokens: get_or("claude.max_tokens", "10000").parse().context("claude.max_tokens")?,
             claude_workspace_id: get_or("claude.workspace_id", ""),
             model_source: ModelSource::parse(&get_or("model.source", "postgres")).context("model.source")?,

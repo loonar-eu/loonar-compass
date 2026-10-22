@@ -23,6 +23,8 @@ pub struct ClaudeClient {
     effort: String,
     /// The provider answering: OpenAI (the request is translated) or Claude.
     openai: bool,
+    /// OpenAI-compatible endpoint (empty = OpenAI).
+    openai_url: String,
 }
 
 impl ClaudeClient {
@@ -31,16 +33,23 @@ impl ClaudeClient {
             .timeout(Duration::from_secs(300))
             .connect_timeout(Duration::from_secs(20))
             .build()?;
-        Ok(Self { http, api_key, model, max_tokens, workspace_id: workspace_id.trim().to_string(), effort: String::new(), openai: false })
+        Ok(Self { http, api_key, model, max_tokens, workspace_id: workspace_id.trim().to_string(), effort: String::new(), openai: false, openai_url: String::new() })
     }
 
     /// The client of the provider chosen in the settings (Claude or OpenAI), with its key, model and effort.
     pub fn from_config(cfg: &crate::config::AppConfig, max_tokens: u32) -> Result<Self> {
         use crate::config::secrets;
         if cfg.uses_openai() {
-            let key = secrets::get(secrets::OPENAI_API_KEY)?;
+            // A local endpoint (Ollama, LM Studio) works without a key.
+            let local = !cfg.openai_url.trim().is_empty() && crate::jira::check_base_url(cfg.openai_url.trim()).is_ok() && !cfg.openai_url.trim().to_ascii_lowercase().starts_with("https://");
+            let key = match secrets::get(secrets::OPENAI_API_KEY) {
+                Ok(key) => key,
+                Err(_) if local => String::new(),
+                Err(e) => return Err(e),
+            };
             let mut client = Self::new(key, cfg.openai_model.clone(), max_tokens, String::new())?.with_effort(&cfg.claude_effort);
             client.openai = true;
+            client.openai_url = cfg.openai_url.trim().to_string();
             return Ok(client);
         }
         let key = secrets::get(secrets::CLAUDE_API_KEY)?;
@@ -58,7 +67,7 @@ impl ClaudeClient {
     pub fn send_value(&self, system: &str, messages: &[Value], tools: Option<&Value>) -> Result<Value> {
         if self.openai {
             let body = crate::openai::to_openai(&self.model, self.max_tokens, &self.effort, system, messages, tools);
-            return crate::openai::send(&self.http, &self.api_key, &body);
+            return crate::openai::send(&self.http, &self.openai_url, &self.api_key, &body);
         }
         let mut body = json!({
             "model": self.model,

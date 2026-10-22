@@ -147,10 +147,49 @@ pub fn from_openai(response: &Value) -> Result<Value> {
 }
 
 /// One request to OpenAI, retried on temporary errors.
-pub fn send(http: &reqwest::blocking::Client, key: &str, body: &Value) -> Result<Value> {
+/// Address of the chat completions of an endpoint: empty = OpenAI; a base such as http://localhost:11434/v1 or
+/// https://resource.openai.azure.com/openai/v1 gets /chat/completions (a full address is used as it is).
+pub fn chat_url(base: &str) -> String {
+    let base = base.trim().trim_end_matches('/');
+    if base.is_empty() {
+        API_URL.to_string()
+    } else if base.ends_with("/chat/completions") || base.contains("/chat/completions?") {
+        base.to_string()
+    } else {
+        format!("{base}/chat/completions")
+    }
+}
+
+/// Azure OpenAI takes the key in the `api-key` header, the others as a Bearer token.
+pub fn uses_api_key_header(url: &str) -> bool {
+    let host = url.split("://").nth(1).unwrap_or(url).split(['/', '?', ':']).next().unwrap_or("").to_ascii_lowercase();
+    host.ends_with(".openai.azure.com") || host.ends_with(".cognitiveservices.azure.com") || host.ends_with(".services.ai.azure.com")
+}
+
+/// Whether the endpoint is OpenAI's own or Azure's (they know `reasoning_effort` and `max_completion_tokens`).
+fn official(url: &str) -> bool {
+    url == API_URL || uses_api_key_header(url)
+}
+
+pub fn send(http: &reqwest::blocking::Client, base: &str, key: &str, body: &Value) -> Result<Value> {
+    let url = chat_url(base);
+    crate::jira::check_base_url(&url).map_err(|_| anyhow::anyhow!("{}", crate::i18n::tr("The model endpoint must start with https:// (http:// only on this computer)")))?;
+    let mut body = body.clone();
+    if !official(&url) {
+        // Local and other compatible servers: the widely supported names, without OpenAI's reasoning settings.
+        if let Some(obj) = body.as_object_mut() {
+            obj.remove("reasoning_effort");
+            if let Some(max) = obj.remove("max_completion_tokens") {
+                obj.insert("max_tokens".into(), max);
+            }
+        }
+    }
+    let body = &body;
     let mut attempt = 1;
     loop {
-        let response = http.post(API_URL).bearer_auth(key).json(body).send();
+        let request = http.post(&url).json(body);
+        let request = if key.is_empty() { request } else if uses_api_key_header(&url) { request.header("api-key", key) } else { request.bearer_auth(key) };
+        let response = request.send();
         let response = match response {
             Ok(r) => r,
             Err(e) if attempt < 4 => {
@@ -172,7 +211,7 @@ pub fn send(http: &reqwest::blocking::Client, key: &str, body: &Value) -> Result
             attempt += 1;
             continue;
         }
-        let message = value["error"]["message"].as_str().map(str::to_string).unwrap_or_else(|| text.chars().take(200).collect());
+        let message = value["error"]["message"].as_str().or(value["error"].as_str()).map(str::to_string).unwrap_or_else(|| text.chars().take(200).collect());
         match status {
             401 => bail!("{}", crate::i18n::tr("The OpenAI API rejected the API key (401). Check the OpenAI key in Settings → AI model.")),
             404 => bail!("{}", crate::i18n::fmt("The OpenAI API does not know the model {0} (404): {1}", &[body["model"].as_str().unwrap_or("").to_string(), message])),
@@ -212,5 +251,76 @@ mod tests {
         assert_eq!(back["content"][0]["type"], "tool_use");
         assert_eq!(back["content"][0]["input"]["ops"], json!([]));
         assert_eq!(back["usage"]["output_tokens"], 5);
+    }
+
+    #[test]
+    fn endpoints() {
+        assert_eq!(chat_url(""), API_URL);
+        assert_eq!(chat_url("http://localhost:11434/v1/"), "http://localhost:11434/v1/chat/completions");
+        assert_eq!(chat_url("https://r.openai.azure.com/openai/v1"), "https://r.openai.azure.com/openai/v1/chat/completions");
+        assert_eq!(chat_url("https://gw.example.com/v1/chat/completions"), "https://gw.example.com/v1/chat/completions");
+        assert!(uses_api_key_header("https://r.openai.azure.com/openai/v1/chat/completions"));
+        assert!(!uses_api_key_header("https://evil.com/r.openai.azure.com/x"));
+        assert!(!uses_api_key_header(API_URL));
+        let http = reqwest::blocking::Client::new();
+        let refused = send(&http, "http://gateway.example.com/v1", "k", &json!({})).unwrap_err().to_string();
+        assert!(refused.contains("https://"), "{refused}");
+    }
+
+    /// A local OpenAI-compatible server (as Ollama or LM Studio): the address, no key, plain max_tokens, no
+    /// reasoning_effort, and a tool call coming back in the Claude format.
+    #[test]
+    fn local_compatible_server() {
+        use std::io::{BufRead, BufReader, Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://127.0.0.1:{}/v1", listener.local_addr().unwrap().port());
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::<(String, String, Value)>::new()));
+        let log = seen.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming().flatten().take(2) {
+                let mut stream = stream;
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut first = String::new();
+                reader.read_line(&mut first).unwrap();
+                let (mut length, mut auth) = (0, String::new());
+                loop {
+                    let mut line = String::new();
+                    reader.read_line(&mut line).unwrap();
+                    let l = line.trim_end().to_string();
+                    if l.is_empty() {
+                        break;
+                    }
+                    let lower = l.to_ascii_lowercase();
+                    if let Some(v) = lower.strip_prefix("content-length:") {
+                        length = v.trim().parse().unwrap();
+                    }
+                    if lower.starts_with("authorization:") || lower.starts_with("api-key:") {
+                        auth = l.clone();
+                    }
+                }
+                let mut body = vec![0; length];
+                reader.read_exact(&mut body).unwrap();
+                let body: Value = serde_json::from_slice(&body).unwrap();
+                log.lock().unwrap().push((first.split_whitespace().nth(1).unwrap().to_string(), auth, body));
+                let reply = json!({ "model": "llama3.2", "choices": [{ "finish_reason": "tool_calls", "message": { "content": "",
+                    "tool_calls": [{ "id": "call_1", "type": "function", "function": { "name": "db_query", "arguments": "{\"sql\":\"select count(*) from t_object\"}" } }] } }],
+                    "usage": { "prompt_tokens": 50, "completion_tokens": 9 } }).to_string();
+                write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{reply}", reply.len()).unwrap();
+            }
+        });
+        let http = reqwest::blocking::Client::new();
+        let tools = json!([{ "name": "db_query", "description": "Query", "input_schema": { "type": "object", "properties": { "sql": { "type": "string" } } } }]);
+        let body = to_openai("llama3.2", 800, "high", "System.", &[json!({ "role": "user", "content": "How many elements?" })], Some(&tools));
+        let answer = send(&http, &base, "", &body).unwrap();
+        assert_eq!(answer["stop_reason"], "tool_use");
+        assert_eq!(answer["content"][0]["name"], "db_query");
+        assert_eq!(answer["content"][0]["input"]["sql"], "select count(*) from t_object");
+        send(&http, &base, "local-key", &body).unwrap();
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen[0].0, "/v1/chat/completions");
+        assert_eq!(seen[0].1, "", "no key: no authorization header");
+        assert_eq!(seen[0].2["max_tokens"], 800);
+        assert!(seen[0].2.get("max_completion_tokens").is_none() && seen[0].2.get("reasoning_effort").is_none());
+        assert_eq!(seen[1].1, "authorization: Bearer local-key".replace("authorization", "authorization"), "a key as a Bearer token");
     }
 }

@@ -621,6 +621,7 @@ struct Form {
     claude_effort: String,
     ai_provider: String,
     openai_model: String,
+    openai_url: String,
     openai_api_key: String,
     claude_api_key: String,
     model_source: String,
@@ -662,6 +663,7 @@ impl Form {
             claude_effort: c.claude_effort.clone(),
             ai_provider: c.ai_provider.clone(),
             openai_model: c.openai_model.clone(),
+            openai_url: c.openai_url.clone(),
             model_source: c.model_source.as_str().into(),
             model_file: c.model_file.display().to_string(),
             db_host: c.db_host.clone(),
@@ -2066,6 +2068,11 @@ impl App {
                 updates.push(("claude.model", f.claude_model.trim().to_string()));
                 updates.push(("ai.provider", f.ai_provider.clone()));
                 updates.push(("openai.model", f.openai_model.trim().to_string()));
+                let endpoint = f.openai_url.trim().trim_end_matches('/').to_string();
+                if !endpoint.is_empty() {
+                    jira::check_base_url(&endpoint).map_err(|_| anyhow::anyhow!("{}", crate::i18n::tr("The model endpoint must start with https:// (http:// only on this computer)")))?;
+                }
+                updates.push(("openai.url", endpoint));
                 if !f.openai_api_key.is_empty() {
                     secrets::set(secrets::OPENAI_API_KEY, f.openai_api_key.trim())?;
                     self.form.openai_api_key.clear();
@@ -2643,6 +2650,7 @@ impl App {
                         ui.end_row();
                         row(ui, crate::i18n::tr("Max tokens"), &mut self.form.claude_max_tokens);
                         if self.form.ai_provider == "openai" {
+                            row_hint(ui, crate::i18n::tr("Endpoint"), &mut self.form.openai_url, crate::i18n::tr("empty = OpenAI; Azure, Ollama, LM Studio: base address …/v1"));
                             row_secret(ui, crate::i18n::tr("OpenAI API key"), &mut self.form.openai_api_key, secrets::exists(secrets::OPENAI_API_KEY));
                         } else {
                             row_hint(ui, crate::i18n::tr("Workspace ID"), &mut self.form.claude_workspace_id, crate::i18n::tr("optional, e.g. wrkspc_…"));
