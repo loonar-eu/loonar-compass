@@ -35,3 +35,4 @@ desktop.ini
 
 __pycache__/
 editor/node_modules/
+/target2

@@ -1151,3 +1151,34 @@ type ‖ typ ‖ Typ ‖ type
 versions ‖ wersje ‖ Versionen ‖ versions
 {0}: Jira replied {1}: {2} ‖ {0}: Jira odpowiedziała {1}: {2} ‖ {0}: Jira antwortete {1}: {2} ‖ {0} : Jira a répondu {1} : {2}
 {0}: no connection to Jira ‖ {0}: brak połączenia z Jira ‖ {0}: keine Verbindung zu Jira ‖ {0} : pas de connexion à Jira
+Diagrams ‖ Diagramy ‖ Diagramme ‖ Diagrammes
+Hub address ‖ Adres huba ‖ Hub-Adresse ‖ Adresse du hub
+Last problem with the hub: {0} ‖ Ostatni problem z hubem: {0} ‖ Letztes Problem mit dem Hub: {0} ‖ Dernier problème avec le hub : {0}
+Optional team service (LoonarCompass.exe --hub hub.json, on a team computer or server). With a hub, Compass takes the team policy (model check rules, the minimum approval mode) and sends every saved change to the team audit trail. People without EA see the models in the hub's web view; other AI tools read them through its MCP server. Ask the hub administrator for the address and your token. ‖ Opcjonalna usługa zespołowa (LoonarCompass.exe --hub hub.json, na komputerze lub serwerze zespołu). Z hubem Compass przyjmuje politykę zespołu (reguły kontroli modelu, minimalny tryb zatwierdzania) i wysyła każdą zapisaną zmianę do zespołowego dziennika audytu. Osoby bez EA oglądają modele w widoku webowym huba, a inne narzędzia AI czytają je przez jego serwer MCP. Adres i Twój token dostaniesz od administratora huba. ‖ Optionaler Teamdienst (LoonarCompass.exe --hub hub.json, auf einem Teamrechner oder Server). Mit einem Hub übernimmt Compass die Teamrichtlinie (Regeln der Modellprüfung, minimaler Freigabemodus) und sendet jede gespeicherte Änderung an das Team-Audit-Protokoll. Personen ohne EA sehen die Modelle in der Weboberfläche des Hubs; andere KI-Werkzeuge lesen sie über seinen MCP-Server. Adresse und Ihr Token erhalten Sie vom Hub-Administrator. ‖ Service d'équipe facultatif (LoonarCompass.exe --hub hub.json, sur un ordinateur ou un serveur de l'équipe). Avec un hub, Compass applique la politique de l'équipe (règles du contrôle du modèle, mode d'approbation minimal) et envoie chaque modification enregistrée au journal d'audit de l'équipe. Les personnes sans EA consultent les modèles dans la vue web du hub ; les autres outils d'IA les lisent via son serveur MCP. Demandez l'adresse et votre jeton à l'administrateur du hub.
+Relationships ‖ Relacje ‖ Beziehungen ‖ Relations
+Save and test hub connection ‖ Zapisz i sprawdź połączenie z hubem ‖ Speichern und Hub-Verbindung testen ‖ Enregistrer et tester la connexion au hub
+Saved. Connected to the hub as {0} ({1}); team policy: minimum approval {2}, rule sets {3}. ‖ Zapisano. Połączono z hubem jako {0} ({1}); polityka zespołu: minimalne zatwierdzanie {2}, zestawy reguł: {3}. ‖ Gespeichert. Mit dem Hub verbunden als {0} ({1}); Teamrichtlinie: minimale Freigabe {2}, Regelsätze {3}. ‖ Enregistré. Connecté au hub en tant que {0} ({1}) ; politique de l'équipe : approbation minimale {2}, jeux de règles {3}.
+Saved. Without a hub Compass works on its own. ‖ Zapisano. Bez huba Compass działa samodzielnie. ‖ Gespeichert. Ohne Hub arbeitet Compass eigenständig. ‖ Enregistré. Sans hub, Compass fonctionne seul.
+Team (Compass Hub) ‖ Zespół (Compass Hub) ‖ Team (Compass Hub) ‖ Équipe (Compass Hub)
+The hub address must start with https:// (http:// only on this computer) ‖ Adres huba musi zaczynać się od https:// (http:// tylko na tym komputerze) ‖ Die Hub-Adresse muss mit https:// beginnen (http:// nur auf diesem Rechner) ‖ L'adresse du hub doit commencer par https:// (http:// seulement sur cet ordinateur)
+This model in the hub ‖ Ten model w hubie ‖ Dieses Modell im Hub ‖ Ce modèle dans le hub
+a note name: letters, digits, spaces, '-', '_' and '.' ‖ nazwa notatki: litery, cyfry, spacje, '-', '_' i '.' ‖ Name einer Notiz: Buchstaben, Ziffern, Leerzeichen, '-', '_' und '.' ‖ nom d'une note : lettres, chiffres, espaces, '-', '_' et '.'
+an audit entry is a JSON object ‖ wpis audytu to obiekt JSON ‖ ein Audit-Eintrag ist ein JSON-Objekt ‖ une entrée d'audit est un objet JSON
+cannot listen on {0} ‖ nie można nasłuchiwać na {0} ‖ kann nicht auf {0} lauschen ‖ impossible d'écouter sur {0}
+e.g. https://compass-hub.example.com ‖ np. https://compass-hub.example.com ‖ z. B. https://compass-hub.example.com ‖ p. ex. https://compass-hub.example.com
+hub source id '{0}': letters, digits, '-' and '_' only ‖ id źródła huba '{0}': tylko litery, cyfry, '-' i '_' ‖ ID der Hub-Quelle '{0}': nur Buchstaben, Ziffern, '-' und '_' ‖ id de source du hub '{0}' : lettres, chiffres, '-' et '_' uniquement
+hub source {0} ‖ źródło huba {0} ‖ Hub-Quelle {0} ‖ source du hub {0}
+hub user {0}: the token must have at least 16 characters ‖ użytkownik huba {0}: token musi mieć co najmniej 16 znaków ‖ Hub-Benutzer {0}: das Token muss mindestens 16 Zeichen haben ‖ utilisateur du hub {0} : le jeton doit comporter au moins 16 caractères
+missing number '{0}' ‖ brak liczby '{0}' ‖ Zahl '{0}' fehlt ‖ nombre '{0}' manquant
+missing or unknown hub token ‖ brak lub nieznany token huba ‖ fehlendes oder unbekanntes Hub-Token ‖ jeton du hub manquant ou inconnu
+no connection to the team hub ‖ brak połączenia z hubem zespołu ‖ keine Verbindung zum Team-Hub ‖ pas de connexion au hub de l'équipe
+object_id | name | type | stereotype | package | description ‖ object_id | nazwa | typ | stereotyp | pakiet | opis ‖ object_id | Name | Typ | Stereotyp | Paket | Beschreibung ‖ object_id | nom | type | stéréotype | paquetage | description
+source id, e.g. shop-db (optional) ‖ id źródła, np. shop-db (opcjonalnie) ‖ Quell-ID, z. B. shop-db (optional) ‖ id de source, p. ex. shop-db (facultatif)
+team policy changed ‖ zmieniono politykę zespołu ‖ Teamrichtlinie geändert ‖ politique de l'équipe modifiée
+the policy is a JSON object ‖ polityka to obiekt JSON ‖ die Richtlinie ist ein JSON-Objekt ‖ la politique est un objet JSON
+the team hub replied {0}: {1} ‖ hub zespołu odpowiedział {0}: {1} ‖ der Team-Hub antwortete {0}: {1} ‖ le hub de l'équipe a répondu {0} : {1}
+there is no note {0} ‖ nie ma notatki {0} ‖ es gibt keine Notiz {0} ‖ il n'y a pas de note {0}
+there is no source {0} ‖ nie ma źródła {0} ‖ es gibt keine Quelle {0} ‖ il n'y a pas de source {0}
+this needs the role {0} ‖ to wymaga roli {0} ‖ dafür ist die Rolle {0} nötig ‖ cela nécessite le rôle {0}
+type at least 2 characters ‖ wpisz co najmniej 2 znaki ‖ mindestens 2 Zeichen eingeben ‖ saisissez au moins 2 caractères
+{0} is not valid JSON ‖ {0} nie jest poprawnym JSON ‖ {0} ist kein gültiges JSON ‖ {0} n'est pas un JSON valide

@@ -816,7 +816,7 @@ fn operation_usage(input: &Value, cfg: &AppConfig) -> Result<String> {
 
 /// Impact analysis: elements reachable from the starting element through relationships (in depth, level by level),
 /// with the relationship through which the impact arrives, the path and the diagrams they appear on.
-fn impact_analysis(input: &Value, cfg: &AppConfig) -> Result<String> {
+pub(crate) fn impact_analysis(input: &Value, cfg: &AppConfig) -> Result<String> {
     let start = input["element"].as_i64().context(crate::i18n::tr("missing field 'element' (object_id)"))?;
     let depth = input["depth"].as_i64().unwrap_or(3).clamp(1, 6);
     let direction = input["direction"].as_str().unwrap_or("both");
@@ -1100,6 +1100,18 @@ fn audit(cfg: &AppConfig, ops: &[Value], result: &Result<Value>) {
     }
     if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&cfg.audit_file) {
         let _ = writeln!(file, "{entry}");
+    }
+    // The team audit trail: the same entry to the hub, in the background (a hub that is down does not stop the work).
+    if let Some(client) = crate::hub::Client::from_config(cfg) {
+        let mut entry = entry;
+        entry["source"] = json!(if cfg.hub_source.trim().is_empty() { entry["database"].clone() } else { json!(cfg.hub_source.trim()) });
+        entry.as_object_mut().map(|o| o.remove("ops"));
+        entry["operations"] = json!(ops.len());
+        std::thread::spawn(move || {
+            if let Err(e) = client.send_audit(&entry) {
+                crate::hub::note_failure(&format!("{e:#}"));
+            }
+        });
     }
 }
 

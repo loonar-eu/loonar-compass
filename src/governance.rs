@@ -90,9 +90,11 @@ pub fn load_rules(cfg: &AppConfig, given: &Value) -> Value {
     if given.is_object() {
         return given.clone();
     }
+    // Local rules first; without them the team rules from the hub policy.
     std::fs::read_to_string(cfg.base_dir.join("governance.json"))
         .ok()
         .and_then(|text| serde_json::from_str(&text).ok())
+        .or_else(|| crate::hub::team_policy(cfg).map(|p| p["governance"].clone()).filter(Value::is_object))
         .unwrap_or_else(|| json!({}))
 }
 

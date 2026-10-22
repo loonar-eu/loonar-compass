@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compass Hub</title>
+<style>
+:root { --bg:#f6f7f9; --panel:#ffffff; --text:#1d2330; --muted:#5f6b7a; --line:#dde2e8; --accent:#2f6fde; --err:#c0392b; --warn:#b7791f; --info:#4a5568; }
+@media (prefers-color-scheme: dark) { :root { --bg:#14171c; --panel:#1d2128; --text:#e6e9ee; --muted:#9aa4b2; --line:#2e3440; --accent:#6ea0ff; --err:#ff7b6b; --warn:#f0b75a; --info:#b8c2d0; } }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 "Segoe UI", system-ui, sans-serif; }
+header { display:flex; align-items:center; gap:16px; padding:12px 20px; background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+header h1 { font-size:17px; margin:0; font-weight:600; }
+header .who { color:var(--muted); margin-left:auto; }
+main { display:grid; grid-template-columns:300px 1fr; gap:16px; padding:16px 20px; max-width:1400px; }
+@media (max-width: 800px) { main { grid-template-columns:1fr; } }
+section { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px; min-width:0; }
+h2 { font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:4px 0 10px; font-weight:600; }
+input, select, button { font:inherit; color:inherit; background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:6px 8px; }
+button { background:var(--accent); color:#fff; border:none; cursor:pointer; }
+button.ghost { background:transparent; color:var(--accent); border:1px solid var(--line); }
+.row { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+.row > input { flex:1; min-width:120px; }
+.tabs { display:flex; gap:4px; margin-bottom:12px; flex-wrap:wrap; }
+.tabs button { background:transparent; color:var(--muted); border:1px solid transparent; }
+.tabs button.on { color:var(--accent); border-color:var(--line); background:var(--bg); }
+.tree { max-height:60vh; overflow:auto; font-size:13px; }
+.tree div { padding:2px 4px; cursor:pointer; border-radius:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tree div:hover, .tree div.on { background:var(--bg); color:var(--accent); }
+table { border-collapse:collapse; width:100%; font-size:13px; }
+th, td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--line); vertical-align:top; overflow-wrap:anywhere; }
+th { color:var(--muted); font-weight:600; }
+tr.click { cursor:pointer; } tr.click:hover td { background:var(--bg); }
+.sev-error { color:var(--err); font-weight:600; } .sev-warning { color:var(--warn); font-weight:600; } .sev-info { color:var(--info); }
+pre { white-space:pre-wrap; font:13px/1.45 Consolas, monospace; margin:0; }
+.muted { color:var(--muted); } .error { color:var(--err); }
+h3 { font-size:14px; margin:16px 0 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Compass Hub</h1>
+  <select id="source" aria-label="Model"></select>
+  <span class="who" id="who"></span>
+  <input id="token" type="password" placeholder="Hub token" aria-label="Hub token" style="width:220px">
+  <button id="login">Sign in</button>
+</header>
+<main>
+  <section>
+    <h2>Packages</h2>
+    <div class="tree" id="tree"><span class="muted">Sign in with your hub token.</span></div>
+  </section>
+  <section>
+    <div class="tabs" id="tabs">
+      <button data-tab="search" class="on">Search</button>
+      <button data-tab="lint">Model check</button>
+      <button data-tab="gap">Gaps</button>
+      <button data-tab="audit">Audit trail</button>
+      <button data-tab="notes">Team notes</button>
+    </div>
+    <div id="view-search">
+      <div class="row"><input id="q" placeholder="Element name (at least 2 characters)"><button id="go">Search</button></div>
+      <div id="results"></div>
+    </div>
+    <div id="view-lint" hidden><p class="muted">Pick a package on the left: it is checked with all subpackages by the team rules.</p><div id="lint"></div></div>
+    <div id="view-gap" hidden>
+      <div class="row"><input id="asis" placeholder="as-is package id"><input id="tobe" placeholder="to-be package id"><button id="gapgo">Compare</button></div>
+      <div id="gap"></div>
+    </div>
+    <div id="view-audit" hidden><div id="audit"></div></div>
+    <div id="view-notes" hidden><div id="notes"></div></div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let token = '';
+try { token = localStorage.getItem('hubToken') || ''; } catch (e) {}
+let selectedPackage = null;
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+async function api(path) {
+  const r = await fetch(path, { headers: { Authorization: 'Bearer ' + token } });
+  const v = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(v.error || r.status);
+  return v;
+}
+const source = () => $('source').value;
+function table(text, onRow) {
+  const lines = text.split('\n');
+  const head = lines.findIndex(l => l.includes(' | '));
+  if (head < 0) return '<pre>' + esc(text) + '</pre>';
+  let html = lines.slice(0, head).map(l => '<p>' + esc(l) + '</p>').join('');
+  const cols = lines[head].replace(/^[^:]*:\s*/, '').split(' | ');
+  html += '<table><tr>' + cols.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr>';
+  for (const l of lines.slice(head + 1)) {
+    if (l.startsWith('## ')) { html += '<tr><td colspan="' + cols.length + '"><h3>' + esc(l.slice(3)) + '</h3></td></tr>'; continue; }
+    if (!l.includes(' | ')) { if (l.trim()) html += '<tr><td colspan="' + cols.length + '" class="muted">' + esc(l) + '</td></tr>'; continue; }
+    const cells = l.split(' | ');
+    html += '<tr' + (onRow ? ' class="click" data-id="' + esc(cells[0]) + '"' : '') + '>' + cells.map((c, i) => '<td' + (i === 0 && /^(error|warning|info)$/.test(c) ? ' class="sev-' + c + '"' : '') + '>' + esc(c) + '</td>').join('') + '</tr>';
+  }
+  return html + '</table>';
+}
+async function login() {
+  token = $('token').value.trim() || token;
+  try { localStorage.setItem('hubToken', token); } catch (e) {}
+  try {
+    const me = await api('/api/me');
+    $('who').textContent = me.name + ' · ' + me.role;
+    const sources = await api('/api/sources');
+    $('source').innerHTML = sources.map(s => '<option value="' + esc(s.id) + '">' + esc(s.name) + ' (' + esc(s.kind) + ')</option>').join('');
+    await loadTree();
+  } catch (e) { $('who').innerHTML = '<span class="error">' + esc(e.message) + '</span>'; }
+}
+async function loadTree() {
+  const v = await api('/api/sources/' + source() + '/packages');
+  const rows = v.text.split('\n').slice(1).map(l => l.split(' | '));
+  const children = {};
+  rows.forEach(([id, parent, name]) => (children[parent] = children[parent] || []).push([id, name]));
+  let html = '';
+  const walk = (parent, depth) => (children[parent] || []).forEach(([id, name]) => { html += '<div data-id="' + esc(id) + '" style="padding-left:' + (4 + depth * 14) + 'px">' + esc(name) + ' <span class="muted">#' + esc(id) + '</span></div>'; walk(id, depth + 1); });
+  walk('0', 0);
+  $('tree').innerHTML = html || '<span class="muted">No packages.</span>';
+}
+$('tree').onclick = async e => {
+  const d = e.target.closest('div[data-id]'); if (!d) return;
+  document.querySelectorAll('.tree div.on').forEach(x => x.classList.remove('on')); d.classList.add('on');
+  selectedPackage = d.dataset.id;
+  if (!$('asis').value) $('asis').value = selectedPackage; else $('tobe').value = selectedPackage;
+  show('lint');
+  $('lint').innerHTML = '<p class="muted">Checking…</p>';
+  try { $('lint').innerHTML = table((await api('/api/sources/' + source() + '/lint/' + selectedPackage)).text); } catch (err) { $('lint').innerHTML = '<p class="error">' + esc(err.message) + '</p>'; }
+};
+async function search() {
+  try { $('results').innerHTML = table((await api('/api/sources/' + source() + '/search?q=' + encodeURIComponent($('q').value))).text, true); }
+  catch (e) { $('results').innerHTML = '<p class="error">' + esc(e.message) + '</p>'; }
+}
+$('results').onclick = async e => {
+  const tr = e.target.closest('tr[data-id]'); if (!tr) return;
+  const id = tr.dataset.id;
+  const [details, impact] = await Promise.all([api('/api/sources/' + source() + '/elements/' + id), api('/api/sources/' + source() + '/impact/' + id + '?depth=3')]);
+  $('results').innerHTML = '<button class="ghost" id="back">← Results</button><h3>Element</h3><pre>' + esc(details.text) + '</pre><h3>Impact</h3>' + table(impact.text);
+  $('back').onclick = search;
+};
+$('gapgo').onclick = async () => {
+  try { $('gap').innerHTML = table((await api('/api/sources/' + source() + '/gap?as_is=' + encodeURIComponent($('asis').value) + '&to_be=' + encodeURIComponent($('tobe').value))).text); }
+  catch (e) { $('gap').innerHTML = '<p class="error">' + esc(e.message) + '</p>'; }
+};
+async function loadAudit() {
+  const entries = await api('/api/audit?limit=200');
+  $('audit').innerHTML = entries.length ? '<table><tr><th>Time</th><th>User</th><th>Model</th><th>Change</th><th>Result</th></tr>' + entries.map(e => '<tr><td>' + esc((e.time || e.received || '').slice(0, 19).replace('T', ' ')) + '</td><td>' + esc(e.user) + '</td><td>' + esc(e.source || e.database || '') + '</td><td><pre>' + esc(e.summary) + '</pre></td><td>' + (e.ok ? '✓' : '<span class="error">✗ ' + esc(e.error || '') + '</span>') + '</td></tr>').join('') + '</table>' : '<p class="muted">No changes recorded yet.</p>';
+}
+async function loadNotes() {
+  const names = await api('/api/notes');
+  if (!names.length) { $('notes').innerHTML = '<p class="muted">No team notes yet.</p>'; return; }
+  const notes = await Promise.all(names.map(n => api('/api/notes/' + encodeURIComponent(n))));
+  $('notes').innerHTML = notes.map(n => '<h3>' + esc(n.name) + '</h3><pre>' + esc(n.text) + '</pre>').join('');
+}
+function show(tab) {
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  ['search', 'lint', 'gap', 'audit', 'notes'].forEach(t => $('view-' + t).hidden = t !== tab);
+  if (tab === 'audit') loadAudit().catch(e => $('audit').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
+  if (tab === 'notes') loadNotes().catch(e => $('notes').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
+}
+$('tabs').onclick = e => { const b = e.target.closest('button'); if (b) show(b.dataset.tab); };
+$('login').onclick = login;
+$('go').onclick = search;
+$('q').onkeydown = e => { if (e.key === 'Enter') search(); };
+$('source').onchange = () => { loadTree(); $('results').innerHTML = ''; $('lint').innerHTML = ''; };
+if (token) login();
+</script>
+</body>
+</html>

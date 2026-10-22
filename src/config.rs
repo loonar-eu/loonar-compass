@@ -38,6 +38,15 @@ impl ApprovalMode {
         }
     }
 
+    /// How strictly writes are approved: auto < plan < ask (the team policy can only make it stricter).
+    pub fn strictness(&self) -> u8 {
+        match self {
+            Self::Auto => 0,
+            Self::Plan => 1,
+            Self::Ask => 2,
+        }
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Plan => "plan",
@@ -162,6 +171,9 @@ pub struct AppConfig {
     pub jira_url: String,
     pub jira_user: String,
     pub jira_project: String,
+    /// Team hub: address and the id of this model among the hub sources (for the audit trail).
+    pub hub_url: String,
+    pub hub_source: String,
     /// The Miro board the last diagram went to (its id): offered first next time.
     pub miro_board: String,
     /// Registry of the pages published by the assistant (for refreshing).
@@ -311,6 +323,8 @@ impl AppConfig {
             jira_url: get_or("jira.url", ""),
             jira_user: get_or("jira.user", ""),
             jira_project: get_or("jira.project", ""),
+            hub_url: get_or("hub.url", ""),
+            hub_source: get_or("hub.source", ""),
             miro_board: get_or("miro.board", ""),
             confluence_pages_file: renamed(&base_dir, "confluence_strony.json", "confluence_pages.json"),
             base_dir,
@@ -399,8 +413,9 @@ pub mod secrets {
     pub const CONFLUENCE_TOKEN: &str = "confluence_token";
     pub const MIRO_TOKEN: &str = "miro_token";
     pub const JIRA_TOKEN: &str = "jira_token";
+    pub const HUB_TOKEN: &str = "hub_token";
     /// Every secret the application stores (removed together on uninstall).
-    pub const ALL: [&str; 7] = [CLAUDE_API_KEY, OPENAI_API_KEY, EA_PASSWORD, DB_PASSWORD, CONFLUENCE_TOKEN, MIRO_TOKEN, JIRA_TOKEN];
+    pub const ALL: [&str; 8] = [CLAUDE_API_KEY, OPENAI_API_KEY, EA_PASSWORD, DB_PASSWORD, CONFLUENCE_TOKEN, MIRO_TOKEN, JIRA_TOKEN, HUB_TOKEN];
 
     pub fn get(name: &str) -> Result<String> {
         if let Ok(value) = keyring::Entry::new(SERVICE, name).and_then(|e| e.get_password()) {

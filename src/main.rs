@@ -25,6 +25,7 @@ mod spell;
 mod openai;
 mod governance;
 mod jira;
+mod hub;
 mod templates;
 mod tools;
 mod window;
@@ -549,6 +550,15 @@ fn main() -> eframe::Result {
         });
         std::process::exit(if result.is_ok() { 0 } else { 1 });
     }
+    // Team hub without a window: `--hub <hub.json>` (log in hub.log next to hub.json).
+    if let Some(file) = args.iter().position(|a| a == "--hub").and_then(|i| args.get(i + 1)) {
+        let file = PathBuf::from(file);
+        let result = hub::load(&file).and_then(|(hub, listen)| hub::serve(hub, &listen, |_| {}));
+        if let Err(e) = &result {
+            window::show_error(config::APP_NAME, &format!("{e:#}"));
+        }
+        std::process::exit(if result.is_ok() { 0 } else { 1 });
+    }
     // Language already before the window opens: a startup error message (system dialog) must be in the user's language.
     // No entry in an existing file = Polish, as in AppConfig::load.
     if let Ok(text) = std::fs::read_to_string(&props_path) {
@@ -636,6 +646,9 @@ struct Form {
     jira_user: String,
     jira_project: String,
     jira_token: String,
+    hub_url: String,
+    hub_source: String,
+    hub_token: String,
     miro_token: String,
     ui_language: String,
 }
@@ -668,6 +681,8 @@ impl Form {
             jira_url: c.jira_url.clone(),
             jira_user: c.jira_user.clone(),
             jira_project: c.jira_project.clone(),
+            hub_url: c.hub_url.clone(),
+            hub_source: c.hub_source.clone(),
             ui_language: c.ui_language.clone(),
             ..Default::default()
         }
@@ -803,7 +818,7 @@ struct App {
     /// Conversations in which the assistant finished working in the background and the user has not looked at yet (conversation ids).
     unseen: std::collections::HashSet<String>,
     /// Result of the last save and test of each of the four settings groups.
-    group_status: [GroupStatus; 7],
+    group_status: [GroupStatus; 8],
     /// Channel through which settings tests (run in the background) return their result: group number and message.
     settings_tx: mpsc::Sender<(usize, Result<String, String>)>,
     settings_rx: mpsc::Receiver<(usize, Result<String, String>)>,
@@ -1398,7 +1413,7 @@ impl App {
                 approval_wake.request_repaint();
                 reply_rx.recv().unwrap_or(false)
             });
-            let approver = tools::Approver::new(cfg.approval_mode, ask);
+            let approver = tools::Approver::new(hub::effective_mode(&cfg), ask);
             let summary = ea::describe(&ops);
             emit(WorkerEvent::StepStart(crate::i18n::fmt("Saving the changes from the diagram editor: {0}", &[summary.replace('\n', ", ")])));
             let result = tools::run("ea_write", &json!({ "ops": ops }), &tools::ToolContext { cfg: &cfg, approver: &approver });
@@ -2137,6 +2152,18 @@ impl App {
                     self.form.miro_token.clear();
                 }
             }
+            GROUP_HUB => {
+                let url = f.hub_url.trim().trim_end_matches('/').to_string();
+                if !url.is_empty() {
+                    jira::check_base_url(&url).map_err(|_| anyhow::anyhow!("{}", crate::i18n::tr("The hub address must start with https:// (http:// only on this computer)")))?;
+                }
+                updates.push(("hub.url", url));
+                updates.push(("hub.source", f.hub_source.trim().to_string()));
+                if !f.hub_token.is_empty() {
+                    secrets::set(secrets::HUB_TOKEN, f.hub_token.trim())?;
+                    self.form.hub_token.clear();
+                }
+            }
             GROUP_JIRA => {
                 let url = f.jira_url.trim().trim_end_matches('/').to_string();
                 if !url.is_empty() {
@@ -2539,7 +2566,7 @@ impl App {
                 approval_wake.request_repaint();
                 reply_rx.recv().unwrap_or(false)
             });
-            let approver = tools::Approver::new(cfg.approval_mode, ask);
+            let approver = tools::Approver::new(hub::effective_mode(&cfg), ask);
             match run_turn(&cfg, &messages, &approver, &inbox, &worker_cancel, &emit) {
                 Ok(()) => emit(WorkerEvent::Done),
                 Err(e) => emit(WorkerEvent::Failed(format!("{e:#}"))),
@@ -2803,6 +2830,23 @@ impl App {
                 row_hint(ui, crate::i18n::tr("Default project key"), &mut self.form.jira_project, crate::i18n::tr("e.g. ARCH"));
             });
             self.group_footer(ui, &ctx2, GROUP_JIRA, crate::i18n::tr("Save and test Jira connection"));
+        });
+        ui.add_space(12.0);
+        settings_group(ui, crate::i18n::tr("Team (Compass Hub)"), inner_width * 2.0 + 44.0, |ui| {
+            ui.add(egui::Label::new(
+                egui::RichText::new(crate::i18n::tr("Optional team service (LoonarCompass.exe --hub hub.json, on a team computer or server). With a hub, Compass takes the team policy (model check rules, the minimum approval mode) and sends every saved change to the team audit trail. People without EA see the models in the hub's web view; other AI tools read them through its MCP server. Ask the hub administrator for the address and your token."))
+                .color(theme::MUTED),
+            ).wrap());
+            ui.add_space(6.0);
+            egui::Grid::new("settings_hub").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
+                row_hint(ui, crate::i18n::tr("Hub address"), &mut self.form.hub_url, crate::i18n::tr("e.g. https://compass-hub.example.com"));
+                row_secret(ui, crate::i18n::tr("Token"), &mut self.form.hub_token, secrets::exists(secrets::HUB_TOKEN));
+                row_hint(ui, crate::i18n::tr("This model in the hub"), &mut self.form.hub_source, crate::i18n::tr("source id, e.g. shop-db (optional)"));
+            });
+            if let Some(failure) = hub::last_failure() {
+                ui.add(egui::Label::new(egui::RichText::new(crate::i18n::fmt("Last problem with the hub: {0}", &[failure])).small().color(theme::MUTED)).wrap());
+            }
+            self.group_footer(ui, &ctx2, GROUP_HUB, crate::i18n::tr("Save and test hub connection"));
         });
         ui.add_space(12.0);
         settings_group(ui, crate::i18n::tr("Miro"), inner_width * 2.0 + 44.0, |ui| {
@@ -3339,6 +3383,7 @@ const GROUP_APPROVAL: usize = 3;
 const GROUP_CONFLUENCE: usize = 4;
 const GROUP_MIRO: usize = 5;
 const GROUP_JIRA: usize = 6;
+const GROUP_HUB: usize = 7;
 
 /// "Send to Miro" window: the diagram, the board, and where on the board the frame goes (shown on a thumbnail
 /// of the board, where the user can move it).
@@ -3651,6 +3696,16 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
             let token = secrets::get(secrets::MIRO_TOKEN).context(crate::i18n::tr("no Miro access token in the settings"))?;
             let boards = miro::Client::new(&token)?.check()?;
             Ok(crate::i18n::fmt("Saved. Connected to Miro: boards available: {0}.", &[boards.to_string()]))
+        }
+        GROUP_HUB => {
+            let Some(client) = hub::Client::from_config(cfg) else {
+                return Ok(crate::i18n::tr("Saved. Without a hub Compass works on its own.").into());
+            };
+            let (name, role) = client.me()?;
+            let policy = client.policy()?;
+            let mode = policy["min_approval"].as_str().unwrap_or("-").to_string();
+            let rules = ["naming", "required_tags", "allowed_relations"].iter().filter(|k| policy["governance"][**k].as_array().is_some_and(|a| !a.is_empty())).count();
+            Ok(crate::i18n::fmt("Saved. Connected to the hub as {0} ({1}); team policy: minimum approval {2}, rule sets {3}.", &[name, role, mode, rules.to_string()]))
         }
         GROUP_JIRA => {
             if cfg.jira_url.trim().is_empty() {

@@ -169,6 +169,7 @@ mod tests {
             include_str!("ea_ui.rs"),
             include_str!("governance.rs"),
             include_str!("history.rs"),
+            include_str!("hub.rs"),
             include_str!("jira.rs"),
             include_str!("openai.rs"),
             include_str!("memory.rs"),
