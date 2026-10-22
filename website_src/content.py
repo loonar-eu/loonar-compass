@@ -44,7 +44,7 @@ T = {}
 T["en"] = dict(
  locale="en_US", name_lang="English",
  title="Loonar Compass – AI assistant for Sparx Enterprise Architect",
- desc="Freeware Windows app: talk to your Sparx Enterprise Architect model in plain language. Ask questions, create and change diagrams through EA, approve every change. Uses Anthropic’s Claude API with your own API key.",
+ desc="Freeware Windows app: talk to your Sparx Enterprise Architect model in plain language. Ask questions, create and change diagrams through EA, approve every change. Uses Claude (Anthropic) or OpenAI with your own API key.",
  og_desc="Talk to your Enterprise Architect model: ask, draw, document — every change written by EA and approved by you.",
  skip="Skip to content", lang_label="Language",
  nav=["Features","How it works","Security","Requirements","FAQ","Support"], nav_dl="Download",
@@ -52,7 +52,7 @@ T["en"] = dict(
  h1='AI assistant for Sparx Enterprise Architect — <em>talk to your model</em>',
  lead="Ask questions in plain language, have diagrams drawn and reworked, and turn the model into documents. Every change is written by Enterprise Architect itself — and only after you approve it.",
  cta1="Download free", cta2="See what it can do",
- meta="Version <a href=\"{changelog}\">{ver}</a> · Windows 10/11 · uses Anthropic’s Claude API with your own API key",
+ meta="Version <a href=\"{changelog}\">{ver}</a> · Windows 10/11 · uses Claude (Anthropic) or OpenAI with your own API key",
  hero_alt="Illustration of the Loonar Compass window: a request to draw an online shop order process as BPMN, the list of steps and the assistant's answer.",
  f_h="What it does", f_sub="One conversation instead of dozens of dialogs — from a quick question to a complete, consistently styled diagram.",
  features=[
@@ -72,7 +72,7 @@ T["en"] = dict(
  h_h="How it works", h_sub="You stay in charge at every step.",
  steps=[
   ("You ask","Type a question or a task; attach a PDF, a screenshot, a sketch or a BPMN file."),
-  ("Claude plans","The Claude model decides what to look up and what to change. You follow every step live in the chat."),
+  ("The AI model plans","The AI model you choose — Claude or OpenAI — decides what to look up and what to change. You follow every step live in the chat."),
   ("It reads and writes the model","Reads straight from the PostgreSQL repository or the .qea/.qeax file (read-only); writes only through Enterprise Architect via COM."),
   ("You approve","See the planned changes, then approve or reject. Saved changes are logged and show up in your EA window."),
  ],
@@ -81,11 +81,11 @@ T["en"] = dict(
  sec_h="Security and privacy", sec_sub="Your model stays where it is. The assistant works on your computer, with your accounts.",
  sec=[
   ("Runs locally","A desktop application for Windows, installed for your user account. Settings, conversation history, memory and the Audit log are stored in your user profile."),
-  ("Secrets stay in Windows","The Claude API key, the EA account password, the database password and the Confluence token are kept in Windows Credential Manager — never in plain text in the settings file."),
-  ("Encrypted connections","The Claude API and Confluence are used only over HTTPS. The connection to PostgreSQL can be encrypted with TLS — preferred, required, or required with the server certificate checked against the Windows certificate store. A model file (.qea, .qeax) needs no database connection: the assistant reads it directly, read-only."),
+  ("Secrets stay in Windows","The Claude or OpenAI API key, the EA account password, the database password and the Confluence token are kept in Windows Credential Manager — never in plain text in the settings file."),
+  ("Encrypted connections","The Claude/OpenAI API and Confluence are used only over HTTPS. The connection to PostgreSQL can be encrypted with TLS — preferred, required, or required with the server certificate checked against the Windows certificate store. A model file (.qea, .qeax) needs no database connection: the assistant reads it directly, read-only."),
   ("Writes only through EA","The database session is read-only, and a model file is opened read-only. Every change is made by Enterprise Architect — when the model uses security, under the EA account you set up, with that account’s permissions and locks. Content of attachments, documents and the model is treated as data, not as instructions."),
-  ("What is sent to Anthropic","To answer, Claude receives the conversation, your attachments, remembered notes, templates in use, the results of the assistant’s queries and the diagram images it shows — not the whole model. Check your organisation’s rules before using it on company models."),
-  ("Your own API key","The app uses your Claude API key from the Anthropic Console. The app itself is free; Anthropic bills Claude usage to the account the key belongs to."),
+  ("What is sent to the AI provider","To answer, the chosen AI provider (Anthropic or OpenAI) receives the conversation, your attachments, remembered notes, templates in use, the results of the assistant’s queries and the diagram images it shows — not the whole model. Check your organisation’s rules before using it on company models."),
+  ("Your own API key","The app uses your own API key — for Claude from the Anthropic Console, for OpenAI from the OpenAI platform. The app itself is free; the provider bills usage to the account the key belongs to."),
  ],
  r_h="Requirements", r_need="Required", r_opt="Optional",
  req=[
@@ -93,7 +93,7 @@ T["en"] = dict(
   "Sparx Enterprise Architect with a licence — to save changes, the assistant starts EA in the background (it uses a licence seat while it runs) or, for a model file you have open, uses your EA window",
   "An EA model: a .qea or .qeax project file, or a PostgreSQL database with security enabled (“Require User Lock to Edit”)",
   "For a database model: access to the database (server, port, name, account) and an EA user account for the assistant with edit rights; a model file needs only its path (and the account only if security is enabled)",
-  "A Claude API key from the Anthropic Console and an internet connection",
+  "A Claude API key from the Anthropic Console or an OpenAI API key from the OpenAI platform, and an internet connection",
  ],
  opt=[
   "Confluence (Data Center or Cloud) — to publish pages directly",
@@ -105,9 +105,9 @@ T["en"] = dict(
   ("Is it really free? Can I use it at work?",
    '<p>Yes. Loonar Compass is freeware: free of charge for any purpose, including professional and commercial use, on any number of computers. You may also pass it on to others — free of charge, complete and unchanged, together with the licence file.</p>'
    '<p>The source code is public on <a href="{repo}">GitHub</a>, so you can see exactly what the application does with your model. It is source-available, not open source: modifying the application, creating derivative works, selling it or renting it out is not allowed. <a href="{lic}">Read the licence</a>.</p>'),
-  ("What does it cost to run, and which Claude model does it use?",
-   '<p>The application is free. The assistant works with your own Claude API key from the Anthropic Console, and Anthropic bills its use to the account the key belongs to — pay as you go, by the amount of text the model reads and writes. Current prices are on <a href="https://claude.com/pricing#api">Anthropic’s pricing page</a>.</p>'
-   '<p>The model is always Claude Haiku 5.5 (<code>claude-haiku-5-5</code>); it is not a setting. “Max tokens” (10,000 by default) only caps the length of a single answer: you pay for the text actually generated.</p>'),
+  ("What does it cost to run, and which AI model does it use?",
+   '<p>The application is free. The assistant works with your own API key — Claude from the Anthropic Console or OpenAI from the OpenAI platform — and the provider bills its use to the account the key belongs to: pay as you go, by the amount of text the model reads and writes. Current prices are on <a href="https://claude.com/pricing#api">Anthropic’s pricing page</a> and <a href="https://openai.com/api/pricing/">OpenAI’s pricing page</a>.</p>'
+   '<p>The default is Claude Haiku 5.5 (<code>claude-haiku-5-5</code>). In Settings → “AI model” you can change the provider, the model and the effort; higher effort and bigger models cost more. “Max tokens” (10,000 by default) only caps the length of a single answer: you pay for the text actually generated.</p>'),
   ("Which operating systems does it run on?",
    '<p>Windows 10 and Windows 11, 64-bit. It is a native Windows desktop application and works together with Enterprise Architect installed on the same computer.</p>'),
   ("Which Enterprise Architect setups are supported?",
@@ -134,21 +134,21 @@ T["en"] = dict(
    '<li><strong>Baselines:</strong> before deleting or substantially restructuring an existing package, the assistant is instructed to save a baseline of it first; you restore it in EA (Manage Baselines → Compare/Restore).</li></ul>'
    '<p>Still, deleting is permanent and AI can make mistakes — the application reminds you of this, so review the proposed changes before you approve them. For important models use ask mode and keep backups of the database or the model file — the application comes without warranty.</p>'),
   ("What data leaves my computer, and where does it go?",
-   '<p>To answer, the assistant sends only what it needs to Anthropic’s Claude API (api.anthropic.com): your messages and attachments, remembered notes, the templates in use, and what it has read from the model in that conversation — the results of its queries to the model (names and descriptions of packages, elements, diagrams) and images of the diagrams it showed. Not the whole model. After a language change, memory and templates are also sent for translation.</p>'
-   '<p>Beyond that, data goes only where you send it: published pages to your Confluence; bug reports and newsletter sign-ups are e-mails you check and send yourself from your mail program. The application sends nothing to Loonar on its own. Before using it on company models, check your organisation’s rules and the data terms of your Anthropic account.</p>'),
+   '<p>To answer, the assistant sends only what it needs to the AI provider chosen in Settings — Anthropic’s Claude API (api.anthropic.com) or the OpenAI API (api.openai.com): your messages and attachments, remembered notes, the templates in use, and what it has read from the model in that conversation — the results of its queries to the model (names and descriptions of packages, elements, diagrams) and images of the diagrams it showed. Not the whole model. After a language change, memory and templates are also sent for translation.</p>'
+   '<p>Beyond that, data goes only where you send it: published pages to your Confluence; bug reports and newsletter sign-ups are e-mails you check and send yourself from your mail program. The application sends nothing to Loonar on its own. Before using it on company models, check your organisation’s rules and the data terms of your Anthropic or OpenAI account.</p>'),
   ("Where are my settings, conversations and passwords stored?",
    '<p>On your computer, in your Windows user profile — every user of the computer has their own:</p>'
    '<ul><li><code>%APPDATA%\\Loonar Compass</code>: settings (app.properties), conversation history, attachments, assistant memory, document templates and the audit log.</li>'
-   '<li>Windows Credential Manager: the Claude API key, the EA account password, the database password and the Confluence token, as well as the passwords of a conversation’s model that differs from Settings. None of them is kept in plain text in the settings file.</li></ul>'
+   '<li>Windows Credential Manager: the Claude and OpenAI API keys, the EA account password, the database password and the Confluence token, as well as the passwords of a conversation’s model that differs from Settings. None of them is kept in plain text in the settings file.</li></ul>'
    '<p>The program itself is installed in <code>%LOCALAPPDATA%\\Programs\\Loonar Compass</code> by default, or in C:\\Program Files\\Loonar Compass when installed for all users.</p>'),
   ("Is the communication encrypted?",
    '<p>Yes, wherever the application connects by itself:</p>'
-   '<ul><li><strong>Claude API and Confluence:</strong> only over HTTPS. A Confluence address starting with <code>http://</code> is accepted only for a server on the same computer (localhost).</li>'
+   '<ul><li><strong>Claude/OpenAI API and Confluence:</strong> only over HTTPS. A Confluence address starting with <code>http://</code> is accepted only for a server on the same computer (localhost).</li>'
    '<li><strong>Model database (PostgreSQL):</strong> TLS, set with “Connection encryption” on the “2. Model” card in Settings (option “PostgreSQL database”): “Preferred” (default) — TLS whenever the server offers it, otherwise an unencrypted connection; “Required” — TLS or no connection; “Required, certificate verified” — TLS, and the server’s certificate and name are checked against the Windows certificate store, including your company’s certificates. “Preferred” and “Required” do not check the certificate. After “Save and test connection”, the application tells you whether the connection is encrypted. In app.properties the setting is <code>db.sslmode</code> = <code>prefer</code>, <code>require</code> or <code>verify-full</code>.</li>'
    '<li><strong>Model file (.qea, .qeax):</strong> no database connection — the assistant reads the file directly, read-only.</li></ul>'
    '<p>Tip for database administrators: with <code>hostssl</code> entries in pg_hba.conf, the server accepts only TLS connections from all clients. Enterprise Architect’s own connection to the database follows EA’s settings, not the application’s.</p>'),
   ("Does it work behind a corporate proxy or firewall?",
-   '<p>Allow these connections: HTTPS (port 443) to api.anthropic.com, for a database model your PostgreSQL server (port 5432 by default; a direct connection, not through the proxy) and, if you publish pages, your Confluence.</p>'
+   '<p>Allow these connections: HTTPS (port 443) to api.anthropic.com or api.openai.com, depending on the provider; for a database model your PostgreSQL server (port 5432 by default; a direct connection, not through the proxy) and, if you publish pages, your Confluence.</p>'
    '<p>For HTTPS, the application uses the proxy set in the Windows Internet settings (system proxy). You can also set the <code>HTTPS_PROXY</code> or <code>ALL_PROXY</code> environment variable, e.g. <code>http://proxy.example.com:8080</code> (exceptions in <code>NO_PROXY</code>); it takes precedence over the system proxy. Restart the application after a change. For basic authentication, the user name and password can be part of the address in that variable; automatic detection and configuration scripts (WPAD, PAC) and proxy sign-in with your Windows account (NTLM, Kerberos) are not supported.</p>'
    '<p>HTTPS certificates are also checked against the Windows certificate store, so a company root certificate used for traffic inspection is accepted once it is installed in Windows.</p>'),
   ("Which languages are available?",
@@ -162,7 +162,7 @@ T["en"] = dict(
   ("How do I uninstall it, and what stays on my computer?",
    '<p>Close the application and use “Uninstall Loonar Compass” in the Start menu or its entry in Windows Settings → Apps → Installed apps. This removes the program files, the shortcuts and the system entry. Your data stays unless you tick one of these options:</p>'
    '<ul><li>“Remove settings, conversations, attachments, memory, templates and the audit log” — this deletes the whole <code>%APPDATA%\\Loonar Compass</code> folder;</li>'
-   '<li>“Remove the API key, passwords and tokens from Credential Manager” — the Claude API key, the EA account and database passwords and the Confluence token.</li></ul>'
+   '<li>“Remove the API key, passwords and tokens from Credential Manager” — the Claude and OpenAI API keys, the EA account and database passwords and the Confluence token.</li></ul>'
    '<p>Your EA model, files you saved elsewhere and pages published to Confluence are not affected.</p>'),
   ("How do I report a bug or hear about new versions?",
    '<p>In the application, open “Report a bug” in the navigation bar, describe what happened, add screenshots and click “Send report”: a ready e-mail to mariusz@loonar.eu opens in your default mail program, where you check it and send it. Technical information (application version, Windows version, AI model, approval mode, last message — no passwords or keys) is added only while that option is ticked (it is by default).</p>'
@@ -192,7 +192,7 @@ T["en"] = dict(
  ab_li="Mariusz Głowacki on LinkedIn",
  c_h="Contact", c_text='Questions, ideas or a bug? Write to <a href="mailto:mariusz@loonar.eu">mariusz@loonar.eu</a> — or use “Report a bug” in the app.',
  f_addr="ul. Gombrowicza 12, 73-110 Stargard, Poland",
- f_tm="Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. Atlassian and Confluence are trademarks of Atlassian. Microsoft, Windows, Word, Excel, GitHub and LinkedIn are trademarks of the Microsoft group of companies. PostgreSQL is a registered trademark of the PostgreSQL Community Association. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.",
+ f_tm="Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. OpenAI is a trademark of OpenAI. Atlassian and Confluence are trademarks of Atlassian. Microsoft, Windows, Word, Excel, GitHub and LinkedIn are trademarks of the Microsoft group of companies. PostgreSQL is a registered trademark of the PostgreSQL Community Association. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.",
  f_stats="No cookies. Anonymous visit statistics (GoatCounter) that keep no personal data. Your language choice is remembered in your browser.",
  f_privacy_link="Privacy", f_legal_link="Legal notice",
  f_top="Back to top",
@@ -207,11 +207,11 @@ T["en"] = dict(
  m_convs=["Order process (BPMN)","Requirements from a PDF","Impact: payment service"],
  m_user="Draw the order process of our online shop as BPMN in the <b>Sales</b> package. Make payment an embedded subprocess.",
  m_steps_h="Steps in the last answer: 3",
- m_steps=["Claude is analyzing and planning (step 1)","Reading the model database: package Sales","Saving to EA, 14 operations: diagram Order process"],
+ m_steps=["The assistant is analyzing and planning (step 1)","Reading the model database: package Sales","Saving to EA, 14 operations: diagram Order process"],
  m_bot="Done. The <b>Sales</b> package has a new BPMN diagram <b>Order process</b>: 3 tasks, a gateway and the embedded subprocess <b>Payment</b> with 3 steps. I have opened it in your EA window.",
  m_ph="Write a message, drag in files or paste an image (Ctrl+V)…",
  m_mode="claude-haiku-5-5 · mode ask",
- m_appr_h="Claude wants to save changes to the model",
+ m_appr_h="The assistant wants to save changes to the model",
  m_appr=["New BPMN diagram “Order process” in Sales","3 tasks, 1 gateway, start and end events","Embedded subprocess “Payment” with 3 steps","9 sequence flows"],
  m_approve="Approve", m_reject="Reject",
  m_saveas="Save as…", m_full="Open full size", m_png="Order process.png",
@@ -228,7 +228,7 @@ T["en"] = dict(
 T["pl"] = dict(
  locale="pl_PL", name_lang="Polski",
  title="Loonar Compass – asystent AI do Sparx Enterprise Architect",
- desc="Darmowa aplikacja dla Windows: rozmawiaj z modelem Sparx Enterprise Architect zwykłym językiem. Pytaj, twórz i zmieniaj diagramy przez EA, zatwierdzaj każdą zmianę. Korzysta z Claude API firmy Anthropic (Twój klucz API).",
+ desc="Darmowa aplikacja dla Windows: rozmawiaj z modelem Sparx Enterprise Architect zwykłym językiem. Pytaj, twórz i zmieniaj diagramy przez EA, zatwierdzaj każdą zmianę. Korzysta z Claude (Anthropic) lub OpenAI (Twój klucz API).",
  og_desc="Porozmawiaj ze swoim modelem w Enterprise Architect: pytaj, rysuj, dokumentuj — każdą zmianę zapisuje EA, a zatwierdzasz Ty.",
  skip="Przejdź do treści", lang_label="Język",
  nav=["Funkcje","Jak to działa","Bezpieczeństwo","Wymagania","FAQ","Wesprzyj"], nav_dl="Pobierz",
@@ -236,7 +236,7 @@ T["pl"] = dict(
  h1='Asystent AI do Sparx Enterprise Architect — <em>porozmawiaj ze swoim modelem</em>',
  lead="Zadawaj pytania zwykłym językiem, zlecaj rysowanie i przebudowę diagramów, zamieniaj model w dokumenty. Każdą zmianę zapisuje sam Enterprise Architect — i to dopiero wtedy, gdy ją zatwierdzisz.",
  cta1="Pobierz za darmo", cta2="Zobacz, co potrafi",
- meta="Wersja <a href=\"{changelog}\">{ver}</a> · Windows 10/11 · korzysta z Claude API firmy Anthropic (Twój klucz API)",
+ meta="Wersja <a href=\"{changelog}\">{ver}</a> · Windows 10/11 · korzysta z Claude (Anthropic) lub OpenAI (Twój klucz API)",
  hero_alt="Ilustracja okna Loonar Compass: prośba o narysowanie procesu zamówienia w sklepie internetowym w BPMN, lista kroków i odpowiedź asystenta.",
  f_h="Co potrafi", f_sub="Jedna rozmowa zamiast dziesiątek okien dialogowych — od szybkiego pytania po kompletny, spójnie sformatowany diagram.",
  features=[
@@ -256,7 +256,7 @@ T["pl"] = dict(
  h_h="Jak to działa", h_sub="Na każdym kroku decydujesz Ty.",
  steps=[
   ("Pytasz","Wpisujesz pytanie albo zadanie, dołączasz PDF, zrzut ekranu, szkic lub plik BPMN."),
-  ("Claude planuje","Model Claude decyduje, co sprawdzić i co zmienić. Każdy krok widzisz na bieżąco w czacie."),
+  ("Model AI planuje","Wybrany przez Ciebie model AI — Claude albo OpenAI — decyduje, co sprawdzić i co zmienić. Każdy krok widzisz na bieżąco w czacie."),
   ("Czyta i zapisuje model","Czyta wprost z repozytorium PostgreSQL albo z pliku .qea/.qeax (tylko do odczytu), a zapisuje wyłącznie przez Enterprise Architect (COM)."),
   ("Zatwierdzasz","Widzisz planowane zmiany i je zatwierdzasz albo odrzucasz. Zapis trafia do dziennika zmian i od razu do Twojego okna EA."),
  ],
@@ -265,11 +265,11 @@ T["pl"] = dict(
  sec_h="Bezpieczeństwo i prywatność", sec_sub="Model zostaje tam, gdzie jest. Asystent działa na Twoim komputerze i na Twoich kontach.",
  sec=[
   ("Działa lokalnie","Aplikacja desktopowa dla Windows, instalowana na Twoim koncie użytkownika. Ustawienia, historia rozmów, pamięć i dziennik zmian są w Twoim profilu użytkownika."),
-  ("Sekrety zostają w Windows","Klucz API Claude, hasło konta EA, hasło do bazy i token Confluence są w Menedżerze poświadczeń Windows — nigdy zwykłym tekstem w pliku ustawień."),
-  ("Szyfrowane połączenia","Z Claude API i Confluence aplikacja łączy się wyłącznie przez HTTPS. Połączenie z PostgreSQL może być szyfrowane TLS — preferowane, wymagane albo wymagane z weryfikacją certyfikatu serwera w magazynie certyfikatów Windows. Plik modelu (.qea, .qeax) nie wymaga połączenia z bazą: asystent czyta go bezpośrednio, tylko do odczytu."),
+  ("Sekrety zostają w Windows","Klucz API Claude lub OpenAI, hasło konta EA, hasło do bazy i token Confluence są w Menedżerze poświadczeń Windows — nigdy zwykłym tekstem w pliku ustawień."),
+  ("Szyfrowane połączenia","Z API Claude/OpenAI i Confluence aplikacja łączy się wyłącznie przez HTTPS. Połączenie z PostgreSQL może być szyfrowane TLS — preferowane, wymagane albo wymagane z weryfikacją certyfikatu serwera w magazynie certyfikatów Windows. Plik modelu (.qea, .qeax) nie wymaga połączenia z bazą: asystent czyta go bezpośrednio, tylko do odczytu."),
   ("Zapis tylko przez EA","Sesja bazy jest tylko do odczytu, a plik modelu asystent otwiera tylko do odczytu. Każdą zmianę wykonuje Enterprise Architect — w modelu z zabezpieczeniami na skonfigurowanym koncie EA, z jego uprawnieniami i blokadami. Treść załączników, dokumentów i modelu asystent ma traktować jako dane, a nie polecenia."),
-  ("Co trafia do Anthropic","Żeby odpowiedzieć, Claude dostaje treść rozmowy, załączniki, zapamiętane ustalenia, użyte szablony, wyniki zapytań asystenta do modelu i pokazane obrazki diagramów — nie cały model. Przed użyciem na modelu firmowym sprawdź zasady swojej organizacji."),
-  ("Twój własny klucz API","Aplikacja korzysta z Twojego klucza API Claude z konsoli Anthropic. Sama aplikacja jest bezpłatna; za użycie Claude Anthropic rozlicza konto, do którego należy klucz."),
+  ("Co trafia do dostawcy AI","Żeby odpowiedzieć, wybrany dostawca AI (Anthropic albo OpenAI) dostaje treść rozmowy, załączniki, zapamiętane ustalenia, użyte szablony, wyniki zapytań asystenta do modelu i pokazane obrazki diagramów — nie cały model. Przed użyciem na modelu firmowym sprawdź zasady swojej organizacji."),
+  ("Twój własny klucz API","Aplikacja korzysta z Twojego własnego klucza API — dla Claude z konsoli Anthropic, dla OpenAI z platformy OpenAI. Sama aplikacja jest bezpłatna; za użycie dostawca rozlicza konto, do którego należy klucz."),
  ],
  r_h="Wymagania", r_need="Niezbędne", r_opt="Opcjonalnie",
  req=[
@@ -277,7 +277,7 @@ T["pl"] = dict(
   "Sparx Enterprise Architect z licencją — do zapisu zmian asystent uruchamia EA w tle (na czas pracy zajmuje ono jedno stanowisko licencji), a przy pliku modelu otwartym w Twoim EA korzysta z Twojego okna",
   "Model EA w pliku projektu .qea lub .qeax albo w bazie PostgreSQL z włączonymi zabezpieczeniami (tryb „Require User Lock to Edit”)",
   "Dla modelu w bazie: dostęp do bazy (serwer, port, nazwa, konto) i konto użytkownika modelu EA dla asystenta z prawem edycji; dla pliku modelu wystarczy ścieżka (konto tylko przy włączonych zabezpieczeniach)",
-  "Klucz API Claude z konsoli Anthropic i połączenie z Internetem",
+  "Klucz API Claude z konsoli Anthropic lub klucz API OpenAI z platformy OpenAI oraz połączenie z Internetem",
  ],
  opt=[
   "Confluence (Data Center lub Cloud) — do publikowania stron",
@@ -289,9 +289,9 @@ T["pl"] = dict(
   ("Czy to naprawdę za darmo? Mogę używać aplikacji w pracy?",
    '<p>Tak. Loonar Compass to freeware: bezpłatnie do każdego zastosowania, także zawodowego i komercyjnego, na dowolnej liczbie komputerów. Możesz go też przekazywać innym — bezpłatnie, w całości, bez zmian i razem z plikiem licencji.</p>'
    '<p>Kod źródłowy jest publiczny na <a href="{repo}">GitHubie</a>, więc możesz sprawdzić, co dokładnie aplikacja robi z Twoim modelem. To kod udostępniony do wglądu (source-available), a nie open source: nie wolno aplikacji modyfikować ani tworzyć na jej podstawie utworów zależnych, sprzedawać jej ani wynajmować. <a href="{lic}">Przeczytaj licencję</a>.</p>'),
-  ("Ile kosztuje korzystanie i z jakiego modelu Claude korzysta aplikacja?",
-   '<p>Sama aplikacja jest bezpłatna. Asystent działa na Twoim własnym kluczu API Claude z konsoli Anthropic, a za użycie Anthropic rozlicza konto, do którego należy klucz — według zużycia, czyli ilości tekstu, który model czyta i pisze. Aktualne ceny znajdziesz w <a href="https://claude.com/pricing#api">cenniku Anthropic</a>.</p>'
-   '<p>Model to zawsze Claude Haiku 5.5 (<code>claude-haiku-5-5</code>) — nie jest to ustawienie. „Max tokenów” (domyślnie 10\u00a0000) ogranicza tylko długość jednej odpowiedzi: płacisz za tekst faktycznie wygenerowany.</p>'),
+  ("Ile kosztuje korzystanie i z jakiego modelu AI korzysta aplikacja?",
+   '<p>Sama aplikacja jest bezpłatna. Asystent działa na Twoim własnym kluczu API — Claude z konsoli Anthropic albo OpenAI z platformy OpenAI — a za użycie dostawca rozlicza konto, do którego należy klucz: według zużycia, czyli ilości tekstu, który model czyta i pisze. Aktualne ceny znajdziesz w <a href="https://claude.com/pricing#api">cenniku Anthropic</a> i <a href="https://openai.com/api/pricing/">cenniku OpenAI</a>.</p>'
+   '<p>Domyślnie to Claude Haiku 5.5 (<code>claude-haiku-5-5</code>). W Ustawieniach → „Model AI” możesz zmienić dostawcę, model i poziom wysiłku (effort); wyższy wysiłek i większe modele kosztują więcej. „Max tokenów” (domyślnie 10\u00a0000) ogranicza tylko długość jednej odpowiedzi: płacisz za tekst faktycznie wygenerowany.</p>'),
   ("Na jakich systemach działa?",
    '<p>Na Windows 10 i Windows 11 w wersji 64-bitowej. To natywna aplikacja desktopowa dla Windows, która współpracuje z Enterprise Architect zainstalowanym na tym samym komputerze.</p>'),
   ("Jakie konfiguracje Enterprise Architect są obsługiwane?",
@@ -318,21 +318,21 @@ T["pl"] = dict(
    '<li><strong>Baseline:</strong> przed usunięciem albo większą przebudową istniejącego pakietu asystent ma polecenie najpierw zapisać jego baseline; przywracasz go w EA (Manage Baselines → Compare/Restore).</li></ul>'
    '<p>Mimo to usuwanie jest nieodwracalne, a AI może się mylić — aplikacja o tym przypomina, więc przed zatwierdzeniem przejrzyj proponowane zmiany. Przy ważnych modelach używaj trybu ask i rób kopie zapasowe bazy albo pliku modelu — aplikacja jest dostarczana bez gwarancji.</p>'),
   ("Jakie dane opuszczają mój komputer i dokąd trafiają?",
-   '<p>Żeby odpowiedzieć, asystent wysyła do API Claude w Anthropic (api.anthropic.com) tylko to, czego potrzebuje: Twoje wiadomości i załączniki, zapamiętane ustalenia, użyte szablony oraz to, co w danej rozmowie odczytał z modelu — wyniki zapytań do modelu (nazwy i opisy pakietów, elementów, diagramów) i obrazki pokazanych diagramów. Nie cały model. Po zmianie języka do tłumaczenia trafiają też pamięć i szablony.</p>'
-   '<p>Poza tym dane idą tylko tam, dokąd sam je wyślesz: publikowane strony do Twojego Confluence, a zgłoszenia błędów i zapis na newsletter to e-maile, które sprawdzasz i wysyłasz ze swojego programu pocztowego. Aplikacja sama niczego nie wysyła do Loonar. Przed użyciem na modelu firmowym sprawdź zasady swojej organizacji i warunki przetwarzania danych na Twoim koncie Anthropic.</p>'),
+   '<p>Żeby odpowiedzieć, asystent wysyła do dostawcy AI wybranego w Ustawieniach — API Claude w Anthropic (api.anthropic.com) albo API OpenAI (api.openai.com) — tylko to, czego potrzebuje: Twoje wiadomości i załączniki, zapamiętane ustalenia, użyte szablony oraz to, co w danej rozmowie odczytał z modelu — wyniki zapytań do modelu (nazwy i opisy pakietów, elementów, diagramów) i obrazki pokazanych diagramów. Nie cały model. Po zmianie języka do tłumaczenia trafiają też pamięć i szablony.</p>'
+   '<p>Poza tym dane idą tylko tam, dokąd sam je wyślesz: publikowane strony do Twojego Confluence, a zgłoszenia błędów i zapis na newsletter to e-maile, które sprawdzasz i wysyłasz ze swojego programu pocztowego. Aplikacja sama niczego nie wysyła do Loonar. Przed użyciem na modelu firmowym sprawdź zasady swojej organizacji i warunki przetwarzania danych na Twoim koncie Anthropic lub OpenAI.</p>'),
   ("Gdzie są przechowywane ustawienia, rozmowy i hasła?",
    '<p>Na Twoim komputerze, w profilu użytkownika Windows — każdy użytkownik komputera ma własne:</p>'
    '<ul><li><code>%APPDATA%\\Loonar Compass</code>: ustawienia (app.properties), historia rozmów, załączniki, pamięć asystenta, szablony dokumentów i dziennik zmian.</li>'
-   '<li>Menedżer poświadczeń Windows: klucz API Claude, hasło konta EA, hasło do bazy i token Confluence, a także hasła modelu rozmowy innego niż w Ustawieniach. Żaden z nich nie jest zapisany zwykłym tekstem w pliku ustawień.</li></ul>'
+   '<li>Menedżer poświadczeń Windows: klucze API Claude i OpenAI, hasło konta EA, hasło do bazy i token Confluence, a także hasła modelu rozmowy innego niż w Ustawieniach. Żaden z nich nie jest zapisany zwykłym tekstem w pliku ustawień.</li></ul>'
    '<p>Sam program instaluje się domyślnie w <code>%LOCALAPPDATA%\\Programs\\Loonar Compass</code>, a przy instalacji dla wszystkich użytkowników w C:\\Program Files\\Loonar Compass.</p>'),
   ("Czy komunikacja jest szyfrowana?",
    '<p>Tak, wszędzie tam, gdzie aplikacja łączy się sama:</p>'
-   '<ul><li><strong>Claude API i Confluence:</strong> wyłącznie przez HTTPS. Adres Confluence zaczynający się od <code>http://</code> jest akceptowany tylko dla serwera na tym samym komputerze (localhost).</li>'
+   '<ul><li><strong>API Claude/OpenAI i Confluence:</strong> wyłącznie przez HTTPS. Adres Confluence zaczynający się od <code>http://</code> jest akceptowany tylko dla serwera na tym samym komputerze (localhost).</li>'
    '<li><strong>Baza modelu (PostgreSQL):</strong> TLS, ustawiany polem „Szyfrowanie połączenia” na karcie „2. Model” w Ustawieniach (opcja „Baza PostgreSQL”): „Preferowane” (domyślnie) — TLS, gdy serwer go oferuje, w przeciwnym razie połączenie bez szyfrowania; „Wymagane” — TLS albo brak połączenia; „Wymagane, z weryfikacją certyfikatu” — TLS, a certyfikat i nazwa serwera są sprawdzane w magazynie certyfikatów Windows, także z certyfikatami firmowymi. „Preferowane” i „Wymagane” nie sprawdzają certyfikatu. Po „Zapisz i sprawdź połączenie” aplikacja informuje, czy połączenie jest szyfrowane. W app.properties to ustawienie <code>db.sslmode</code> = <code>prefer</code>, <code>require</code> albo <code>verify-full</code>.</li>'
    '<li><strong>Plik modelu (.qea, .qeax):</strong> bez połączenia z bazą — asystent czyta plik bezpośrednio, tylko do odczytu.</li></ul>'
    '<p>Wskazówka dla administratorów bazy: dzięki wpisom <code>hostssl</code> w pliku pg_hba.conf serwer przyjmuje od wszystkich klientów wyłącznie połączenia TLS. Własne połączenie Enterprise Architect z bazą działa według ustawień EA, nie aplikacji.</p>'),
   ("Czy działa za firmowym proxy albo zaporą?",
-   '<p>Potrzebne są połączenia: HTTPS (port 443) do api.anthropic.com, przy modelu w bazie do Twojego serwera PostgreSQL (domyślnie port 5432; połączenie bezpośrednie, nie przez proxy) i — jeśli publikujesz strony — do Twojego Confluence.</p>'
+   '<p>Potrzebne są połączenia: HTTPS (port 443) do api.anthropic.com lub api.openai.com (zależnie od dostawcy), przy modelu w bazie do Twojego serwera PostgreSQL (domyślnie port 5432; połączenie bezpośrednie, nie przez proxy) i — jeśli publikujesz strony — do Twojego Confluence.</p>'
    '<p>Dla HTTPS aplikacja korzysta z serwera proxy ustawionego w opcjach internetowych Windows (proxy systemowe). Możesz też ustawić zmienną środowiskową <code>HTTPS_PROXY</code> albo <code>ALL_PROXY</code>, np. <code>http://proxy.example.com:8080</code> (wyjątki w <code>NO_PROXY</code>) — ma ona pierwszeństwo przed proxy systemowym. Po zmianie uruchom aplikację ponownie. Przy uwierzytelnianiu podstawowym (basic) login i hasło mogą być częścią adresu w tej zmiennej; automatyczne wykrywanie ustawień i skrypty automatycznej konfiguracji (WPAD, PAC) oraz logowanie do proxy kontem Windows (NTLM, Kerberos) nie są obsługiwane.</p>'
    '<p>Certyfikaty HTTPS są sprawdzane także z magazynem certyfikatów Windows, więc firmowy certyfikat główny używany do inspekcji ruchu zadziała, jeśli jest zainstalowany w Windows.</p>'),
   ("W jakich językach jest dostępna?",
@@ -346,7 +346,7 @@ T["pl"] = dict(
   ("Jak odinstalować aplikację i co zostanie na komputerze?",
    '<p>Zamknij aplikację i użyj skrótu „Odinstaluj Loonar Compass” w menu Start albo pozycji w Ustawieniach Windows → Aplikacje → Zainstalowane aplikacje. Usuwane są pliki programu, skróty i wpis w systemie. Twoje dane zostają, chyba że zaznaczysz jedną z opcji:</p>'
    '<ul><li>„Usuń ustawienia, rozmowy, załączniki, pamięć asystenta, szablony dokumentów i dziennik zmian” — kasuje cały folder <code>%APPDATA%\\Loonar Compass</code>;</li>'
-   '<li>„Usuń klucz API, hasła i tokeny z Menedżera poświadczeń” — klucz API Claude, hasła konta EA i bazy oraz token Confluence.</li></ul>'
+   '<li>„Usuń klucz API, hasła i tokeny z Menedżera poświadczeń” — klucze API Claude i OpenAI, hasła konta EA i bazy oraz token Confluence.</li></ul>'
    '<p>Twój model EA, pliki zapisane gdzie indziej i strony opublikowane w Confluence pozostają bez zmian.</p>'),
   ("Jak zgłosić błąd albo dostawać informacje o nowych wersjach?",
    '<p>W aplikacji otwórz „Zgłoś błąd” na pasku nawigacji, opisz, co się stało, dodaj zrzuty ekranu i kliknij „Wyślij zgłoszenie”: w domyślnym programie pocztowym otworzy się gotowa wiadomość do mariusz@loonar.eu, którą sprawdzasz i wysyłasz. Informacje techniczne (wersja aplikacji, wersja Windows, model AI, tryb zatwierdzania, ostatni komunikat — bez haseł i kluczy) są dołączane tylko wtedy, gdy ta opcja jest zaznaczona (domyślnie jest).</p>'
@@ -376,7 +376,7 @@ T["pl"] = dict(
  ab_li="Mariusz Głowacki na LinkedIn",
  c_h="Kontakt", c_text='Pytanie, pomysł, błąd? Napisz na <a href="mailto:mariusz@loonar.eu">mariusz@loonar.eu</a> albo użyj „Zgłoś błąd” w aplikacji.',
  f_addr="ul. Gombrowicza 12, 73-110 Stargard",
- f_tm="Sparx Systems i Enterprise Architect są zarejestrowanymi znakami towarowymi Sparx Systems Pty Ltd. Claude i Anthropic są znakami towarowymi Anthropic, PBC. Atlassian i Confluence są znakami towarowymi Atlassian. Microsoft, Windows, Word, Excel, GitHub i LinkedIn są znakami towarowymi grupy Microsoft. PostgreSQL jest zarejestrowanym znakiem towarowym PostgreSQL Community Association. Loonar Compass jest niezależnym produktem, niepowiązanym z tymi firmami, nieautoryzowanym ani niesponsorowanym przez nie.",
+ f_tm="Sparx Systems i Enterprise Architect są zarejestrowanymi znakami towarowymi Sparx Systems Pty Ltd. Claude i Anthropic są znakami towarowymi Anthropic, PBC. OpenAI jest znakiem towarowym OpenAI. Atlassian i Confluence są znakami towarowymi Atlassian. Microsoft, Windows, Word, Excel, GitHub i LinkedIn są znakami towarowymi grupy Microsoft. PostgreSQL jest zarejestrowanym znakiem towarowym PostgreSQL Community Association. Loonar Compass jest niezależnym produktem, niepowiązanym z tymi firmami, nieautoryzowanym ani niesponsorowanym przez nie.",
  f_stats="Bez plików cookie. Anonimowe statystyki odwiedzin (GoatCounter), które nie przechowują danych osobowych. Wybór języka zapamiętuje Twoja przeglądarka.",
  f_privacy_link="Prywatność", f_legal_link="Nota prawna",
  f_top="Do góry",
@@ -388,11 +388,11 @@ T["pl"] = dict(
  m_convs=["Proces zamówienia (BPMN)","Wymagania z dokumentu PDF","Wpływ: usługa płatności"],
  m_user="Narysuj proces zamówienia w naszym sklepie internetowym jako BPMN w pakiecie <b>Sprzedaż</b>. Płatność zrób jako podproces osadzony.",
  m_steps_h="Kroki ostatniej odpowiedzi: 3",
- m_steps=["Claude analizuje i planuje (krok 1)","Odczyt z bazy modelu: pakiet Sprzedaż","Zapis do EA (operacje: 14): diagram Proces zamówienia"],
+ m_steps=["Asystent analizuje i planuje (krok 1)","Odczyt z bazy modelu: pakiet Sprzedaż","Zapis do EA (operacje: 14): diagram Proces zamówienia"],
  m_bot="Gotowe. W pakiecie <b>Sprzedaż</b> jest nowy diagram BPMN <b>Proces zamówienia</b>: 3 zadania, bramka i podproces osadzony <b>Płatność</b> z 3 krokami. Otworzyłem go w Twoim oknie EA.",
  m_ph="Napisz wiadomość, przeciągnij pliki albo wklej obraz (Ctrl+V)…",
  m_mode="claude-haiku-5-5 · tryb ask",
- m_appr_h="Claude chce zapisać zmiany w modelu",
+ m_appr_h="Asystent chce zapisać zmiany w modelu",
  m_appr=["Nowy diagram BPMN „Proces zamówienia” w pakiecie Sprzedaż","3 zadania, 1 bramka, zdarzenie początkowe i końcowe","Podproces osadzony „Płatność” z 3 krokami","9 przepływów sekwencji"],
  m_approve="Zatwierdź", m_reject="Odrzuć",
  m_saveas="Zapisz jako…", m_full="Otwórz w pełnym rozmiarze", m_png="Proces zamówienia.png",
@@ -408,7 +408,7 @@ T["pl"] = dict(
 T["de"] = dict(
  locale="de_DE", name_lang="Deutsch",
  title="Loonar Compass – KI-Assistent für Sparx Enterprise Architect",
- desc="Kostenlose Windows-App: Sprechen Sie mit Ihrem Sparx-Enterprise-Architect-Modell. Fragen stellen, Diagramme über EA anlegen und ändern, jede Änderung selbst freigeben. Nutzt die Claude-API von Anthropic mit Ihrem eigenen API-Schlüssel.",
+ desc="Kostenlose Windows-App: Sprechen Sie mit Ihrem Sparx-Enterprise-Architect-Modell. Fragen stellen, Diagramme über EA anlegen und ändern, jede Änderung selbst freigeben. Nutzt Claude (Anthropic) oder OpenAI mit Ihrem eigenen API-Schlüssel.",
  og_desc="Sprechen Sie mit Ihrem Enterprise-Architect-Modell: fragen, zeichnen, dokumentieren – EA schreibt jede Änderung, Sie geben sie frei.",
  skip="Zum Inhalt springen", lang_label="Sprache",
  nav=["Funktionen","So funktioniert’s","Sicherheit","Voraussetzungen","FAQ","Unterstützen"], nav_dl="Download",
@@ -416,7 +416,7 @@ T["de"] = dict(
  h1='KI-Assistent für Sparx Enterprise Architect – <em>sprechen Sie mit Ihrem Modell</em>',
  lead="Stellen Sie Fragen in natürlicher Sprache, lassen Sie Diagramme zeichnen und umbauen und machen Sie aus dem Modell Dokumente. Jede Änderung schreibt Enterprise Architect selbst – und erst, wenn Sie sie freigegeben haben.",
  cta1="Kostenlos herunterladen", cta2="Funktionen ansehen",
- meta="Version <a href=\"{changelog}\">{ver}</a> · Windows 10/11 · nutzt die Claude-API von Anthropic mit Ihrem eigenen API-Schlüssel",
+ meta="Version <a href=\"{changelog}\">{ver}</a> · Windows 10/11 · nutzt Claude (Anthropic) oder OpenAI mit Ihrem eigenen API-Schlüssel",
  hero_alt="Illustration des Fensters von Loonar Compass: eine Anfrage, den Bestellprozess eines Onlineshops als BPMN zu zeichnen, die Schrittliste und die Antwort des Assistenten.",
  f_h="Was er kann", f_sub="Ein Gespräch statt Dutzender Dialogfenster – von der schnellen Frage bis zum vollständigen, einheitlich gestalteten Diagramm.",
  features=[
@@ -436,7 +436,7 @@ T["de"] = dict(
  h_h="So funktioniert’s", h_sub="Sie behalten bei jedem Schritt die Kontrolle.",
  steps=[
   ("Sie fragen","Frage oder Aufgabe eingeben; PDF, Screenshot, Skizze oder BPMN-Datei anhängen."),
-  ("Claude plant","Das Claude-Modell entscheidet, was nachzuschlagen und was zu ändern ist. Jeden Schritt sehen Sie live im Chat."),
+  ("Das KI-Modell plant","Das von Ihnen gewählte KI-Modell – Claude oder OpenAI – entscheidet, was nachzuschlagen und was zu ändern ist. Jeden Schritt sehen Sie live im Chat."),
   ("Lesen und Schreiben im Modell","Liest direkt aus dem PostgreSQL-Repository oder der .qea/.qeax-Datei (nur lesend) und schreibt ausschließlich über Enterprise Architect (COM)."),
   ("Sie geben frei","Sie sehen die geplanten Änderungen und geben sie frei oder lehnen sie ab. Gespeichertes landet im Änderungsprotokoll und sofort in Ihrem EA-Fenster."),
  ],
@@ -445,11 +445,11 @@ T["de"] = dict(
  sec_h="Sicherheit und Datenschutz", sec_sub="Ihr Modell bleibt, wo es ist. Der Assistent arbeitet auf Ihrem Rechner, mit Ihren Konten.",
  sec=[
   ("Läuft lokal","Eine Desktop-Anwendung für Windows, installiert für Ihr Benutzerkonto. Einstellungen, Gesprächsverlauf, Gedächtnis und Änderungsprotokoll liegen in Ihrem Benutzerprofil."),
-  ("Geheimnisse bleiben in Windows","API-Schlüssel für Claude, Passwort des EA-Kontos, Datenbankpasswort und Confluence-Token liegen in der Windows-Anmeldeinformationsverwaltung – nie im Klartext in der Einstellungsdatei."),
-  ("Verschlüsselte Verbindungen","Claude-API und Confluence werden nur über HTTPS angesprochen. Die Verbindung zu PostgreSQL lässt sich mit TLS verschlüsseln – bevorzugt, erforderlich oder erforderlich mit Prüfung des Serverzertifikats gegen den Windows-Zertifikatspeicher. Eine Modelldatei (.qea, .qeax) braucht keine Datenbankverbindung: Der Assistent liest sie direkt und nur lesend."),
+  ("Geheimnisse bleiben in Windows","API-Schlüssel für Claude oder OpenAI, Passwort des EA-Kontos, Datenbankpasswort und Confluence-Token liegen in der Windows-Anmeldeinformationsverwaltung – nie im Klartext in der Einstellungsdatei."),
+  ("Verschlüsselte Verbindungen","Claude-/OpenAI-API und Confluence werden nur über HTTPS angesprochen. Die Verbindung zu PostgreSQL lässt sich mit TLS verschlüsseln – bevorzugt, erforderlich oder erforderlich mit Prüfung des Serverzertifikats gegen den Windows-Zertifikatspeicher. Eine Modelldatei (.qea, .qeax) braucht keine Datenbankverbindung: Der Assistent liest sie direkt und nur lesend."),
   ("Schreiben nur über EA","Die Datenbanksitzung ist nur lesend, eine Modelldatei wird schreibgeschützt geöffnet. Jede Änderung führt Enterprise Architect aus – bei aktivierter Sicherheit unter dem eingerichteten EA-Konto, mit dessen Berechtigungen und Sperren. Inhalte von Anhängen, Dokumenten und Modell soll der Assistent als Daten behandeln, nicht als Anweisungen."),
-  ("Was an Anthropic geht","Für die Antwort erhält Claude das Gespräch, Ihre Anhänge, gemerkte Vereinbarungen, verwendete Vorlagen, die Ergebnisse der Abfragen des Assistenten und die gezeigten Diagrammbilder – nicht das ganze Modell. Prüfen Sie vor dem Einsatz an Firmenmodellen die Regeln Ihrer Organisation."),
-  ("Ihr eigener API-Schlüssel","Die App nutzt Ihren Claude-API-Schlüssel aus der Anthropic Console. Die App selbst ist kostenlos; die Nutzung von Claude rechnet Anthropic mit dem Konto ab, zu dem der Schlüssel gehört."),
+  ("Was an den KI-Anbieter geht","Für die Antwort erhält der gewählte KI-Anbieter (Anthropic oder OpenAI) das Gespräch, Ihre Anhänge, gemerkte Vereinbarungen, verwendete Vorlagen, die Ergebnisse der Abfragen des Assistenten und die gezeigten Diagrammbilder – nicht das ganze Modell. Prüfen Sie vor dem Einsatz an Firmenmodellen die Regeln Ihrer Organisation."),
+  ("Ihr eigener API-Schlüssel","Die App nutzt Ihren eigenen API-Schlüssel – für Claude aus der Anthropic Console, für OpenAI von der OpenAI-Plattform. Die App selbst ist kostenlos; die Nutzung rechnet der Anbieter mit dem Konto ab, zu dem der Schlüssel gehört."),
  ],
  r_h="Voraussetzungen", r_need="Erforderlich", r_opt="Optional",
  req=[
@@ -457,7 +457,7 @@ T["de"] = dict(
   "Sparx Enterprise Architect mit Lizenz – zum Speichern startet der Assistent EA im Hintergrund (das währenddessen einen Lizenzplatz belegt) oder nutzt bei einer dort geöffneten Modelldatei Ihr EA-Fenster",
   "Ein EA-Modell als Projektdatei .qea oder .qeax oder in einer PostgreSQL-Datenbank mit aktivierter Sicherheit („Require User Lock to Edit“)",
   "Für ein Datenbankmodell: Zugang zur Datenbank (Server, Port, Name, Konto) und ein EA-Benutzerkonto für den Assistenten mit Bearbeitungsrechten; für eine Modelldatei genügt der Pfad (ein Konto nur bei aktivierter Sicherheit)",
-  "Ein Claude-API-Schlüssel aus der Anthropic Console und eine Internetverbindung",
+  "Ein Claude-API-Schlüssel aus der Anthropic Console oder ein OpenAI-API-Schlüssel von der OpenAI-Plattform sowie eine Internetverbindung",
  ],
  opt=[
   "Confluence (Data Center oder Cloud) – zum direkten Veröffentlichen von Seiten",
@@ -469,9 +469,9 @@ T["de"] = dict(
   ("Ist das wirklich kostenlos? Darf ich es beruflich nutzen?",
    '<p>Ja. Loonar Compass ist Freeware: kostenlos für jeden Zweck, auch beruflich und kommerziell, auf beliebig vielen Computern. Sie dürfen die Anwendung auch weitergeben – kostenlos, vollständig, unverändert und zusammen mit den Dateien LICENSE und THIRD-PARTY-NOTICES.</p>'
    '<p>Der Quellcode ist auf <a href="{repo}">GitHub</a> öffentlich, sodass Sie genau sehen, was die Anwendung mit Ihrem Modell macht. Er ist einsehbar (Source-available), aber nicht Open Source: Nicht erlaubt sind Änderungen an der Anwendung und abgeleitete Werke sowie Verkauf oder Vermietung. <a href="{lic}">Lizenz lesen</a>.</p>'),
-  ("Was kostet der Betrieb, und welches Claude-Modell wird verwendet?",
-   '<p>Die Anwendung selbst ist kostenlos. Der Assistent arbeitet mit Ihrem eigenen Claude-API-Schlüssel aus der Anthropic Console; Anthropic rechnet die Nutzung mit dem Konto ab, zu dem der Schlüssel gehört – nach Verbrauch, also nach der Textmenge, die das Modell liest und schreibt. Aktuelle Preise finden Sie auf der <a href="https://claude.com/pricing#api">Preisseite von Anthropic</a>.</p>'
-   '<p>Das Modell ist immer Claude Haiku 5.5 (<code>claude-haiku-5-5</code>) und keine Einstellung. „Max. Tokens“ (standardmäßig 10.000) begrenzt nur die Länge einer einzelnen Antwort: Sie zahlen für den tatsächlich erzeugten Text.</p>'),
+  ("Was kostet der Betrieb, und welches KI-Modell wird verwendet?",
+   '<p>Die Anwendung selbst ist kostenlos. Der Assistent arbeitet mit Ihrem eigenen API-Schlüssel – Claude aus der Anthropic Console oder OpenAI von der OpenAI-Plattform; der Anbieter rechnet die Nutzung mit dem Konto ab, zu dem der Schlüssel gehört – nach Verbrauch, also nach der Textmenge, die das Modell liest und schreibt. Aktuelle Preise finden Sie auf der <a href="https://claude.com/pricing#api">Preisseite von Anthropic</a> und der <a href="https://openai.com/api/pricing/">Preisseite von OpenAI</a>.</p>'
+   '<p>Standard ist Claude Haiku 5.5 (<code>claude-haiku-5-5</code>). Unter Einstellungen → „KI-Modell“ können Sie Anbieter, Modell und Aufwand (Effort) ändern; höherer Aufwand und größere Modelle kosten mehr. „Max. Tokens“ (standardmäßig 10.000) begrenzt nur die Länge einer einzelnen Antwort: Sie zahlen für den tatsächlich erzeugten Text.</p>'),
   ("Unter welchen Betriebssystemen läuft es?",
    '<p>Unter Windows 10 und Windows 11, jeweils 64 Bit. Es ist eine native Windows-Desktopanwendung und arbeitet mit Enterprise Architect zusammen, das auf demselben Computer installiert ist.</p>'),
   ("Welche Enterprise-Architect-Umgebungen werden unterstützt?",
@@ -498,21 +498,21 @@ T["de"] = dict(
    '<li><strong>Baselines:</strong> Vor dem Löschen oder größeren Umbau eines bestehenden Pakets ist der Assistent angewiesen, zuerst eine Baseline davon anzulegen; wiederhergestellt wird sie in EA (Manage Baselines → Compare/Restore).</li></ul>'
    '<p>Trotzdem: Löschen ist endgültig, und KI kann sich irren – die Anwendung weist darauf hin; prüfen Sie die vorgeschlagenen Änderungen daher vor der Freigabe. Nutzen Sie bei wichtigen Modellen den Modus ask und sichern Sie die Datenbank bzw. die Modelldatei – die Anwendung wird unentgeltlich und im vorliegenden Zustand bereitgestellt (Einzelheiten in der Lizenz).</p>'),
   ("Welche Daten verlassen meinen Computer, und wohin gehen sie?",
-   '<p>Für eine Antwort sendet der Assistent an die Claude-API von Anthropic (api.anthropic.com) nur, was er braucht: Ihre Nachrichten und Anhänge, gemerkte Vereinbarungen, verwendete Vorlagen und das, was er in dieser Unterhaltung aus dem Modell gelesen hat – die Ergebnisse seiner Abfragen am Modell (Namen und Beschreibungen von Paketen, Elementen, Diagrammen) und Bilder der gezeigten Diagramme. Nicht das ganze Modell. Nach einem Sprachwechsel gehen auch Gedächtnis und Vorlagen zur Übersetzung dorthin.</p>'
-   '<p>Darüber hinaus gehen Daten nur dorthin, wohin Sie sie schicken: veröffentlichte Seiten in Ihr Confluence; Fehlermeldungen und die Newsletter-Anmeldung sind E-Mails, die Sie in Ihrem E-Mail-Programm prüfen und selbst senden. Von sich aus sendet die Anwendung nichts an Loonar. Prüfen Sie vor dem Einsatz an Firmenmodellen die Regeln Ihrer Organisation und die Datenverarbeitungsbedingungen Ihres Anthropic-Kontos.</p>'),
+   '<p>Für eine Antwort sendet der Assistent an den in den Einstellungen gewählten KI-Anbieter – die Claude-API von Anthropic (api.anthropic.com) oder die OpenAI-API (api.openai.com) – nur, was er braucht: Ihre Nachrichten und Anhänge, gemerkte Vereinbarungen, verwendete Vorlagen und das, was er in dieser Unterhaltung aus dem Modell gelesen hat – die Ergebnisse seiner Abfragen am Modell (Namen und Beschreibungen von Paketen, Elementen, Diagrammen) und Bilder der gezeigten Diagramme. Nicht das ganze Modell. Nach einem Sprachwechsel gehen auch Gedächtnis und Vorlagen zur Übersetzung dorthin.</p>'
+   '<p>Darüber hinaus gehen Daten nur dorthin, wohin Sie sie schicken: veröffentlichte Seiten in Ihr Confluence; Fehlermeldungen und die Newsletter-Anmeldung sind E-Mails, die Sie in Ihrem E-Mail-Programm prüfen und selbst senden. Von sich aus sendet die Anwendung nichts an Loonar. Prüfen Sie vor dem Einsatz an Firmenmodellen die Regeln Ihrer Organisation und die Datenverarbeitungsbedingungen Ihres Anthropic- bzw. OpenAI-Kontos.</p>'),
   ("Wo werden Einstellungen, Unterhaltungen und Passwörter gespeichert?",
    '<p>Auf Ihrem Computer, in Ihrem Windows-Benutzerprofil – jeder Benutzer des Computers hat eigene:</p>'
    '<ul><li><code>%APPDATA%\\Loonar Compass</code>: Einstellungen (app.properties), Unterhaltungsverlauf, Anhänge, Gedächtnis des Assistenten, Dokumentvorlagen und Änderungsprotokoll.</li>'
-   '<li>Windows-Anmeldeinformationsverwaltung: Claude-API-Schlüssel, Passwort des EA-Kontos, Datenbankpasswort und Confluence-Token sowie die Passwörter eines Unterhaltungsmodells, das von den Einstellungen abweicht. Keines davon steht im Klartext in der Einstellungsdatei.</li></ul>'
+   '<li>Windows-Anmeldeinformationsverwaltung: API-Schlüssel für Claude und OpenAI, Passwort des EA-Kontos, Datenbankpasswort und Confluence-Token sowie die Passwörter eines Unterhaltungsmodells, das von den Einstellungen abweicht. Keines davon steht im Klartext in der Einstellungsdatei.</li></ul>'
    '<p>Das Programm selbst liegt standardmäßig unter <code>%LOCALAPPDATA%\\Programs\\Loonar Compass</code>, bei einer Installation für alle Benutzer unter C:\\Program Files\\Loonar Compass.</p>'),
   ("Ist die Kommunikation verschlüsselt?",
    '<p>Ja, überall dort, wo die Anwendung selbst Verbindungen aufbaut:</p>'
-   '<ul><li><strong>Claude-API und Confluence:</strong> nur über HTTPS. Eine Confluence-Adresse mit <code>http://</code> wird nur für einen Server auf demselben Computer (localhost) akzeptiert.</li>'
+   '<ul><li><strong>Claude-/OpenAI-API und Confluence:</strong> nur über HTTPS. Eine Confluence-Adresse mit <code>http://</code> wird nur für einen Server auf demselben Computer (localhost) akzeptiert.</li>'
    '<li><strong>Modelldatenbank (PostgreSQL):</strong> TLS, einstellbar mit „Verschlüsselung der Verbindung“ auf der Karte „2. Modell“ in den Einstellungen (Option „PostgreSQL-Datenbank“): „Bevorzugt“ (Standard) – TLS, sofern der Server es anbietet, sonst eine unverschlüsselte Verbindung; „Erforderlich“ – TLS oder keine Verbindung; „Erforderlich, mit Zertifikatsprüfung“ – TLS, wobei Zertifikat und Name des Servers gegen den Windows-Zertifikatspeicher geprüft werden, einschließlich der Zertifikate Ihres Unternehmens. „Bevorzugt“ und „Erforderlich“ prüfen das Zertifikat nicht. Nach „Speichern und Verbindung prüfen“ zeigt die Anwendung an, ob die Verbindung verschlüsselt ist. In app.properties heißt die Einstellung <code>db.sslmode</code> = <code>prefer</code>, <code>require</code> oder <code>verify-full</code>.</li>'
    '<li><strong>Modelldatei (.qea, .qeax):</strong> keine Datenbankverbindung – der Assistent liest die Datei direkt und nur lesend.</li></ul>'
    '<p>Tipp für Datenbankadministratoren: Mit <code>hostssl</code>-Einträgen in pg_hba.conf nimmt der Server von allen Clients nur TLS-Verbindungen an. Die eigene Verbindung von Enterprise Architect zur Datenbank richtet sich nach den Einstellungen von EA, nicht nach denen der Anwendung.</p>'),
   ("Funktioniert es hinter einem Firmen-Proxy oder einer Firewall?",
-   '<p>Benötigt werden diese Verbindungen: HTTPS (Port 443) zu api.anthropic.com, bei einem Datenbankmodell zu Ihrem PostgreSQL-Server (standardmäßig Port 5432; direkt, nicht über den Proxy) und – wenn Sie Seiten veröffentlichen – zu Ihrem Confluence.</p>'
+   '<p>Benötigt werden diese Verbindungen: HTTPS (Port 443) zu api.anthropic.com oder api.openai.com (je nach Anbieter), bei einem Datenbankmodell zu Ihrem PostgreSQL-Server (standardmäßig Port 5432; direkt, nicht über den Proxy) und – wenn Sie Seiten veröffentlichen – zu Ihrem Confluence.</p>'
    '<p>Für HTTPS verwendet die Anwendung den Proxy aus den Windows-Internetoptionen (System-Proxy). Sie können auch die Umgebungsvariable <code>HTTPS_PROXY</code> oder <code>ALL_PROXY</code> setzen, z.\u00a0B. <code>http://proxy.example.com:8080</code> (Ausnahmen in <code>NO_PROXY</code>); sie hat Vorrang vor dem System-Proxy. Starten Sie die Anwendung nach einer Änderung neu. Bei Standardauthentifizierung (Basic) können Benutzername und Passwort Teil der Adresse in dieser Variablen sein; automatische Erkennung und Skripte zur automatischen Konfiguration (WPAD, PAC) sowie die Proxy-Anmeldung mit dem Windows-Konto (NTLM, Kerberos) werden nicht unterstützt.</p>'
    '<p>HTTPS-Zertifikate werden auch gegen den Windows-Zertifikatspeicher geprüft – ein firmeneigenes Stammzertifikat für die Prüfung des Datenverkehrs wird also akzeptiert, sobald es in Windows installiert ist.</p>'),
   ("In welchen Sprachen gibt es die Anwendung?",
@@ -526,7 +526,7 @@ T["de"] = dict(
   ("Wie deinstalliere ich es, und was bleibt auf dem Computer?",
    '<p>Schließen Sie die Anwendung und verwenden Sie „Loonar Compass deinstallieren“ im Startmenü oder den Eintrag unter Windows-Einstellungen → Apps → Installierte Apps. Entfernt werden Programmdateien, Verknüpfungen und der Systemeintrag. Ihre Daten bleiben erhalten, es sei denn, Sie aktivieren eine dieser Optionen:</p>'
    '<ul><li>„Einstellungen, Unterhaltungen, Anhänge, Gedächtnis des Assistenten, Dokumentvorlagen und Änderungsprotokoll entfernen“ – löscht den ganzen Ordner <code>%APPDATA%\\Loonar Compass</code>;</li>'
-   '<li>„API-Schlüssel, Passwörter und Tokens aus der Anmeldeinformationsverwaltung entfernen“ – Claude-API-Schlüssel, Passwörter des EA-Kontos und der Datenbank sowie Confluence-Token.</li></ul>'
+   '<li>„API-Schlüssel, Passwörter und Tokens aus der Anmeldeinformationsverwaltung entfernen“ – API-Schlüssel für Claude und OpenAI, Passwörter des EA-Kontos und der Datenbank sowie Confluence-Token.</li></ul>'
    '<p>Ihr EA-Modell, anderswo gespeicherte Dateien und in Confluence veröffentlichte Seiten bleiben unberührt.</p>'),
   ("Wie melde ich einen Fehler, und wie erfahre ich von neuen Versionen?",
    '<p>Öffnen Sie in der Anwendung „Fehler melden“ in der Navigationsleiste, beschreiben Sie, was passiert ist, fügen Sie Screenshots hinzu und klicken Sie auf „Meldung senden“: In Ihrem Standard-E-Mail-Programm öffnet sich eine fertige Nachricht an mariusz@loonar.eu, die Sie prüfen und senden. Technische Informationen (Anwendungsversion, Windows-Version, KI-Modell, Freigabemodus, letzte Meldung – ohne Passwörter und Schlüssel) werden nur angehängt, solange diese Option aktiviert ist (standardmäßig ja).</p>'
@@ -556,7 +556,7 @@ T["de"] = dict(
  ab_li="Mariusz Głowacki auf LinkedIn",
  c_h="Kontakt", c_text='Fragen, Ideen oder einen Fehler gefunden? Schreiben Sie an <a href="mailto:mariusz@loonar.eu">mariusz@loonar.eu</a> – oder nutzen Sie „Fehler melden“ in der App.',
  f_addr="ul. Gombrowicza 12, 73-110 Stargard, Polen",
- f_tm="Sparx Systems und Enterprise Architect sind eingetragene Marken der Sparx Systems Pty Ltd. Claude und Anthropic sind Marken der Anthropic, PBC. Atlassian und Confluence sind Marken von Atlassian. Microsoft, Windows, Word, Excel, GitHub und LinkedIn sind Marken der Microsoft-Unternehmensgruppe. PostgreSQL ist eine eingetragene Marke der PostgreSQL Community Association. Loonar Compass ist ein unabhängiges Produkt, steht in keiner Verbindung zu diesen Unternehmen und wird von ihnen weder unterstützt noch gesponsert.",
+ f_tm="Sparx Systems und Enterprise Architect sind eingetragene Marken der Sparx Systems Pty Ltd. Claude und Anthropic sind Marken der Anthropic, PBC. OpenAI ist eine Marke von OpenAI. Atlassian und Confluence sind Marken von Atlassian. Microsoft, Windows, Word, Excel, GitHub und LinkedIn sind Marken der Microsoft-Unternehmensgruppe. PostgreSQL ist eine eingetragene Marke der PostgreSQL Community Association. Loonar Compass ist ein unabhängiges Produkt, steht in keiner Verbindung zu diesen Unternehmen und wird von ihnen weder unterstützt noch gesponsert.",
  f_stats="Keine Cookies. Anonyme Besuchsstatistik (GoatCounter), die keine personenbezogenen Daten dauerhaft speichert. Ihre Sprachwahl merkt sich Ihr Browser.",
  f_privacy_link="Datenschutz", f_legal_link="Impressum",
  f_top="Nach oben",
@@ -568,11 +568,11 @@ T["de"] = dict(
  m_convs=["Bestellprozess (BPMN)","Anforderungen aus einem PDF","Auswirkung: Zahlungsdienst"],
  m_user="Zeichne den Bestellprozess unseres Onlineshops als BPMN im Paket <b>Vertrieb</b>. Die Zahlung bitte als eingebetteten Teilprozess.",
  m_steps_h="Schritte der letzten Antwort: 3",
- m_steps=["Claude analysiert und plant (Schritt 1)","Lesen der Modelldatenbank: Paket Vertrieb","Speichern in EA, 14 Operationen: Diagramm Bestellprozess"],
+ m_steps=["Der Assistent analysiert und plant (Schritt 1)","Lesen der Modelldatenbank: Paket Vertrieb","Speichern in EA, 14 Operationen: Diagramm Bestellprozess"],
  m_bot="Fertig. Im Paket <b>Vertrieb</b> gibt es ein neues BPMN-Diagramm <b>Bestellprozess</b>: 3 Tasks, ein Gateway und den eingebetteten Teilprozess <b>Zahlung</b> mit 3 Schritten. Ich habe es in Ihrem EA-Fenster geöffnet.",
  m_ph="Nachricht schreiben, Dateien hineinziehen oder Bild einfügen (Strg+V)…",
  m_mode="claude-haiku-5-5 · Modus ask",
- m_appr_h="Claude möchte Änderungen im Modell speichern",
+ m_appr_h="Der Assistent möchte Änderungen im Modell speichern",
  m_appr=["Neues BPMN-Diagramm „Bestellprozess“ im Paket Vertrieb","3 Tasks, 1 Gateway, Start- und Endereignis","Eingebetteter Teilprozess „Zahlung“ mit 3 Schritten","9 Sequenzflüsse"],
  m_approve="Freigeben", m_reject="Ablehnen",
  m_saveas="Speichern unter…", m_full="In voller Größe öffnen", m_png="Bestellprozess.png",
@@ -588,7 +588,7 @@ T["de"] = dict(
 T["fr"] = dict(
  locale="fr_FR", name_lang="Français",
  title="Loonar Compass – assistant IA pour Sparx Enterprise Architect",
- desc="Application Windows gratuite : dialoguez avec votre modèle Sparx Enterprise Architect. Posez des questions, créez et modifiez des diagrammes via EA, validez chaque modification. Utilise l’API Claude d’Anthropic avec votre propre clé API.",
+ desc="Application Windows gratuite : dialoguez avec votre modèle Sparx Enterprise Architect. Posez des questions, créez et modifiez des diagrammes via EA, validez chaque modification. Utilise Claude (Anthropic) ou OpenAI avec votre propre clé API.",
  og_desc="Parlez à votre modèle Enterprise Architect : questionnez, dessinez, documentez — chaque modification est enregistrée par EA et validée par vous.",
  skip="Aller au contenu", lang_label="Langue",
  nav=["Fonctionnalités","Fonctionnement","Sécurité","Prérequis","FAQ","Soutenir"], nav_dl="Télécharger",
@@ -596,7 +596,7 @@ T["fr"] = dict(
  h1='L’assistant IA pour Sparx Enterprise Architect — <em>parlez à votre modèle</em>',
  lead="Posez vos questions en langage naturel, faites dessiner et remanier vos diagrammes, transformez le modèle en documents. Chaque modification est enregistrée par Enterprise Architect lui-même — et seulement après votre validation.",
  cta1="Télécharger gratuitement", cta2="Découvrir les fonctionnalités",
- meta="Version <a href=\"{changelog}\">{ver}</a> · Windows 10/11 · utilise l’API Claude d’Anthropic avec votre propre clé API",
+ meta="Version <a href=\"{changelog}\">{ver}</a> · Windows 10/11 · utilise Claude (Anthropic) ou OpenAI avec votre propre clé API",
  hero_alt="Illustration de la fenêtre de Loonar Compass : une demande de dessiner en BPMN le processus de commande d’une boutique en ligne, la liste des étapes et la réponse de l’assistant.",
  f_h="Ce qu’il sait faire", f_sub="Une conversation au lieu de dizaines de boîtes de dialogue — de la question rapide au diagramme complet et homogène.",
  features=[
@@ -616,7 +616,7 @@ T["fr"] = dict(
  h_h="Comment ça marche", h_sub="Vous gardez la main à chaque étape.",
  steps=[
   ("Vous demandez","Saisissez une question ou une tâche ; joignez un PDF, une capture d’écran, un croquis ou un fichier BPMN."),
-  ("Claude planifie","Le modèle Claude décide quoi consulter et quoi modifier. Vous suivez chaque étape en direct dans le chat."),
+  ("Le modèle d’IA planifie","Le modèle d’IA que vous choisissez — Claude ou OpenAI — décide quoi consulter et quoi modifier. Vous suivez chaque étape en direct dans le chat."),
   ("Il lit et écrit le modèle","Lecture directe du référentiel PostgreSQL ou du fichier .qea/.qeax (en lecture seule) ; écriture uniquement à travers Enterprise Architect (COM)."),
   ("Vous validez","Vous voyez les modifications prévues, vous les validez ou les refusez. L’enregistrement est consigné au journal et apparaît aussitôt dans votre fenêtre EA."),
  ],
@@ -625,11 +625,11 @@ T["fr"] = dict(
  sec_h="Sécurité et confidentialité", sec_sub="Votre modèle reste où il est. L’assistant travaille sur votre ordinateur, avec vos comptes.",
  sec=[
   ("Fonctionne en local","Une application de bureau pour Windows, installée pour votre compte utilisateur. Paramètres, historique des conversations, mémoire et journal des modifications sont stockés dans votre profil utilisateur."),
-  ("Les secrets restent dans Windows","La clé API Claude, le mot de passe du compte EA, le mot de passe de la base et le jeton Confluence sont conservés dans le Gestionnaire d’identification Windows — jamais en clair dans le fichier de paramètres."),
-  ("Connexions chiffrées","L’API Claude et Confluence ne sont utilisés qu’en HTTPS. La connexion à PostgreSQL peut être chiffrée en TLS — de préférence, obligatoirement, ou obligatoirement avec vérification du certificat du serveur dans le magasin de certificats Windows. Un fichier de modèle (.qea, .qeax) ne demande aucune connexion à une base : l’assistant le lit directement, en lecture seule."),
+  ("Les secrets restent dans Windows","La clé API Claude ou OpenAI, le mot de passe du compte EA, le mot de passe de la base et le jeton Confluence sont conservés dans le Gestionnaire d’identification Windows — jamais en clair dans le fichier de paramètres."),
+  ("Connexions chiffrées","L’API Claude/OpenAI et Confluence ne sont utilisés qu’en HTTPS. La connexion à PostgreSQL peut être chiffrée en TLS — de préférence, obligatoirement, ou obligatoirement avec vérification du certificat du serveur dans le magasin de certificats Windows. Un fichier de modèle (.qea, .qeax) ne demande aucune connexion à une base : l’assistant le lit directement, en lecture seule."),
   ("Écriture uniquement via EA","La session de base de données est en lecture seule, et un fichier de modèle est ouvert en lecture seule. Chaque modification est effectuée par Enterprise Architect — si la sécurité est activée, avec le compte EA configuré, ses droits et ses verrous. Le contenu des pièces jointes, des documents et du modèle est traité comme des données, et non comme des instructions."),
-  ("Ce qui est envoyé à Anthropic","Pour répondre, Claude reçoit la conversation, vos pièces jointes, les notes mémorisées, les modèles utilisés, les résultats des requêtes de l’assistant et les images de diagrammes affichées — pas tout le modèle. Vérifiez les règles de votre organisation avant de l’utiliser sur des modèles d’entreprise."),
-  ("Votre propre clé API","L’application utilise votre clé API Claude issue de la console Anthropic. L’application est gratuite ; Anthropic facture l’utilisation de Claude au compte auquel appartient la clé."),
+  ("Ce qui est envoyé au fournisseur d’IA","Pour répondre, le fournisseur d’IA choisi (Anthropic ou OpenAI) reçoit la conversation, vos pièces jointes, les notes mémorisées, les modèles utilisés, les résultats des requêtes de l’assistant et les images de diagrammes affichées — pas tout le modèle. Vérifiez les règles de votre organisation avant de l’utiliser sur des modèles d’entreprise."),
+  ("Votre propre clé API","L’application utilise votre propre clé API — pour Claude, issue de la console Anthropic ; pour OpenAI, de la plateforme OpenAI. L’application est gratuite ; le fournisseur facture l’utilisation au compte auquel appartient la clé."),
  ],
  r_h="Prérequis", r_need="Indispensable", r_opt="Facultatif",
  req=[
@@ -637,7 +637,7 @@ T["fr"] = dict(
   "Sparx Enterprise Architect avec licence — pour enregistrer, l’assistant lance EA en arrière-plan (EA occupe alors une place de licence) ou, pour un fichier de modèle ouvert dans votre EA, passe par votre fenêtre",
   "Un modèle EA sous forme de fichier de projet .qea ou .qeax, ou dans une base PostgreSQL avec la sécurité activée (« Require User Lock to Edit »)",
   "Pour un modèle en base : l’accès à la base (serveur, port, nom, compte) et un compte utilisateur EA pour l’assistant, avec droits de modification ; pour un fichier de modèle, son chemin suffit (un compte seulement si la sécurité est activée)",
-  "Une clé API Claude de la console Anthropic et une connexion Internet",
+  "Une clé API Claude de la console Anthropic ou une clé API OpenAI de la plateforme OpenAI, et une connexion Internet",
  ],
  opt=[
   "Confluence (Data Center ou Cloud) — pour publier directement des pages",
@@ -649,9 +649,9 @@ T["fr"] = dict(
   ("Est-ce vraiment gratuit ? Puis-je l’utiliser au travail ?",
    '<p>Oui. Loonar Compass est un freeware : gratuit pour tout usage, y compris professionnel et commercial, sur autant d’ordinateurs que vous le souhaitez. Vous pouvez aussi le transmettre à d’autres personnes — gratuitement, en entier, sans modification et avec le fichier de licence.</p>'
    '<p>Le code source est public sur <a href="{repo}">GitHub</a> : vous pouvez voir exactement ce que l’application fait de votre modèle. Il est consultable (source-available), mais ce n’est pas de l’open source : sont interdites la modification de l’application et la création d’œuvres dérivées, ainsi que sa vente ou sa location. <a href="{lic}">Lire la licence</a>.</p>'),
-  ("Combien coûte son utilisation, et quel modèle Claude utilise-t-il ?",
-   '<p>L’application est gratuite. L’assistant fonctionne avec votre propre clé API Claude, issue de la console Anthropic, et Anthropic facture l’utilisation au compte auquel appartient la clé — à la consommation, c’est-à-dire selon la quantité de texte que le modèle lit et écrit. Les tarifs actuels figurent sur la <a href="https://claude.com/pricing#api">page de tarifs d’Anthropic</a>.</p>'
-   '<p>Le modèle est toujours Claude Haiku 5.5 (<code>claude-haiku-5-5</code>) ; ce n’est pas un paramètre. « Jetons max. » (10\u202f000 par défaut) limite seulement la longueur d’une réponse : vous payez le texte réellement généré.</p>'),
+  ("Combien coûte son utilisation, et quel modèle d’IA utilise-t-il ?",
+   '<p>L’application est gratuite. L’assistant fonctionne avec votre propre clé API — Claude, issue de la console Anthropic, ou OpenAI, issue de la plateforme OpenAI — et le fournisseur facture l’utilisation au compte auquel appartient la clé : à la consommation, c’est-à-dire selon la quantité de texte que le modèle lit et écrit. Les tarifs actuels figurent sur la <a href="https://claude.com/pricing#api">page de tarifs d’Anthropic</a> et la <a href="https://openai.com/api/pricing/">page de tarifs d’OpenAI</a>.</p>'
+   '<p>Par défaut, c’est Claude Haiku 5.5 (<code>claude-haiku-5-5</code>). Dans Paramètres → « Modèle d’IA », vous pouvez changer le fournisseur, le modèle et le niveau d’effort ; un effort plus élevé et des modèles plus grands coûtent plus cher. « Jetons max. » (10\u202f000 par défaut) limite seulement la longueur d’une réponse : vous payez le texte réellement généré.</p>'),
   ("Sur quels systèmes fonctionne-t-il ?",
    '<p>Sur Windows 10 et Windows 11, en 64 bits. C’est une application de bureau Windows native, qui travaille avec Enterprise Architect installé sur le même ordinateur.</p>'),
   ("Quelles configurations d’Enterprise Architect sont prises en charge ?",
@@ -678,21 +678,21 @@ T["fr"] = dict(
    '<li><strong>Baselines :</strong> avant de supprimer ou de restructurer en profondeur un paquetage existant, l’assistant a pour consigne d’en créer d’abord une baseline ; vous la restaurez dans EA (Manage Baselines → Compare/Restore).</li></ul>'
    '<p>Cela dit, une suppression est définitive et l’IA peut se tromper — l’application le rappelle : relisez donc les modifications proposées avant de les valider. Pour les modèles importants, utilisez le mode ask et sauvegardez la base ou le fichier du modèle — l’application est fournie sans garantie.</p>'),
   ("Quelles données quittent mon ordinateur, et où vont-elles ?",
-   '<p>Pour répondre, l’assistant envoie à l’API Claude d’Anthropic (api.anthropic.com) uniquement ce dont il a besoin : vos messages et pièces jointes, les notes mémorisées, les modèles de documents utilisés et ce qu’il a lu dans le modèle au cours de la conversation — les résultats de ses requêtes sur le modèle (noms et descriptions des paquetages, éléments, diagrammes) et les images des diagrammes affichés. Pas tout le modèle. Après un changement de langue, la mémoire et les modèles de documents sont aussi envoyés pour traduction.</p>'
-   '<p>Pour le reste, les données ne vont que là où vous les envoyez : les pages publiées dans votre Confluence ; les signalements de bug et l’inscription à la newsletter sont des e-mails que vous vérifiez et envoyez vous-même depuis votre messagerie. L’application n’envoie rien d’elle-même à Loonar. Avant de l’utiliser sur des modèles d’entreprise, vérifiez les règles de votre organisation et les conditions de traitement des données de votre compte Anthropic.</p>'),
+   '<p>Pour répondre, l’assistant envoie au fournisseur d’IA choisi dans les Paramètres — l’API Claude d’Anthropic (api.anthropic.com) ou l’API OpenAI (api.openai.com) — uniquement ce dont il a besoin : vos messages et pièces jointes, les notes mémorisées, les modèles de documents utilisés et ce qu’il a lu dans le modèle au cours de la conversation — les résultats de ses requêtes sur le modèle (noms et descriptions des paquetages, éléments, diagrammes) et les images des diagrammes affichés. Pas tout le modèle. Après un changement de langue, la mémoire et les modèles de documents sont aussi envoyés pour traduction.</p>'
+   '<p>Pour le reste, les données ne vont que là où vous les envoyez : les pages publiées dans votre Confluence ; les signalements de bug et l’inscription à la newsletter sont des e-mails que vous vérifiez et envoyez vous-même depuis votre messagerie. L’application n’envoie rien d’elle-même à Loonar. Avant de l’utiliser sur des modèles d’entreprise, vérifiez les règles de votre organisation et les conditions de traitement des données de votre compte Anthropic ou OpenAI.</p>'),
   ("Où sont stockés mes paramètres, mes conversations et mes mots de passe ?",
    '<p>Sur votre ordinateur, dans votre profil utilisateur Windows — chaque utilisateur de l’ordinateur a les siens :</p>'
    '<ul><li><code>%APPDATA%\\Loonar Compass</code> : paramètres (app.properties), historique des conversations, pièces jointes, mémoire de l’assistant, modèles de documents et journal des modifications.</li>'
-   '<li>Gestionnaire d’identification Windows : la clé API Claude, le mot de passe du compte EA, le mot de passe de la base et le jeton Confluence, ainsi que les mots de passe du modèle d’une conversation qui diffère des Paramètres. Aucun d’eux n’est enregistré en clair dans le fichier de paramètres.</li></ul>'
+   '<li>Gestionnaire d’identification Windows : les clés API Claude et OpenAI, le mot de passe du compte EA, le mot de passe de la base et le jeton Confluence, ainsi que les mots de passe du modèle d’une conversation qui diffère des Paramètres. Aucun d’eux n’est enregistré en clair dans le fichier de paramètres.</li></ul>'
    '<p>Le programme lui-même s’installe par défaut dans <code>%LOCALAPPDATA%\\Programs\\Loonar Compass</code>, ou dans C:\\Program Files\\Loonar Compass s’il est installé pour tous les utilisateurs.</p>'),
   ("Les communications sont-elles chiffrées ?",
    '<p>Oui, partout où l’application établit elle-même une connexion :</p>'
-   '<ul><li><strong>API Claude et Confluence :</strong> uniquement en HTTPS. Une adresse Confluence en <code>http://</code> n’est acceptée que pour un serveur situé sur le même ordinateur (localhost).</li>'
+   '<ul><li><strong>API Claude/OpenAI et Confluence :</strong> uniquement en HTTPS. Une adresse Confluence en <code>http://</code> n’est acceptée que pour un serveur situé sur le même ordinateur (localhost).</li>'
    '<li><strong>Base de données du modèle (PostgreSQL) :</strong> TLS, à régler avec « Chiffrement de la connexion » sur la carte « 2. Modèle » des Paramètres (option « Base PostgreSQL ») : « Préféré » (par défaut) — TLS dès que le serveur le propose, sinon une connexion non chiffrée ; « Obligatoire » — TLS ou pas de connexion ; « Obligatoire, certificat vérifié » — TLS, avec vérification du certificat et du nom du serveur dans le magasin de certificats Windows, y compris les certificats de votre entreprise. « Préféré » et « Obligatoire » ne vérifient pas le certificat. Après « Enregistrer et tester la connexion », l’application indique si la connexion est chiffrée. Dans app.properties, le paramètre est <code>db.sslmode</code> = <code>prefer</code>, <code>require</code> ou <code>verify-full</code>.</li>'
    '<li><strong>Fichier du modèle (.qea, .qeax) :</strong> aucune connexion à une base — l’assistant lit le fichier directement, en lecture seule.</li></ul>'
    '<p>Conseil pour les administrateurs de bases de données : avec des entrées <code>hostssl</code> dans pg_hba.conf, le serveur n’accepte que des connexions TLS, quel que soit le client. La connexion propre d’Enterprise Architect à la base suit les paramètres d’EA, et non ceux de l’application.</p>'),
   ("Fonctionne-t-il derrière un proxy ou un pare-feu d’entreprise ?",
-   '<p>Il faut autoriser ces connexions : HTTPS (port 443) vers api.anthropic.com, pour un modèle en base votre serveur PostgreSQL (port 5432 par défaut ; connexion directe, pas via le proxy) et, si vous publiez des pages, votre Confluence.</p>'
+   '<p>Il faut autoriser ces connexions : HTTPS (port 443) vers api.anthropic.com ou api.openai.com (selon le fournisseur), pour un modèle en base votre serveur PostgreSQL (port 5432 par défaut ; connexion directe, pas via le proxy) et, si vous publiez des pages, votre Confluence.</p>'
    '<p>Pour le HTTPS, l’application utilise le proxy défini dans les options Internet de Windows (proxy système). Vous pouvez aussi définir la variable d’environnement <code>HTTPS_PROXY</code> ou <code>ALL_PROXY</code>, par exemple <code>http://proxy.example.com:8080</code> (exceptions dans <code>NO_PROXY</code>) ; elle a priorité sur le proxy système. Redémarrez l’application après une modification. Avec une authentification de base (basic), le nom d’utilisateur et le mot de passe peuvent figurer dans l’adresse de cette variable ; la détection automatique et les scripts de configuration automatique (WPAD, PAC) ainsi que l’authentification au proxy avec le compte Windows (NTLM, Kerberos) ne sont pas pris en charge.</p>'
    '<p>Les certificats HTTPS sont aussi vérifiés avec le magasin de certificats Windows : un certificat racine d’entreprise utilisé pour l’inspection du trafic est donc accepté dès qu’il est installé dans Windows.</p>'),
   ("Dans quelles langues est-il disponible ?",
@@ -706,7 +706,7 @@ T["fr"] = dict(
   ("Comment le désinstaller, et que reste-t-il sur l’ordinateur ?",
    '<p>Fermez l’application, puis utilisez « Désinstaller Loonar Compass » dans le menu Démarrer ou son entrée dans Paramètres Windows → Applications → Applications installées. Les fichiers du programme, les raccourcis et l’entrée système sont supprimés. Vos données restent, sauf si vous cochez l’une de ces options :</p>'
    '<ul><li>« Supprimer les paramètres, les conversations, les pièces jointes, la mémoire de l’assistant, les modèles de documents et le journal des modifications » — efface tout le dossier <code>%APPDATA%\\Loonar Compass</code> ;</li>'
-   '<li>« Supprimer la clé API, les mots de passe et les jetons du Gestionnaire d’identification » — la clé API Claude, les mots de passe du compte EA et de la base, et le jeton Confluence.</li></ul>'
+   '<li>« Supprimer la clé API, les mots de passe et les jetons du Gestionnaire d’identification » — les clés API Claude et OpenAI, les mots de passe du compte EA et de la base, et le jeton Confluence.</li></ul>'
    '<p>Votre modèle EA, les fichiers enregistrés ailleurs et les pages publiées dans Confluence ne sont pas touchés.</p>'),
   ("Comment signaler un bug ou être informé des nouvelles versions ?",
    '<p>Dans l’application, ouvrez « Signaler un bug » dans la barre de navigation, décrivez ce qui s’est passé, ajoutez des captures d’écran et cliquez sur « Envoyer le signalement » : un message prêt à partir vers mariusz@loonar.eu s’ouvre dans votre messagerie par défaut ; vous le vérifiez et l’envoyez. Les informations techniques (version de l’application, version de Windows, modèle d’IA, mode de validation, dernier message — sans mots de passe ni clés) ne sont jointes que si cette option reste cochée (elle l’est par défaut).</p>'
@@ -736,7 +736,7 @@ T["fr"] = dict(
  ab_li="Mariusz Głowacki sur LinkedIn",
  c_h="Contact", c_text='Une question, une idée, un bug ? Écrivez à <a href="mailto:mariusz@loonar.eu">mariusz@loonar.eu</a> — ou utilisez « Signaler un bug » dans l’application.',
  f_addr="ul. Gombrowicza 12, 73-110 Stargard, Pologne",
- f_tm="Sparx Systems et Enterprise Architect sont des marques déposées de Sparx Systems Pty Ltd. Claude et Anthropic sont des marques d’Anthropic, PBC. Atlassian et Confluence sont des marques d’Atlassian. Microsoft, Windows, Word, Excel, GitHub et LinkedIn sont des marques du groupe Microsoft. PostgreSQL est une marque déposée de la PostgreSQL Community Association. Loonar Compass est un produit indépendant, sans lien avec ces sociétés, qui ne l’approuvent ni ne le parrainent.",
+ f_tm="Sparx Systems et Enterprise Architect sont des marques déposées de Sparx Systems Pty Ltd. Claude et Anthropic sont des marques d’Anthropic, PBC. OpenAI est une marque d’OpenAI. Atlassian et Confluence sont des marques d’Atlassian. Microsoft, Windows, Word, Excel, GitHub et LinkedIn sont des marques du groupe Microsoft. PostgreSQL est une marque déposée de la PostgreSQL Community Association. Loonar Compass est un produit indépendant, sans lien avec ces sociétés, qui ne l’approuvent ni ne le parrainent.",
  f_stats="Pas de cookies. Statistiques de visite anonymes (GoatCounter), qui ne conservent aucune donnée personnelle. Votre choix de langue est mémorisé par votre navigateur.",
  f_privacy_link="Confidentialité", f_legal_link="Mentions légales",
  f_top="Haut de page",
@@ -748,11 +748,11 @@ T["fr"] = dict(
  m_convs=["Processus de commande (BPMN)","Exigences d’un PDF","Impact : service de paiement"],
  m_user="Dessine le processus de commande de notre boutique en ligne en BPMN dans le paquetage <b>Ventes</b>. Le paiement doit être un sous-processus intégré.",
  m_steps_h="Étapes de la dernière réponse : 3",
- m_steps=["Claude analyse et planifie (étape 1)","Lecture de la base de données du modèle : paquetage Ventes","Enregistrement dans EA, 14 opérations : diagramme Processus de commande"],
+ m_steps=["L’assistant analyse et planifie (étape 1)","Lecture de la base de données du modèle : paquetage Ventes","Enregistrement dans EA, 14 opérations : diagramme Processus de commande"],
  m_bot="C’est fait. Le paquetage <b>Ventes</b> contient un nouveau diagramme BPMN <b>Processus de commande</b> : 3 tâches, une passerelle et le sous-processus intégré <b>Paiement</b> en 3 étapes. Je l’ai ouvert dans votre fenêtre EA.",
  m_ph="Écrivez un message, glissez des fichiers ou collez une image (Ctrl+V)…",
  m_mode="claude-haiku-5-5 · mode ask",
- m_appr_h="Claude veut enregistrer des modifications dans le modèle",
+ m_appr_h="L’assistant veut enregistrer des modifications dans le modèle",
  m_appr=["Nouveau diagramme BPMN « Processus de commande » dans Ventes","3 tâches, 1 passerelle, événements de début et de fin","Sous-processus intégré « Paiement » en 3 étapes","9 flux de séquence"],
  m_approve="Valider", m_reject="Refuser",
  m_saveas="Enregistrer sous…", m_full="Ouvrir en taille réelle", m_png="Processus de commande.png",

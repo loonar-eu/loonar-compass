@@ -53,7 +53,7 @@
       <nav class="docs-tabs"><a href="index.html" aria-current="page">User guide</a><a href="install.html">Installation</a></nav>
       <details class="docs-ver"><summary>Version: 0.7 (latest)</summary><ul><li><a href="./" aria-current="page">0.7 (latest)</a></li><li><a href="../../0.6/en/">0.6</a></li><li><a href="../../0.5/en/">0.5</a></li><li><a href="../../0.4/en/">0.4</a></li><li><a href="../../0.3/en/">0.3</a></li></ul></details>
       <p class="docs-toc-h">On this page</p>
-      <ol class="docs-toc"><li><a href="#s1">1. What Loonar Compass is</a></li><li class="docs-toc-other"><a href="install.html#s2">2. Requirements <span aria-hidden="true">↗</span></a></li><li class="docs-toc-other"><a href="install.html#s3">3. Installation <span aria-hidden="true">↗</span></a></li><li><a href="#s4">4. Application window and navigation</a></li><li><a href="#s5">5. Settings and language</a></li><li><a href="#s6">6. Talking to the assistant</a></li><li><a href="#s7">7. Working with the Enterprise Architect model</a></li><li><a href="#s8">8. Working with the open EA window</a></li><li><a href="#s9">9. Diagram editor</a></li><li><a href="#s10">10. Sending diagrams to Miro</a></li><li><a href="#s11">11. Documents: Word, Excel, images, Confluence</a></li><li><a href="#s12">12. Document templates</a></li><li><a href="#s13">13. Assistant memory</a></li><li><a href="#s14">14. Approving changes and the audit log</a></li><li><a href="#s15">15. Conversations: history, search, background work</a></li><li><a href="#s16">16. Data, security and privacy</a></li><li><a href="#s17">17. Troubleshooting</a></li><li><a href="#s18">18. Reporting bugs and new releases</a></li><li class="docs-toc-other"><a href="install.html#s19">19. Updating and uninstalling <span aria-hidden="true">↗</span></a></li><li><a href="#s20">20. License, trademarks and contact</a></li></ol>
+      <ol class="docs-toc"><li><a href="#s1">1. What Loonar Compass is</a></li><li class="docs-toc-other"><a href="install.html#s2">2. Requirements <span aria-hidden="true">↗</span></a></li><li class="docs-toc-other"><a href="install.html#s3">3. Installation <span aria-hidden="true">↗</span></a></li><li><a href="#s4">4. Application window and navigation</a></li><li><a href="#s5">5. Settings and language</a></li><li><a href="#s6">6. Talking to the assistant</a></li><li><a href="#s7">7. Working with the Enterprise Architect model</a></li><li><a href="#s8">8. Working with the open EA window</a></li><li><a href="#s9">9. Compass in Enterprise Architect</a></li><li><a href="#s10">10. Diagram editor</a></li><li><a href="#s11">11. Sending diagrams to Miro</a></li><li><a href="#s12">12. Documents: Word, Excel, images, Confluence</a></li><li><a href="#s13">13. Document templates</a></li><li><a href="#s14">14. Assistant memory</a></li><li><a href="#s15">15. Approving changes and the audit log</a></li><li><a href="#s16">16. Conversations: history, search, background work</a></li><li><a href="#s17">17. Data, security and privacy</a></li><li><a href="#s18">18. Troubleshooting</a></li><li><a href="#s19">19. Reporting bugs and new releases</a></li><li class="docs-toc-other"><a href="install.html#s20">20. Updating and uninstalling <span aria-hidden="true">↗</span></a></li><li><a href="#s21">21. License, trademarks and contact</a></li></ol>
       <p class="docs-pdf"><a href="Manual.en.pdf" download>Download as PDF (whole guide)</a></p>
     </aside>
     <article class="docs-body">
@@ -65,66 +65,80 @@
   <li><b>reads the model</b> (packages, elements, diagrams, connectors, attributes and operations) and describes what is in it,</li>
   <li><b>analyzes the model</b>: the impact of changing an element on the rest of the model, where operations are used, elements without connectors,</li>
   <li><b>changes the model</b>: creates packages, diagrams, elements and connectors, adds attributes and operations to classes, sets keywords and tagged values, lays out elements on diagrams, moves them, removes an element from a diagram, deletes objects from the model, colors them, adds legends, copies packages and creates baselines of them,</li>
+  <li><b>keeps the EA project glossary</b> (terms with their meaning and type) and <b>structured scenarios of elements</b> (actor and system steps),</li>
   <li><b>draws</b> diagrams from a description, a photo, a sketch or an attached file,</li>
   <li><b>shows diagrams</b> as images in the chat, just as Enterprise Architect draws them,</li>
   <li><b>prepares documents</b> from the model's content: Word, Excel, PNG images and Confluence pages, also based on templates,</li>
   <li><b>remembers notes</b> between conversations (modeling conventions, preferences, corrections).</li>
 </ul>
-<p>The application uses the Claude Haiku 5.5 language model (Anthropic) over the Internet. It connects to the EA model in two ways: it reads it directly (from the PostgreSQL database or from the .qea/.qeax file) and writes to it through Enterprise Architect, using the model user account given in the settings when the model has one. With a model file you have open in EA, the changes go through your EA window; otherwise EA runs in the background.</p>
-<p>The interface and the assistant's answers are available in four languages: Polish, English, German and French (chapter 5). Answers and changes are prepared by an AI model and may contain errors: review them before you approve them (chapter 14).</p>
+<p>The application uses an AI language model over the Internet, with your API key: Claude Haiku 5.5 (Anthropic) by default; in the settings you can choose another Claude model or an OpenAI model (chapter 5). It connects to the EA model in two ways: it reads it directly (from the PostgreSQL database or from the .qea/.qeax file) and writes to it through Enterprise Architect, using the model user account given in the settings when the model has one. With a model file you have open in EA, the changes go through your EA window; otherwise EA runs in the background.</p>
+<p>The interface and the assistant's answers are available in four languages: Polish, English, German and French (chapter 5). Answers and changes are prepared by an AI model and may contain errors: review them before you approve them (chapter 15).</p>
+<p>Loonar Compass runs as a separate window, started from the Start menu, or as a window docked in Enterprise Architect itself, which works with the project open in that EA window (chapter 9).</p>
 <h2 id="s4">4. Application window and navigation</h2>
 <p>On the left side of the window there is a navy-blue <b>navigation bar</b> with icons. When you hover the mouse over an icon, its name appears. Clicking switches the view.</p>
 <table>
   <tr><th>Icon</th><th>What it contains</th></tr>
-  <tr><td><b>Chat</b></td><td>The list of conversations and the conversation with the assistant (chapters 6 and 15)</td></tr>
-  <tr><td><b>Settings</b></td><td>Claude API key, model database, Enterprise Architect, language and approval mode, new releases, Confluence (chapter 5)</td></tr>
-  <tr><td><b>Assistant memory</b></td><td>Notes the assistant has remembered between conversations (chapter 13)</td></tr>
-  <tr><td><b>Document templates</b></td><td>Document templates that the assistant fills with content from the model (chapter 12)</td></tr>
-  <tr><td><b>Model audit log</b></td><td>The assistant's saves to the model, with export to Excel (chapter 14)</td></tr>
+  <tr><td><b>Chat</b></td><td>The list of conversations and the conversation with the assistant (chapters 6 and 16)</td></tr>
+  <tr><td><b>Settings</b></td><td>AI model, EA model, Enterprise Architect, language and approval mode, new releases, Confluence, Miro (chapter 5)</td></tr>
+  <tr><td><b>Assistant memory</b></td><td>Notes the assistant has remembered between conversations (chapter 14)</td></tr>
+  <tr><td><b>Document templates</b></td><td>Document templates that the assistant fills with content from the model (chapter 13)</td></tr>
+  <tr><td><b>Model audit log</b></td><td>The assistant's saves to the model, with export to Excel (chapter 15)</td></tr>
   <tr><td><b>Changelog</b></td><td>The list of features and known limitations of each version</td></tr>
-  <tr><td><b>Report a bug</b></td><td>A bug report form with images (chapter 18)</td></tr>
+  <tr><td><b>Report a bug</b></td><td>A bug report form with images (chapter 19)</td></tr>
   <tr><td><b>Support the project</b> (heart icon, at the bottom of the bar)</td><td>Voluntary support for the development of the application, links to GitHub and loonar.eu</td></tr>
-  <tr><td><b>About</b> (at the very bottom of the bar)</td><td>Version, application owner, links (privacy policy, source code on GitHub, loonar.eu), trademark notice, license text and the licenses of the open-source components (chapter 20)</td></tr>
+  <tr><td><b>About</b> (at the very bottom of the bar)</td><td>Version, application owner, links (privacy policy, source code on GitHub, loonar.eu), trademark notice, license text and the licenses of the open-source components (chapter 21)</td></tr>
 </table>
 <p>An orange <b>“!”</b> on the Settings, Assistant memory and Document templates icons means that after a language change the translation has not finished yet (chapter 5).</p>
 <p><b>Support the project.</b> Loonar Compass is free, also for commercial use, and it will stay free. If it saves you time, you can support its development with a voluntary contribution: the <b>Support on suppi.pl</b> button opens <a href="https://suppi.pl/loonar">suppi.pl/loonar</a>. The contributions pay, among other things, for a code-signing certificate. Other ways to help: report bugs and ideas (Report a bug), recommend the application to other Enterprise Architect users or star the project on GitHub.</p>
 <h3>Chat view</h3>
 <ul>
   <li><b>The list of conversations</b> on the left is grouped into “Today”, “Yesterday”, “Last 7 days” and “Earlier”. You start a new conversation with the <b>+</b> button. The selected conversation is highlighted.</li>
-  <li><b>The conversation header</b> shows its title, the <b>Model: …</b> button with the model of the conversation (chapter 15) and, while the assistant is working, the “Claude is working” indicator.</li>
+  <li><b>The conversation header</b> shows its title, the <b>Model: …</b> button with the model of the conversation (chapter 16) and, while the assistant is working, the “The assistant is working” indicator.</li>
   <li><b>Messages:</b> yours are in a beige bubble, the assistant's answers have the application icon. Each message shows the time (older ones also the date).</li>
-  <li><b>The new conversation screen</b> shows the logo, a hint about what you can do, and which model the conversation will use, with the <b>Choose another model…</b> button.</li>
+  <li><b>The new conversation screen</b> shows the logo, a hint about what you can do, and which EA model the conversation will use, with the <b>Choose another model…</b> and <b>Confirm the model and start</b> buttons (chapter 16).</li>
   <li><b>The message card</b> at the bottom: the text field, the paste button, the model and approval mode, and the round send and stop buttons (chapter 6). Below the card, a reminder says that answers and changes are prepared by an AI model.</li>
 </ul>
 <h2 id="s5">5. Settings and language</h2>
-<p>The <b>Settings</b> view has six cards. You save each one separately with the button below the card, and the application immediately checks that the details work. The result appears below the button: green with a description or red with the cause of the error.</p>
-<figure><img src="../img/settings.png" alt="Settings view with the cards Claude, model database, Enterprise Architect, language and change approval, new releases, Confluence"><figcaption>Settings: each card with its own save and test</figcaption></figure>
+<p>The <b>Settings</b> view has seven cards: <b>AI model</b> and <b>Language and change approval</b> in the left column, <b>Model</b> and <b>Enterprise Architect</b> in the right one, and below them <b>New releases (newsletter)</b>, <b>Confluence</b> and <b>Miro</b>. In Compass opened in Enterprise Architect, there are no Model and Enterprise Architect cards, because the model is the project open in that EA window (chapter 9). You save each card separately with the button below the card, and the application immediately checks that the details work. The result appears below the button: green with a description or red with the cause of the error.</p>
+<figure><img src="../img/settings.png" alt="Settings view of an earlier version of the application, with numbered cards"><figcaption>Settings: each card with its own save and test (screenshot of an earlier version: the cards had numbers, the “AI model” card was called “Claude”, and the EA account was on the Enterprise Architect card)</figcaption></figure>
 <table>
   <tr><th>Card</th><th>Fields</th><th>What the test checks</th></tr>
-  <tr><td>1. Claude</td><td>Model (Claude Haiku 5.5, read-only), Max tokens (the length limit of a single model answer), Claude API key. A note below the fields says what the application sends to Anthropic (chapter 16).</td><td>Sends a short request to the model</td></tr>
-  <tr><td>2. Model</td><td>Choice: <b>PostgreSQL database</b> (Server, Port, Database name, Database user, Database password stored in Windows Credential Manager, Connection encryption) or <b>EA file (.qea, .qeax)</b> (Model file; the <b>…</b> button opens a file selection dialog)</td><td>Database: connects, counts packages, elements and diagrams, says whether the connection is encrypted and warns if the database user is a superuser. File: opens it read-only and counts packages, elements and diagrams</td></tr>
-  <tr><td>3. Enterprise Architect</td><td>Path to EA.exe (the <b>…</b> button opens a file selection dialog), EA user account, EA account password (for a model file without security, both stay empty)</td><td>Opens the model in EA (a model file you have open: in your EA window) and logs in with the given account</td></tr>
-  <tr><td>4. Language and change approval</td><td>Language; Approval mode: ask, plan or auto (chapter 14); after a language change, also the <b>Translate now</b> button</td><td>Saving only</td></tr>
-  <tr><td>5. New releases (newsletter)</td><td>Email address and consent to news about new releases, with an information note and a link to the privacy policy (chapter 18)</td><td>Prepares a message in the mail program</td></tr>
-  <tr><td>6. Confluence</td><td>Confluence address, Email (Cloud only), Token, Space key, Parent page ID (chapter 11). The address must start with https:// (http:// only for a server on the same computer).</td><td>Connects to Confluence with the given token and checks the space</td></tr>
-  <tr><td>7. Miro</td><td>Access token of a Miro app with the boards:read and boards:write permissions (chapter 10)</td><td>Connects to Miro and counts the boards the token can see</td></tr>
+  <tr><td>AI model</td><td>Provider, Model, Effort, Max tokens, Workspace ID (Claude only) and the API key of the chosen provider: Claude API key or OpenAI API key (described below). A note below the fields says what the application sends to the provider (chapter 17).</td><td>“Save and test key” checks the key with a short request to the chosen model</td></tr>
+  <tr><td>Model</td><td>Choice: <b>PostgreSQL database</b> (Server, Port, Database name, Database user, Database password stored in Windows Credential Manager, Connection encryption) or <b>EA file (.qea, .qeax)</b> (Model file; the <b>…</b> button opens a file selection dialog). Below, the model's EA account: the checkbox <b>“The model has security enabled (EA user accounts)”</b>, EA user account and EA account password (without the checkbox, both fields are disabled and EA opens the model without a login), and the option <b>“The model requires a lock to edit (Require User Lock to Edit)”</b>: when on, the assistant locks the packages and elements it changes and releases the locks afterwards; without it, it locks nothing.</td><td>Database: “Save and test connection” connects, counts packages, elements and diagrams, says whether the connection is encrypted and warns if the database user is a superuser. File: “Save and test the file” opens it read-only and counts packages, elements and diagrams. The test also saves a test package in the model, checks it and deletes it at once</td></tr>
+  <tr><td>Enterprise Architect</td><td>Path to EA.exe (the <b>…</b> button opens a file selection dialog). The EA account is set on the Model card, because it belongs to the model file or database.</td><td>“Save and test EA access” opens the model in EA (a model file you have open: in your EA window), logs in with the account from the Model card, saves a test package in the model, checks it and deletes it at once (from a few to over ten seconds)</td></tr>
+  <tr><td>Language and change approval</td><td>Language; Approval mode: ask, plan or auto (chapter 15); after a language change, also the <b>Translate now</b> button</td><td>Saving only</td></tr>
+  <tr><td>New releases (newsletter)</td><td>Email address and consent to news about new releases, with an information note and a link to the privacy policy (chapter 19)</td><td>Prepares a message in the mail program</td></tr>
+  <tr><td>Confluence</td><td>Confluence address, Email (Cloud only), Token, Space key, Parent page ID (chapter 12). The address must start with https:// (http:// only for a server on the same computer).</td><td>Connects to Confluence with the given token and checks the space</td></tr>
+  <tr><td>Miro</td><td>Access token of a Miro app with the boards:read and boards:write permissions (chapter 11)</td><td>Connects to Miro and counts the boards the token can see</td></tr>
 </table>
-<p>An empty password or key field means “no change”. The label <b>saved</b> next to a field indicates that the value is already stored. The API key, the passwords and the Confluence token are kept in Windows Credential Manager, never in the settings file. The database password must not contain a semicolon (<code>;</code>), because Enterprise Architect cannot pass it in its connection string.</p>
-<p><b>Default values.</b> When there are no settings yet, the server, database name, EA user account and password fields are empty (the Server field shows the gray hint “e.g. 127.0.0.1”), the port is 5432, the database user is <code>postgres</code>, the path to EA.exe is <code>C:\Program Files\Sparx Systems\EA\EA.exe</code>, the approval mode is ask and Max tokens is 10000. Existing settings are not changed.</p>
+<p>An empty password or key field means “no change”. The label <b>saved</b> next to a field indicates that the value is already stored. The API keys, the passwords and the Confluence and Miro tokens are kept in Windows Credential Manager, never in the settings file. The database password must not contain a semicolon (<code>;</code>), because Enterprise Architect cannot pass it in its connection string.</p>
+<p><b>Default values.</b> When there are no settings yet, the server, database name, EA user account and password fields are empty (the Server field shows the gray hint “e.g. 127.0.0.1”), the port is 5432, the database user is <code>postgres</code>, the path to EA.exe is <code>C:\Program Files\Sparx Systems\EA\EA.exe</code>, the approval mode is ask, the provider is Anthropic (Claude), the model is <code>claude-haiku-5-5</code>, the effort is “model default” and Max tokens is 10000. Existing settings are not changed.</p>
 <p><b>Max tokens.</b> If the assistant stops working with a message about a truncated answer, increase this value (for example to 20000). The limit costs nothing by itself: you pay for the text actually generated.</p>
-<p><b>Package locking</b> while saving is always on, which is why it is not in the settings.</p>
+<p><b>Locking</b> of packages and elements while saving depends on the option “The model requires a lock to edit (Require User Lock to Edit)” on the Model card: select it when the model has “Require User Lock to Edit” turned on in EA.</p>
+<h3>AI model: provider, model and effort</h3>
+<p>The <b>AI model</b> card decides which language model answers in the conversations:</p>
+<table>
+  <tr><th>Field</th><th>Meaning</th></tr>
+  <tr><td>Provider</td><td><b>Anthropic (Claude)</b> (default) or <b>OpenAI</b>.</td></tr>
+  <tr><td>Model</td><td>A text field with a <b>▾</b> list. Claude: <code>claude-haiku-5-5</code> (default), <code>claude-sonnet-5-5</code>, <code>claude-opus-5-5</code>, <code>claude-fable-5-1</code>. OpenAI: <code>gpt-5.1</code>, <code>gpt-5</code>, <code>gpt-5-mini</code>. You can also type the id of any other model of the chosen provider.</td></tr>
+  <tr><td>Effort</td><td><b>model default</b> (default), <b>low</b>, <b>medium</b>, <b>high</b>, <b>xhigh</b> or <b>max</b>. Higher effort gives more thorough answers and model work, but uses more tokens and time, so it costs more; lower effort is faster and cheaper. With OpenAI, the effort maps to the model's reasoning effort.</td></tr>
+  <tr><td>Max tokens</td><td>The length limit of a single model answer (see below).</td></tr>
+  <tr><td>Workspace ID</td><td>Claude only, optional: the ID of a workspace from the Anthropic Console, for example <code>wrkspc_…</code>.</td></tr>
+  <tr><td>Claude API key / OpenAI API key</td><td>The key of the chosen provider. You create a Claude key in the Anthropic Console. You create an OpenAI key on the OpenAI platform: <code>platform.openai.com</code> → <b>API keys</b> → <b>Create new secret key</b>. The keys are stored in Windows Credential Manager, each separately.</td></tr>
+</table>
+<p><b>Save and test key</b> checks the key with a short request to the chosen model. The data needed for the answers goes only to the chosen provider: to api.anthropic.com or to api.openai.com (chapter 17). If you change nothing on this card, the application works exactly as before: with Claude Haiku 5.5 and the model default effort. Larger models and higher effort cost more; Anthropic and OpenAI publish their prices.</p>
 <h3>Changing the language</h3>
-<p>The application works in four languages: <b>Polish, English, German and French</b>. You choose the language in the installer (English by default) and change it on the <b>“4. Language and change approval”</b> card:</p>
+<p>The application works in four languages: <b>Polish, English, German and French</b>. You choose the language in the installer (English by default) and change it on the <b>“Language and change approval”</b> card:</p>
 <ol>
   <li>Choose a language from the <b>Language</b> list.</li>
   <li>Click <b>Save</b>. The interface switches to the new language, and the assistant answers in it from the next message.</li>
-  <li>The application carries your content over to the new language: it replaces untouched default templates with the versions in the new language, and <b>the assistant's memory and your own and modified templates are translated by Claude</b>.</li>
+  <li>The application carries your content over to the new language: it replaces untouched default templates with the versions in the new language, and <b>the assistant's memory and your own and modified templates are translated by the AI model</b>.</li>
 </ol>
 <p>Only the memory and the templates are translated. <b>Conversation history is never translated</b>: conversations stay in the language in which you held them.</p>
-<div class="note"><b>No connection to Claude.</b> Translation requires a working API key. If there is no connection, an orange <b>“!”</b> appears on the <b>Settings</b>, <b>Assistant memory</b> and <b>Document templates</b> icons, and the tooltip explains that the content has not been translated yet. The translation resumes the next time the application starts, or immediately when you click the <b>Translate now</b> button on card 4. Saving other cards does not start it.</div>
+<div class="note"><b>No connection to the AI model.</b> Translation requires a working API key. If there is no connection, an orange <b>“!”</b> appears on the <b>Settings</b>, <b>Assistant memory</b> and <b>Document templates</b> icons, and the tooltip explains that the content has not been translated yet. The translation resumes the next time the application starts, or immediately when you click the <b>Translate now</b> button on the “Language and change approval” card. Saving other cards does not start it.</div>
 
 <h3>Database connection encryption</h3>
-<p>The <b>Connection encryption</b> field on the “2. Model” card (PostgreSQL database) decides whether the assistant reads the model over TLS:</p>
+<p>The <b>Connection encryption</b> field on the “Model” card (PostgreSQL database) decides whether the assistant reads the model over TLS:</p>
 <table>
   <tr><th>Setting</th><th>Effect</th></tr>
   <tr><td><b>Preferred</b> (default)</td><td>TLS when the server offers it; otherwise an unencrypted connection. Works with any server.</td></tr>
@@ -140,7 +154,7 @@
 <h2 id="s6">6. Talking to the assistant</h2>
 <figure><img src="../img/chat.png" alt="Conversation window with a diagram image from Enterprise Architect in the chat"><figcaption>A conversation with a diagram shown as an image in the chat: the list of conversations on the left, the message card at the bottom</figcaption></figure>
 <h3>Writing</h3>
-<p>You type a message in the <b>message card</b> at the bottom of the window. The card contains the text field, the paste button, the model name and the current approval mode, and round buttons: <b>Send</b> and, while the assistant is working, <b>Stop</b>. Below the card you see the reminder: “Answers and changes are prepared by an AI model (Claude by Anthropic) and may contain errors. Review them before you approve.”</p>
+<p>You type a message in the <b>message card</b> at the bottom of the window. The card contains the text field, the paste button, the model name and the current approval mode, and round buttons: <b>Send</b> and, while the assistant is working, <b>Stop</b>. Below the card you see the reminder: “Answers and changes are prepared by an AI model and may contain errors. Review them before you approve.”</p>
 <table>
   <tr><th>Key</th><th>Action</th></tr>
   <tr><td><span class="key">Enter</span></td><td>Sends the message</td></tr>
@@ -148,7 +162,7 @@
   <tr><td><span class="key">↑</span> in an empty field</td><td>Recalls your last message from this conversation; further presses go back to earlier ones, <span class="key">↓</span> goes forward again</td></tr>
   <tr><td><span class="key">Ctrl</span> + <span class="key">V</span></td><td>Pastes text, and when the clipboard contains an image or files, adds them as attachments</td></tr>
 </table>
-<p>The message field grows with the text. Spelling errors are underlined in red using the Windows system dictionary, in the language from the system settings.</p>
+<p>The message field grows with the text. Spelling errors are underlined in red using the Windows system dictionary, in the language from the system settings. Right-click an underlined word and choose <b>Add “…” to the dictionary</b>: the word goes into the Windows dictionary, and a Polish expression goes in with all its forms (singular and plural, from the nominative to the vocative). In the same menu, <b>Add “…” to the EA project glossary</b> asks the assistant to add the term to the project glossary (chapter 7).</p>
 <h3>Attachments</h3>
 <p>You can attach up to 5 files to a message, each up to 10 MB. Ways to do it: drag files into the window (from Explorer or from a browser), paste them from the clipboard (<span class="key">Ctrl</span> + <span class="key">V</span>) or use the paste button in the message card.</p>
 <table>
@@ -219,11 +233,17 @@
   <li><b>A baseline</b> is a saved version of a package in EA. Before deleting or substantially restructuring an existing package, the assistant is instructed to create a baseline, but this is not enforced: for important packages, ask for a baseline explicitly and use the <b>ask</b> mode.</li>
   <li><b>Restoring</b> is done in Enterprise Architect: right-click the package, choose <b>Manage Baselines</b>, select the baseline and use <b>Compare/Restore</b>. The assistant does not restore baselines itself, because restoring through automation makes EA hang.</li>
 </ul>
+<h3>EA project glossary</h3>
+<p>The assistant adds terms to the EA project glossary (Project Glossary): a term with its meaning and type, by default the type <code>Slownik</code>. A Polish term goes in with all its forms (singular and plural, from the nominative to the vocative), so EA highlights every form in notes. Add a term by asking in the conversation or from the message field: right-click a word and choose <b>Add “…” to the EA project glossary</b>. If the assistant does not know the meaning or the type of the term, it asks you.</p>
+<div class="prompt">Add the term “order” to the project glossary: a customer's request to deliver selected products.</div>
+<h3>Structured scenarios of elements</h3>
+<p>The assistant creates, changes and deletes structured scenarios of elements, for example of use cases. They appear in EA on the element's <b>Scenarios</b> tab, with steps performed by the actor or by the system.</p>
+<div class="prompt">Add a basic path scenario to the “Place order” use case: the customer confirms the cart, the system calculates the order value, the customer chooses a payment method, the system saves the order.</div>
 <h3>Good to know</h3>
 <ul>
-  <li><b>The first EA call takes from a few to over ten seconds</b>, because the application starts Enterprise Architect in the background and opens the model. Subsequent saves and diagram retrievals take less than a second. After 10 minutes without calls, the background EA closes and releases the license. Closing the application also closes its EA session.</li>
-  <li><b>Locks.</b> In a model with security enabled, the assistant locks an object under its own account while saving and releases the lock afterwards. It will not change an object locked by another user; the message states who holds the lock on the element (account or group, since when), its package and diagram.</li>
-  <li><b>Deletion is permanent.</b> Deleting a package deletes all its contents. With important models, use the <b>ask</b> mode (chapter 14), use baselines and back up the database.</li>
+  <li><b>The first EA call takes from a few to over ten seconds</b>, because the application starts Enterprise Architect in the background and opens the model. Subsequent saves and diagram retrievals take less than a second. After 10 minutes without calls, the background EA closes and releases the license. Closing the application also closes its EA session. Compass in EA (chapter 9) does not start EA in the background: it saves through your EA window.</li>
+  <li><b>Locks.</b> When the option “The model requires a lock to edit” is on in the Model card, the assistant locks an object under its own account while saving and releases the lock afterwards. It will not change an object locked by another user; the message states who holds the lock on the element (account or group, since when), its package and diagram.</li>
+  <li><b>Deletion is permanent.</b> Deleting a package deletes all its contents. With important models, use the <b>ask</b> mode (chapter 15), use baselines and back up the database.</li>
   <li><b>Partial saves.</b> When one operation of a save fails, the earlier operations of that save stay in the model. The message says what was saved.</li>
   <li><b>Check the result.</b> The assistant can make mistakes: misread a photo, choose a different element type or lay out a diagram illegibly. Ask it to show the diagram after the changes and to make corrections.</li>
   <li><b>Large diagrams</b> are saved by the assistant in several steps. This is normal.</li>
@@ -238,8 +258,36 @@
 <div class="prompt">Describe the element I have selected and show which other diagrams it appears on.</div>
 <div class="prompt">Open the “Order process” diagram in my EA and highlight the “Requirements” package in the Project Browser.</div>
 <p>Only when the EA window is not open or shows a different model does the assistant work without it; you will then see the changes after refreshing the package in EA (<span class="key">F5</span>). The connection string of your EA window is never sent to the model.</p>
-<h2 id="s9">9. Diagram editor</h2>
-<p>Every EA diagram shown in the chat has an <b>Edit diagram</b> button. It opens the diagram in an editor window where you change it with the mouse. The editor works on the model, not on a picture: what you save goes into EA through the same operations the assistant uses, with the approval panel and the change log (chapter 14). The editor needs WebView2, which is part of Windows 10 and 11.</p>
+<p>The cooperation described here applies to the separate application. Compass started in Enterprise Architect itself always works with the project open in its EA window (chapter 9).</p>
+<h2 id="s9">9. Compass in Enterprise Architect</h2>
+<p>Loonar Compass also runs inside Enterprise Architect, as a window docked next to the Project Browser and the diagrams. You work in it as in the separate application: the conversation, attachments, change approval, memory, templates and documents work the same way. The separate application, started from the Start menu, keeps working as before.</p>
+<h3>Installing and starting</h3>
+<ol>
+  <li>In the installer, on the “Destination folder” page, select <b>“Add Loonar Compass to Enterprise Architect”</b>. It works with any Enterprise Architect installation, also a trial. Restart EA after the installation.</li>
+  <li>Open a project in Enterprise Architect: a file or a database.</li>
+  <li>On the <b>Start</b> ribbon, in the <b>Add-Ins</b> group, click <b>Loonar Compass</b> (you also find the button under <b>Specialize</b>). The button works only with a project open.</li>
+  <li>Compass opens as a docked window in EA, in the same place as the Properties window. You can drag it elsewhere, float it or add it to a tab group; EA remembers where you put it.</li>
+</ol>
+<h3>Project and conversations</h3>
+<ul>
+  <li>In EA, Compass always works with the project open in that EA window: a file or any database. It reads the model through Enterprise Architect itself, so it needs no model settings, no passwords and no choice of a conversation model. Opening another project in EA switches Compass to it; without an open project, Compass does not work.</li>
+  <li>You choose conversations from the drop-down at the top of the window. The list shows only the conversations with this project. The <b>+</b> button starts a new conversation, and the pencil renames the selected one.</li>
+  <li>The view icons are at the bottom of the window; in a narrow window the pages scroll sideways and up and down.</li>
+  <li><span class="key">Ctrl</span> + <span class="key">V</span> pastes pictures, files and text, as in the separate application.</li>
+  <li>The settings in EA have no Model and Enterprise Architect cards. The AI model, Language and change approval, Confluence and Miro cards work as in the separate application (chapter 5).</li>
+</ul>
+<h3>Changes, diagrams and references to objects</h3>
+<ul>
+  <li>Writes go through the same EA window, so changes show at once in the Project Browser and on diagrams. Change approval works as in the separate application (chapter 15).</li>
+  <li><b>Show diagram</b> and <b>Edit diagram</b> open the diagram in EA itself instead of showing an image in the chat.</li>
+  <li>Right-click an element, package or diagram (in the Project Browser or on a diagram) and choose <b>Specialize</b> → <b>Add to the Compass conversation</b>. A reference to the object goes into the message, for example «Package: Shop (id 5)», so the assistant knows which object you mean.</li>
+</ul>
+<div class="prompt">Describe «Package: Shop (id 5)» and suggest the missing requirements.</div>
+<h3>The assistant's steps in System Output</h3>
+<p>EA's <b>System Output</b> window has a <b>Loonar Compass</b> tab: your messages and every step of the assistant (model reads, writes to EA, results) with the time. Meanwhile, the chat in the Compass window shows only the last step, in one line.</p>
+<p><b>Closing.</b> Compass closes together with Enterprise Architect and saves the conversation. When you close the project in EA, Compass asks you to open a project.</p>
+<h2 id="s10">10. Diagram editor</h2>
+<p>Every EA diagram shown in the chat has an <b>Edit diagram</b> button. It opens the diagram in an editor window where you change it with the mouse. The editor works on the model, not on a picture: what you save goes into EA through the same operations the assistant uses, with the approval panel and the change log (chapter 15). The editor needs WebView2, which is part of Windows 10 and 11. In Compass in EA, the <b>Edit diagram</b> button opens the diagram in Enterprise Architect itself (chapter 9).</p>
 <figure><img src="../img/editor.png" alt="Diagram editor with a class diagram and the Properties panel"><figcaption>The diagram editor: the toolbar, the diagram and the Properties panel</figcaption></figure>
 <h3>Drawing</h3>
 <ul>
@@ -268,7 +316,7 @@
   <li><b>Save to EA</b> saves the changes and closes the editor; the result appears in the conversation. <b>Cancel</b> closes it without saving.</li>
   <li><b>Tidy with AI</b> saves the changes and asks the assistant in the conversation to arrange the diagram so it reads well, without adding, deleting or renaming anything.</li>
 </ul>
-<h2 id="s10">10. Sending diagrams to Miro</h2>
+<h2 id="s11">11. Sending diagrams to Miro</h2>
 <p>A diagram from EA can go to a Miro board as editable shapes and connectors in a frame with the diagram's name. Only from EA to Miro: what people change on the board does not come back to the model.</p>
 <p><b>Setup, once:</b></p>
 <ol>
@@ -276,7 +324,7 @@
   <li>Give the app a name (for example Loonar Compass) and <b>leave “Expire user authorization token” unchecked</b>: an expiring token stops working after an hour.</li>
   <li>Under <b>Permissions</b>, select <code>boards:read</code> and <code>boards:write</code>.</li>
   <li>Click <b>Install app and get OAuth token</b> and choose the organization and team whose boards the application may use (for a first test, the Developer team). Copy the token.</li>
-  <li>Paste it in Settings, card <b>“7. Miro”</b>, and click <b>Save and test Miro connection</b>. The token is kept in Windows Credential Manager.</li>
+  <li>Paste it in Settings, card <b>“Miro”</b>, and click <b>Save and test Miro connection</b>. The token is kept in Windows Credential Manager.</li>
 </ol>
 <p>Diagrams can go only to boards of the team the app is installed in; to use another organization, install the app there too (the same button).</p>
 <p><b>Sending:</b></p>
@@ -287,7 +335,7 @@
   <li>Click <b>Send to Miro</b>. When it is done, the conversation gets a message with a link that opens the board at the new frame.</li>
 </ol>
 <p>Sequence diagrams go as lifelines with numbered messages in their EA order (replies dashed). Sending the same diagram again puts a new frame next to the earlier one, so nothing changed on the board is overwritten.</p>
-<h2 id="s11">11. Documents: Word, Excel, images, Confluence</h2>
+<h2 id="s12">12. Documents: Word, Excel, images, Confluence</h2>
 <p>The assistant prepares documents from the content of the model and the conversation. The finished file appears in the chat as a card with buttons.</p>
 <table>
   <tr><th>Type</th><th>What it contains</th><th>Buttons in the chat</th></tr>
@@ -306,10 +354,10 @@
   <li>In Confluence, open the page for editing, open the Source Editor, paste the code and confirm.</li>
   <li>Click <b>Open images folder</b> and add the images to the page as attachments.</li>
 </ol>
-<p><b>Publishing through the assistant.</b> Once you have filled in the <b>“6. Confluence”</b> card, the assistant publishes the page via the REST API at your request: it creates a new page under the parent page or updates an existing one (given by ID or title). Images are uploaded as attachments; existing ones get a new version. Diagrams are exported from EA anew on every publication, so republishing refreshes the page after changes in the model. The assistant remembers the pages it has published. The connection uses HTTPS only (http:// is accepted only for a server on the same computer).</p>
+<p><b>Publishing through the assistant.</b> Once you have filled in the <b>“Confluence”</b> card, the assistant publishes the page via the REST API at your request: it creates a new page under the parent page or updates an existing one (given by ID or title). Images are uploaded as attachments; existing ones get a new version. Diagrams are exported from EA anew on every publication, so republishing refreshes the page after changes in the model. The assistant remembers the pages it has published. The connection uses HTTPS only (http:// is accepted only for a server on the same computer).</p>
 <div class="note"><b>Publishing always requires approval</b>, also in <b>auto</b> mode. Before the page is sent to Confluence, a panel with the <b>Approve</b> and <b>Reject</b> buttons appears. It says whether a new page will be created or whether the content of an existing page (with the same title or ID) will be <b>REPLACED</b>; the previous version stays in the page history.</div>
 <table>
-  <tr><th>Field of the “6. Confluence” card</th><th>What to enter</th></tr>
+  <tr><th>Field of the “Confluence” card</th><th>What to enter</th></tr>
   <tr><td>Confluence address</td><td>On your organization's own servers (Data Center), for example <code>https://confluence.example.com</code>; in the cloud (Cloud) <code>https://your-site.atlassian.net/wiki</code></td></tr>
   <tr><td>Email (Cloud only)</td><td>For Confluence Cloud: the account's email address. For Data Center, leave it empty.</td></tr>
   <tr><td>Token</td><td>Data Center: a personal access token (Profile → Personal Access Tokens). Cloud: the account's API token. The token is stored in Windows Credential Manager.</td></tr>
@@ -319,7 +367,7 @@
 <p><b>Confluence Cloud: where the details come from.</b></p>
 <ol>
   <li><b>Token</b>: it is created on your Atlassian account, not in Confluence. Open <code>https://id.atlassian.com/manage-profile/security/api-tokens</code> (Atlassian account → Security → API tokens). Atlassian may first ask you to confirm it is you with a code sent to your email.</li>
-  <li>Click <b>Create API token</b> (the plain one, not <b>Create API token with scopes</b>), give it a name, for example Loonar Compass, and choose how long it is valid: one week by default, at most one year. Click <b>Create</b> and copy the token: Atlassian shows it only once. When it expires, create a new one and paste it in card 6.</li>
+  <li>Click <b>Create API token</b> (the plain one, not <b>Create API token with scopes</b>), give it a name, for example Loonar Compass, and choose how long it is valid: one week by default, at most one year. Click <b>Create</b> and copy the token: Atlassian shows it only once. When it expires, create a new one and paste it on the “Confluence” card.</li>
   <li><b>Email</b>: the email address of the Atlassian account the token belongs to.</li>
   <li><b>Address</b>: your site with <code>/wiki</code>, for example <code>https://your-site.atlassian.net/wiki</code>.</li>
   <li><b>Space key</b>: it is in the address of any page of the space, after <code>/spaces/</code> (for example <code>…/wiki/spaces/PM/…</code> gives <code>PM</code>), and under <b>Space settings</b>.</li>
@@ -327,7 +375,7 @@
 </ol>
 <p>Save the card with the <b>Save and test Confluence connection</b> button.</p>
 <div class="prompt">Prepare a Confluence page describing the “Complaint handling” process with the diagram and publish it in the space.</div>
-<h2 id="s12">12. Document templates</h2>
+<h2 id="s13">13. Document templates</h2>
 <p>A template tells the assistant how to build a document: which sections it should have and what to put in them. The assistant fills it with content from the model and prepares a Confluence page or a Word document.</p>
 <p>After installation, the following default templates are available:</p>
 <ul>
@@ -346,43 +394,43 @@
 <h3>Your own templates</h3>
 <p>Templates are Markdown files with instructions for the assistant. The first line has the form <code>&gt; Template: description</code>; the description is shown in the list. You can modify the existing templates, add your own files to the templates folder or ask the assistant to create a template from a sample document. In the ask and plan modes, the assistant asks for your approval before it overwrites a template.</p>
 <div class="prompt">Create a template from the attached document: keep the layout of the sections and add what each of them should contain.</div>
-<h2 id="s13">13. Assistant memory</h2>
+<h2 id="s14">14. Assistant memory</h2>
 <p>The assistant keeps notes between conversations: modeling conventions, your preferences, corrections and facts about projects. It knows them in every new conversation. A note on the same topic is updated instead of duplicated, and outdated ones are removed.</p>
 <p>The assistant saves a note by itself when it learns something worth remembering, and tells you so in one sentence. You can also ask it explicitly, starting with “remember…”:</p>
 <div class="prompt">Remember: we number requirements FR01, FR02… and keep them in the “Requirements” package.</div>
 <div class="prompt">Remember that on BPMN diagrams we color system tasks green.</div>
 <p>Notes are shared by all models. When you want a note to apply to one model only, say so, for example “remember this only for this model”: the note is then used only in conversations with that model, and the “Assistant memory” view shows which model it belongs to.</p>
-<p>In the <b>ask</b> and <b>plan</b> modes, saving a note requires your approval, just like a change to the model. Saving a note does not interrupt the assistant's work on the current task. The whole content of the memory is sent to Claude with every request (chapter 16).</p>
+<p>In the <b>ask</b> and <b>plan</b> modes, saving a note requires your approval, just like a change to the model. Saving a note does not interrupt the assistant's work on the current task. The whole content of the memory is sent to the AI model with every request (chapter 17).</p>
 <h3>The “Assistant memory” view</h3>
 <ul>
   <li>A list of notes with dates.</li>
   <li><b>Remove</b> next to a note deletes it.</li>
   <li><b>Open memory folder</b> opens the <code>memory</code> folder in Explorer. The notes are Markdown files in it, and the index is in the <code>MEMORY.md</code> file.</li>
 </ul>
-<h2 id="s14">14. Approving changes and the audit log</h2>
-<p>You set the mode in the <b>Settings</b> view, on card 4. It decides whether and when the application asks for approval before saving to EA. Reading the model and showing diagrams never require approval. The current mode is also visible in the message card.</p>
+<h2 id="s15">15. Approving changes and the audit log</h2>
+<p>You set the mode in the <b>Settings</b> view, on the “Language and change approval” card. It decides whether and when the application asks for approval before saving to EA. Reading the model and showing diagrams never require approval. The current mode is also visible in the message card.</p>
 <table>
   <tr><th>Mode</th><th>When it asks for approval</th><th>For whom</th></tr>
   <tr><td><b>ask</b></td><td>Before every save, including saving a note to the memory and overwriting a template</td><td>Working on an important model; full control</td></tr>
   <tr><td><b>plan</b></td><td>Once, before the first save in a given assistant answer. Further saves in that answer go ahead without asking, except deleting objects, moving elements and diagrams, and copying packages: these always ask again.</td><td>Larger tasks, when the first save shows the direction</td></tr>
   <tr><td><b>auto</b></td><td>Never (exception: publishing to Confluence)</td><td>A test model or work that is easy to undo</td></tr>
 </table>
-<p>When approval is needed, a <b>“Claude wants to save changes to the model”</b> panel appears above the message field, with a description of the changes (how many packages, diagrams, elements and connectors, and the names of the objects being deleted, moved or copied) and the <b>Approve</b> and <b>Reject</b> buttons. A rejected save does not change the model; the assistant is informed of the rejection and may suggest something else.</p>
-<figure><img src="../img/approval.png" alt="Approval panel “Claude wants to save changes to the model” with the Approve and Reject buttons"><figcaption>The approval panel for a change in the model</figcaption></figure>
-<p>Publishing to Confluence always asks for approval, in every mode, and says when an existing page will be replaced (chapter 11).</p>
+<p>When approval is needed, a <b>“The assistant wants to save changes to the model”</b> panel appears above the message field, with a description of the changes (how many packages, diagrams, elements and connectors, and the names of the objects being deleted, moved or copied) and the <b>Approve</b> and <b>Reject</b> buttons. A rejected save does not change the model; the assistant is informed of the rejection and may suggest something else.</p>
+<figure><img src="../img/approval.png" alt="Approval panel “The assistant wants to save changes to the model” with the Approve and Reject buttons"><figcaption>The approval panel for a change in the model</figcaption></figure>
+<p>Publishing to Confluence always asks for approval, in every mode, and says when an existing page will be replaced (chapter 12).</p>
 <h3>Audit log</h3>
 <p>Every save by the assistant to the model, including failed ones, goes into the audit log (saves you rejected are not recorded, because nothing was saved). The <b>Model audit log</b> view shows the latest 200 entries, newest first: time, result, EA account, database and changes. The <b>Export to Excel</b> button saves the whole log as an XLSX workbook, for example for reviewing changes as a team, and <b>Open log file</b> opens the <code>audit_log.jsonl</code> file.</p>
-<h2 id="s15">15. Conversations: history, search, background work</h2>
+<h2 id="s16">16. Conversations: history, search, background work</h2>
 <ul>
   <li><b>New conversation:</b> the <b>+</b> button above the list of conversations. Every conversation is saved and comes back after the application is restarted.</li>
   <li><b>Groups:</b> conversations are grouped into “Today”, “Yesterday”, “Last 7 days” and “Earlier”.</li>
   <li><b>Search:</b> the “Search conversations…” field filters the list by title and by message content.</li>
   <li><b>Renaming:</b> click the pencil next to the selected conversation, type a name; <span class="key">Enter</span> saves, <span class="key">Esc</span> cancels.</li>
-  <li><b>Model of the conversation:</b> every conversation works with its own model. A new conversation uses the default model from the settings (the new conversation screen says which one); <b>Choose another model…</b> or the <b>Model: …</b> button in the header opens the model of the conversation. There you choose <b>Default from the settings</b> or <b>Another model</b>: a PostgreSQL database (server, port, database name, user, password, connection encryption) or an EA file (.qea, .qeax), and the EA account. <b>Test the connection</b> opens the model and counts packages, elements and diagrams; <b>Save</b> sets it for the conversation. Passwords of a connection that differs from the settings are kept in Windows Credential Manager. Changing the model of a conversation that already has messages applies to the next messages; the earlier answers refer to the previous model.</li>
+  <li><b>Model of the conversation:</b> every conversation works with its own EA model, and a new conversation starts with confirming that model. The new conversation screen shows the default model from the settings. <b>Choose another model…</b> opens the “Model of this conversation” window, where you choose <b>Default from the settings</b> or <b>Another model</b>: a PostgreSQL database (server, port, database name, user, password, connection encryption) or an EA file (.qea, .qeax), with the EA account and security options as on the Model card. <b>Test the connection</b> opens the model, counts packages, elements and diagrams, and saves a test package in it, which it checks and deletes at once. <b>Confirm the model and start</b> fixes the model of the conversation: it cannot be changed afterwards, and the <b>Model: …</b> button in the header shows it view only. To work with another model, start a new conversation. Changing the default model in the settings does not change conversations in progress. Passwords of a connection that differs from the settings are kept in Windows Credential Manager. In Compass in EA, the model of the conversation is always the project open in EA (chapter 9).</li>
   <li><b>EA file dropped on the window:</b> a .qea or .qeax file dropped on the chat becomes the model of the conversation instead of an attachment; in a conversation with messages, a new conversation starts with that file.</li>
   <li><b>Conversations from earlier versions</b> get a copy of the model from the settings when version 0.5 or later starts for the first time, so they keep working with that model even if the settings change later. Hovering over a conversation in the list shows its model.</li>
   <li><b>Several conversations at once:</b> while the assistant is working, you can start a new conversation or switch to another one. The work already started continues in the background.</li>
-  <li><b>Deleting:</b> conversations cannot be deleted in the application. If you need to, close the application and delete the conversation's file in the <code>history</code> folder (chapter 16).</li>
+  <li><b>Deleting:</b> conversations cannot be deleted in the application. If you need to, close the application and delete the conversation's file in the <code>history</code> folder (chapter 17).</li>
 </ul>
 <table>
   <tr><th>Dot next to a conversation</th><th>Meaning</th></tr>
@@ -390,7 +438,7 @@
   <tr><td class="c-green"><b>● green</b></td><td>The assistant has finished working in the background, and you have not looked at the result yet</td></tr>
 </table>
 <p>Saves to EA from different conversations are carried out one after another, not simultaneously. EA in the background keeps one model open at a time: switching between conversations with different models reopens it, which takes from a few to about 25 seconds. When the chat is scrolled up, the circle with an arrow above the message field takes you to the end of the conversation.</p>
-<h2 id="s16">16. Data, security and privacy</h2>
+<h2 id="s17">17. Data, security and privacy</h2>
 <h3>Where your data is</h3>
 <table>
   <tr><th>What</th><th>Where</th></tr>
@@ -401,54 +449,56 @@
   <tr><td>Assistant memory (<code>memory</code> folder with the <code>MEMORY.md</code> index)</td></tr>
   <tr><td>Document templates (<code>templates</code> folder)</td></tr>
   <tr><td>Audit log (<code>audit_log.jsonl</code>) and the list of published Confluence pages (<code>confluence_pages.json</code>)</td></tr>
-  <tr><td>Claude API key, EA account password, database password, Confluence token</td><td>Windows Credential Manager, entries “loonar-compass” (encrypted by the system). Nothing secret is stored in <code>app.properties</code>.</td></tr>
+  <tr><td>Claude API key, OpenAI API key, EA account password, database password, Confluence and Miro tokens</td><td>Windows Credential Manager, entries “loonar-compass” (encrypted by the system). Nothing secret is stored in <code>app.properties</code>.</td></tr>
 </table>
 <p>Conversation history is stored as plain files in your Windows profile, protected by your Windows account; the application does not encrypt it.</p>
-<h3>What is sent to Anthropic</h3>
-<p>So that the assistant can answer, every request to the Claude service (Anthropic) contains: the content of the conversation, the attached files, the full content of the assistant's memory, the list of templates with their descriptions, and what the assistant has read from the model in that conversation, i.e. the results of its database queries (names and descriptions of packages, elements, diagrams) and images of the diagrams shown. The whole database is not sent, only what the assistant asked for. After a language change, the content of the memory and templates to be translated is also sent to Claude. The data goes to Anthropic with your API key; Loonar does not receive it.</p>
-<div class="note"><b>Before you use the application on a company model</b>, check whether your organization's rules and your agreements with customers allow the content of the model to be passed to an external AI service, and which data processing terms apply to your Anthropic account.</div>
+<h3>What is sent to the AI model provider</h3>
+<p>So that the assistant can answer, every request to the chosen AI model provider (Anthropic or OpenAI, AI model card) contains: the content of the conversation, the attached files, the full content of the assistant's memory, the list of templates with their descriptions, and what the assistant has read from the model in that conversation, i.e. the results of its database queries (names and descriptions of packages, elements, diagrams) and images of the diagrams shown. The whole database is not sent, only what the assistant asked for. After a language change, the content of the memory and templates to be translated is also sent. The data goes directly to the chosen provider (api.anthropic.com or api.openai.com) with your API key; the other provider receives nothing, and Loonar does not receive it.</p>
+<div class="note"><b>Before you use the application on a company model</b>, check whether your organization's rules and your agreements with customers allow the content of the model to be passed to an external AI service, and which data processing terms apply to your account with the chosen provider (Anthropic or OpenAI).</div>
 <h3>The assistant's permissions</h3>
 <ul>
-  <li>The assistant reads the database in a read-only session, and a model file read-only, with a time limit for each query; server functions that read files or affect other sessions are blocked. All changes go through Enterprise Architect, under the account given in the settings, so the permissions and locks of that account apply to them.</li>
-  <li>In Confluence, the assistant works with the permissions of the token from card 6 and publishes only after your approval.</li>
+  <li>The assistant reads the database in a read-only session, and a model file read-only, with a time limit for each query; server functions that read files or affect other sessions are blocked. All changes go through Enterprise Architect, under the model's EA account (from the Model card or from the model of the conversation), so the permissions and locks of that account apply to them. Compass in EA reads and writes the model through the EA window it is open in, under the account you logged in to EA with.</li>
+  <li>In Confluence, the assistant works with the permissions of the token from the “Confluence” card and publishes only after your approval.</li>
   <li>The assistant has no access to files on disk other than those you attach to it yourself and its own memory and templates folders. Images drawn by the assistant cannot read files from disk or from the network.</li>
   <li>The assistant treats the content of attachments, documents and the model as data, not as instructions.</li>
   <li>The connection string of your open EA window, with its login details, is never sent to the model.</li>
 </ul>
 <h3>Connections and encryption</h3>
 <ul>
-  <li>The Claude API and Confluence are used over HTTPS only.</li>
-  <li>The connection to the model database supports TLS (card 2, see “Database connection encryption” in chapter 5). Tip: administrators can enforce TLS for all clients with <code>hostssl</code> entries in <code>pg_hba.conf</code>. Enterprise Architect's own connection to the database follows EA's settings.</li>
+  <li>The AI model API (Anthropic or OpenAI), Confluence and Miro are used over HTTPS only.</li>
+  <li>The connection to the model database supports TLS (Model card, see “Database connection encryption” in chapter 5). Tip: administrators can enforce TLS for all clients with <code>hostssl</code> entries in <code>pg_hba.conf</code>. Enterprise Architect's own connection to the database follows EA's settings.</li>
   <li>The application uses the proxy from the Windows Internet settings and the HTTPS_PROXY and ALL_PROXY variables. Proxies with a PAC script and NTLM/Kerberos proxy authentication are not supported.</li>
-  <li>Temporary Claude API errors (overload 529 or other 5xx errors, rate limit 429) are retried automatically.</li>
+  <li>Temporary errors of the AI model API (overload 529 or other 5xx errors, rate limit 429) are retried automatically.</li>
 </ul>
-<h2 id="s17">17. Troubleshooting</h2>
+<h2 id="s18">18. Troubleshooting</h2>
 <table>
   <tr><th>Symptom</th><th>What to do</th></tr>
   <tr><td>The application opens on the “Settings” view</td><td>Settings or secrets are missing. Fill in the cards and save each one with its “Save and test…” button.</td></tr>
-  <tr><td>“The Claude API rejected the API key (401)”</td><td>The key is wrong or has been revoked. Paste the current key from the Anthropic Console on card 1.</td></tr>
-  <tr><td>“The Claude API returned … with a response that is not from the API”</td><td>A proxy or firewall is probably blocking api.anthropic.com. Ask your IT department to allow the connection. The application uses the proxy from the Windows Internet settings or the HTTPS_PROXY / ALL_PROXY variables; PAC scripts and NTLM/Kerberos proxy authentication are not supported.</td></tr>
+  <tr><td>“The Claude API rejected the API key (401)” or “The OpenAI API rejected the API key (401)”</td><td>The key is wrong or has been revoked. Paste the current key of the chosen provider (from the Anthropic Console or the OpenAI platform) on the “AI model” card.</td></tr>
+  <tr><td>“The OpenAI API does not know the model … (404)”</td><td>The model id on the “AI model” card is wrong, or your OpenAI account has no access to that model. Choose a model from the <b>▾</b> list.</td></tr>
+  <tr><td>“The Claude API returned … with a response that is not from the API”</td><td>A proxy or firewall is probably blocking api.anthropic.com (or api.openai.com when OpenAI is the provider). Ask your IT department to allow the connection. The application uses the proxy from the Windows Internet settings or the HTTPS_PROXY / ALL_PROXY variables; PAC scripts and NTLM/Kerberos proxy authentication are not supported.</td></tr>
   <tr><td>“The Claude API rate limit was reached (429)” or “The Claude API is overloaded or temporarily unavailable”</td><td>The application has already retried the request several times. Wait a moment and send the message again.</td></tr>
   <tr><td>File test: “this does not look like an Enterprise Architect model file”</td><td>Choose a .qea or .qeax project file created by Enterprise Architect 16 or later. Older .eap/.eapx files must first be converted to .qea in EA (project transfer).</td></tr>
   <tr><td>Database test: no connection</td><td>Check the server, port, database name, user and password, and whether the PostgreSQL server accepts connections from this computer. The database password must not contain a semicolon (;).</td></tr>
   <tr><td>“The connection is NOT encrypted: the server does not offer TLS”, or the connection fails with “Required” or “Required, certificate verified”</td><td>The server does not offer TLS: ask the database administrator to enable it. With certificate verification, the server certificate must be trusted in the Windows certificate store (for example through your company's certificate authority) and the server name must match the certificate.</td></tr>
-  <tr><td>The database test warns that the account is a superuser</td><td>Superuser rights are not needed. Ask the administrator for a normal account with read and write rights on the model tables, without superuser rights: the assistant only reads the database, but Enterprise Architect saves changes with the same account. Enter it on card 2.</td></tr>
-  <tr><td>“EA did not respond within 300 s”</td><td>Most often a wrong model user account or password (EA then waits at an invisible login window) or no free license. Correct the details on card 3 and use “Save and test EA login”.</td></tr>
+  <tr><td>The database test warns that the account is a superuser</td><td>Superuser rights are not needed. Ask the administrator for a normal account with read and write rights on the model tables, without superuser rights: the assistant only reads the database, but Enterprise Architect saves changes with the same account. Enter it on the Model card.</td></tr>
+  <tr><td>“EA did not respond within 300 s”</td><td>Most often a wrong model user account or password (EA then waits at an invisible login window) or no free license. Correct the details on the Model card (EA account, database details) and use “Save and test EA access” on the Enterprise Architect card.</td></tr>
   <tr><td>The first save or the first diagram takes a long time</td><td>This is Enterprise Architect starting in the background (from a few to over ten seconds). Subsequent calls are fast.</td></tr>
-  <tr><td>“The model's answer was cut off at the limit of … tokens”</td><td>Increase “Max tokens” on card 1 or ask for the task to be done in smaller parts.</td></tr>
+  <tr><td>“The model's answer was cut off at the limit of … tokens”</td><td>Increase “Max tokens” on the “AI model” card or ask for the task to be done in smaller parts.</td></tr>
   <tr><td>“The assistant took 24 steps without finishing”</td><td>The answer reached the step limit. Send a new message, for example “continue”, and the assistant carries on from where it stopped.</td></tr>
   <tr><td>Changes are not visible in Enterprise Architect</td><td>If the same model is open in EA, the assistant refreshes it by itself. Otherwise, refresh the package in the Project Browser (<span class="key">F5</span>) or open the diagram again.</td></tr>
   <tr><td>“Cannot lock the object”</td><td>The object is locked by another model user; the message says who. Release the lock in EA or ask its owner to do so.</td></tr>
-  <tr><td>Orange “!” on the Settings, Assistant memory and Document templates icons</td><td>After a language change, the translation is waiting for a connection to Claude. Check the API key on card 1 and click “Translate now” on card 4, or restart the application.</td></tr>
-  <tr><td>Publishing to Confluence fails</td><td>Check card 6 with the “Save and test Confluence connection” button: the address (it must start with https://), token, space key, and for Cloud also the email address. You can also paste the page manually with the “Copy page code” button.</td></tr>
+  <tr><td>Orange “!” on the Settings, Assistant memory and Document templates icons</td><td>After a language change, the translation is waiting for a connection to the AI model. Check the API key on the “AI model” card and click “Translate now” on the “Language and change approval” card, or restart the application.</td></tr>
+  <tr><td>Publishing to Confluence fails</td><td>Check the “Confluence” card with the “Save and test Confluence connection” button: the address (it must start with https://), token, space key, and for Cloud also the email address. You can also paste the page manually with the “Copy page code” button.</td></tr>
   <tr><td>After a baseline you need to go back to an earlier version of the package</td><td>In EA: right-click the package → Manage Baselines → Compare/Restore.</td></tr>
   <tr><td>The assistant claims it cannot do something</td><td>Ask: “What can you do in this application?”. If the feature is on the list in the “Changelog” view, tell it so explicitly and ask it to try again.</td></tr>
+  <tr><td>There is no Loonar Compass button on EA's Start ribbon, or it is disabled</td><td>Run the installer again with the option “Add Loonar Compass to Enterprise Architect” selected, then restart EA. The button works only with a project open (chapter 9).</td></tr>
   <tr><td>Files cannot be dragged into the window</td><td>The application was started as administrator. Close it and start it with the normal shortcut.</td></tr>
-  <tr><td>“The program hit an unexpected error and has to close”</td><td>Your conversations and settings are saved. The details are in the file <code>%TEMP%\loonar-compass-crash.log</code>: attach it to a bug report (chapter 18).</td></tr>
+  <tr><td>“The program hit an unexpected error and has to close”</td><td>Your conversations and settings are saved. The details are in the file <code>%TEMP%\loonar-compass-crash.log</code>: attach it to a bug report (chapter 19).</td></tr>
   <tr><td>“The settings file … contains an error”</td><td>The message gives the faulty value. Correct it on the relevant card and save the card again.</td></tr>
   <tr><td>Windows SmartScreen warns when the installer starts</td><td>The installer is not digitally signed yet. Click “More info” and then “Run anyway”. With Smart App Control turned on, Windows blocks unsigned applications; wait for the signed version.</td></tr>
 </table>
-<h2 id="s18">18. Reporting bugs and new releases</h2>
+<h2 id="s19">19. Reporting bugs and new releases</h2>
 <h3>Report a bug</h3>
 <ol>
   <li>Click the <b>Report a bug</b> icon in the navigation bar.</li>
@@ -459,14 +509,14 @@
 </ol>
 <p>The report goes to Loonar Mariusz Głowacki and is used only to answer it and to improve the application; the details are in the <a href="https://loonar.eu/privacy/">privacy policy</a>, linked from the form. The temporary copies of the images are deleted as soon as the mail program has taken them. If the mail program does not accept attachments from other applications, a message without images opens together with the folder containing the images: drag them into the message. Only in this case do the copies stay in that folder.</p>
 <h3>New releases (newsletter)</h3>
-<p>On the <b>“5. New releases (newsletter)”</b> card in the settings, enter your email address and select “I want to receive news about new releases”: a short email when a new version is released, with a description of the changes and where to download it, without ads. Your choice is stored in the settings, and subscribing and unsubscribing are sent to the author as a message from the mail program. Your address is used only for this news, based on your consent, until you withdraw it: clear the option and save, or write an email. The card links to the privacy policy.</p>
-<h2 id="s20">20. License, trademarks and contact</h2>
+<p>On the <b>“New releases (newsletter)”</b> card in the settings, enter your email address and select “I want to receive news about new releases”: a short email when a new version is released, with a description of the changes and where to download it, without ads. Your choice is stored in the settings, and subscribing and unsubscribing are sent to the author as a message from the mail program. Your address is used only for this news, based on your consent, until you withdraw it: clear the option and save, or write an email. The card links to the privacy policy.</p>
+<h2 id="s21">21. License, trademarks and contact</h2>
 <p><b>License.</b> Loonar Compass is freeware: you may use it free of charge on any number of computers, also for professional and commercial purposes, without time or territorial limits, and pass on unmodified copies free of charge. Modifying the application is prohibited. The license also sets out rules on AI-generated output (you review it before you approve it or rely on it), on data and on open-source components. The Polish version of the license is binding; the English, German and French versions are translations. The full text is in the <b>About</b> view and in the installation folder: <code>LICENSE.txt</code> in the installation language and, for languages other than Polish, <code>LICENSE.pl.txt</code> with the binding Polish version.</p>
 <p><b>Privacy.</b> The application collects no data (no telemetry). How bug reports and newsletter sign-ups are processed is described in the <a href="https://loonar.eu/privacy/">privacy policy</a>; the owner's details are in the <a href="https://loonar.eu/legal/">legal notice</a>.</p>
 <p><b>Open-source components.</b> The application includes open-source libraries and fonts; each keeps its own license. The list and the license texts are in the <code>THIRD-PARTY-NOTICES.txt</code> file in the installation folder; in the <b>About</b> view, click <b>Show licenses of the components</b>.</p>
 <p><b>Support.</b> The application is free and will stay free. If you want to support its development, use the <b>Support the project</b> view or go to <a href="https://suppi.pl/loonar">suppi.pl/loonar</a>. The source code is at <a href="https://github.com/loonar-eu/loonar-compass">github.com/loonar-eu/loonar-compass</a>.</p>
 <p>Application owner: Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard.<br>Contact: mariusz@loonar.eu, <a href="https://loonar.eu">loonar.eu</a>. The most convenient way to report bugs is the <b>Report a bug</b> view.</p>
-<p>Loonar Compass 0.7. Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. Atlassian, Confluence and Jira are trademarks of Atlassian. Microsoft, Windows, Word and Excel are trademarks of the Microsoft group of companies. PostgreSQL is a registered trademark of the PostgreSQL Community Association. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.</p>
+<p>Loonar Compass 0.7. Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. OpenAI and GPT are trademarks of OpenAI. Atlassian, Confluence and Jira are trademarks of Atlassian. Microsoft, Windows, Word and Excel are trademarks of the Microsoft group of companies. PostgreSQL is a registered trademark of the PostgreSQL Community Association. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.</p>
     </article>
   </div>
 </main>
@@ -474,7 +524,7 @@
 <footer class="site-footer">
   <div class="wrap ftr">
     <div class="ftr-brand"><img src="../../../assets/img/logo.svg" alt="" width="40" height="40"><div><strong>Loonar Compass</strong><br>© 2026 Loonar Mariusz Głowacki<br>ul. Gombrowicza 12, 73-110 Stargard, Poland<br><a href="mailto:mariusz@loonar.eu">mariusz@loonar.eu</a></div></div>
-    <div class="ftr-txt"><p>Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. Atlassian and Confluence are trademarks of Atlassian. Microsoft, Windows, Word, Excel, GitHub and LinkedIn are trademarks of the Microsoft group of companies. PostgreSQL is a registered trademark of the PostgreSQL Community Association. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.</p><p>No cookies. Anonymous visit statistics (GoatCounter) that keep no personal data. Your language choice is remembered in your browser.</p></div>
+    <div class="ftr-txt"><p>Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. OpenAI is a trademark of OpenAI. Atlassian and Confluence are trademarks of Atlassian. Microsoft, Windows, Word, Excel, GitHub and LinkedIn are trademarks of the Microsoft group of companies. PostgreSQL is a registered trademark of the PostgreSQL Community Association. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.</p><p>No cookies. Anonymous visit statistics (GoatCounter) that keep no personal data. Your language choice is remembered in your browser.</p></div>
     <nav class="lang ftr-lang" aria-label="Language"><ul><li><a href="../en/" hreflang="en" lang="en" data-lang-link="en" title="English" aria-current="page">EN</a></li><li><a href="../pl/" hreflang="pl" lang="pl" data-lang-link="pl" title="Polski">PL</a></li><li><a href="../de/" hreflang="de" lang="de" data-lang-link="de" title="Deutsch">DE</a></li><li><a href="../fr/" hreflang="fr" lang="fr" data-lang-link="fr" title="Français">FR</a></li></ul></nav>
   </div>
   <div class="wrap ftr-bottom">

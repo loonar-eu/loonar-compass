@@ -2,6 +2,15 @@
 
 Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen Loonar EA Assistant).
 
+## Version 0.7.6 (2026-10-22)
+
+- KI-Modell wählbar: Anbieter Anthropic (Claude) oder OpenAI, beliebiges Modell (aus der Liste oder eigene ID) und Aufwandsstufe (von „Standard des Modells“ bis max). Standard unverändert: Claude Haiku 5.5. Jeder Anbieter hat einen eigenen API-Schlüssel in der Anmeldeinformationsverwaltung; Daten gehen nur an den gewählten.
+- Einstellungen ohne Kartennummern; die erste Karte heißt „KI-Modell“.
+- Strukturierte Szenarien von Elementen: Der Assistent legt Szenarien im Tab Scenarios an, ändert und löscht sie, mit Akteur- und Systemschritten.
+- Compass in EA: Unterhaltung umbenennen (Stift neben der Unterhaltungsliste).
+- Fortschrittsmeldungen lauten „Der Assistent …“ statt „Claude …“.
+- Benutzerhandbuch: neues Kapitel „Compass in Enterprise Architect“, Karte „KI-Modell“, Projektglossar und Szenarien.
+
 ## Version 0.7.5 (2026-10-22)
 
 - Korrektur: Compass in EA füllt seinen ganzen Bereich und folgt jeder Größenänderung, auch in einem schwebenden Fenster und in einer Tab-Gruppe.

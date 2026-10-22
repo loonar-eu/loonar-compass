@@ -2741,7 +2741,7 @@ impl App {
                         });
                         ui.end_row();
                     });
-                    ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("The EA account is set with the model (card 2): it belongs to the model file or database.")).small().color(theme::MUTED)).wrap());
+                    ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("The EA account is set with the model (the Model card): it belongs to the model file or database.")).small().color(theme::MUTED)).wrap());
                     self.group_footer(ui, &ctx, GROUP_EA, crate::i18n::tr("Save and test EA access"));
                 });
             });

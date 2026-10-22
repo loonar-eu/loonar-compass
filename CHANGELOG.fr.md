@@ -2,6 +2,15 @@
 
 Toutes les modifications importantes de l'application Loonar Compass (nommée Loonar EA Assistant jusqu'à la version 0.3).
 
+## Version 0.7.6 (2026-10-22)
+
+- Choix du modèle d'IA : fournisseur Anthropic (Claude) ou OpenAI, n'importe quel modèle (dans la liste ou identifiant libre) et niveau d'effort (de « par défaut du modèle » à max). Par défaut, rien ne change : Claude Haiku 5.5. Chaque fournisseur a sa propre clé API dans le Gestionnaire d'identification ; les données vont uniquement au fournisseur choisi.
+- Paramètres sans numéros de cartes ; la première carte est « Modèle d'IA ».
+- Scénarios structurés d'éléments : l'assistant crée, modifie et supprime des scénarios dans l'onglet Scenarios, avec étapes acteur et système.
+- Compass dans EA : renommer une conversation (crayon à côté de la liste).
+- Les messages de progression disent « L'assistant … » au lieu de « Claude … ».
+- Guide utilisateur : nouveau chapitre « Compass dans Enterprise Architect », carte « Modèle d'IA », glossaire du projet et scénarios.
+
 ## Version 0.7.5 (2026-10-22)
 
 - Correction : Compass dans EA remplit tout son panneau et suit chaque changement de taille, y compris dans une fenêtre flottante et un groupe d'onglets.
