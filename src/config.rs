@@ -6,6 +6,10 @@ use std::path::{Path, PathBuf};
 
 /// The only model the application uses. It is not a user setting.
 pub const CLAUDE_MODEL: &str = "claude-haiku-5-5";
+/// Claude models offered in the settings (any other id can still be set in app.properties).
+pub const CLAUDE_MODELS: [&str; 4] = ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-1"];
+/// Effort levels of the Claude API (output_config.effort); "" = the model's default.
+pub const EFFORTS: [&str; 6] = ["", "low", "medium", "high", "xhigh", "max"];
 
 /// Product name: user data folder, window titles, shortcuts.
 pub const APP_NAME: &str = "Loonar Compass";
@@ -111,6 +115,8 @@ impl SslMode {
 pub struct AppConfig {
     pub base_dir: PathBuf,
     pub claude_model: String,
+    /// Effort (output_config.effort): low | medium | high | xhigh | max; empty = the model's default.
+    pub claude_effort: String,
     pub claude_max_tokens: u32,
     /// Workspace ID from the Anthropic Console: required for an API key that is not scoped to a workspace
     /// (empty = the header is not sent).
@@ -248,7 +254,8 @@ impl AppConfig {
 
         Ok(Self {
             // The model is fixed: the `claude.model` entry in the file is informational only and does not change the model.
-            claude_model: CLAUDE_MODEL.to_string(),
+            claude_model: get_or("claude.model", CLAUDE_MODEL),
+            claude_effort: get_or("claude.effort", ""),
             claude_max_tokens: get_or("claude.max_tokens", "10000").parse().context("claude.max_tokens")?,
             claude_workspace_id: get_or("claude.workspace_id", ""),
             model_source: ModelSource::parse(&get_or("model.source", "postgres")).context("model.source")?,

@@ -53,25 +53,23 @@ Message added. Claude will take it into account at the next step. ‖ Wiadomoś�
 Claude is writing… ‖ Claude pisze… ‖ Claude schreibt… ‖ Claude écrit…
 Settings ‖ Ustawienia ‖ Einstellungen ‖ Paramètres
 Each group is saved separately; after saving, the application immediately checks that the details work. Leave a password or key field empty to keep the current value. ‖ Każdą kartę zapisujesz osobno; po zapisie aplikacja od razu sprawdza, czy dane działają. Puste pole hasła lub klucza oznacza brak zmiany. ‖ Jede Gruppe wird einzeln gespeichert; danach prüft die Anwendung sofort, ob die Daten funktionieren. Ein leeres Passwort- oder Schlüsselfeld bedeutet keine Änderung. ‖ Chaque groupe s'enregistre séparément ; après l'enregistrement, l'application teste aussitôt les données saisies. Un champ de mot de passe ou de clé laissé vide conserve la valeur actuelle.
-1. Claude ‖ 1. Claude ‖ 1. Claude ‖ 1. Claude
+Claude ‖ Claude ‖ Claude ‖ Claude
 Model ‖ Model ‖ Modell ‖ Modèle
 Max tokens ‖ Max tokenów ‖ Max. Tokens ‖ Jetons max.
 Claude API key ‖ Klucz API Claude ‖ Claude-API-Schlüssel ‖ Clé API Claude
 Save and test key ‖ Zapisz i sprawdź klucz ‖ Speichern und Schlüssel prüfen ‖ Enregistrer et tester la clé
 Approval mode ‖ Tryb ‖ Modus ‖ Mode
-2. Model database (PostgreSQL) ‖ 2. Baza modelu (PostgreSQL) ‖ 2. Modelldatenbank (PostgreSQL) ‖ 2. Base de données du modèle (PostgreSQL)
 Server ‖ Serwer ‖ Server ‖ Serveur
 Database name ‖ Nazwa bazy ‖ Datenbankname ‖ Nom de la base
 Database user ‖ Konto bazy ‖ Datenbankkonto ‖ Compte de la base
 Database password ‖ Hasło do bazy ‖ Datenbankpasswort ‖ Mot de passe de la base
 Save and test connection ‖ Zapisz i sprawdź połączenie ‖ Speichern und Verbindung prüfen ‖ Enregistrer et tester la connexion
-3. Enterprise Architect ‖ 3. Enterprise Architect ‖ 3. Enterprise Architect ‖ 3. Enterprise Architect
 Path to EA.exe ‖ Ścieżka do EA.exe ‖ Pfad zu EA.exe ‖ Chemin d'EA.exe
 Choose EA.exe ‖ Wskaż EA.exe ‖ EA.exe auswählen ‖ Choisir EA.exe
 EA user account ‖ Konto użytkownika EA ‖ EA-Benutzerkonto ‖ Compte utilisateur EA
 EA account password ‖ Hasło konta EA ‖ Passwort des EA-Kontos ‖ Mot de passe du compte EA
 Save and test EA login ‖ Zapisz i sprawdź logowanie do EA ‖ Speichern und EA-Anmeldung prüfen ‖ Enregistrer et tester la connexion à EA
-6. Confluence ‖ 6. Confluence ‖ 6. Confluence ‖ 6. Confluence
+Confluence ‖ Confluence ‖ Confluence ‖ Confluence
 Confluence address ‖ Adres Confluence ‖ Confluence-Adresse ‖ Adresse Confluence
 e.g. https://confluence.example.com ‖ np. https://confluence.firma.pl ‖ z. B. https://confluence.firma.de ‖ p. ex. https://confluence.societe.fr
 Email (Cloud only) ‖ E-mail (tylko Cloud) ‖ E-Mail (nur Cloud) ‖ E-mail (Cloud uniquement)
@@ -104,7 +102,7 @@ Send report ‖ Wyślij zgłoszenie ‖ Meldung senden ‖ Envoyer le signalemen
 First describe what happened. ‖ Opisz najpierw, co się stało. ‖ Beschreiben Sie zuerst, was passiert ist. ‖ Décrivez d'abord ce qui s'est passé.
 Opening the message in your mail program… ‖ Otwieranie wiadomości w programie pocztowym… ‖ Nachricht wird im E-Mail-Programm geöffnet… ‖ Ouverture du message dans votre logiciel de messagerie…
 Saved in settings, but the message could not be prepared: {0} ‖ Zapisano w ustawieniach, ale nie udało się przygotować wiadomości: {0} ‖ In den Einstellungen gespeichert, aber die Nachricht konnte nicht vorbereitet werden: {0} ‖ Enregistré dans les paramètres, mais le message n'a pas pu être préparé : {0}
-5. New releases (newsletter) ‖ 5. Nowe wydania (newsletter) ‖ 5. Neue Versionen (Newsletter) ‖ 5. Nouvelles versions (newsletter)
+New releases (newsletter) ‖ Nowe wydania (newsletter) ‖ Neue Versionen (Newsletter) ‖ Nouvelles versions (newsletter)
 A short email when a new version is released: what's new and where to get it. No ads; unsubscribe at any time. ‖ Krótki e-mail, gdy wyjdzie nowa wersja aplikacji: co nowego i skąd ją pobrać. Bez reklam, rezygnacja w każdej chwili. ‖ Eine kurze E-Mail, wenn eine neue Version erscheint: was neu ist und wo Sie sie herunterladen können. Keine Werbung, jederzeit abbestellbar. ‖ Un court e-mail à chaque nouvelle version : nouveautés et où la télécharger. Sans publicité, désinscription à tout moment.
 Email address ‖ Adres e-mail ‖ E-Mail-Adresse ‖ Adresse e-mail
 Subscribe ‖ Subskrypcja ‖ Abonnieren ‖ M'inscrire
@@ -260,7 +258,7 @@ Page code copied. In Confluence, paste it into the source editor and add the ima
 Could not copy the page code: {0} ‖ Nie udało się skopiować kodu strony: {0} ‖ Seitencode konnte nicht kopiert werden: {0} ‖ Impossible de copier le code de la page : {0}
 Could not open the image: {0} ‖ Nie udało się otworzyć obrazka: {0} ‖ Bild konnte nicht geöffnet werden: {0} ‖ Impossible d'ouvrir l'image : {0}
 Language ‖ Język ‖ Sprache ‖ Langue
-4. Language and change approval ‖ 4. Język i zatwierdzanie zmian ‖ 4. Sprache und Freigabe von Änderungen ‖ 4. Langue et validation des modifications
+Language and change approval ‖ Język i zatwierdzanie zmian ‖ Sprache und Freigabe von Änderungen ‖ Langue et validation des modifications
 Language changed, but memory and templates are waiting to be translated by Claude: {0} ‖ Język zmieniony, ale pamięć i szablony czekają na przetłumaczenie przez Claude: {0} ‖ Sprache geändert, aber Gedächtnis und Vorlagen warten auf die Übersetzung durch Claude: {0} ‖ Langue modifiée, mais la mémoire et les modèles attendent d'être traduits par Claude : {0}
 Translating memory and templates into the new language… ‖ Tłumaczenie pamięci i szablonów na nowy język… ‖ Gedächtnis und Vorlagen werden in die neue Sprache übersetzt… ‖ Traduction de la mémoire et des modèles dans la nouvelle langue…
 The language has been changed, but settings, assistant memory and templates are not translated yet. Translation needs a connection to Claude (API key in Settings) and starts automatically once the connection works. ‖ Język został zmieniony, ale ustawienia, pamięć asystenta i szablony nie są jeszcze przetłumaczone. Tłumaczenie wymaga połączenia z Claude (klucz API w Ustawieniach) i rozpocznie się automatycznie, gdy połączenie zacznie działać. ‖ Die Sprache wurde geändert, aber Einstellungen, Gedächtnis des Assistenten und Vorlagen sind noch nicht übersetzt. Die Übersetzung benötigt eine Verbindung zu Claude (API-Schlüssel in den Einstellungen) und startet automatisch, sobald die Verbindung funktioniert. ‖ La langue a été modifiée, mais les paramètres, la mémoire de l'assistant et les modèles ne sont pas encore traduits. La traduction nécessite une connexion à Claude (clé API dans les Paramètres) et démarre automatiquement dès que la connexion fonctionne.
@@ -732,7 +730,6 @@ Workspace ID ‖ Workspace ID ‖ Workspace-ID ‖ ID de l'espace de travail (wo
 optional, e.g. wrkspc_… ‖ opcjonalnie, np. wrkspc_… ‖ optional, z. B. wrkspc_… ‖ facultatif, p. ex. wrkspc_…
 The API key is not assigned to a workspace: enter the Workspace ID from the Anthropic Console in Settings → 1. Claude ({0}). ‖ Klucz API nie jest przypisany do workspace’u: wpisz Workspace ID z konsoli Anthropic w Ustawienia → 1. Claude ({0}). ‖ Der API-Schlüssel ist keinem Workspace zugeordnet: Geben Sie die Workspace-ID aus der Anthropic Console unter Einstellungen → 1. Claude ein ({0}). ‖ La clé API n'est rattachée à aucun espace de travail : saisissez l'ID de l'espace de travail de la console Anthropic dans Paramètres → 1. Claude ({0}).
 {0}: {1}@@count ‖ {0}: {1} ‖ {0}: {1} ‖ {0} : {1}
-2. Model ‖ 2. Model ‖ 2. Modell ‖ 2. Modèle
 Choose an Enterprise Architect project file .qea or .qeax ‖ Wybierz plik projektu Enterprise Architect .qea albo .qeax ‖ Wählen Sie eine Enterprise-Architect-Projektdatei .qea oder .qeax ‖ Choisissez un fichier de projet Enterprise Architect .qea ou .qeax
 Choose the model file ‖ Wybierz plik modelu ‖ Modelldatei auswählen ‖ Choisir le fichier du modèle
 EA file (.qea, .qeax) ‖ Plik EA (.qea, .qeax) ‖ EA-Datei (.qea, .qeax) ‖ Fichier EA (.qea, .qeax)
@@ -916,7 +913,7 @@ Showing the first {0}. Type more to narrow the list. ‖ Pokazano pierwsze {0}. 
 Saves the changes, closes the editor and asks Claude in the conversation to tidy up the layout. ‖ Zapisuje zmiany, zamyka edytor i prosi Claude w rozmowie o uporządkowanie układu. ‖ Speichert die Änderungen, schließt den Editor und bittet Claude in der Unterhaltung, das Layout aufzuräumen. ‖ Enregistre les modifications, ferme l'éditeur et demande à Claude, dans la conversation, de réorganiser la disposition.
 Tidy up the layout of diagram "{0}" (id {1}): arrange the elements so the diagram reads well, align them and route the relationships without crossings. Do not add, delete or rename elements or relationships. ‖ Uporządkuj układ diagramu „{0}” (id {1}): rozmieść elementy tak, żeby diagram dobrze się czytał, wyrównaj je i poprowadź relacje bez przecięć. Nie dodawaj, nie usuwaj i nie zmieniaj nazw elementów ani relacji. ‖ Räume das Layout des Diagramms „{0}“ (ID {1}) auf: Ordne die Elemente gut lesbar an, richte sie aus und führe die Beziehungen ohne Kreuzungen. Füge keine Elemente oder Beziehungen hinzu, lösche oder benenne keine um. ‖ Réorganise la disposition du diagramme « {0} » (id {1}) : place les éléments pour que le diagramme se lise bien, aligne-les et trace les relations sans croisements. N'ajoute, ne supprime et ne renomme ni éléments ni relations.
 Tidy with AI ‖ Uporządkuj z AI ‖ Mit KI aufräumen ‖ Réorganiser avec l'IA
-7. Miro ‖ 7. Miro ‖ 7. Miro ‖ 7. Miro
+Miro ‖ Miro ‖ Miro ‖ Miro
 Access token ‖ Token dostępu ‖ Zugriffstoken ‖ Jeton d'accès
 Board ‖ Tablica ‖ Board ‖ Tableau
 Diagram "{0}" ‖ Diagram „{0}” ‖ Diagramm „{0}“ ‖ Diagramme « {0} »
@@ -1044,3 +1041,10 @@ scenario '{0}' ‖ scenariusz „{0}” ‖ Szenario „{0}“ ‖ scénario « 
 scenario step {0} ‖ krok scenariusza {0} ‖ Szenarioschritt {0} ‖ étape de scénario {0}
 structured scenarios of elements ‖ scenariusze elementów ‖ strukturierte Szenarien von Elementen ‖ scénarios structurés d'éléments
 Rename the conversation ‖ Zmień nazwę rozmowy ‖ Unterhaltung umbenennen ‖ Renommer la conversation
+
+AI model ‖ Model AI ‖ KI-Modell ‖ Modèle d'IA
+Effort ‖ Poziom wysiłku ‖ Aufwand ‖ Effort
+model default ‖ domyślny dla modelu ‖ Standard des Modells ‖ par défaut du modèle
+Higher effort: more thorough answers and model work, more tokens and time. Lower: faster and cheaper. ‖ Wyższy poziom: dokładniejsze odpowiedzi i praca na modelu, więcej tokenów i czasu. Niższy: szybciej i taniej. ‖ Höherer Aufwand: gründlichere Antworten, mehr Tokens und Zeit. Niedriger: schneller und günstiger. ‖ Effort plus élevé : réponses plus approfondies, plus de jetons et de temps. Plus bas : plus rapide et moins cher.
+scenario '{0}' was not found on the element ‖ nie znaleziono scenariusza „{0}” w elemencie ‖ Szenario „{0}“ wurde am Element nicht gefunden ‖ scénario « {0} » introuvable sur l'élément
+structured scenarios DELETED ‖ scenariusze USUNIĘTE ‖ Szenarien GELÖSCHT ‖ scénarios SUPPRIMÉS

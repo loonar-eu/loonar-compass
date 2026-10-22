@@ -1,4 +1,4 @@
-//! Claude Messages API client. The only model provider: `claude-haiku-5-5`.
+//! Claude Messages API client. The model and effort come from the settings.
 
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
@@ -19,6 +19,8 @@ pub struct ClaudeClient {
     max_tokens: u32,
     /// Workspace ID: needed when the API key is not scoped to a workspace (empty = no header).
     workspace_id: String,
+    /// Effort level sent as output_config.effort (empty = the model's default).
+    effort: String,
 }
 
 impl ClaudeClient {
@@ -27,7 +29,13 @@ impl ClaudeClient {
             .timeout(Duration::from_secs(300))
             .connect_timeout(Duration::from_secs(20))
             .build()?;
-        Ok(Self { http, api_key, model, max_tokens, workspace_id: workspace_id.trim().to_string() })
+        Ok(Self { http, api_key, model, max_tokens, workspace_id: workspace_id.trim().to_string(), effort: String::new() })
+    }
+
+    /// Effort for the requests of this client (the model's default when empty).
+    pub fn with_effort(mut self, effort: &str) -> Self {
+        self.effort = effort.trim().to_string();
+        self
     }
 
     /// One Messages API call. Returns the whole response (with `content` and `stop_reason`),
@@ -41,6 +49,9 @@ impl ClaudeClient {
         });
         if let Some(t) = tools {
             body["tools"] = t.clone();
+        }
+        if !self.effort.is_empty() {
+            body["output_config"] = json!({ "effort": self.effort });
         }
         let mut attempt = 1;
         loop {
@@ -137,5 +148,21 @@ mod tests {
     fn refusal_is_reported() {
         assert!(super::check_refusal(&serde_json::json!({ "stop_reason": "refusal", "content": [] })).is_err());
         assert!(super::check_refusal(&serde_json::json!({ "stop_reason": "end_turn", "content": [] })).is_ok());
+    }
+}
+
+#[cfg(test)]
+mod model_probe {
+    /// Every offered model answers with an effort level (real API, key from the Credential Manager).
+    #[test]
+    #[ignore]
+    fn models_accept_effort() {
+        let key = crate::config::secrets::get(crate::config::secrets::CLAUDE_API_KEY).expect("key");
+        for model in crate::config::CLAUDE_MODELS {
+            let client = super::ClaudeClient::new(key.clone(), model.to_string(), 64, String::new()).unwrap().with_effort("low");
+            let tools = serde_json::json!([{"name":"ping","description":"Answers pong.","input_schema":{"type":"object","properties":{}}}]);
+            let result = client.send_value("Answer in one word.", &[serde_json::json!({"role":"user","content":"Say hi"})], Some(&tools));
+            println!("{model}: {}", match &result { Ok(v) => format!("ok stop={} ", v["stop_reason"]), Err(e) => format!("ERROR {e:#}") });
+        }
     }
 }

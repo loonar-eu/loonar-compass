@@ -604,6 +604,8 @@ enum View {
 struct Form {
     claude_max_tokens: String,
     claude_workspace_id: String,
+    claude_model: String,
+    claude_effort: String,
     claude_api_key: String,
     model_source: String,
     model_file: String,
@@ -633,6 +635,8 @@ impl Form {
         Self {
             claude_max_tokens: c.claude_max_tokens.to_string(),
             claude_workspace_id: c.claude_workspace_id.clone(),
+            claude_model: c.claude_model.clone(),
+            claude_effort: c.claude_effort.clone(),
             model_source: c.model_source.as_str().into(),
             model_file: c.model_file.display().to_string(),
             db_host: c.db_host.clone(),
@@ -657,6 +661,7 @@ impl Form {
     fn defaults() -> Self {
         Self {
             claude_max_tokens: "10000".into(),
+            claude_model: config::CLAUDE_MODEL.into(),
             model_source: "postgres".into(),
             db_host: String::new(),
             db_port: "5432".into(),
@@ -2026,6 +2031,8 @@ impl App {
                 let max_tokens: u32 = f.claude_max_tokens.trim().parse().context(crate::i18n::tr("Max tokens: enter a number"))?;
                 updates.push(("claude.max_tokens", max_tokens.to_string()));
                 updates.push(("claude.workspace_id", f.claude_workspace_id.trim().to_string()));
+                updates.push(("claude.model", f.claude_model.trim().to_string()));
+                updates.push(("claude.effort", f.claude_effort.trim().to_string()));
                 if !f.claude_api_key.is_empty() {
                     secrets::set(secrets::CLAUDE_API_KEY, &f.claude_api_key)?;
                     self.form.claude_api_key.clear();
@@ -2533,22 +2540,40 @@ impl App {
         let inner_width = SETTINGS_LABEL_WIDTH + SETTINGS_FIELD_WIDTH + 12.0;
         ui.horizontal_top(|ui| {
             ui.vertical(|ui| {
-                settings_group(ui, crate::i18n::tr("1. Claude"), inner_width, |ui| {
+                settings_group(ui, crate::i18n::tr("AI model"), inner_width, |ui| {
                     egui::Grid::new("settings_claude").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
-                        // The model is fixed (Claude Haiku 5.5 only), so it is shown read-only.
                         label_cell(ui, crate::i18n::tr("Model"));
-                        ui.label(egui::RichText::new(config::CLAUDE_MODEL).color(theme::MUTED));
+                        egui::ComboBox::from_id_salt("claude_model")
+                            .width(SETTINGS_FIELD_WIDTH)
+                            .selected_text(self.form.claude_model.clone())
+                            .show_ui(ui, |ui| {
+                                for model in config::CLAUDE_MODELS {
+                                    ui.selectable_value(&mut self.form.claude_model, model.to_string(), model);
+                                }
+                            });
+                        ui.end_row();
+                        label_cell(ui, crate::i18n::tr("Effort"));
+                        let effort_label = |e: &str| if e.is_empty() { crate::i18n::tr("model default").to_string() } else { e.to_string() };
+                        egui::ComboBox::from_id_salt("claude_effort")
+                            .width(SETTINGS_FIELD_WIDTH)
+                            .selected_text(effort_label(&self.form.claude_effort))
+                            .show_ui(ui, |ui| {
+                                for effort in config::EFFORTS {
+                                    ui.selectable_value(&mut self.form.claude_effort, effort.to_string(), effort_label(effort));
+                                }
+                            });
                         ui.end_row();
                         row(ui, crate::i18n::tr("Max tokens"), &mut self.form.claude_max_tokens);
                         row_hint(ui, crate::i18n::tr("Workspace ID"), &mut self.form.claude_workspace_id, crate::i18n::tr("optional, e.g. wrkspc_…"));
                         row_secret(ui, crate::i18n::tr("Claude API key"), &mut self.form.claude_api_key, secrets::exists(secrets::CLAUDE_API_KEY));
                     });
+                    ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Higher effort: more thorough answers and model work, more tokens and time. Lower: faster and cheaper.")).small().color(theme::MUTED)).wrap());
                     ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("To answer, the app sends the conversation, attachments, remembered notes, templates, model query results and diagram images to Anthropic (Claude API) using your key. Loonar does not receive this data.")).small().color(theme::MUTED)).wrap());
                     self.group_footer(ui, &ctx, GROUP_CLAUDE, crate::i18n::tr("Save and test key"));
                 });
                 ui.add_space(12.0);
 
-                settings_group(ui, crate::i18n::tr("4. Language and change approval"), inner_width, |ui| {
+                settings_group(ui, crate::i18n::tr("Language and change approval"), inner_width, |ui| {
                     egui::Grid::new("settings_approval").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
                         // Language of the interface, of the assistant's responses and of new templates (changes after "Save").
                         label_cell(ui, crate::i18n::tr("Language"));
@@ -2589,7 +2614,7 @@ impl App {
             // In a tab of EA the model is the project open in EA and EA is the one running: nothing to set here.
             if !ea::in_ea_tab() {
             ui.vertical(|ui| {
-                settings_group(ui, crate::i18n::tr("2. Model"), inner_width, |ui| {
+                settings_group(ui, crate::i18n::tr("Model"), inner_width, |ui| {
                     ui.horizontal_wrapped(|ui| {
                         // A result of the other source's test would read as this one's.
                         if ui.radio_value(&mut self.form.model_source, "postgres".to_string(), crate::i18n::tr("PostgreSQL database")).changed()
@@ -2670,7 +2695,7 @@ impl App {
                 });
                 ui.add_space(12.0);
 
-                settings_group(ui, crate::i18n::tr("3. Enterprise Architect"), inner_width, |ui| {
+                settings_group(ui, crate::i18n::tr("Enterprise Architect"), inner_width, |ui| {
                     egui::Grid::new("settings_ea").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
                         label_cell(ui, crate::i18n::tr("Path to EA.exe"));
                         ui.horizontal(|ui| {
@@ -2694,7 +2719,7 @@ impl App {
         self.newsletter_ui(ui, inner_width * 2.0 + 44.0);
         ui.add_space(12.0);
         let ctx2 = ui.ctx().clone();
-        settings_group(ui, crate::i18n::tr("6. Confluence"), inner_width * 2.0 + 44.0, |ui| {
+        settings_group(ui, crate::i18n::tr("Confluence"), inner_width * 2.0 + 44.0, |ui| {
             ui.add(egui::Label::new(
                 egui::RichText::new(crate::i18n::tr("For publishing pages through the assistant. Pages are created without these details too: you copy the code and paste it into the source editor. Confluence on your company's servers (Data Center): the address, e.g. https://confluence.company.com, and a personal access token (Profile → Personal Access Tokens), with the e-mail field left empty. Confluence Cloud: the address https://company.atlassian.net/wiki, the account e-mail and an API token."))
                 .color(theme::MUTED),
@@ -2710,7 +2735,7 @@ impl App {
             self.group_footer(ui, &ctx2, GROUP_CONFLUENCE, crate::i18n::tr("Save and test Confluence connection"));
         });
         ui.add_space(12.0);
-        settings_group(ui, crate::i18n::tr("7. Miro"), inner_width * 2.0 + 44.0, |ui| {
+        settings_group(ui, crate::i18n::tr("Miro"), inner_width * 2.0 + 44.0, |ui| {
             ui.add(egui::Label::new(
                 egui::RichText::new(crate::i18n::tr("For sending diagrams from EA to a Miro board (\"Send to Miro\" under a diagram in the chat). In Miro: Settings of your profile → Your apps → Create new app, give it the boards:read and boards:write permissions, install it in your team and copy the access token here. The token is kept in Windows Credential Manager."))
                 .color(theme::MUTED),
@@ -2777,7 +2802,7 @@ impl App {
             ui.hyperlink_to(egui::RichText::new(crate::i18n::tr("Privacy policy")).small(), privacy_url());
         });
         ui.add_space(14.0);
-        let technical = crate::i18n::fmt("Loonar Compass {0}\nSystem: {1}\nModel: {2}\nApproval mode: {3}\nLast message: {4}", &[app_version().to_string(), (windows_version_cached()).to_string(), (config::CLAUDE_MODEL).to_string(), (self.cfg.as_ref().map(|c| c.approval_mode.as_str()).unwrap_or("-")).to_string(), (self.status).to_string()]);
+        let technical = crate::i18n::fmt("Loonar Compass {0}\nSystem: {1}\nModel: {2}\nApproval mode: {3}\nLast message: {4}", &[app_version().to_string(), (windows_version_cached()).to_string(), (self.cfg.as_ref().map(|c| c.claude_model.clone()).unwrap_or_default()).to_string(), (self.cfg.as_ref().map(|c| c.approval_mode.as_str()).unwrap_or("-")).to_string(), (self.status).to_string()]);
         let sending = self.contact.sending.is_some();
         let c = &mut self.contact;
         let mut remove = None;
@@ -2912,7 +2937,7 @@ impl App {
         let props_path = self.props_path.clone();
         let ctx = ui.ctx().clone();
         let c = &mut self.contact;
-        settings_group(ui, crate::i18n::tr("5. New releases (newsletter)"), width, |ui| {
+        settings_group(ui, crate::i18n::tr("New releases (newsletter)"), width, |ui| {
             ui.add(egui::Label::new(
                 egui::RichText::new(crate::i18n::tr("A short email when a new version is released: what's new and where to get it. No ads; unsubscribe at any time."))
                     .color(theme::MUTED),
@@ -3723,7 +3748,7 @@ fn run_turn(
 ) -> anyhow::Result<()> {
     let tool_ctx = tools::ToolContext { cfg, approver };
     let key = secrets::get(secrets::CLAUDE_API_KEY)?;
-    let client = claude::ClaudeClient::new(key, cfg.claude_model.clone(), cfg.claude_max_tokens, cfg.claude_workspace_id.clone())?;
+    let client = claude::ClaudeClient::new(key, cfg.claude_model.clone(), cfg.claude_max_tokens, cfg.claude_workspace_id.clone())?.with_effort(&cfg.claude_effort);
     let mut msgs = history_to_api(messages, &cfg.attachments_dir)?;
     let tools = tools::definitions();
     // The system prompt (with memory) stays fixed for the whole response: the model's reasoning blocks are signed
@@ -4941,7 +4966,7 @@ impl eframe::App for App {
                                 }
                             }
                             if let Some(cfg) = &self.cfg {
-                                ui.label(egui::RichText::new(crate::i18n::fmt("{0} · mode {1}", &[(config::CLAUDE_MODEL).to_string(), (cfg.approval_mode.as_str()).to_string()])).small().color(theme::MUTED));
+                                ui.label(egui::RichText::new(crate::i18n::fmt("{0} · mode {1}", &[(cfg.claude_model).to_string(), (cfg.approval_mode.as_str()).to_string()])).small().color(theme::MUTED));
                             }
                         });
                     });

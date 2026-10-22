@@ -56,6 +56,8 @@ pub const MODEL_OPS: &[&str] = &[
     "create_baseline",
     "add_glossary_term",
     "create_scenario",
+    "update_scenario",
+    "delete_scenario",
 ];
 
 #[derive(Default)]
@@ -354,7 +356,8 @@ pub fn describe(ops: &[Value]) -> String {
         "clone_package" => crate::i18n::tr("package copies (with all contents)"),
         "create_baseline" => crate::i18n::tr("package baselines (saved versions)"),
         "add_glossary_term" => crate::i18n::tr("terms in the project glossary"),
-        "create_scenario" => crate::i18n::tr("structured scenarios of elements"),
+        "create_scenario" | "update_scenario" => crate::i18n::tr("structured scenarios of elements"),
+        "delete_scenario" => crate::i18n::tr("structured scenarios DELETED"),
         "remove_from_diagram" => crate::i18n::tr("elements removed from diagrams (they stay in the model)"),
         "diagram_style" => crate::i18n::tr("diagram style settings"),
         "set_composite" => crate::i18n::tr("element-to-diagram links"),
@@ -1060,11 +1063,21 @@ mod scenario_probe {
         let op = json!({"op":"create_scenario","element":id,"name":"Zakup produktu","notes":"Klient kupuje produkt.",
             "steps":[{"text":"Klient wybiera produkt","actor":true},{"text":"System pokazuje koszyk"},{"text":"Klient płaci","actor":true,"uses":"Płatność"}]});
         let result = run_batch(&cfg, &[op], &BatchOptions::default());
+        let update = run_batch(&cfg, &[json!({"op":"update_scenario","element":id,"scenario":"Zakup produktu","name":"Zakup produktu v2",
+            "steps":[{"text":"Klient loguje się","actor":true},{"text":"System pokazuje koszyk"}]})], &BatchOptions::default());
+        println!("update: {update:?}");
+        let rows2 = crate::tools::query_rows(&cfg, &format!("select scenario, xmlcontent from t_objectscenarios where object_id = {id}")).unwrap();
+        println!("after update: {rows2:?}");
+        let delete = run_batch(&cfg, &[json!({"op":"delete_scenario","element":id,"scenario":"Zakup produktu v2"})], &BatchOptions::default());
+        println!("delete: {delete:?}");
+        let rows3 = crate::tools::query_rows(&cfg, &format!("select count(*) from t_objectscenarios where object_id = {id}")).unwrap();
+        println!("after delete: {rows3:?}");
         shutdown();
         println!("{result:?}");
         result.expect("scenario");
-        let rows = crate::tools::query_rows(&cfg, &format!("select scenario, scenariotype, xmlcontent from t_objectscenarios where object_id = {id}")).unwrap();
-        println!("{rows:?}");
-        assert!(rows.iter().any(|r| r[0] == "Zakup produktu" && r[2].contains("System pokazuje koszyk")));
+        let rows: Vec<Vec<String>> = Vec::new();
+        let _ = rows;
+        assert!(rows2.iter().any(|r| r[0] == "Zakup produktu v2" && r[1].contains("Klient loguje się") && !r[1].contains("Klient płaci")));
+        assert_eq!(rows3[0][0], "0");
     }
 }

@@ -1080,6 +1080,60 @@ impl Job<'_> {
                 let (id, guid, real) = (copy.int("PackageID")?, copy.text("PackageGUID")?, copy.text("Name")?);
                 self.register(&op["key"], Kind::Package, &copy, id, guid, real);
             }
+            "update_scenario" | "delete_scenario" => {
+                // An existing structured scenario of an element, found by its name (or GUID).
+                let element = self.element(&op["element"])?;
+                let wanted = text_field(op, "scenario");
+                let scenarios = element.obj("Scenarios")?;
+                let items = scenarios.items()?;
+                let index = items
+                    .iter()
+                    .position(|s| s.text("Name").map(|n| n.eq_ignore_ascii_case(&wanted)).unwrap_or(false) || s.text("ScenarioGUID").map(|g| g == wanted).unwrap_or(false))
+                    .ok_or_else(|| anyhow!("{}", crate::i18n::fmt("scenario '{0}' was not found on the element", &[wanted.clone()])))?;
+                if name == "delete_scenario" {
+                    scenarios.call("Delete", &[i(index as i32)])?;
+                    scenarios.call("Refresh", &[])?;
+                    element.call("Update", &[])?;
+                    return Ok(());
+                }
+                let scenario = items[index].clone();
+                let name = { let n = text_field(op, "name"); if n.is_empty() { scenario.text("Name")? } else { n } };
+                scenario.set("Name", s(&name))?;
+                let kind_field = text_field(op, "type");
+                if !kind_field.is_empty() {
+                    scenario.set("Type", s(&kind_field))?;
+                }
+                if !op["notes"].is_null() {
+                    scenario.set("Notes", s(&text_field(op, "notes")))?;
+                }
+                if let Some(new_steps) = op["steps"].as_array() {
+                    // The steps are replaced as a whole (the scenario keeps its name and GUID).
+                    let steps = scenario.obj("Steps")?;
+                    let count = steps.int("Count")?;
+                    for at in (0..count).rev() {
+                        steps.call("Delete", &[i(at)])?;
+                    }
+                    steps.call("Refresh", &[])?;
+                    for (index, step) in new_steps.iter().enumerate() {
+                        let text = step.as_str().map(str::to_string).unwrap_or_else(|| text_field(step, "text"));
+                        let actor = step["actor"].as_bool().unwrap_or(false);
+                        let item = steps.call_obj("AddNew", &[s(&text), s(if actor { "1" } else { "0" })])?;
+                        item.set("Pos", i(index as i32 + 1))?;
+                        let uses = text_field(step, "uses");
+                        if !uses.is_empty() {
+                            item.set("Uses", s(&uses))?;
+                        }
+                        let results = text_field(step, "results");
+                        if !results.is_empty() {
+                            item.set("Results", s(&results))?;
+                        }
+                        item.update(&crate::i18n::fmt("scenario step {0}", &[(index + 1).to_string()]))?;
+                    }
+                }
+                scenario.update(&crate::i18n::fmt("scenario '{0}'", &[name.clone()]))?;
+                scenarios.call("Refresh", &[])?;
+                element.call("Update", &[])?;
+            }
             "create_scenario" => {
                 // Structured scenario of an element (the Scenarios tab of its properties, e.g. a use case), not notes:
                 // a name, a type (Basic Path / Alternate / Exception), a description and numbered steps.
