@@ -22,6 +22,7 @@ mod render;
 mod xlsx;
 mod report;
 mod spell;
+mod openai;
 mod templates;
 mod tools;
 mod window;
@@ -606,6 +607,9 @@ struct Form {
     claude_workspace_id: String,
     claude_model: String,
     claude_effort: String,
+    ai_provider: String,
+    openai_model: String,
+    openai_api_key: String,
     claude_api_key: String,
     model_source: String,
     model_file: String,
@@ -637,6 +641,8 @@ impl Form {
             claude_workspace_id: c.claude_workspace_id.clone(),
             claude_model: c.claude_model.clone(),
             claude_effort: c.claude_effort.clone(),
+            ai_provider: c.ai_provider.clone(),
+            openai_model: c.openai_model.clone(),
             model_source: c.model_source.as_str().into(),
             model_file: c.model_file.display().to_string(),
             db_host: c.db_host.clone(),
@@ -662,6 +668,8 @@ impl Form {
         Self {
             claude_max_tokens: "10000".into(),
             claude_model: config::CLAUDE_MODEL.into(),
+            ai_provider: "anthropic".into(),
+            openai_model: config::OPENAI_MODELS[0].into(),
             model_source: "postgres".into(),
             db_host: String::new(),
             db_port: "5432".into(),
@@ -1016,7 +1024,7 @@ impl App {
             };
             self.steps = vec![
                 step(
-                    &crate::i18n::fmt("Claude is analyzing and planning (step {0})", &["1".to_string()]),
+                    &crate::i18n::fmt("The assistant is analyzing and planning (step {0})", &["1".to_string()]),
                     Some((true, crate::i18n::fmt("{0}, {1} response tokens", &[crate::i18n::fmt("next: {0}", &["db_query".to_string()]), "592".to_string()]), 5.0)),
                 ),
                 step(
@@ -1083,7 +1091,7 @@ impl App {
                     )
                 });
                 if self.events.is_some() {
-                    self.status = crate::i18n::tr("Claude is working in this conversation: save the diagram again when it has finished.").into();
+                    self.status = crate::i18n::tr("The assistant is working in this conversation: save the diagram again when it has finished.").into();
                 } else if ops.is_empty() {
                     match tidy {
                         Some(request) => self.ask_in_conversation(ctx, request),
@@ -1846,7 +1854,7 @@ impl App {
                 Ok(WorkerEvent::Consumed(n)) => self.consumed += n,
                 Ok(WorkerEvent::Approval(request)) => {
                     self.pending_approval = Some(request);
-                    self.status = crate::i18n::tr("Claude is waiting for your approval to save.").into();
+                    self.status = crate::i18n::tr("The assistant is waiting for your approval to save.").into();
                 }
                 Ok(WorkerEvent::Done) => {
                     ea_ui::output(&format!("■ {}", crate::i18n::fmt("Answer ready: \"{0}\"", &[shown_title(&self.session.title).to_string()])));
@@ -2032,6 +2040,12 @@ impl App {
                 updates.push(("claude.max_tokens", max_tokens.to_string()));
                 updates.push(("claude.workspace_id", f.claude_workspace_id.trim().to_string()));
                 updates.push(("claude.model", f.claude_model.trim().to_string()));
+                updates.push(("ai.provider", f.ai_provider.clone()));
+                updates.push(("openai.model", f.openai_model.trim().to_string()));
+                if !f.openai_api_key.is_empty() {
+                    secrets::set(secrets::OPENAI_API_KEY, f.openai_api_key.trim())?;
+                    self.form.openai_api_key.clear();
+                }
                 updates.push(("claude.effort", f.claude_effort.trim().to_string()));
                 if !f.claude_api_key.is_empty() {
                     secrets::set(secrets::CLAUDE_API_KEY, &f.claude_api_key)?;
@@ -2202,8 +2216,7 @@ impl App {
         let text = expression.clone();
         std::thread::spawn(move || {
             let result = (|| -> anyhow::Result<Vec<String>> {
-                let key = secrets::get(secrets::CLAUDE_API_KEY)?;
-                let client = claude::ClaudeClient::new(key, cfg.claude_model.clone(), 1500, cfg.claude_workspace_id.clone())?;
+                let client = claude::ClaudeClient::from_config(&cfg, 1500)?.with_effort("low");
                 let prompt = format!(
                     "Expression: \"{text}\". If it is Polish, list all its inflected forms: singular and plural, in all seven cases \
                      (mianownik, dopełniacz, celownik, biernik, narzędnik, miejscownik, wołacz); inflect a multi-word expression as a \
@@ -2513,7 +2526,7 @@ impl App {
         self.events = Some(events_rx);
         self.outbox = Some(outbox_tx);
         self.cancel = cancel;
-        self.status = crate::i18n::tr("Claude is writing…").into();
+        self.status = crate::i18n::tr("The assistant is writing…").into();
         self.steps.clear();
     }
 
@@ -2542,15 +2555,31 @@ impl App {
             ui.vertical(|ui| {
                 settings_group(ui, crate::i18n::tr("AI model"), inner_width, |ui| {
                     egui::Grid::new("settings_claude").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
-                        label_cell(ui, crate::i18n::tr("Model"));
-                        egui::ComboBox::from_id_salt("claude_model")
+                        label_cell(ui, crate::i18n::tr("Provider"));
+                        let provider_label = |p: &str| if p == "openai" { "OpenAI" } else { "Anthropic (Claude)" };
+                        egui::ComboBox::from_id_salt("ai_provider")
                             .width(SETTINGS_FIELD_WIDTH)
-                            .selected_text(self.form.claude_model.clone())
+                            .selected_text(provider_label(&self.form.ai_provider))
                             .show_ui(ui, |ui| {
-                                for model in config::CLAUDE_MODELS {
-                                    ui.selectable_value(&mut self.form.claude_model, model.to_string(), model);
+                                for p in ["anthropic", "openai"] {
+                                    ui.selectable_value(&mut self.form.ai_provider, p.to_string(), provider_label(p));
                                 }
                             });
+                        ui.end_row();
+                        let openai = self.form.ai_provider == "openai";
+                        label_cell(ui, crate::i18n::tr("Model"));
+                        ui.horizontal(|ui| {
+                            let (field, list): (&mut String, &[&str]) = if openai { (&mut self.form.openai_model, &config::OPENAI_MODELS) } else { (&mut self.form.claude_model, &config::CLAUDE_MODELS) };
+                            ui.add(egui::TextEdit::singleline(field).desired_width(SETTINGS_FIELD_WIDTH - 44.0));
+                            ui.menu_button("▾", |ui| {
+                                for model in list {
+                                    if ui.button(*model).clicked() {
+                                        *field = model.to_string();
+                                        ui.close_menu();
+                                    }
+                                }
+                            });
+                        });
                         ui.end_row();
                         label_cell(ui, crate::i18n::tr("Effort"));
                         let effort_label = |e: &str| if e.is_empty() { crate::i18n::tr("model default").to_string() } else { e.to_string() };
@@ -2564,8 +2593,12 @@ impl App {
                             });
                         ui.end_row();
                         row(ui, crate::i18n::tr("Max tokens"), &mut self.form.claude_max_tokens);
-                        row_hint(ui, crate::i18n::tr("Workspace ID"), &mut self.form.claude_workspace_id, crate::i18n::tr("optional, e.g. wrkspc_…"));
-                        row_secret(ui, crate::i18n::tr("Claude API key"), &mut self.form.claude_api_key, secrets::exists(secrets::CLAUDE_API_KEY));
+                        if self.form.ai_provider == "openai" {
+                            row_secret(ui, crate::i18n::tr("OpenAI API key"), &mut self.form.openai_api_key, secrets::exists(secrets::OPENAI_API_KEY));
+                        } else {
+                            row_hint(ui, crate::i18n::tr("Workspace ID"), &mut self.form.claude_workspace_id, crate::i18n::tr("optional, e.g. wrkspc_…"));
+                            row_secret(ui, crate::i18n::tr("Claude API key"), &mut self.form.claude_api_key, secrets::exists(secrets::CLAUDE_API_KEY));
+                        }
                     });
                     ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Higher effort: more thorough answers and model work, more tokens and time. Lower: faster and cheaper.")).small().color(theme::MUTED)).wrap());
                     ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("To answer, the app sends the conversation, attachments, remembered notes, templates, model query results and diagram images to Anthropic (Claude API) using your key. Loonar does not receive this data.")).small().color(theme::MUTED)).wrap());
@@ -2802,7 +2835,7 @@ impl App {
             ui.hyperlink_to(egui::RichText::new(crate::i18n::tr("Privacy policy")).small(), privacy_url());
         });
         ui.add_space(14.0);
-        let technical = crate::i18n::fmt("Loonar Compass {0}\nSystem: {1}\nModel: {2}\nApproval mode: {3}\nLast message: {4}", &[app_version().to_string(), (windows_version_cached()).to_string(), (self.cfg.as_ref().map(|c| c.claude_model.clone()).unwrap_or_default()).to_string(), (self.cfg.as_ref().map(|c| c.approval_mode.as_str()).unwrap_or("-")).to_string(), (self.status).to_string()]);
+        let technical = crate::i18n::fmt("Loonar Compass {0}\nSystem: {1}\nModel: {2}\nApproval mode: {3}\nLast message: {4}", &[app_version().to_string(), (windows_version_cached()).to_string(), (self.cfg.as_ref().map(|c| c.ai_model().to_string()).unwrap_or_default()).to_string(), (self.cfg.as_ref().map(|c| c.approval_mode.as_str()).unwrap_or("-")).to_string(), (self.status).to_string()]);
         let sending = self.contact.sending.is_some();
         let c = &mut self.contact;
         let mut remove = None;
@@ -3566,10 +3599,10 @@ fn ea_account_rows(ui: &mut egui::Ui, user: &mut String, password: &mut String, 
 fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> {
     match group {
         GROUP_CLAUDE => {
-            let key = secrets::get(secrets::CLAUDE_API_KEY)?;
-            let client = claude::ClaudeClient::new(key, cfg.claude_model.clone(), 16, cfg.claude_workspace_id.clone())?;
+            // A small answer budget would end in the model's reasoning: the test asks for one word with room to spare.
+            let client = claude::ClaudeClient::from_config(cfg, 400)?.with_effort("low");
             let response = client.send_value("Answer in one word.", &[json!({ "role": "user", "content": "ping" })], None)?;
-            Ok(crate::i18n::fmt("Saved. The key works: model {0} replied.", &[(response["model"].as_str().unwrap_or(config::CLAUDE_MODEL)).to_string()]))
+            Ok(crate::i18n::fmt("Saved. The key works: model {0} replied.", &[(response["model"].as_str().unwrap_or(cfg.ai_model())).to_string()]))
         }
         GROUP_DB => {
             let message = check_model(cfg)?;
@@ -3718,20 +3751,20 @@ fn tool_result_summary(name: &str, text: &str) -> String {
 
 fn tool_status(name: &str, input: &Value) -> String {
     match name {
-        "db_query" => crate::i18n::tr("Claude is reading the model…").to_string(),
-        "ea_write" => crate::i18n::fmt("Claude is saving to EA ({0} operations)…", &[(input["ops"].as_array().map_or(0, Vec::len)).to_string()]),
-        "ea_show_diagram" => crate::i18n::tr("Claude is getting a diagram from EA…").to_string(),
-        "memory_save" | "memory_delete" | "memory_read" => crate::i18n::tr("Claude is using its memory…").to_string(),
-        "render_image" => crate::i18n::tr("Claude is drawing an image…").to_string(),
-        "create_document" => crate::i18n::tr("Claude is creating a Word document…").to_string(),
-        "create_spreadsheet" => crate::i18n::tr("Claude is creating an Excel workbook…").to_string(),
-        "create_confluence_page" => crate::i18n::tr("Claude is preparing a Confluence page…").to_string(),
-        "publish_confluence" => crate::i18n::tr("Claude is publishing a page to Confluence…").to_string(),
-        "confluence_pages" | "read_template" | "save_template" => crate::i18n::tr("Claude is looking at templates and pages…").to_string(),
-        "impact_analysis" => crate::i18n::tr("Claude is analyzing the impact of a change…").to_string(),
-        "ea_ui" => crate::i18n::tr("Claude is looking at the open EA window…").to_string(),
-        "operation_usage" => crate::i18n::tr("Claude is checking where operations are used…").to_string(),
-        other => crate::i18n::fmt("Claude is using the tool {0}…", &[(other).to_string()]),
+        "db_query" => crate::i18n::tr("The assistant is reading the model…").to_string(),
+        "ea_write" => crate::i18n::fmt("The assistant is saving to EA ({0} operations)…", &[(input["ops"].as_array().map_or(0, Vec::len)).to_string()]),
+        "ea_show_diagram" => crate::i18n::tr("The assistant is getting a diagram from EA…").to_string(),
+        "memory_save" | "memory_delete" | "memory_read" => crate::i18n::tr("The assistant is using its memory…").to_string(),
+        "render_image" => crate::i18n::tr("The assistant is drawing an image…").to_string(),
+        "create_document" => crate::i18n::tr("The assistant is creating a Word document…").to_string(),
+        "create_spreadsheet" => crate::i18n::tr("The assistant is creating an Excel workbook…").to_string(),
+        "create_confluence_page" => crate::i18n::tr("The assistant is preparing a Confluence page…").to_string(),
+        "publish_confluence" => crate::i18n::tr("The assistant is publishing a page to Confluence…").to_string(),
+        "confluence_pages" | "read_template" | "save_template" => crate::i18n::tr("The assistant is looking at templates and pages…").to_string(),
+        "impact_analysis" => crate::i18n::tr("The assistant is analyzing the impact of a change…").to_string(),
+        "ea_ui" => crate::i18n::tr("The assistant is looking at the open EA window…").to_string(),
+        "operation_usage" => crate::i18n::tr("The assistant is checking where operations are used…").to_string(),
+        other => crate::i18n::fmt("The assistant is using the tool {0}…", &[(other).to_string()]),
     }
 }
 
@@ -3747,8 +3780,7 @@ fn run_turn(
     emit: &dyn Fn(WorkerEvent),
 ) -> anyhow::Result<()> {
     let tool_ctx = tools::ToolContext { cfg, approver };
-    let key = secrets::get(secrets::CLAUDE_API_KEY)?;
-    let client = claude::ClaudeClient::new(key, cfg.claude_model.clone(), cfg.claude_max_tokens, cfg.claude_workspace_id.clone())?.with_effort(&cfg.claude_effort);
+    let client = claude::ClaudeClient::from_config(cfg, cfg.claude_max_tokens)?;
     let mut msgs = history_to_api(messages, &cfg.attachments_dir)?;
     let tools = tools::definitions();
     // The system prompt (with memory) stays fixed for the whole response: the model's reasoning blocks are signed
@@ -3760,8 +3792,8 @@ fn run_turn(
         if cancel.load(Ordering::Relaxed) {
             bail!("{}", crate::i18n::fmt("stopped at your request", &[]));
         }
-        emit(WorkerEvent::Status(crate::i18n::tr("Claude is thinking…").into()));
-        emit(WorkerEvent::StepStart(crate::i18n::fmt("Claude is analyzing and planning (step {0})", &[(round).to_string()])));
+        emit(WorkerEvent::Status(crate::i18n::tr("The assistant is thinking…").into()));
+        emit(WorkerEvent::StepStart(crate::i18n::fmt("The assistant is analyzing and planning (step {0})", &[(round).to_string()])));
         let resp = match client.send_value(&system, &msgs, Some(&tools)) {
             Ok(resp) => resp,
             Err(e) => {
@@ -4760,7 +4792,7 @@ impl eframe::App for App {
                                         .rounding(10.0)
                                         .inner_margin(egui::Margin::symmetric(9.0, 3.0))
                                         .show(ui, |ui| {
-                                            ui.label(egui::RichText::new(crate::i18n::tr("Claude is working")).small().color(egui::Color32::from_rgb(133, 79, 11)));
+                                            ui.label(egui::RichText::new(crate::i18n::tr("The assistant is working")).small().color(egui::Color32::from_rgb(133, 79, 11)));
                                         });
                             }
                             });
@@ -4966,12 +4998,12 @@ impl eframe::App for App {
                                 }
                             }
                             if let Some(cfg) = &self.cfg {
-                                ui.label(egui::RichText::new(crate::i18n::fmt("{0} · mode {1}", &[(cfg.claude_model).to_string(), (cfg.approval_mode.as_str()).to_string()])).small().color(theme::MUTED));
+                                ui.label(egui::RichText::new(crate::i18n::fmt("{0} · mode {1}", &[(cfg.ai_model()).to_string(), (cfg.approval_mode.as_str()).to_string()])).small().color(theme::MUTED));
                             }
                         });
                     });
                     ui.add(egui::Label::new(
-                        egui::RichText::new(crate::i18n::tr("Answers and changes are prepared by an AI model (Claude by Anthropic) and may contain errors. Review them before you approve.")).small().color(theme::HINT),
+                        egui::RichText::new(crate::i18n::tr("Answers and changes are prepared by an AI model and may contain errors. Review them before you approve.")).small().color(theme::HINT),
                     ).wrap());
                     if clicked {
                         self.send(ctx);
@@ -5010,7 +5042,7 @@ impl eframe::App for App {
                 if let Some(request) = &self.pending_approval {
                     egui::TopBottomPanel::bottom("approval").show(ctx, |ui| {
                         ui.add_space(6.0);
-                        ui.label(egui::RichText::new(crate::i18n::tr("Claude wants to save changes to the model")).strong());
+                        ui.label(egui::RichText::new(crate::i18n::tr("The assistant wants to save changes to the model")).strong());
                         egui::ScrollArea::vertical().max_height(180.0).id_salt("approval_text").show(ui, |ui| {
                             ui.label(&request.summary);
                         });
@@ -5264,7 +5296,7 @@ impl eframe::App for App {
                                     .show(ui, |ui| {
                                         ui.set_width(ui.available_width().min(900.0) - 24.0);
                                         let title = if busy {
-                                            crate::i18n::fmt("Claude is working · step {0}", &[(self.steps.len()).to_string()])
+                                            crate::i18n::fmt("The assistant is working · step {0}", &[(self.steps.len()).to_string()])
                                         } else if failed_steps > 0 {
                                             crate::i18n::fmt("Steps in the last answer: {0} (failed: {1})", &[(self.steps.len()).to_string(), (failed_steps).to_string()])
                                         } else {

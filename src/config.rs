@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 pub const CLAUDE_MODEL: &str = "claude-haiku-5-5";
 /// Claude models offered in the settings (any other id can still be set in app.properties).
 pub const CLAUDE_MODELS: [&str; 4] = ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-1"];
+/// OpenAI models offered in the settings (any other id can be typed in).
+pub const OPENAI_MODELS: [&str; 3] = ["gpt-5.1", "gpt-5", "gpt-5-mini"];
 /// Effort levels of the Claude API (output_config.effort); "" = the model's default.
 pub const EFFORTS: [&str; 6] = ["", "low", "medium", "high", "xhigh", "max"];
 
@@ -117,6 +119,10 @@ pub struct AppConfig {
     pub claude_model: String,
     /// Effort (output_config.effort): low | medium | high | xhigh | max; empty = the model's default.
     pub claude_effort: String,
+    /// Model provider: "anthropic" (Claude) or "openai".
+    pub ai_provider: String,
+    /// OpenAI model id (used when the provider is OpenAI).
+    pub openai_model: String,
     pub claude_max_tokens: u32,
     /// Workspace ID from the Anthropic Console: required for an API key that is not scoped to a workspace
     /// (empty = the header is not sent).
@@ -225,6 +231,16 @@ pub fn find_properties(start: &Path) -> Option<PathBuf> {
 }
 
 impl AppConfig {
+    /// Whether the conversation model is OpenAI's (otherwise Claude).
+    pub fn uses_openai(&self) -> bool {
+        self.ai_provider == "openai"
+    }
+
+    /// The model id that answers (of the chosen provider).
+    pub fn ai_model(&self) -> &str {
+        if self.uses_openai() { &self.openai_model } else { &self.claude_model }
+    }
+
     pub fn uses_file(&self) -> bool {
         self.model_source == ModelSource::File
     }
@@ -256,6 +272,8 @@ impl AppConfig {
             // The model is fixed: the `claude.model` entry in the file is informational only and does not change the model.
             claude_model: get_or("claude.model", CLAUDE_MODEL),
             claude_effort: get_or("claude.effort", ""),
+            ai_provider: get_or("ai.provider", "anthropic"),
+            openai_model: get_or("openai.model", OPENAI_MODELS[0]),
             claude_max_tokens: get_or("claude.max_tokens", "10000").parse().context("claude.max_tokens")?,
             claude_workspace_id: get_or("claude.workspace_id", ""),
             model_source: ModelSource::parse(&get_or("model.source", "postgres")).context("model.source")?,
@@ -368,6 +386,7 @@ pub mod secrets {
     /// Service name of the pre-release versions: secrets found there are moved to `SERVICE`.
     const LEGACY_SERVICE: &str = "loonar-ea-assistant";
     pub const CLAUDE_API_KEY: &str = "claude_api_key";
+    pub const OPENAI_API_KEY: &str = "openai_api_key";
     pub const EA_PASSWORD: &str = "ea_password";
     pub const DB_PASSWORD: &str = "db_password";
     pub const CONFLUENCE_TOKEN: &str = "confluence_token";

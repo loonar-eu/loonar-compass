@@ -21,6 +21,8 @@ pub struct ClaudeClient {
     workspace_id: String,
     /// Effort level sent as output_config.effort (empty = the model's default).
     effort: String,
+    /// The provider answering: OpenAI (the request is translated) or Claude.
+    openai: bool,
 }
 
 impl ClaudeClient {
@@ -29,7 +31,20 @@ impl ClaudeClient {
             .timeout(Duration::from_secs(300))
             .connect_timeout(Duration::from_secs(20))
             .build()?;
-        Ok(Self { http, api_key, model, max_tokens, workspace_id: workspace_id.trim().to_string(), effort: String::new() })
+        Ok(Self { http, api_key, model, max_tokens, workspace_id: workspace_id.trim().to_string(), effort: String::new(), openai: false })
+    }
+
+    /// The client of the provider chosen in the settings (Claude or OpenAI), with its key, model and effort.
+    pub fn from_config(cfg: &crate::config::AppConfig, max_tokens: u32) -> Result<Self> {
+        use crate::config::secrets;
+        if cfg.uses_openai() {
+            let key = secrets::get(secrets::OPENAI_API_KEY)?;
+            let mut client = Self::new(key, cfg.openai_model.clone(), max_tokens, String::new())?.with_effort(&cfg.claude_effort);
+            client.openai = true;
+            return Ok(client);
+        }
+        let key = secrets::get(secrets::CLAUDE_API_KEY)?;
+        Ok(Self::new(key, cfg.claude_model.clone(), max_tokens, cfg.claude_workspace_id.clone())?.with_effort(&cfg.claude_effort))
     }
 
     /// Effort for the requests of this client (the model's default when empty).
@@ -41,6 +56,10 @@ impl ClaudeClient {
     /// One Messages API call. Returns the whole response (with `content` and `stop_reason`),
     /// because the tool loop must see the `tool_use` blocks. Temporary errors are retried.
     pub fn send_value(&self, system: &str, messages: &[Value], tools: Option<&Value>) -> Result<Value> {
+        if self.openai {
+            let body = crate::openai::to_openai(&self.model, self.max_tokens, &self.effort, system, messages, tools);
+            return crate::openai::send(&self.http, &self.api_key, &body);
+        }
         let mut body = json!({
             "model": self.model,
             "max_tokens": self.max_tokens,
@@ -110,7 +129,7 @@ impl ClaudeClient {
         };
         let message = value["error"]["message"].as_str().map(str::to_string).unwrap_or_else(|| value.to_string());
         let error = match status {
-            401 => crate::i18n::tr("The Claude API rejected the API key (401). Check the key in Settings → 1. Claude.").to_string(),
+            401 => crate::i18n::tr("The Claude API rejected the API key (401). Check the key in Settings → AI model.").to_string(),
             403 => crate::i18n::fmt("The API key has no access to this operation (403): {0}", &[message]),
             404 => crate::i18n::fmt("The Claude API does not know the model {0} (404): {1}", &[self.model.clone(), message]),
             400 if message.contains("workspace") => crate::i18n::fmt("The API key is not assigned to a workspace: enter the Workspace ID from the Anthropic Console in Settings → 1. Claude ({0}).", &[message]),

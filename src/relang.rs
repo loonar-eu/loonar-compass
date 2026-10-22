@@ -36,7 +36,8 @@ fn clear_pending(props: &Path) -> Result<()> {
 
 /// Translation of one text by Claude (keeps the Markdown structure and the application's markers).
 fn translate(cfg: &AppConfig, key: &str, text: &str, to: Lang) -> Result<String> {
-    let client = crate::claude::ClaudeClient::new(key.to_string(), cfg.claude_model.clone(), 8000, cfg.claude_workspace_id.clone())?;
+    let _ = key;
+    let client = crate::claude::ClaudeClient::from_config(cfg, 8000)?;
     let system = format!(
         "You translate documents into {}. Return ONLY the translated document, nothing else. Keep the Markdown structure, \
          tables, the first line marker word before the colon translated naturally (e.g. 'Template:', 'Vorlage:', 'Modèle:', 'Szablon:'), \
@@ -54,7 +55,7 @@ fn translate(cfg: &AppConfig, key: &str, text: &str, to: Lang) -> Result<String>
         .collect::<Vec<_>>()
         .join("");
     if out.trim().is_empty() {
-        bail!("{}", crate::i18n::tr("Claude returned an empty translation"));
+        bail!("{}", crate::i18n::tr("The assistant returned an empty translation"));
     }
     Ok(out.trim().to_string())
 }

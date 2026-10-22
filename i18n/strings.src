@@ -19,7 +19,7 @@ Conversation renamed. ‖ Zmieniono nazwę rozmowy. ‖ Unterhaltung umbenannt. 
 Could not rename: {0} ‖ Nie zmieniono nazwy: {0} ‖ Name nicht geändert: {0} ‖ Nom non modifié : {0}
 New conversation. ‖ Nowa rozmowa. ‖ Neue Unterhaltung. ‖ Nouvelle conversation.
 Loaded: {0} ‖ Wczytano: {0} ‖ Geladen: {0} ‖ Chargé : {0}
-Claude is waiting for your approval to save. ‖ Claude czeka na Twoją zgodę na zapis. ‖ Claude wartet auf Ihre Freigabe zum Speichern. ‖ Claude attend votre accord pour enregistrer.
+The assistant is waiting for your approval to save. ‖ Asystent czeka na Twoją zgodę na zapis. ‖ Der Assistent wartet auf Ihre Freigabe zum Speichern. ‖ L'assistant attend votre accord pour enregistrer.
 the worker thread ended without a result ‖ wątek roboczy zakończył się bez wyniku ‖ der Arbeitsthread endete ohne Ergebnis ‖ le thread de travail s'est terminé sans résultat
 Model: {0} ‖ Model: {0} ‖ Modell: {0} ‖ Modèle : {0}
 stopped at your request ‖ przerwano na Twoje polecenie ‖ auf Ihre Anweisung abgebrochen ‖ interrompu à votre demande
@@ -50,7 +50,7 @@ Complete the settings first. ‖ Najpierw uzupełnij ustawienia. ‖ Bitte zuers
 Attachment ‖ Załącznik ‖ Anhang ‖ Pièce jointe
 New conversation ‖ Nowa rozmowa ‖ Neue Unterhaltung ‖ Nouvelle conversation
 Message added. Claude will take it into account at the next step. ‖ Wiadomość dodana. Claude uwzględni ją przy najbliższym kroku. ‖ Nachricht hinzugefügt. Claude berücksichtigt sie beim nächsten Schritt. ‖ Message ajouté. Claude en tiendra compte à la prochaine étape.
-Claude is writing… ‖ Claude pisze… ‖ Claude schreibt… ‖ Claude écrit…
+The assistant is writing… ‖ Asystent pisze… ‖ Der Assistent schreibt… ‖ L'assistant écrit…
 Settings ‖ Ustawienia ‖ Einstellungen ‖ Paramètres
 Each group is saved separately; after saving, the application immediately checks that the details work. Leave a password or key field empty to keep the current value. ‖ Każdą kartę zapisujesz osobno; po zapisie aplikacja od razu sprawdza, czy dane działają. Puste pole hasła lub klucza oznacza brak zmiany. ‖ Jede Gruppe wird einzeln gespeichert; danach prüft die Anwendung sofort, ob die Daten funktionieren. Ein leeres Passwort- oder Schlüsselfeld bedeutet keine Änderung. ‖ Chaque groupe s'enregistre séparément ; après l'enregistrement, l'application teste aussitôt les données saisies. Un champ de mot de passe ou de clé laissé vide conserve la valeur actuelle.
 Claude ‖ Claude ‖ Claude ‖ Claude
@@ -171,22 +171,22 @@ Impact analysis of element {0} (direction {1}, depth {2}) ‖ Analiza wpływu el
 Removing a note from memory: {0} ‖ Usunięcie ustalenia z pamięci: {0} ‖ Entfernen einer Festlegung aus dem Gedächtnis: {0} ‖ Suppression d'une note de la mémoire : {0}
 Reading a note from memory: {0} ‖ Odczyt ustalenia z pamięci: {0} ‖ Lesen einer Festlegung aus dem Gedächtnis: {0} ‖ Lecture d'une note de la mémoire : {0}
 Tool {0} ‖ Narzędzie {0} ‖ Werkzeug {0} ‖ Outil {0}
-Claude is reading the model… ‖ Claude czyta model… ‖ Claude liest das Modell… ‖ Claude lit le modèle…
-Claude is saving to EA ({0} operations)… ‖ Claude zapisuje do EA (operacje: {0})… ‖ Claude speichert in EA ({0} Operationen)… ‖ Claude enregistre dans EA ({0} opérations)…
-Claude is getting a diagram from EA… ‖ Claude pobiera diagram z EA… ‖ Claude ruft ein Diagramm aus EA ab… ‖ Claude récupère un diagramme depuis EA…
-Claude is using its memory… ‖ Claude korzysta z pamięci… ‖ Claude nutzt sein Gedächtnis… ‖ Claude utilise sa mémoire…
-Claude is drawing an image… ‖ Claude rysuje obrazek… ‖ Claude zeichnet ein Bild… ‖ Claude dessine une image…
-Claude is creating a Word document… ‖ Claude tworzy dokument Word… ‖ Claude erstellt ein Word-Dokument… ‖ Claude crée un document Word…
-Claude is creating an Excel workbook… ‖ Claude tworzy arkusz Excel… ‖ Claude erstellt eine Excel-Arbeitsmappe… ‖ Claude crée un classeur Excel…
-Claude is preparing a Confluence page… ‖ Claude przygotowuje stronę Confluence… ‖ Claude bereitet eine Confluence-Seite vor… ‖ Claude prépare une page Confluence…
-Claude is publishing a page to Confluence… ‖ Claude publikuje stronę w Confluence… ‖ Claude veröffentlicht eine Seite in Confluence… ‖ Claude publie une page dans Confluence…
-Claude is looking at templates and pages… ‖ Claude sięga po szablony i strony… ‖ Claude greift auf Vorlagen und Seiten zu… ‖ Claude consulte les modèles et les pages…
-Claude is analyzing the impact of a change… ‖ Claude analizuje wpływ zmiany… ‖ Claude analysiert die Auswirkungen einer Änderung… ‖ Claude analyse l'impact d'une modification…
-Claude is looking at the open EA window… ‖ Claude zagląda do otwartego okna EA… ‖ Claude sieht sich das geöffnete EA-Fenster an… ‖ Claude regarde la fenêtre EA ouverte…
-Claude is checking where operations are used… ‖ Claude szuka, gdzie użyte są operacje… ‖ Claude sucht, wo Operationen verwendet werden… ‖ Claude cherche où les opérations sont utilisées…
-Claude is using the tool {0}… ‖ Claude używa narzędzia {0}… ‖ Claude verwendet das Werkzeug {0}… ‖ Claude utilise l'outil {0}…
-Claude is thinking… ‖ Claude myśli… ‖ Claude denkt nach… ‖ Claude réfléchit…
-Claude is analyzing and planning (step {0}) ‖ Claude analizuje i planuje (krok {0}) ‖ Claude analysiert und plant (Schritt {0}) ‖ Claude analyse et planifie (étape {0})
+The assistant is reading the model… ‖ Asystent czyta model… ‖ Der Assistent liest das Modell… ‖ L'assistant lit le modèle…
+The assistant is saving to EA ({0} operations)… ‖ Asystent zapisuje do EA (operacje: {0})… ‖ Der Assistent speichert in EA ({0} Operationen)… ‖ L'assistant enregistre dans EA ({0} opérations)…
+The assistant is getting a diagram from EA… ‖ Asystent pobiera diagram z EA… ‖ Der Assistent ruft ein Diagramm aus EA ab… ‖ L'assistant récupère un diagramme depuis EA…
+The assistant is using its memory… ‖ Asystent korzysta z pamięci… ‖ Der Assistent nutzt sein Gedächtnis… ‖ L'assistant utilise sa mémoire…
+The assistant is drawing an image… ‖ Asystent rysuje obrazek… ‖ Der Assistent zeichnet ein Bild… ‖ L'assistant dessine une image…
+The assistant is creating a Word document… ‖ Asystent tworzy dokument Word… ‖ Der Assistent erstellt ein Word-Dokument… ‖ L'assistant crée un document Word…
+The assistant is creating an Excel workbook… ‖ Asystent tworzy arkusz Excel… ‖ Der Assistent erstellt eine Excel-Arbeitsmappe… ‖ L'assistant crée un classeur Excel…
+The assistant is preparing a Confluence page… ‖ Asystent przygotowuje stronę Confluence… ‖ Der Assistent bereitet eine Confluence-Seite vor… ‖ L'assistant prépare une page Confluence…
+The assistant is publishing a page to Confluence… ‖ Asystent publikuje stronę w Confluence… ‖ Der Assistent veröffentlicht eine Seite in Confluence… ‖ L'assistant publie une page dans Confluence…
+The assistant is looking at templates and pages… ‖ Asystent sięga po szablony i strony… ‖ Der Assistent greift auf Vorlagen und Seiten zu… ‖ L'assistant consulte les modèles et les pages…
+The assistant is analyzing the impact of a change… ‖ Asystent analizuje wpływ zmiany… ‖ Der Assistent analysiert die Auswirkungen einer Änderung… ‖ L'assistant analyse l'impact d'une modification…
+The assistant is looking at the open EA window… ‖ Asystent zagląda do otwartego okna EA… ‖ Der Assistent sieht sich das geöffnete EA-Fenster an… ‖ L'assistant regarde la fenêtre EA ouverte…
+The assistant is checking where operations are used… ‖ Asystent szuka, gdzie użyte są operacje… ‖ Der Assistent sucht, wo Operationen verwendet werden… ‖ L'assistant cherche où les opérations sont utilisées…
+The assistant is using the tool {0}… ‖ Asystent używa narzędzia {0}… ‖ Der Assistent verwendet das Werkzeug {0}… ‖ L'assistant utilise l'outil {0}…
+The assistant is thinking… ‖ Asystent myśli… ‖ Der Assistent denkt nach… ‖ L'assistant réfléchit…
+The assistant is analyzing and planning (step {0}) ‖ Asystent analizuje i planuje (krok {0}) ‖ Der Assistent analysiert und plant (Schritt {0}) ‖ L'assistant analyse et planifie (étape {0})
 {0}, {1} response tokens ‖ {0}, tokeny odpowiedzi: {1} ‖ {0}, {1} Antwort-Tokens ‖ {0}, {1} jetons de réponse
 final answer ‖ odpowiedź dla Ciebie ‖ Antwort für Sie ‖ réponse pour vous
 next: {0} ‖ następne: {0} ‖ als Nächstes: {0} ‖ ensuite : {0}
@@ -217,7 +217,7 @@ Search conversations… ‖ Szukaj w rozmowach… ‖ Unterhaltungen durchsuchen
 Rename conversation ‖ Zmień nazwę rozmowy ‖ Unterhaltung umbenennen ‖ Renommer la conversation
 No saved conversations ‖ Brak zapisanych rozmów ‖ Keine gespeicherten Unterhaltungen ‖ Aucune conversation enregistrée
 No conversations match the search ‖ Brak rozmów pasujących do wyszukiwania ‖ Keine passenden Unterhaltungen gefunden ‖ Aucune conversation ne correspond à la recherche
-Claude is working ‖ Claude pracuje ‖ Claude arbeitet ‖ Claude travaille
+The assistant is working ‖ Asystent pracuje ‖ Der Assistent arbeitet ‖ L'assistant travaille
 Remove attachment ‖ Usuń załącznik ‖ Anhang entfernen ‖ Supprimer la pièce jointe
 Drop files here… ‖ Upuść pliki tutaj… ‖ Dateien hier ablegen… ‖ Déposez les fichiers ici…
 Add a message: Claude will take it into account while working… ‖ Dopisz wiadomość: Claude uwzględni ją w trakcie pracy… ‖ Nachricht ergänzen: Claude berücksichtigt sie während der Arbeit… ‖ Ajoutez un message : Claude en tiendra compte pendant son travail…
@@ -231,7 +231,7 @@ Stop ‖ Przerwij ‖ Abbrechen ‖ Arrêter
 Stop after the current step ‖ Przerwij po bieżącym kroku ‖ Nach dem aktuellen Schritt abbrechen ‖ Arrêter après l'étape en cours
 Stopping after the current step… ‖ Przerywanie po bieżącym kroku… ‖ Wird nach dem aktuellen Schritt abgebrochen… ‖ Arrêt après l'étape en cours…
 {0} · mode {1} ‖ {0} · tryb {1} ‖ {0} · Modus {1} ‖ {0} · mode {1}
-Claude wants to save changes to the model ‖ Claude chce zapisać zmiany w modelu ‖ Claude möchte Änderungen im Modell speichern ‖ Claude veut enregistrer des modifications dans le modèle
+The assistant wants to save changes to the model ‖ Asystent chce zapisać zmiany w modelu ‖ Der Assistent möchte Änderungen im Modell speichern ‖ L'assistant veut enregistrer des modifications dans le modèle
 Approve ‖ Zatwierdź ‖ Freigeben ‖ Valider
 Reject ‖ Odrzuć ‖ Ablehnen ‖ Refuser
 Approved, Claude is saving… ‖ Zatwierdzono, Claude zapisuje… ‖ Freigegeben, Claude speichert… ‖ Validé, Claude enregistre…
@@ -246,7 +246,7 @@ Images to attach to the page ‖ Obrazki do załączenia na stronie ‖ Bilder z
 Open ‖ Otwórz ‖ Öffnen ‖ Ouvrir
 Save as… ‖ Zapisz jako… ‖ Speichern unter… ‖ Enregistrer sous…
 Open full size ‖ Otwórz w pełnym rozmiarze ‖ In voller Größe öffnen ‖ Ouvrir en taille réelle
-Claude is working · step {0} ‖ Claude pracuje · krok {0} ‖ Claude arbeitet · Schritt {0} ‖ Claude travaille · étape {0}
+The assistant is working · step {0} ‖ Asystent pracuje · krok {0} ‖ Der Assistent arbeitet · Schritt {0} ‖ L'assistant travaille · étape {0}
 Steps in the last answer: {0} (failed: {1}) ‖ Kroki ostatniej odpowiedzi: {0} (nieudane: {1}) ‖ Schritte der letzten Antwort: {0} (fehlgeschlagen: {1}) ‖ Étapes de la dernière réponse : {0} (échecs : {1})
 Steps in the last answer: {0} ‖ Kroki ostatniej odpowiedzi: {0} ‖ Schritte der letzten Antwort: {0} ‖ Étapes de la dernière réponse : {0}
 collapse ‖ zwiń ‖ einklappen ‖ réduire
@@ -387,7 +387,7 @@ Checking… ‖ Sprawdzam… ‖ Prüfe… ‖ Vérification…
 Document ‖ Dokument ‖ Dokument ‖ Document
 Workbook ‖ Arkusz ‖ Arbeitsmappe ‖ Classeur
 the model's answer was cut off at the limit of {0} tokens. Increase "Max tokens" in Settings or ask for the diagram to be drawn in smaller parts. ‖ odpowiedź modelu została ucięta na limicie {0} tokenów. Zwiększ „Max tokenów” w Ustawieniach albo poproś o narysowanie diagramu w mniejszych częściach. ‖ die Antwort des Modells wurde beim Limit von {0} Tokens abgeschnitten. Erhöhen Sie „Max. Tokens“ in den Einstellungen oder lassen Sie das Diagramm in kleineren Teilen zeichnen. ‖ la réponse du modèle a été tronquée à la limite de {0} jetons. Augmentez « Jetons max. » dans les Paramètres ou demandez que le diagramme soit dessiné en plusieurs parties plus petites.
-Claude returned an empty translation ‖ Claude zwrócił pusty wynik tłumaczenia ‖ Claude hat eine leere Übersetzung zurückgegeben ‖ Claude a renvoyé une traduction vide
+The assistant returned an empty translation ‖ Asystent zwrócił pusty wynik tłumaczenia ‖ Der Assistent hat eine leere Übersetzung zurückgegeben ‖ L'assistant a renvoyé une traduction vide
 no Claude API key ‖ brak klucza API Claude ‖ kein Claude-API-Schlüssel ‖ pas de clé API Claude
 reading {0} ‖ odczyt {0} ‖ {0} lesen ‖ lecture de {0}
 installer path ‖ ścieżka instalatora ‖ Pfad des Installationsprogramms ‖ chemin du programme d'installation
@@ -623,7 +623,7 @@ sheet name ‖ nazwa arkusza ‖ Name des Tabellenblatts ‖ nom de la feuille
 saving XLSX ‖ zapis XLSX ‖ XLSX speichern ‖ enregistrement XLSX
 '{0}' is not a Confluence page ID (digits only) ‖ „{0}” nie jest identyfikatorem strony Confluence (tylko cyfry) ‖ „{0}“ ist keine Confluence-Seiten-ID (nur Ziffern) ‖ « {0} » n'est pas un ID de page Confluence (chiffres uniquement)
 '{0}' is not a Confluence space key ‖ „{0}” nie jest kluczem przestrzeni Confluence ‖ „{0}“ ist kein Confluence-Bereichsschlüssel ‖ « {0} » n'est pas une clé d'espace Confluence
-Answers and changes are prepared by an AI model (Claude by Anthropic) and may contain errors. Review them before you approve. ‖ Odpowiedzi i zmiany przygotowuje model AI (Claude firmy Anthropic) i mogą zawierać błędy. Sprawdzaj je przed zatwierdzeniem. ‖ Antworten und Änderungen werden von einem KI-Modell (Claude von Anthropic) erstellt und können Fehler enthalten. Prüfen Sie sie vor der Freigabe. ‖ Les réponses et les modifications sont préparées par un modèle d'IA (Claude d'Anthropic) et peuvent contenir des erreurs. Vérifiez-les avant de les valider.
+Answers and changes are prepared by an AI model and may contain errors. Review them before you approve. ‖ Odpowiedzi i zmiany przygotowuje model AI i mogą zawierać błędy. Sprawdzaj je przed zatwierdzeniem. ‖ Antworten und Änderungen werden von einem KI-Modell erstellt und können Fehler enthalten. Prüfen Sie sie vor der Freigabe. ‖ Les réponses et les modifications sont préparées par un modèle d'IA et peuvent contenir des erreurs. Vérifiez-les avant de les valider.
 COPY package {0} with all its contents ‖ KOPIOWANIE pakietu {0} z całą zawartością ‖ KOPIE des Pakets {0} mit dem gesamten Inhalt ‖ COPIE du paquetage {0} avec tout son contenu
 Connection encryption ‖ Szyfrowanie połączenia ‖ Verschlüsselung der Verbindung ‖ Chiffrement de la connexion
 DELETE {0} {1} ‖ USUNIĘCIE: {0} {1} ‖ LÖSCHEN: {0} {1} ‖ SUPPRESSION : {0} {1}
@@ -658,7 +658,7 @@ The API key has no access to this operation (403): {0} ‖ Klucz API nie ma dost
 The Claude API does not know the model {0} (404): {1} ‖ Claude API nie zna modelu {0} (404): {1} ‖ Die Claude-API kennt das Modell {0} nicht (404): {1} ‖ L'API Claude ne connaît pas le modèle {0} (404) : {1}
 The Claude API is overloaded or temporarily unavailable ({0}). Try again in a moment. ‖ Claude API jest przeciążone lub chwilowo niedostępne ({0}). Spróbuj ponownie za chwilę. ‖ Die Claude-API ist überlastet oder vorübergehend nicht verfügbar ({0}). Versuchen Sie es gleich noch einmal. ‖ L'API Claude est surchargée ou temporairement indisponible ({0}). Réessayez dans un instant.
 The Claude API rate limit was reached (429). Wait a moment and try again. ‖ Osiągnięto limit zapytań Claude API (429). Odczekaj chwilę i spróbuj ponownie. ‖ Das Anfragelimit der Claude-API ist erreicht (429). Warten Sie einen Moment und versuchen Sie es erneut. ‖ La limite de requêtes de l'API Claude est atteinte (429). Patientez un instant et réessayez.
-The Claude API rejected the API key (401). Check the key in Settings → 1. Claude. ‖ Claude API odrzuciło klucz API (401). Sprawdź klucz w Ustawienia → 1. Claude. ‖ Die Claude-API hat den API-Schlüssel abgelehnt (401). Prüfen Sie den Schlüssel unter Einstellungen → 1. Claude. ‖ L'API Claude a refusé la clé API (401). Vérifiez la clé dans Paramètres → 1. Claude.
+The Claude API rejected the API key (401). Check the key in Settings → AI model. ‖ Claude API odrzuciło klucz API (401). Sprawdź klucz w Ustawienia → Model AI. ‖ Die Claude-API hat den API-Schlüssel abgelehnt (401). Prüfen Sie den Schlüssel unter Einstellungen → KI-Modell. ‖ L'API Claude a refusé la clé API (401). Vérifiez la clé dans Paramètres → Modèle d'IA.
 The Claude API returned {0} with a response that is not from the API (a proxy or firewall may be blocking api.anthropic.com): {1} ‖ Claude API zwróciło {0} z odpowiedzią, która nie pochodzi z API (dostęp do api.anthropic.com może blokować proxy lub zapora): {1} ‖ Die Claude-API hat {0} mit einer Antwort zurückgegeben, die nicht von der API stammt (möglicherweise blockiert ein Proxy oder eine Firewall api.anthropic.com): {1} ‖ L'API Claude a renvoyé {0} avec une réponse qui ne provient pas de l'API (un proxy ou un pare-feu bloque peut-être api.anthropic.com) : {1}
 The Confluence address must start with https:// ‖ Adres Confluence musi zaczynać się od https:// ‖ Die Confluence-Adresse muss mit https:// beginnen ‖ L'adresse Confluence doit commencer par https://
 The application includes open-source libraries and fonts; each keeps its own license. ‖ Aplikacja zawiera biblioteki i czcionki open source; każda z nich ma własną licencję. ‖ Die Anwendung enthält Open-Source-Bibliotheken und -Schriftarten; jede behält ihre eigene Lizenz. ‖ L'application contient des bibliothèques et des polices open source ; chacune conserve sa propre licence.
@@ -809,7 +809,7 @@ reading the diagram ‖ odczyt diagramu ‖ Lesen des Diagramms ‖ lecture du d
 saving the changes ‖ zapis zmian ‖ Speichern der Änderungen ‖ enregistrement des modifications
 the diagram editor closed with an error ‖ edytor diagramów zamknął się z błędem ‖ der Diagrammeditor wurde mit einem Fehler beendet ‖ l'éditeur de diagrammes s'est fermé avec une erreur
 Changes from the diagram editor saved in EA (diagram "{0}"):\n{1} ‖ Zmiany z edytora diagramu zapisane w EA (diagram „{0}”):\n{1} ‖ Änderungen aus dem Diagrammeditor in EA gespeichert (Diagramm „{0}“):\n{1} ‖ Modifications de l'éditeur de diagrammes enregistrées dans EA (diagramme « {0} ») :\n{1}
-Claude is working in this conversation: save the diagram again when it has finished. ‖ Claude pracuje w tej rozmowie: zapisz diagram ponownie, gdy skończy. ‖ Claude arbeitet in dieser Unterhaltung: Speichern Sie das Diagramm erneut, wenn Claude fertig ist. ‖ Claude travaille dans cette conversation : enregistrez à nouveau le diagramme quand il aura terminé.
+The assistant is working in this conversation: save the diagram again when it has finished. ‖ Asystent pracuje w tej rozmowie: zapisz diagram ponownie, gdy skończy. ‖ Der Assistent arbeitet in dieser Unterhaltung: Speichern Sie das Diagramm erneut, wenn Claude fertig ist. ‖ L'assistant travaille dans cette conversation : enregistrez à nouveau le diagramme quand il aura terminé.
 Edit diagram ‖ Edytuj diagram ‖ Diagramm bearbeiten ‖ Modifier le diagramme
 Saving the changes from the diagram editor: {0} ‖ Zapis zmian z edytora diagramu: {0} ‖ Speichern der Änderungen aus dem Diagrammeditor: {0} ‖ Enregistrement des modifications de l'éditeur de diagrammes : {0}
 Saving the changes from the diagram editor… ‖ Zapisywanie zmian z edytora diagramu… ‖ Änderungen aus dem Diagrammeditor werden gespeichert… ‖ Enregistrement des modifications de l'éditeur de diagrammes…
@@ -1048,3 +1048,9 @@ model default ‖ domyślny dla modelu ‖ Standard des Modells ‖ par défaut 
 Higher effort: more thorough answers and model work, more tokens and time. Lower: faster and cheaper. ‖ Wyższy poziom: dokładniejsze odpowiedzi i praca na modelu, więcej tokenów i czasu. Niższy: szybciej i taniej. ‖ Höherer Aufwand: gründlichere Antworten, mehr Tokens und Zeit. Niedriger: schneller und günstiger. ‖ Effort plus élevé : réponses plus approfondies, plus de jetons et de temps. Plus bas : plus rapide et moins cher.
 scenario '{0}' was not found on the element ‖ nie znaleziono scenariusza „{0}” w elemencie ‖ Szenario „{0}“ wurde am Element nicht gefunden ‖ scénario « {0} » introuvable sur l'élément
 structured scenarios DELETED ‖ scenariusze USUNIĘTE ‖ Szenarien GELÖSCHT ‖ scénarios SUPPRIMÉS
+Provider ‖ Dostawca ‖ Anbieter ‖ Fournisseur
+OpenAI API key ‖ Klucz API OpenAI ‖ OpenAI-API-Schlüssel ‖ Clé API OpenAI
+connecting to the OpenAI API ‖ łączenie z API OpenAI ‖ Verbindung zur OpenAI-API ‖ connexion à l'API OpenAI
+The OpenAI API rejected the API key (401). Check the OpenAI key in Settings → AI model. ‖ API OpenAI odrzuciło klucz (401). Sprawdź klucz OpenAI w Ustawieniach → Model AI. ‖ Die OpenAI-API hat den Schlüssel abgelehnt (401). Prüfen Sie den OpenAI-Schlüssel unter Einstellungen → KI-Modell. ‖ L'API OpenAI a refusé la clé (401). Vérifiez la clé OpenAI dans Paramètres → Modèle d'IA.
+The OpenAI API does not know the model {0} (404): {1} ‖ API OpenAI nie zna modelu {0} (404): {1} ‖ Die OpenAI-API kennt das Modell {0} nicht (404): {1} ‖ L'API OpenAI ne connaît pas le modèle {0} (404) : {1}
+the OpenAI API returned {0}: {1} ‖ API OpenAI zwróciło {0}: {1} ‖ die OpenAI-API hat {0} zurückgegeben: {1} ‖ l'API OpenAI a renvoyé {0} : {1}
