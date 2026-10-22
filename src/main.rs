@@ -5678,6 +5678,91 @@ mod tests {
         result.expect("turn");
     }
 
+    /// The new 0.8 tools in real conversations on the cheapest models: the model check, the gap analysis, reading a
+    /// Jira issue and creating one (Jira imitation on localhost). LOONAR_TEST_PROPS = a test model; LOONAR_TEST_PROVIDER =
+    /// anthropic (Haiku, effort low) or openai (gpt-5-mini, effort low). Uses a few cents of tokens.
+    /// Run with: `cargo test ai_new_features -- --ignored --nocapture --test-threads=1`.
+    #[test]
+    #[ignore = "requires an API key, EA and a test model"]
+    fn ai_new_features() {
+        i18n::set(i18n::Lang::En);
+        let mut cfg = AppConfig::load(Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("settings");
+        let provider = std::env::var("LOONAR_TEST_PROVIDER").unwrap_or_else(|_| "anthropic".into());
+        cfg.ai_provider = provider.clone();
+        cfg.claude_model = "claude-haiku-5-5".into();
+        cfg.openai_model = "gpt-5-mini".into();
+        cfg.openai_url = String::new();
+        cfg.claude_effort = "low".into();
+        cfg.hub_url = String::new();
+        let jira = jira::mock::start(false, "test-jira-token-0123");
+        cfg.jira_url = jira.url.clone();
+        cfg.jira_user = String::new();
+        cfg.jira_project = "ARCH".into();
+        std::env::set_var("LOONAR_TEST_JIRA_TOKEN", "test-jira-token-0123");
+
+        let q = |sql: &str| tools::query_rows(&cfg, sql).expect(sql);
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id limit 1")[0][0].parse().unwrap();
+        let name = format!("ZZ_test_mostu_ai_{}", chrono::Local::now().format("%H%M%S"));
+        let created = ea::run_batch(&cfg, &[
+            json!({"op":"create_package","key":"pkg","parent":root,"name":name}),
+            json!({"op":"create_package","key":"asis","parent":"#pkg","name":"Payments as-is"}),
+            json!({"op":"create_package","key":"tobe","parent":"#pkg","name":"Payments to-be"}),
+            json!({"op":"create_element","key":"c1","package":"#asis","name":"Class1","type":"Class"}),
+            json!({"op":"create_element","key":"bill","package":"#asis","name":"Billing","type":"Component","notes":"Invoices."}),
+            json!({"op":"create_element","key":"fax","package":"#asis","name":"LegacyFax","type":"Component","notes":"Old fax gateway."}),
+            json!({"op":"create_connector","source":"#fax","target":"#fax","type":"Dependency"}),
+            json!({"op":"create_element","key":"bill2","package":"#tobe","name":"Billing","type":"Component","notes":"Invoices."}),
+            json!({"op":"create_element","key":"pay","package":"#tobe","name":"PaymentGateway","type":"Component","notes":"Card payments."}),
+            json!({"op":"create_connector","source":"#bill2","target":"#pay","type":"Dependency"}),
+        ], &ea::BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("test packages");
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).expect(key)["id"].as_i64().unwrap();
+        let (pkg, asis, tobe) = (id_of("pkg"), id_of("asis"), id_of("tobe"));
+
+        let turn = |prompt: String| -> (Vec<String>, String) {
+            let messages = vec![Message { role: "user".into(), text: prompt.clone(), attachments: vec![], created: chrono::Utc::now().to_rfc3339() }];
+            let asked = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+            let log = asked.clone();
+            let approver = tools::Approver::new(ApprovalMode::Auto, Box::new(move |summary| { log.lock().unwrap().push(summary); true }));
+            let (_tx, inbox) = mpsc::channel();
+            let cancel = AtomicBool::new(false);
+            let steps = std::sync::Mutex::new(Vec::<String>::new());
+            let answer = std::sync::Mutex::new(String::new());
+            let emit = |event: WorkerEvent| match event {
+                WorkerEvent::Text(text) => answer.lock().unwrap().push_str(&text),
+                WorkerEvent::StepStart(step) => steps.lock().unwrap().push(step),
+                WorkerEvent::StepEnd { ok, detail } if !ok => steps.lock().unwrap().push(format!("FAILED {detail}")),
+                _ => {}
+            };
+            let started = std::time::Instant::now();
+            let result = run_turn(&cfg, &messages, &approver, &inbox, &cancel, &emit);
+            let steps = steps.into_inner().unwrap();
+            let answer = answer.into_inner().unwrap();
+            println!("\n=== [{provider}] {prompt}\n({} s) steps: {steps:#?}\napprovals asked: {}\nANSWER: {}", started.elapsed().as_secs(), asked.lock().unwrap().len(), answer.chars().take(700).collect::<String>());
+            if let Err(e) = result {
+                println!("TURN FAILED: {e:#}");
+            }
+            (steps, answer)
+        };
+        let has = |steps: &[String], what: &str| steps.iter().any(|s| s.contains(what));
+
+        let (lint_steps, lint_answer) = turn(format!("Check the quality of package {asis} in the model and list the most important problems."));
+        let (gap_steps, gap_answer) = turn(format!("Compare package {asis} (as-is) with package {tobe} (to-be): what is new and what is to retire?"));
+        let (jira_steps, jira_answer) = turn(format!("Read the Jira issue ARCH-7 and tell me which elements of package {tobe} it is about."));
+        let (create_steps, _) = turn(format!("Create a Jira task in project ARCH to rename the element Class1 in package {asis} to a business name."));
+        let posted = jira.requests.lock().unwrap().iter().filter(|r| r.0 == "POST" && r.1.ends_with("/issue")).count();
+        ea::run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &ea::BatchOptions::default()).expect("cleanup");
+        ea::shutdown();
+
+        assert!(has(&lint_steps, "Model check of package"), "the model check was used");
+        assert!(lint_answer.contains("Class1"), "the answer names the default name");
+        assert!(has(&gap_steps, "Gap analysis"), "the gap analysis was used");
+        assert!(gap_answer.contains("PaymentGateway") && gap_answer.contains("LegacyFax"), "new and retired elements");
+        assert!(has(&jira_steps, "Reading the Jira issue ARCH-7"), "the issue was read");
+        assert!(jira_answer.contains("PaymentGateway"), "the story is linked to the payment gateway");
+        assert!(has(&create_steps, "Creating a Jira issue"), "an issue was created");
+        assert_eq!(posted, 1, "exactly one issue sent to Jira");
+    }
+
     /// Settings tests (the same ones the "Save and test" buttons run) on the saved configuration.
     /// Run with: `cargo test settings_tests_pass -- --ignored --nocapture`.
     #[test]

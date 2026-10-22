@@ -578,6 +578,11 @@ fn jira(cfg: &AppConfig) -> Result<crate::jira::Connection> {
     if cfg.jira_url.trim().is_empty() {
         bail!("{}", crate::i18n::tr("Jira is not configured: enter its address and token in Settings → Jira"));
     }
+    // Tests talk to a Jira imitation with a test token (never the user's).
+    #[cfg(test)]
+    if let Ok(token) = std::env::var("LOONAR_TEST_JIRA_TOKEN") {
+        return Ok(crate::jira::Connection { base_url: cfg.jira_url.clone(), user: cfg.jira_user.clone(), token });
+    }
     let token = crate::config::secrets::get(crate::config::secrets::JIRA_TOKEN).context(crate::i18n::tr("no Jira token in the settings"))?;
     Ok(crate::jira::Connection { base_url: cfg.jira_url.clone(), user: cfg.jira_user.clone(), token })
 }
