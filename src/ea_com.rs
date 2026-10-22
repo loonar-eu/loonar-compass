@@ -1080,6 +1080,42 @@ impl Job<'_> {
                 let (id, guid, real) = (copy.int("PackageID")?, copy.text("PackageGUID")?, copy.text("Name")?);
                 self.register(&op["key"], Kind::Package, &copy, id, guid, real);
             }
+            "create_scenario" => {
+                // Structured scenario of an element (the Scenarios tab of its properties, e.g. a use case), not notes:
+                // a name, a type (Basic Path / Alternate / Exception), a description and numbered steps.
+                let element = self.element(&op["element"])?;
+                let name = text_field(op, "name");
+                let kind = { let k = text_field(op, "type"); if k.is_empty() { "Basic Path".to_string() } else { k } };
+                let scenarios = element.obj("Scenarios")?;
+                let scenario = scenarios.call_obj("AddNew", &[s(&name), s(&kind)])?;
+                let notes = text_field(op, "notes");
+                if !notes.is_empty() {
+                    scenario.set("Notes", s(&notes))?;
+                }
+                scenario.update(&crate::i18n::fmt("scenario '{0}'", &[name.clone()]))?;
+                let steps = scenario.obj("Steps")?;
+                for (index, step) in op["steps"].as_array().into_iter().flatten().enumerate() {
+                    let text = step.as_str().map(str::to_string).unwrap_or_else(|| text_field(step, "text"));
+                    // StepType: 0 = system, 1 = actor (EA's ScenarioStepType).
+                    let actor = step["actor"].as_bool().unwrap_or(false);
+                    let item = steps.call_obj("AddNew", &[s(&text), s(if actor { "1" } else { "0" })])?;
+                    item.set("Pos", i(index as i32 + 1))?;
+                    let uses = text_field(step, "uses");
+                    if !uses.is_empty() {
+                        item.set("Uses", s(&uses))?;
+                    }
+                    let results = text_field(step, "results");
+                    if !results.is_empty() {
+                        item.set("Results", s(&results))?;
+                    }
+                    item.update(&crate::i18n::fmt("scenario step {0}", &[(index + 1).to_string()]))?;
+                }
+                // The steps live in the scenario's XML: they are saved with the scenario.
+                scenario.update(&crate::i18n::fmt("scenario '{0}'", &[name.clone()]))?;
+                steps.call("Refresh", &[])?;
+                scenarios.call("Refresh", &[])?;
+                element.call("Update", &[])?;
+            }
             "add_glossary_term" => {
                 // Project glossary (Glossary window: Term / Type / Meaning). EA highlights a term in notes only in exactly
                 // the form written in the glossary, so every inflected form is its own entry with the same meaning.

@@ -1040,3 +1040,7 @@ The term and its forms are already in the project glossary. ‖ Pojęcie i jego 
 Added to the project glossary: {0} ‖ Dodano do słownika projektu: {0} ‖ Zum Projektglossar hinzugefügt: {0} ‖ Ajouté au glossaire du projet : {0}
 Add "{0}" to the EA project glossary ‖ Dodaj „{0}” do słownika projektu EA ‖ „{0}“ zum EA-Projektglossar hinzufügen ‖ Ajouter « {0} » au glossaire du projet EA
 Add the term "{0}" to the EA project glossary with all its forms. Ask me for its meaning and type if you do not know them. ‖ Dodaj pojęcie „{0}” do słownika projektu EA ze wszystkimi formami odmiany. Jeśli nie znasz jego definicji i typu, zapytaj mnie o nie. ‖ Füge den Begriff „{0}“ mit allen Formen zum EA-Projektglossar hinzu. Frag mich nach Bedeutung und Typ, wenn du sie nicht kennst. ‖ Ajoute le terme « {0} » au glossaire du projet EA avec toutes ses formes. Demande-moi sa définition et son type si tu ne les connais pas.
+scenario '{0}' ‖ scenariusz „{0}” ‖ Szenario „{0}“ ‖ scénario « {0} »
+scenario step {0} ‖ krok scenariusza {0} ‖ Szenarioschritt {0} ‖ étape de scénario {0}
+structured scenarios of elements ‖ scenariusze elementów ‖ strukturierte Szenarien von Elementen ‖ scénarios structurés d'éléments
+Rename the conversation ‖ Zmień nazwę rozmowy ‖ Unterhaltung umbenennen ‖ Renommer la conversation

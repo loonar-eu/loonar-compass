@@ -55,6 +55,7 @@ pub const MODEL_OPS: &[&str] = &[
     "clone_package",
     "create_baseline",
     "add_glossary_term",
+    "create_scenario",
 ];
 
 #[derive(Default)]
@@ -353,6 +354,7 @@ pub fn describe(ops: &[Value]) -> String {
         "clone_package" => crate::i18n::tr("package copies (with all contents)"),
         "create_baseline" => crate::i18n::tr("package baselines (saved versions)"),
         "add_glossary_term" => crate::i18n::tr("terms in the project glossary"),
+        "create_scenario" => crate::i18n::tr("structured scenarios of elements"),
         "remove_from_diagram" => crate::i18n::tr("elements removed from diagrams (they stay in the model)"),
         "diagram_style" => crate::i18n::tr("diagram style settings"),
         "set_composite" => crate::i18n::tr("element-to-diagram links"),
@@ -1040,5 +1042,29 @@ mod glossary_probe {
         println!("{} | {}", result["warnings"], again["warnings"]);
         let rows = crate::tools::query_rows(&cfg, "select count(*) from t_glossary where meaning like 'element techniczny%'").unwrap();
         assert_eq!(rows[0][0], "10");
+    }
+}
+
+#[cfg(test)]
+mod scenario_probe {
+    use super::*;
+    use serde_json::json;
+
+    /// A structured scenario with steps on an element (LOONAR_TEST_PROPS = a test copy).
+    #[test]
+    #[ignore]
+    fn structured_scenario() {
+        let props = std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS");
+        let cfg = AppConfig::load(std::path::Path::new(&props)).unwrap();
+        let id: i64 = crate::tools::query_rows(&cfg, "select min(object_id) from t_object where object_type in ('UseCase','Class')").unwrap()[0][0].parse().unwrap();
+        let op = json!({"op":"create_scenario","element":id,"name":"Zakup produktu","notes":"Klient kupuje produkt.",
+            "steps":[{"text":"Klient wybiera produkt","actor":true},{"text":"System pokazuje koszyk"},{"text":"Klient płaci","actor":true,"uses":"Płatność"}]});
+        let result = run_batch(&cfg, &[op], &BatchOptions::default());
+        shutdown();
+        println!("{result:?}");
+        result.expect("scenario");
+        let rows = crate::tools::query_rows(&cfg, &format!("select scenario, scenariotype, xmlcontent from t_objectscenarios where object_id = {id}")).unwrap();
+        println!("{rows:?}");
+        assert!(rows.iter().any(|r| r[0] == "Zakup produktu" && r[2].contains("System pokazuje koszyk")));
     }
 }

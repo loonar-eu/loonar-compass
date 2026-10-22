@@ -791,6 +791,8 @@ struct App {
     confirmed_session: String,
     /// In a tab of EA: the project that EA window has open. Every conversation there uses it (none = Compass does not work).
     ea_project: Option<ModelChoice>,
+    /// In a window of EA: the new name being typed for the current conversation.
+    ea_rename: Option<String>,
     /// The diagram editor window that is open: the diagram and the changes come back when it closes.
     editor_rx: Option<mpsc::Receiver<Result<Option<(Value, Value)>, String>>>,
     /// "Tidy with AI" in the diagram editor: the request goes to the conversation once the editor's changes are saved.
@@ -932,6 +934,7 @@ impl App {
             conn: None,
             confirmed_session: String::new(),
             ea_project: None,
+            ea_rename: None,
             editor_rx: None,
             tidy_request: None,
             miro: None,
@@ -4428,8 +4431,20 @@ impl eframe::App for App {
                     if narrow {
                         let mut pick: Option<Session> = None;
                         let mut new_one = false;
+                        let mut rename_done: Option<String> = None;
                         ui.horizontal(|ui| {
-                            let width = (ui.available_width() - 40.0).max(80.0);
+                            // Renaming the current conversation: the drop-down becomes a text field (Enter saves, Esc cancels).
+                            if let Some(name) = self.ea_rename.as_mut() {
+                                let field = ui.add(egui::TextEdit::singleline(name).desired_width((ui.available_width() - 8.0).max(80.0)));
+                                field.request_focus();
+                                if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                                    rename_done = Some(name.trim().to_string());
+                                } else if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                                    rename_done = Some(String::new());
+                                }
+                                return;
+                            }
+                            let width = (ui.available_width() - 74.0).max(80.0);
                             let current = if self.session.messages.is_empty() { crate::i18n::tr("New conversation").to_string() } else { shown_title(&self.session.title).to_string() };
                             egui::ComboBox::from_id_salt("conversation_pick")
                                 .width(width)
@@ -4449,11 +4464,26 @@ impl eframe::App for App {
                                         ui.label(egui::RichText::new(crate::i18n::tr("No conversations with this project yet")).color(theme::MUTED));
                                     }
                                 });
+                            let can_rename = !self.session.messages.is_empty();
+                            if ui
+                                .add_enabled(can_rename, egui::Button::new(icons::text(icons::EDIT, "✎", 13.0)).min_size(egui::vec2(28.0, 28.0)))
+                                .on_hover_text(crate::i18n::tr("Rename the conversation"))
+                                .clicked()
+                            {
+                                self.ea_rename = Some(shown_title(&self.session.title).to_string());
+                            }
                             new_one = ui
                                 .add(egui::Button::new(icons::text(icons::ADD, "+", 13.0)).min_size(egui::vec2(28.0, 28.0)))
                                 .on_hover_text(crate::i18n::tr("New conversation"))
                                 .clicked();
                         });
+                        if let Some(name) = rename_done {
+                            self.ea_rename = None;
+                            if !name.is_empty() {
+                                let id = self.session.id.clone();
+                                self.rename_session(&id, name);
+                            }
+                        }
                         if let Some(s) = pick {
                             self.switch_to(s);
                         }
