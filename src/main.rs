@@ -821,6 +821,8 @@ struct App {
     unseen: std::collections::HashSet<String>,
     /// Result of the last save and test of each of the four settings groups.
     group_status: [GroupStatus; 8],
+    /// Findings of the live model check already shown in EA (not repeated).
+    live_reported: Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
     /// Channel through which settings tests (run in the background) return their result: group number and message.
     settings_tx: mpsc::Sender<(usize, Result<String, String>)>,
     settings_rx: mpsc::Receiver<(usize, Result<String, String>)>,
@@ -1004,6 +1006,7 @@ impl App {
             recall: 0,
             unseen: std::collections::HashSet::new(),
             group_status: Default::default(),
+            live_reported: Default::default(),
             settings_tx,
             settings_rx,
         }
@@ -4504,6 +4507,29 @@ impl eframe::App for App {
                 self.input.push_str(&reference);
                 self.input.push(' ');
                 self.view = View::Chat;
+            }
+            // Live governance: a relationship just drawn or an element just changed in EA is checked by the rules,
+            // findings go to the "Loonar Compass" tab of System Output (each one once).
+            let events = ea_ui::take_events();
+            if !events.is_empty() {
+                if let Some(cfg) = self.cfg.clone() {
+                    let reported = self.live_reported.clone();
+                    std::thread::spawn(move || {
+                        for (kind, id) in events {
+                            match governance::check_object(&cfg, &kind, id) {
+                                Ok(findings) => {
+                                    ea_ui::debug(&format!("live check {kind} {id}: {} findings", findings.len()));
+                                    for finding in findings {
+                                        if reported.lock().unwrap().insert(format!("{kind}:{id}:{finding}")) {
+                                            ea_ui::output(&crate::i18n::fmt("⚠ Model check: {0}", &[finding]));
+                                        }
+                                    }
+                                }
+                                Err(e) => ea_ui::debug(&format!("live check {kind} {id}: {e:#}")),
+                            }
+                        }
+                    });
+                }
             }
             ctx.request_repaint_after(std::time::Duration::from_millis(500));
         }

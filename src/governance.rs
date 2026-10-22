@@ -42,8 +42,8 @@ fn sql_list(values: &[String]) -> String {
 /// Ids of the package and all its subpackages.
 fn subtree(cfg: &AppConfig, package: i64) -> Result<Vec<String>> {
     let rows = query_rows(cfg, &format!(
-        "with recursive tree(package_id) as (select package_id from t_package where package_id = {package} \
-         union all select p.package_id from t_package p join tree t on p.parent_id = t.package_id) select package_id from tree"
+        "with recursive tree(package_id) as (select package_id as c0 from t_package where package_id = {package} \
+         union all select p.package_id as c0 from t_package p join tree t on p.parent_id = t.package_id) select package_id as c0 from tree"
     ))?;
     anyhow::ensure!(!rows.is_empty(), "{}", crate::i18n::fmt("there is no package with id {0}", &[package.to_string()]));
     Ok(rows.into_iter().map(|r| r[0].clone()).collect())
@@ -108,15 +108,15 @@ pub fn lint(input: &Value, cfg: &AppConfig) -> Result<String> {
     let decoration = sql_list(&DECORATION.iter().map(|s| s.to_string()).collect::<Vec<_>>());
 
     let elements = query_rows(cfg, &format!(
-        "select o.object_id, coalesce(o.name,''), o.object_type, coalesce(o.stereotype,''), coalesce(o.note,''), p.name, o.package_id \
+        "select o.object_id as c0, coalesce(o.name,'') as c1, o.object_type as c2, coalesce(o.stereotype,'') as c3, coalesce(o.note,'') as c4, p.name as c5, o.package_id as c6 \
          from t_object o join t_package p on p.package_id = o.package_id where o.package_id in ({ids}) and o.object_type <> 'Package'"
     ))?;
     let connected: HashSet<String> = query_rows(cfg, &format!(
-        "select start_object_id from t_connector where start_object_id in (select object_id from t_object where package_id in ({ids})) \
-         union select end_object_id from t_connector where end_object_id in (select object_id from t_object where package_id in ({ids}))"
+        "select start_object_id as c0 from t_connector where start_object_id in (select object_id as c0 from t_object where package_id in ({ids})) \
+         union select end_object_id as c0 from t_connector where end_object_id in (select object_id as c0 from t_object where package_id in ({ids}))"
     ))?.into_iter().map(|r| r[0].clone()).collect();
     let on_diagram: HashSet<String> = query_rows(cfg, &format!(
-        "select distinct d.object_id from t_diagramobjects d join t_object o on o.object_id = d.object_id where o.package_id in ({ids})"
+        "select distinct d.object_id as c0 from t_diagramobjects d join t_object o on o.object_id = d.object_id where o.package_id in ({ids})"
     ))?.into_iter().map(|r| r[0].clone()).collect();
 
     let mut findings: Vec<Finding> = Vec::new();
@@ -164,7 +164,7 @@ pub fn lint(input: &Value, cfg: &AppConfig) -> Result<String> {
     if !required.is_empty() {
         let mut tags: HashMap<String, HashSet<String>> = HashMap::new();
         for r in query_rows(cfg, &format!(
-            "select t.object_id, lower(t.property), coalesce(t.value,'') from t_objectproperties t join t_object o on o.object_id = t.object_id where o.package_id in ({ids})"
+            "select t.object_id as c0, lower(t.property) as c1, coalesce(t.value,'') as c2 from t_objectproperties t join t_object o on o.object_id = t.object_id where o.package_id in ({ids})"
         ))? {
             if !r[2].trim().is_empty() {
                 tags.entry(r[0].clone()).or_default().insert(r[1].clone());
@@ -182,12 +182,12 @@ pub fn lint(input: &Value, cfg: &AppConfig) -> Result<String> {
 
     // Relationships: broken ends, duplicates, self-relationships and the allowed relationships from the rules.
     let connectors = query_rows(cfg, &format!(
-        "select c.connector_id, c.connector_type, coalesce(c.stereotype,''), c.start_object_id, c.end_object_id, \
-         coalesce(s.name,''), coalesce(s.object_type,''), coalesce(s.stereotype,''), coalesce(t.name,''), coalesce(t.object_type,''), coalesce(t.stereotype,''), \
-         case when s.object_id is null then 0 else 1 end, case when t.object_id is null then 0 else 1 end, coalesce(p.name,'') \
+        "select c.connector_id as c0, c.connector_type as c1, coalesce(c.stereotype,'') as c2, c.start_object_id as c3, c.end_object_id as c4, \
+         coalesce(s.name,'') as c5, coalesce(s.object_type,'') as c6, coalesce(s.stereotype,'') as c7, coalesce(t.name,'') as c8, coalesce(t.object_type,'') as c9, coalesce(t.stereotype,'') as c10, \
+         case when s.object_id is null then 0 else 1 end as c11, case when t.object_id is null then 0 else 1 end as c12, coalesce(p.name,'') as c13 \
          from t_connector c left join t_object s on s.object_id = c.start_object_id left join t_object t on t.object_id = c.end_object_id \
          left join t_package p on p.package_id = s.package_id \
-         where c.start_object_id in (select object_id from t_object where package_id in ({ids})) or c.end_object_id in (select object_id from t_object where package_id in ({ids}))"
+         where c.start_object_id in (select object_id as c0 from t_object where package_id in ({ids})) or c.end_object_id in (select object_id as c0 from t_object where package_id in ({ids}))"
     ))?;
     let allowed: Vec<&Value> = rules["allowed_relations"].as_array().into_iter().flatten().collect();
     let checked_types: HashSet<String> = allowed.iter().filter_map(|r| r["connector_type"].as_str()).map(|s| s.to_lowercase()).collect();
@@ -225,16 +225,16 @@ pub fn lint(input: &Value, cfg: &AppConfig) -> Result<String> {
 
     // Packages and diagrams without content.
     for r in query_rows(cfg, &format!(
-        "select p.package_id, p.name from t_package p where p.package_id in ({ids}) and p.package_id <> {package} \
-         and not exists (select 1 from t_object o where o.package_id = p.package_id and o.object_type <> 'Package') \
-         and not exists (select 1 from t_diagram d where d.package_id = p.package_id) \
-         and not exists (select 1 from t_package c where c.parent_id = p.package_id)"
+        "select p.package_id as c0, p.name as c1 from t_package p where p.package_id in ({ids}) and p.package_id <> {package} \
+         and not exists (select 1 as c0 from t_object o where o.package_id = p.package_id and o.object_type <> 'Package') \
+         and not exists (select 1 as c0 from t_diagram d where d.package_id = p.package_id) \
+         and not exists (select 1 as c0 from t_package c where c.parent_id = p.package_id)"
     ))? {
         findings.push(Finding { rule: "empty_package", id: r[0].clone(), kind: "package", name: r[1].clone(), package: String::new(), detail: crate::i18n::tr("no elements, diagrams or subpackages").to_string() });
     }
     for r in query_rows(cfg, &format!(
-        "select d.diagram_id, d.name, p.name from t_diagram d join t_package p on p.package_id = d.package_id where d.package_id in ({ids}) \
-         and not exists (select 1 from t_diagramobjects o where o.diagram_id = d.diagram_id)"
+        "select d.diagram_id as c0, d.name as c1, p.name as c2 from t_diagram d join t_package p on p.package_id = d.package_id where d.package_id in ({ids}) \
+         and not exists (select 1 as c0 from t_diagramobjects o where o.diagram_id = d.diagram_id)"
     ))? {
         findings.push(Finding { rule: "empty_diagram", id: r[0].clone(), kind: "diagram", name: r[1].clone(), package: r[2].clone(), detail: crate::i18n::tr("no elements on the diagram").to_string() });
     }
@@ -305,7 +305,7 @@ pub fn gap(input: &Value, cfg: &AppConfig) -> Result<String> {
         let ids = subtree(cfg, package)?.join(",");
         let mut map = BTreeMap::new();
         for r in query_rows(cfg, &format!(
-            "select o.object_id, coalesce(o.name,''), o.object_type, coalesce(o.stereotype,''), coalesce(o.note,''), p.name \
+            "select o.object_id as c0, coalesce(o.name,'') as c1, o.object_type as c2, coalesce(o.stereotype,'') as c3, coalesce(o.note,'') as c4, p.name as c5 \
              from t_object o join t_package p on p.package_id = o.package_id where o.package_id in ({ids}) and o.object_type <> 'Package' and coalesce(o.name,'') <> ''"
         ))? {
             if DECORATION.contains(&r[2].as_str()) {
@@ -322,7 +322,7 @@ pub fn gap(input: &Value, cfg: &AppConfig) -> Result<String> {
         }
         let list = ids.join(",");
         for r in query_rows(cfg, &format!(
-            "select c.start_object_id, c.end_object_id, c.connector_type, coalesce(s.name,''), coalesce(t.name,'') from t_connector c \
+            "select c.start_object_id as c0, c.end_object_id as c1, c.connector_type as c2, coalesce(s.name,'') as c3, coalesce(t.name,'') as c4 from t_connector c \
              join t_object s on s.object_id = c.start_object_id join t_object t on t.object_id = c.end_object_id \
              where c.start_object_id in ({list}) or c.end_object_id in ({list})"
         ))? {
@@ -388,7 +388,7 @@ pub fn preview(cfg: &AppConfig, ops: &[Value]) -> String {
     let mut lines = Vec::new();
     let one = |sql: String| query_rows(cfg, &sql).ok().and_then(|r| r.into_iter().next());
     let name_of = |table: &str, key: &str, id: i64| -> String {
-        one(format!("select coalesce(name,'') from {table} where {key} = {id}")).map(|r| r[0].clone()).unwrap_or_else(|| format!("#{id}"))
+        one(format!("select coalesce(name,'') as c0 from {table} where {key} = {id}")).map(|r| r[0].clone()).unwrap_or_else(|| format!("#{id}"))
     };
     let target = |op: &Value, field: &str| -> String {
         match &op[field] {
@@ -414,7 +414,7 @@ pub fn preview(cfg: &AppConfig, ops: &[Value]) -> String {
             "place" => format!("+ {} → {}", target(op, "element"), target(op, "diagram")),
             "update_element" => {
                 let id = op["element"].as_i64().unwrap_or(0);
-                let before = one(format!("select coalesce(name,''), coalesce(stereotype,''), coalesce(alias,''), coalesce(note,'') from t_object where object_id = {id}"));
+                let before = one(format!("select coalesce(name,'') as c0, coalesce(stereotype,'') as c1, coalesce(alias,'') as c2, coalesce(note,'') as c3 from t_object where object_id = {id}"));
                 let mut changes = Vec::new();
                 if let Some(b) = &before {
                     for (field, index) in [("name", 0), ("stereotype", 1), ("alias", 2), ("notes", 3)] {
@@ -446,6 +446,85 @@ pub fn preview(cfg: &AppConfig, ops: &[Value]) -> String {
         lines.push(crate::i18n::fmt("… and {0} more", &[(ops.len() - 80).to_string()]));
     }
     lines.join("\n")
+}
+
+/// Live check of one object just created or changed in EA (events from the add-in): what is wrong with it by the
+/// built-in checks and the rules. `kind` is "element" or "connector". Empty = nothing to report.
+pub fn check_object(cfg: &AppConfig, kind: &str, id: i64) -> Result<Vec<String>> {
+    check_object_with(cfg, kind, id, &load_rules(cfg, &Value::Null))
+}
+
+pub fn check_object_with(cfg: &AppConfig, kind: &str, id: i64, rules: &Value) -> Result<Vec<String>> {
+    let mut out = Vec::new();
+    match kind {
+        "element" => {
+            let Some(e) = query_rows(cfg, &format!(
+                "select coalesce(name,'') as c0, object_type as c1, coalesce(stereotype,'') as c2 from t_object where object_id = {id}"
+            ))?.into_iter().next() else { return Ok(out) };
+            let (name, otype, stereo) = (&e[0], &e[1], &e[2]);
+            if DECORATION.contains(&otype.as_str()) || otype == "Package" {
+                return Ok(out);
+            }
+            let shown = if stereo.is_empty() { otype.clone() } else { format!("{otype} «{stereo}»") };
+            if is_default_name(name) {
+                out.push(crate::i18n::fmt("\"{0}\": {1}", &[name.clone(), crate::i18n::fmt("default or empty name ({0})", &[shown.clone()])]));
+            }
+            for rule in rules["naming"].as_array().into_iter().flatten() {
+                let pattern = rule["pattern"].as_str().unwrap_or("*");
+                if matches_selector(rule["applies_to"].as_str().unwrap_or("*"), otype, stereo) && !wildcard(pattern, name.trim()) {
+                    let message = rule["message"].as_str().map(String::from).unwrap_or_else(|| crate::i18n::fmt("name does not match the pattern {0}", &[pattern.to_string()]));
+                    out.push(crate::i18n::fmt("\"{0}\": {1}", &[name.clone(), message]));
+                }
+            }
+            let required: Vec<&Value> = rules["required_tags"].as_array().into_iter().flatten().filter(|r| matches_selector(r["applies_to"].as_str().unwrap_or("*"), otype, stereo)).collect();
+            if !required.is_empty() {
+                let tags: HashSet<String> = query_rows(cfg, &format!("select lower(property) as c0, coalesce(value,'') as c1 from t_objectproperties where object_id = {id}"))?
+                    .into_iter().filter(|r| !r[1].trim().is_empty()).map(|r| r[0].clone()).collect();
+                for rule in required {
+                    let tag = rule["tag"].as_str().unwrap_or("");
+                    if !tag.is_empty() && !tags.contains(&tag.to_lowercase()) {
+                        out.push(crate::i18n::fmt("\"{0}\": {1}", &[name.clone(), crate::i18n::fmt("missing tagged value {0}", &[tag.to_string()])]));
+                    }
+                }
+            }
+        }
+        "connector" => {
+            let Some(c) = query_rows(cfg, &format!(
+                "select c.connector_type as c0, coalesce(c.stereotype,'') as c1, c.start_object_id as c2, c.end_object_id as c3, coalesce(s.name,'') as c4, coalesce(s.object_type,'') as c5, coalesce(s.stereotype,'') as c6, \
+                 coalesce(t.name,'') as c7, coalesce(t.object_type,'') as c8, coalesce(t.stereotype,'') as c9 from t_connector c left join t_object s on s.object_id = c.start_object_id \
+                 left join t_object t on t.object_id = c.end_object_id where c.connector_id = {id}"
+            ))?.into_iter().next() else { return Ok(out) };
+            let kind = if c[1].is_empty() { c[0].clone() } else { format!("{} «{}»", c[0], c[1]) };
+            let label = format!("{} → {}", c[4], c[7]);
+            if c[2] == c[3] && !matches!(c[0].as_str(), "StateFlow" | "Sequence" | "Transition" | "SelfMessage") {
+                out.push(crate::i18n::fmt("\"{0}\": {1}", &[label.clone(), crate::i18n::fmt("{0} from the element to itself", &[kind.clone()])]));
+            }
+            let same = query_rows(cfg, &format!(
+                "select count(*) as c0 from t_connector where start_object_id = {} and end_object_id = {} and connector_type = '{}' and coalesce(stereotype,'') = '{}'",
+                c[2], c[3], c[0].replace('\'', "''"), c[1].replace('\'', "''")
+            ))?;
+            let n: usize = same.first().and_then(|r| r[0].parse().ok()).unwrap_or(1);
+            if n > 1 {
+                out.push(crate::i18n::fmt("\"{0}\": {1}", &[label.clone(), crate::i18n::fmt("{0} repeated {1} times", &[kind.clone(), n.to_string()])]));
+            }
+            let allowed: Vec<&Value> = rules["allowed_relations"].as_array().into_iter().flatten().collect();
+            let listed = allowed.iter().any(|r| r["connector_type"].as_str().is_some_and(|t| t.eq_ignore_ascii_case(&c[0]) || t.eq_ignore_ascii_case(&c[1])));
+            if listed {
+                let ok = allowed.iter().any(|r| {
+                    let t = r["connector_type"].as_str().unwrap_or("");
+                    (t.eq_ignore_ascii_case(&c[0]) || t.eq_ignore_ascii_case(&c[1]))
+                        && matches_selector(r["source"].as_str().unwrap_or("*"), &c[5], &c[6])
+                        && matches_selector(r["target"].as_str().unwrap_or("*"), &c[8], &c[9])
+                });
+                if !ok {
+                    let ends = format!("{} → {}", if c[6].is_empty() { &c[5] } else { &c[6] }, if c[9].is_empty() { &c[8] } else { &c[9] });
+                    out.push(crate::i18n::fmt("\"{0}\": {1}", &[label, crate::i18n::fmt("{0} is not allowed between {1}", &[kind, ends])]));
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(out)
 }
 
 #[cfg(test)]

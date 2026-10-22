@@ -303,6 +303,23 @@ pub fn take_references() -> Vec<String> {
     text.lines().map(str::trim).filter(|line| !line.is_empty()).map(str::to_string).collect()
 }
 
+/// Model events the EA add-in passed on (a new relationship, a changed element): ("connector" | "element", id).
+pub fn take_events() -> Vec<(String, i64)> {
+    let Some(name) = ROT_NAME.get() else { return Vec::new() };
+    let file = std::env::temp_dir().join(format!("loonar-ea-event-{name}.txt"));
+    let Ok(text) = std::fs::read_to_string(&file) else { return Vec::new() };
+    let _ = std::fs::remove_file(&file);
+    let mut events: Vec<(String, i64)> = text
+        .lines()
+        .filter_map(|line| {
+            let (kind, id) = line.trim().split_once(':')?;
+            Some((kind.to_string(), id.trim().parse().ok()?))
+        })
+        .collect();
+    events.dedup();
+    events
+}
+
 /// The repository registered in the Running Object Table under the item moniker `!name`.
 ///
 /// # Safety

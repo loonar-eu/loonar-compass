@@ -747,7 +747,7 @@ mod tests {
             "required_tags": [{"applies_to": "Component", "tag": "Owner"}],
             "allowed_relations": [{"connector_type": "Realisation", "source": "Component", "target": "Class"}]
         });
-        let ruled = crate::governance::lint(&json!({"package": asis, "rules": rules, "skip": ["missing_notes"]}), &cfg);
+        let ruled = crate::governance::lint(&json!({"package": asis, "rules": rules.clone(), "skip": ["missing_notes"]}), &cfg);
         let gap = crate::governance::gap(&json!({"as_is": asis, "to_be": tobe}), &cfg);
         let preview = crate::governance::preview(&cfg, &[
             json!({"op":"update_element","element":orders,"name":"OrderingService","notes":"New."}),
@@ -755,6 +755,15 @@ mod tests {
             json!({"op":"delete","element":orders}),
         ]);
         let elapsed = started.elapsed().as_millis();
+        let live_c1 = crate::governance::check_object_with(&cfg, "element", id_of("c1"), &rules).expect("live element");
+        let live_billing = crate::governance::check_object_with(&cfg, "element", id_of("billing"), &rules).expect("live element");
+        let realisation = q(&format!("select connector_id from t_connector where start_object_id = {} and connector_type = 'Realisation'", id_of("billing")))[0][0].parse::<i64>().unwrap();
+        let selfrel = q(&format!("select connector_id from t_connector where start_object_id = {0} and end_object_id = {0}", id_of("legacy")))[0][0].parse::<i64>().unwrap();
+        let dup = q(&format!("select connector_id from t_connector where start_object_id = {} and end_object_id = {}", orders, id_of("billing")))[0][0].parse::<i64>().unwrap();
+        let live_real = crate::governance::check_object_with(&cfg, "connector", realisation, &rules).expect("live connector");
+        let live_self = crate::governance::check_object_with(&cfg, "connector", selfrel, &rules).expect("live connector");
+        let live_dup = crate::governance::check_object_with(&cfg, "connector", dup, &rules).expect("live connector");
+        let live_gone = crate::governance::check_object_with(&cfg, "element", 999_999_999, &rules).expect("live missing");
         run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &BatchOptions::default()).expect("deleting the test package");
         shutdown();
 
@@ -782,6 +791,18 @@ mod tests {
         assert!(preview.contains("\"OrderService\"") && preview.contains("\"OrderingService\""), "before → after of a name");
         assert!(preview.lines().any(|l| l.starts_with('+') && l.contains("Audit")), "a new element");
         assert!(preview.lines().any(|l| l.starts_with('−')), "a deletion");
+        println!("--- live ---
+{live_c1:?}
+{live_billing:?}
+{live_real:?}
+{live_self:?}
+{live_dup:?}");
+        assert!(live_c1.iter().any(|f| f.contains("Class1")), "live: default name");
+        assert!(live_billing.iter().any(|f| f.contains("Owner")) && live_billing.iter().any(|f| f.contains("Service")), "live: tag and naming rules");
+        assert!(live_real.iter().any(|f| f.contains("Billing → OrderApi")), "live: disallowed relationship");
+        assert!(live_self.iter().any(|f| f.contains("LegacyFax → LegacyFax")), "live: self relationship");
+        assert!(live_dup.iter().any(|f| f.contains("2")), "live: duplicate");
+        assert!(live_gone.is_empty(), "a removed object: nothing");
     }
 
     /// Changing the position and size of an element on a diagram (set_bounds) on a real EA; the connector must stay.

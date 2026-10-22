@@ -32,6 +32,47 @@ namespace LoonarCompass
             return "";
         }
 
+        /// <summary>A relationship drawn in EA: Compass checks it by the model rules (System Output). Nothing is changed here.</summary>
+        public bool EA_OnPostNewConnector(object repository, object info)
+        {
+            Pass("connector", info, "ConnectorID");
+            return false;
+        }
+
+        /// <summary>An element changed in EA (name, stereotype, tagged values…): Compass checks it by the model rules.
+        /// New elements are checked after their first edit (EA creates them as "Class1" and the name is typed next).</summary>
+        public void EA_OnNotifyContextItemModified(object repository, string guid, int type)
+        {
+            // 4 = otElement
+            if (type != 4 || current == null || current.IsDisposed)
+                return;
+            try
+            {
+                dynamic r = repository;
+                dynamic element = r.GetElementByGuid(guid);
+                current.Event("element:" + element.ElementID);
+            }
+            catch (Exception e)
+            {
+                Log.Write("ContextItemModified: " + e.Message);
+            }
+        }
+
+        static void Pass(string kind, object info, string property)
+        {
+            if (current == null || current.IsDisposed)
+                return;
+            try
+            {
+                dynamic properties = info;
+                current.Event(kind + ":" + properties.Get(property).Value);
+            }
+            catch (Exception e)
+            {
+                Log.Write(kind + " event: " + e.Message);
+            }
+        }
+
         /// <summary>The Compass menu goes to the Start ribbon (next to the other everyday tools), not Specialize.</summary>
         public string EA_GetRibbonCategory(object repository)
         {
@@ -248,7 +289,10 @@ namespace LoonarCompass
                 dynamic r = repo;
                 foreach (string line in lines)
                     if (line.Trim().Length > 0)
+                    {
+                        Log.Write("output: " + line);
                         r.WriteOutput(OutputTab, line, 0);
+                    }
             }
             catch
             {
@@ -297,6 +341,20 @@ namespace LoonarCompass
         public bool Running
         {
             get { return process != null && child != IntPtr.Zero; }
+        }
+
+        /// <summary>A model event for the live check in Compass (handed over in a file, like the references).</summary>
+        public void Event(string line)
+        {
+            if (rotName == null || process == null)
+                return;
+            try
+            {
+                File.AppendAllText(Path.Combine(Path.GetTempPath(), "loonar-ea-event-" + rotName + ".txt"), line + Environment.NewLine);
+            }
+            catch
+            {
+            }
         }
 
         /// <summary>Hands a reference to Compass (it takes it into the message field) and brings the Compass tab forward.</summary>

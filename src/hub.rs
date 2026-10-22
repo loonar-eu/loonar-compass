@@ -373,7 +373,7 @@ fn route(hub: &Hub, request: &Request) -> Result<(u16, Value), HttpError> {
 }
 
 fn packages(cfg: &AppConfig) -> Result<String> {
-    let rows = crate::tools::query_rows(cfg, "select package_id, parent_id, name from t_package order by parent_id, tpos, name")?;
+    let rows = crate::tools::query_rows(cfg, "select package_id as c0, parent_id as c1, name as c2 from t_package order by parent_id, tpos, name")?;
     let mut out = vec!["package_id | parent_id | name".to_string()];
     out.extend(rows.into_iter().take(2000).map(|r| r.join(" | ")));
     Ok(out.join("\n"))
@@ -386,7 +386,7 @@ fn search(cfg: &AppConfig, q: &str) -> Result<String> {
     }
     let like = q.to_lowercase().replace('\'', "''").replace('%', "").replace('_', "");
     let rows = crate::tools::query_rows(cfg, &format!(
-        "select o.object_id, o.name, o.object_type, coalesce(o.stereotype,''), p.name, substr(coalesce(o.note,''), 1, 120) from t_object o \
+        "select o.object_id as c0, o.name as c1, o.object_type as c2, coalesce(o.stereotype,'') as c3, p.name as c4, substr(coalesce(o.note,''), 1, 120) as c5 from t_object o \
          join t_package p on p.package_id = o.package_id where lower(o.name) like '%{like}%' or lower(coalesce(o.alias,'')) like '%{like}%' order by o.name limit 100"
     ))?;
     let mut out = vec![crate::i18n::tr("object_id | name | type | stereotype | package | description").to_string()];
@@ -397,7 +397,7 @@ fn search(cfg: &AppConfig, q: &str) -> Result<String> {
 fn element_details(cfg: &AppConfig, id: i64) -> Result<String> {
     let q = |sql: String| crate::tools::query_rows(cfg, &sql);
     let row = q(format!(
-        "select o.object_id, o.name, o.object_type, coalesce(o.stereotype,''), coalesce(o.alias,''), coalesce(o.status,''), coalesce(o.author,''), p.name, coalesce(o.note,''), o.ea_guid \
+        "select o.object_id as c0, o.name as c1, o.object_type as c2, coalesce(o.stereotype,'') as c3, coalesce(o.alias,'') as c4, coalesce(o.status,'') as c5, coalesce(o.author,'') as c6, p.name as c7, coalesce(o.note,'') as c8, o.ea_guid as c9 \
          from t_object o join t_package p on p.package_id = o.package_id where o.object_id = {id}"
     ))?
     .into_iter()
@@ -409,13 +409,13 @@ fn element_details(cfg: &AppConfig, id: i64) -> Result<String> {
         String::new(),
         row[8].clone(),
     ];
-    let tags = q(format!("select property, coalesce(value,'') from t_objectproperties where object_id = {id} order by property"))?;
+    let tags = q(format!("select property as c0, coalesce(value,'') as c1 from t_objectproperties where object_id = {id} order by property"))?;
     if !tags.is_empty() {
         out.push(format!("\n{}:", crate::i18n::tr("Tagged values")));
         out.extend(tags.into_iter().map(|t| format!("- {} = {}", t[0], t[1])));
     }
     let links = q(format!(
-        "select c.connector_type, case when c.start_object_id = {id} then '→' else '←' end, o.object_id, o.name from t_connector c \
+        "select c.connector_type as c0, case when c.start_object_id = {id} then '→' else '←' end as c1, o.object_id as c2, o.name as c3 from t_connector c \
          join t_object o on o.object_id = case when c.start_object_id = {id} then c.end_object_id else c.start_object_id end \
          where c.start_object_id = {id} or c.end_object_id = {id} order by 1, 4"
     ))?;
@@ -423,7 +423,7 @@ fn element_details(cfg: &AppConfig, id: i64) -> Result<String> {
         out.push(format!("\n{}:", crate::i18n::tr("Relationships")));
         out.extend(links.into_iter().map(|l| format!("- {} {} {} (id {})", l[0], l[1], l[3], l[2])));
     }
-    let diagrams = q(format!("select d.diagram_id, d.name from t_diagramobjects x join t_diagram d on d.diagram_id = x.diagram_id where x.object_id = {id} order by d.name"))?;
+    let diagrams = q(format!("select d.diagram_id as c0, d.name as c1 from t_diagramobjects x join t_diagram d on d.diagram_id = x.diagram_id where x.object_id = {id} order by d.name"))?;
     if !diagrams.is_empty() {
         out.push(format!("\n{}:", crate::i18n::tr("Diagrams")));
         out.extend(diagrams.into_iter().map(|d| format!("- {} (id {})", d[1], d[0])));
@@ -662,7 +662,7 @@ mod tests {
             let root = text.lines().nth(1).unwrap().split(" | ").next().unwrap().to_string();
             // Any element of the model for search, details and impact.
             let any = crate::tools::query_rows(&AppConfig::load(Path::new(&config["sources"][if source == "shop-db" { 0 } else { 1 }]["properties"].as_str().unwrap())).unwrap(),
-                "select object_id, name from t_object where object_type <> 'Package' and length(name) > 3 order by object_id limit 1").unwrap();
+                "select object_id as c0, name as c1 from t_object where object_type <> 'Package' and length(name) > 3 order by object_id limit 1").unwrap();
             let (element, name) = (any[0][0].clone(), any[0][1].clone());
             let part: String = name.chars().take(4).collect();
             let found: Value = serde_json::from_str(&get(&format!("/api/sources/{source}/search?q={}", part.replace(' ', "%20")), viewer).1).unwrap();
