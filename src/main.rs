@@ -5930,7 +5930,11 @@ mod tests {
         if cfg.ai_provider == "openai" { cfg.openai_model = model; } else { cfg.claude_model = model; }
         cfg.openai_url = String::new();
         cfg.claude_effort = String::new();
-        cfg.hub_url = String::new();
+        cfg.hub_url = std::env::var("LOONAR_BENCH_HUB_URL").unwrap_or_default();
+        cfg.hub_source = std::env::var("LOONAR_BENCH_HUB_SOURCE").unwrap_or_default();
+        if let Ok(effort) = std::env::var("LOONAR_BENCH_EFFORT") {
+            cfg.claude_effort = effort;
+        }
         let scenarios: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(std::env::var("LOONAR_BENCH").expect("LOONAR_BENCH")).unwrap()).unwrap();
         let out_path = std::env::var("LOONAR_BENCH_OUT").expect("LOONAR_BENCH_OUT");
         let only: Vec<String> = std::env::var("LOONAR_BENCH_ONLY").map(|v| v.split(',').map(String::from).collect()).unwrap_or_default();

@@ -177,6 +177,12 @@ pub fn verify(cfg: &AppConfig, ops: &[Value], result: &Value) -> Verification {
                     }
                 }
             }
+            "export_xmi" | "generate_report" => {
+                // The file the operation wrote.
+                let file = op["file"].as_str().unwrap_or("").replace('/', "\\");
+                let size = std::fs::metadata(&file).map(|m| m.len()).unwrap_or(0);
+                check(size > 0, crate::i18n::fmt("file {0} was not written", &[file.clone()]), &mut v);
+            }
             "move" => {
                 if let (Some(e), Some(p)) = (id_of(&op["element"]), id_of(&op["package"])) {
                     let now = one(format!("select package_id as c0 from t_object where object_id = {e}")).map(|r| r[0].clone()).unwrap_or_default();

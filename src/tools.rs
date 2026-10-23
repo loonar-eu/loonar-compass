@@ -1318,7 +1318,10 @@ fn ea_write(input: &Value, ctx: &ToolContext) -> Result<String> {
     }
     // The model is read again: only what is really there may be reported as done.
     let check = crate::verify::verify(ctx.cfg, ops, &done);
-    if check.problems.is_empty() {
+    if check.problems.is_empty() && check.passed == 0 {
+        // Nothing comparable in the model (e.g. a layout, colors): EA's confirmation of the save is the evidence.
+        text.push_str("\nEA confirmed the save; these operations have no model values to compare afterwards.\n");
+    } else if check.problems.is_empty() {
         text.push_str(&format!("\nVerified in the model after the write: {} checks passed.\n", check.passed));
     } else {
         text.push_str(&format!(
