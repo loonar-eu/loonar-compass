@@ -2,30 +2,109 @@
 
 Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen Loonar EA Assistant).
 
-## Version 0.8 (2026-10-22)
+## Version 0.8 (2026-10-23)
 
-- KI-Modell wählbar: Anbieter Anthropic (Claude) oder OpenAI, beliebiges Modell (aus der Liste oder eigene ID) und Aufwandsstufe (von „Standard des Modells“ bis max). Standard unverändert: Claude Haiku 5.5. Jeder Anbieter hat einen eigenen API-Schlüssel in der Anmeldeinformationsverwaltung; Daten gehen nur an den gewählten.
-- Einstellungen ohne Kartennummern; die erste Karte heißt „KI-Modell“.
-- Modellqualitätsprüfung (Governance) ohne KI-Raten: der Assistent prüft ein Paket mit Unterpaketen – Standard- und leere Namen, Elemente ohne Beschreibung, verwaiste Elemente, doppelte Namen und Beziehungen, Beziehungen zu nicht vorhandenen Elementen, leere Pakete und Diagramme – sowie die Regeln der Organisation aus governance.json: Namenskonventionen, Pflicht-Tagged-Values und erlaubte Beziehungen (Metamodell / MDG). Jeder Befund hat eine Schwere (Fehler, Warnung, Info).
-- Compass in EA prüft eine gerade gezeichnete Beziehung und ein gerade geändertes Element; Befunde erscheinen im Reiter „Loonar Compass“ der Systemausgabe.
-- Lückenanalyse Ist / Soll: zwei Pakete im Vergleich – neu, abzulösen, geändert (Stereotyp, Beschreibung, Beziehungen); auf Wunsch nach Excel.
-- Die Freigabe zeigt eine Vorschau „vorher → nachher“: was entsteht, was sich von welchem Wert auf welchen ändert und was gelöscht wird.
-- Jira (Cloud und Data Center): der Assistent liest Vorgänge (per Schlüssel und JQL-Suche) als Kontext und legt mit Ihrer Zustimmung Vorgänge, Kommentare und Links zu Modellelementen an. Neue Karte „Jira“ in den Einstellungen.
-- Beliebiger Endpunkt kompatibel mit der OpenAI-API: Azure OpenAI, Ollama, LM Studio oder ein Firmen-Gateway – auch lokale Modelle, ohne Daten in die Cloud.
-- Compass Hub – optionaler Teamdienst (LoonarCompass.exe --hub hub.json): Modelle des Teams (EA-Datenbanken und -Dateien), gemeinsame Richtlinie (Regeln der Modellprüfung, minimaler Freigabemodus), zentrales Audit-Protokoll aller Arbeitsplätze, gemeinsame Notizen, Benutzer mit Tokens und Rollen (viewer, architect, admin), Weboberfläche der Modelle für Personen ohne EA und ein MCP-Server (nur Lesen) für andere KI-Werkzeuge. Neue Karte „Team (Compass Hub)“.
-- Strukturierte Szenarien von Elementen: Der Assistent legt Szenarien im Tab Scenarios an, ändert und löscht sie, mit Akteur- und Systemschritten.
-- Compass in EA: Unterhaltung umbenennen (Stift neben der Unterhaltungsliste).
-- Fortschrittsmeldungen lauten „Der Assistent …“ statt „Claude …“.
-- Benutzerhandbuch: neues Kapitel „Compass in Enterprise Architect“, Karte „KI-Modell“, Projektglossar und Szenarien.
-- Überprüfung nach jedem Speichern: Compass liest das Modell erneut und vergleicht es mit der Anfrage (erstellte Objekte existieren, neue Beziehungen haben die gewünschten Enden, neue Elemente liegen im gewünschten Paket, geänderte Namen, Notizen, Stereotypen und Tagged Values haben die neuen Werte, gelöschte Objekte sind verschwunden). Abweichungen gehen an den Assistenten, der sie melden muss, statt „fertig“ zu sagen.
-- Speichern ganz oder gar nicht: Schlägt ein Speichervorgang auf halbem Weg fehl, werden die von ihm erstellten Objekte wieder gelöscht, sodass nichts Halbfertiges im Modell bleibt.
-- Das Löschen eines Elements mit Beziehungen erfordert immer Zustimmung (auch im Modus auto) und listet die Beziehungen auf.
-- Eigene MCP-Server (neue Karte „MCP-Server“): Server aus mcp_servers.json geben dem Assistenten zusätzliche Werkzeuge – lokales Programm (stdio) oder HTTP; Tokens aus ${secret:NAME} (Anmeldeinformationsverwaltung) oder ${env:NAME}. Ein Werkzeug, das nicht nur liest, fragt vor jedem Aufruf nach Zustimmung, außer der Server hat "trusted": true. „MCP-Server speichern und testen“ zeigt die Anzahl der Werkzeuge pro Server.
-- EA-Skripte: Der Assistent listet Skriptgruppen und Skripte auf, liest ein Skript, speichert es (JScript, VBScript, JavaScript; fehlende Gruppe wird angelegt; wie ein Speichern freigegeben) und führt es aus (jedes Mal freigegeben) – im geöffneten EA-Fenster oder ohne ein solches in der eigenen EA-Hintergrundsitzung von Compass. Repository und Session.Output funktionieren wie in EA; „!INC Gruppe.Skript“ wird aus dem Modell aufgelöst. Ist in EA ein anderes Modell geöffnet, endet die Ausführung mit einer Meldung.
-- Neue Modelloperationen: automatisches Diagrammlayout (Richtung unten, rechts, oben, links; Abstand), XMI-Export und -Import eines Pakets (der Import ersetzt GUIDs, außer man bittet, sie zu behalten), verknüpfte Dokumente von Elementen (aus Text), Swimlanes eines Diagramms, Umkehren einer Beziehung, Bearbeiten eines Pakets (Name, Notizen, Version, Status, Stereotyp) und ein Dokument aus einer EA-Dokumentvorlage (DOCX/PDF/RTF, z. B. „Model Report“, wie Publish → Report Builder).
-- Ereignis-Agenten (neue Karte „Ereignis-Agenten (Compass in EA)“): Regeln in event_agents.json (Ereignisse element_created, element_changed, connector_created, diagram_created). Sie arbeiten, solange Compass in seinem EA-Reiter geöffnet ist; der Assistent liest das Modell und antwortet im Reiter „Loonar Compass“ von System Output (Zeilen beginnen mit 🤖) und ändert das Modell nie von sich aus; derselbe Agent und dasselbe Objekt höchstens einmal pro Minute.
-- Rechtschreibung in der Sprache von Compass: Das Werkzeug spell_check prüft Notizen von Elementen und Diagrammen, Szenarioschritte und das Projektglossar mit dem Windows-Rechtschreibwörterbuch (die Prüfung von EA hat nur englische Wörterbücher); Elementnamen und Glossarbegriffe gelten als bekannte Wörter; Korrekturen erst nach Zustimmung. Im EA-Reiter werden die Notizen eines geänderten Elements laufend geprüft („✎ Rechtschreibung: …“). Das Speichern der Sprache in den Einstellungen stellt die Prüfung von EA darauf um, wenn EA ein Wörterbuch dafür hat. Hat Windows kein Wörterbuch für die Sprache, fügen Sie sie in den Windows-Einstellungen → Zeit und Sprache → Sprache hinzu.
-- Lesezugriffe auf eine EA-Datei, die in einem EA-Fenster geöffnet ist, laufen über dieses Fenster (die Datei auf der Festplatte enthält die letzten Änderungen eventuell noch nicht).
+Das bisher größte Release. Compass prüft die Modellqualität, kontrolliert jedes Speichern und macht es rückgängig, vergleicht das Modell mit Anforderungen und mit Code, schätzt Änderungen und arbeitet im Team. Zu jeder Funktion gibt es eine Beispielanfrage: Geben Sie sie so im Gespräch ein oder mit eigenen Worten.
+
+### Wahl des KI-Modells
+
+- **Anbieter und Modelle.** Anthropic (Claude) oder OpenAI, ein beliebiges Modell (aus der Liste oder eigene ID) und die Aufwandsstufe, von „Standard des Modells“ bis max. Wo: Einstellungen → Karte „KI-Modell“.
+  - Standard unverändert: Claude Haiku 5.5.
+  - Jeder Anbieter hat einen eigenen Schlüssel in der Windows-Anmeldeinformationsverwaltung; Daten gehen nur an den gewählten Anbieter.
+- **Jeder OpenAI-kompatible Endpunkt.** Azure OpenAI, Ollama, LM Studio oder ein Firmen-Gateway. Mit einem lokalen Modell verlässt nichts Ihren Rechner.
+
+### Modellqualität und Teamregeln
+
+- **Modellprüfung.** Regelbasiert, ohne Raten durch die KI. Jeder Befund hat einen Schweregrad: Fehler, Warnung oder Information. Gefunden werden:
+  - Standard- und leere Namen, Elemente ohne Beschreibung, verwaiste Elemente;
+  - doppelte Namen und Beziehungen, Beziehungen zu nicht vorhandenen Elementen;
+  - leere Pakete und Diagramme, Flüsse gegen UML- oder BPMN-Regeln.
+  - Beispiel: „Prüfe die Qualität des Pakets Domäne und liste die wichtigsten Probleme auf.“
+- **Regeln der Organisation.** In governance.json neben den Einstellungen oder vom Team-Hub: Namenskonventionen, Pflicht-Tagged-Values, erlaubte Beziehungen zwischen Typen (Metamodell / MDG).
+  - Beispiel: „Prüfe, ob alle Komponenten im Paket Systeme den Tagged Value Owner haben.“
+- **Gap-Analyse Ist / Soll.** Was neu ist, was entfällt und was sich geändert hat (Stereotyp, Beschreibung, Beziehungen); auf Wunsch nach Excel.
+  - Beispiel: „Vergleiche das Paket Ist mit dem Paket Soll und speichere die Lücken in Excel.“
+- **Rechtschreibung in der Compass-Sprache.** Notizen von Elementen und Diagrammen, Szenarioschritte und das Projektglossar werden mit der Windows-Rechtschreibprüfung geprüft. Elementnamen und Glossarbegriffe gelten als bekannte Wörter; Korrekturen erst nach Ihrer Freigabe.
+  - Das Speichern der Sprache in den Einstellungen stellt auch die EA-Rechtschreibprüfung auf diese Sprache um, wenn EA ein Wörterbuch dafür hat.
+  - Sprache fehlt: Windows-Einstellungen → Zeit und Sprache → Sprache → Sprache hinzufügen.
+  - Beispiel: „Prüfe die Rechtschreibung der Notizen im ganzen Modell und korrigiere die Fehler.“
+
+### Speichern, dem Sie vertrauen können
+
+- **Vorschau „vorher → nachher“.** Das Freigabefenster zeigt, was entsteht, welcher Wert sich in welchen ändert und was gelöscht wird.
+- **Prüfung nach jedem Speichern.** Compass liest das Modell erneut und vergleicht es mit dem Auftrag. Weicht etwas ab, sagt der Assistent es, statt „fertig“ zu melden. Geprüft wird, ob:
+  - angelegte Objekte existieren, Beziehungen die richtigen Enden haben, Elemente im gewünschten Paket liegen;
+  - Namen, Beschreibungen, Stereotypen und Tagged Values die neuen Werte haben;
+  - gelöschte Objekte verschwunden sind und XMI-Dateien und Berichte geschrieben wurden.
+- **Alles oder nichts.** Schlägt ein Speichern auf halbem Weg fehl, werden die bereits angelegten Objekte entfernt.
+- **Sicheres Löschen.** Das Löschen eines Elements mit Beziehungen braucht immer Ihre Freigabe (auch im Auto-Modus); das Fenster nennt diese Beziehungen.
+- **Zeitmaschine.** Jedes Speichern kommt mit den Umkehroperationen in ein Rückgängig-Journal; rückgängig machen lässt sich, was angelegt oder geändert wurde. Ein Löschen macht Compass nicht rückgängig: Vorher legt es eine EA-Baseline des Pakets an, die Sie in EA wiederherstellen. Vor dem Rückgängigmachen fragt Compass immer nach.
+  - Beispiele: „Mach die letzte Änderung rückgängig.“, „Zeig die Historie der Änderungen, die du in diesem Modell gemacht hast.“, „Mach die letzten zwei Änderungen rückgängig.“
+
+### Anforderungen, Code und Schätzung
+
+- **Anforderungen gegen das Modell.** Ein Word-Dokument, Text oder Markdown, eine Confluence-Seite oder in das Gespräch eingefügter Text wird zur Rückverfolgbarkeitsmatrix: abgedeckt, wahrscheinlich abgedeckt, nicht abgedeckt, „gleiche ID, anderer Inhalt“ und Modellelemente, die keine Anforderung verlangt. Trace-Beziehungen entstehen erst nach Ihrer Freigabe.
+  - Beispiel: „Vergleiche die Anforderungen aus C:\Projekte\BRD.docx mit dem Modell: Was ist abgedeckt und was fehlt?“, danach „Lege Trace-Beziehungen für die abgedeckten Anforderungen an.“
+- **Modell gegen Code.** Ein Quellordner, nur lesend: Klassen, Interfaces, Enums und Records mit Feldern (Java, Kotlin, C#, TypeScript, Rust, Python), SQL-Tabellen mit Spalten, API-Operationen (OpenAPI operationId). Der Bericht zeigt, was im Modell fehlt, was es im Code nicht mehr gibt und wie sich die Felder unterscheiden.
+  - Beispiel: „Vergleiche das Paket Domäne mit dem Code in C:\repo\shop – was fehlt im Modell und was im Code?“
+- **Schätzung einer Änderung.** Die Auswirkung einer Änderung wird zu einer Aufgabenliste in einfacher Sprache (ändern, anpassen, prüfen) mit Stunden nach Elementtyp und Beziehungsebene, Diagrammaktualisierung, Tests, Analyse, Dokumentation und Risikopuffer; auf Wunsch nach Excel.
+  - Die Normen stehen in estimate.json neben den Einstellungen. Das ist eine Art zu schätzen, nicht die einzige: Passen Sie die Normen an Ihr Team an.
+  - Beispiel: „Schätze eine Änderung der Klasse Bestellung: Was muss sich ändern und wie lange dauert es?“
+
+### Neue Modelloperationen
+
+- **Automatisches Diagramm-Layout.** Nach unten, rechts, oben oder links, mit dem gewünschten Abstand.
+  - Beispiel: „Ordne das Diagramm Domänenmodell von links nach rechts an.“
+- **XMI-Export und -Import eines Pakets.** Der Import vergibt neue GUIDs, außer Sie möchten sie behalten.
+  - Beispiel: „Exportiere das Paket Domäne nach C:\Export\domaene.xml.“
+- **Dokumente aus EA-Dokumentvorlagen.** DOCX, PDF oder RTF, wie mit Publish → Report Builder.
+  - Beispiel: „Erstelle einen Bericht aus der Vorlage Model Report für das Paket Domäne nach C:\Berichte\domaene.docx.“
+- **Mehr Bearbeitung.** Swimlanes von Diagrammen, verknüpfte Dokumente von Elementen, Umkehren einer Beziehung, Paketdaten (Name, Beschreibung, Version, Status, Stereotyp). Aggregation und Komposition entstehen als echte UML-Beziehungen.
+  - Beispiele: „Füge dem Diagramm Bestellprozess die Bahnen Vertrieb und Lager hinzu.“, „Kehre die Beziehung zwischen Kunde und Bestellung um.“
+- **Strukturierte Szenarien.** Szenarien von Elementen mit Akteur- und Systemschritten.
+  - Beispiel: „Füge dem Anwendungsfall Bestellung aufgeben ein Hauptszenario mit fünf Schritten hinzu.“
+
+### EA-Skripte
+
+- **Skripte lesen, speichern und ausführen.** Der Assistent zeigt Gruppen und Skripte und liest ein Skript. Er speichert JScript, VBScript und JavaScript (eine fehlende Gruppe wird angelegt; Freigabe wie bei jedem Speichern) und führt ein Skript jedes Mal nach Ihrer Freigabe aus, im offenen EA-Fenster oder im Hintergrund.
+  - Repository und Session.Output funktionieren wie in EA; „!INC Gruppe.Skript“ wird aus dem Modell aufgelöst.
+  - Beispiel: „Erstelle und starte ein EA-Skript in JScript, das die Namen aller Pakete des Modells ausgibt.“
+
+### Teamarbeit: Compass Hub
+
+- **Ein optionaler Team-Dienst.** `LoonarCompass.exe --hub hub.json` auf einem Team-Rechner oder Server. In hub.json stehen die Listen-Adresse, die Modelle des Teams (EA-Datenbanken und -Dateien), Benutzer mit Tokens und Rollen (viewer, architect, admin) und die Richtlinie.
+  - In Compass: Einstellungen → Karte „Team (Compass Hub)“, mit der Adresse und Ihrem Token vom Hub-Administrator.
+- **Gemeinsame Richtlinie.** Regeln der Modellprüfung und der minimale Freigabemodus gelten an allen Arbeitsplätzen; jedes Speichern geht ins zentrale Audit-Protokoll; gemeinsame Teamnotizen.
+- **Änderungssätze zur Prüfung.** Statt zu speichern, schlägt der Assistent die Änderung dem Hub vor. Ein zweiter Architekt kommentiert und genehmigt sie in der Weboberfläche (Vier-Augen-Prinzip); danach übernimmt der Autor den genehmigten Satz mit Prüfung.
+  - Beispiele: „Schlage dem Team eine Änderung zur Prüfung vor: füge die Klasse Lager zum Paket Domäne hinzu.“, „Zeig die genehmigten Änderungssätze und übernimm Satz 3.“
+- **Eine Weboberfläche für Kollegen ohne EA.** Die Hub-Adresse im Browser, mit den Reitern Ask, Search, Model check, Gaps, Audit trail, Team notes und Change sets. Unter „Ask“ stellt ein Stakeholder eine Frage zum Modell, und der Assistent antwortet nur lesend.
+- **Der MCP-Server des Hubs.** Nur lesend, für andere KI-Werkzeuge: Quellen, Paketbaum, Elementsuche und -details, Auswirkungsanalyse, Modellprüfung und Gap-Analyse.
+
+### Jira und eigene MCP-Server
+
+- **Jira (Cloud und Data Center).** Vorgänge per Schlüssel oder JQL-Suche als Kontext für das Modell; nach Ihrer Freigabe neue Vorgänge, Kommentare und Links zu Elementen. Wo: Einstellungen → Karte „Jira“.
+  - Beispiele: „Lies den Vorgang SHOP-123 und prüfe, welche Modellelemente er betrifft.“, „Lege in Jira einen Vorgang für die fehlende Beschreibung der Klasse Rechnung an.“
+- **Eigene MCP-Server.** Karte „MCP-Server“, gespeichert in mcp_servers.json: ein lokales Programm (stdio) oder HTTP; Tokens aus ${secret:name} (Anmeldeinformationsverwaltung) oder ${env:NAME}.
+  - Ein Werkzeug, das nicht nur liest, fragt vor jedem Aufruf nach Freigabe, außer der Server hat "trusted": true.
+  - „MCP-Server speichern und testen“ zeigt die Zahl der Werkzeuge jedes Servers.
+  - Beispiel: „Liste über den MCP-Server hub die Modellquellen des Teams auf.“
+
+### Compass in Enterprise Architect
+
+- **Laufende Prüfung.** Eine neu gezeichnete Beziehung und ein geändertes Element werden sofort geprüft (Regeln und Rechtschreibung der Notizen); Hinweise erscheinen im Reiter „Loonar Compass“ des Fensters System Output.
+- **Ereignis-Agenten.** Karte „Ereignis-Agenten (Compass in EA)“, gespeichert in event_agents.json: Wenn ein Element entsteht oder sich ändert oder eine Beziehung oder ein Diagramm entsteht, tut der Assistent, was die Regel sagt.
+  - Er liest das Modell und antwortet in System Output (Zeilen mit 🤖); er ändert das Modell nie selbst; derselbe Agent und dasselbe Objekt höchstens einmal pro Minute.
+  - Beispielregel für eine neue Komponente: „prüfe, ob sie eine Beschreibung und einen Verantwortlichen hat, und schlage fehlende Beziehungen vor“.
+- **Gespräch umbenennen.** Der Stift neben der Gesprächsliste.
+- **Lesen einer in EA geöffneten Modelldatei.** Lesezugriffe laufen über das EA-Fenster und sehen so die letzten Änderungen, bevor EA sie auf die Festplatte schreibt.
+
+### Weitere Änderungen und Korrekturen
+
+- Einstellungskarten ohne Nummern; die erste Karte ist „KI-Modell“.
+- Fortschrittsmeldungen sagen „Der Assistent …“ statt „Claude …“.
+- Dateimodelle: Nach jedem Speichern sind die Änderungen sofort auf der Festplatte, sodass folgende Lesezugriffe den neuen Stand sehen.
+- EA-Fehlerdialoge (SQL, XML) blockieren die Arbeit im Hintergrund nicht mehr; Abfragen mit Ausdrücken und doppelten Spaltennamen liefern korrekte Ergebnisse.
+- Benutzerhandbuch in 4 Sprachen: ein neues Kapitel mit Anwendungsfällen und fertigen Anfragen, das Kapitel „Compass in Enterprise Architect“ und die Karten „KI-Modell“, „Jira“, „Team“, „MCP-Server“ und „Ereignis-Agenten“.
 
 ## Version 0.7.5 (2026-10-22)
 

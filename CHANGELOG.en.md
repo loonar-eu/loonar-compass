@@ -2,30 +2,109 @@
 
 All notable changes to Loonar Compass (named Loonar EA Assistant until version 0.3).
 
-## Version 0.8 (2026-10-22)
+## Version 0.8 (2026-10-23)
 
-- Choice of AI model: provider Anthropic (Claude) or OpenAI, any model (from a list or your own id) and an effort level (from "model default" to max). The default is unchanged: Claude Haiku 5.5. Each provider has its own API key in Credential Manager; data goes only to the chosen one.
-- Settings without card numbers; the first card is "AI model".
-- Model quality check (governance) without AI guessing: in one request the assistant checks a package with its subpackages – default and empty names, elements without a description, orphaned elements, duplicate names and relationships, relationships to non-existent elements, empty packages and diagrams – and the organization's rules from governance.json: naming conventions, required tagged values and allowed relationships (metamodel / MDG). Every finding has a severity (error, warning, info).
-- Compass in EA checks a relationship just drawn and an element just changed; findings appear in the "Loonar Compass" tab of System Output.
-- As-is / to-be gap analysis: two packages compared – what is new, what is to retire, what changed (stereotype, description, relationships); to Excel on request.
-- The save approval shows a "before → after" preview: what is created, what changes from which value to which, and what is deleted.
-- Jira (Cloud and Data Center): the assistant reads issues (by key and JQL search) as context for the model and, with your consent, creates issues, comments and links to model elements. New "Jira" card in the settings.
-- Any endpoint compatible with the OpenAI API: Azure OpenAI, Ollama, LM Studio or a company gateway – local models too, with no data sent to the cloud.
-- Compass Hub – an optional team service (LoonarCompass.exe --hub hub.json): the team's models (EA databases and files), a shared policy (model check rules, minimum approval mode), a central audit trail from every workstation, shared notes, users with tokens and roles (viewer, architect, admin), a web view of the models for people without EA and an MCP server (read-only) for other AI tools. New "Team (Compass Hub)" card in the settings.
-- Structured scenarios of elements: the assistant creates, changes and deletes scenarios in the Scenarios tab, with actor and system steps.
-- Compass in EA: renaming a conversation (pencil next to the conversation list).
+The biggest release so far. Compass now checks model quality, verifies every save and lets you undo it, compares the model with requirements and with code, estimates changes and works as a team tool. Each feature below has an example prompt: type it in the conversation as it is, or in your own words.
+
+### Choice of AI model
+
+- **Providers and models.** Anthropic (Claude) or OpenAI, any model (from the list or your own id) and the effort level, from "model default" to max. Where: Settings → "AI model" card.
+  - The default is unchanged: Claude Haiku 5.5.
+  - Each provider has its own key in Windows Credential Manager; data goes only to the provider you chose.
+- **Any OpenAI-compatible endpoint.** Azure OpenAI, Ollama, LM Studio or a company gateway. With a local model, nothing leaves your computer.
+
+### Model quality and team rules
+
+- **Model check.** Rule-based, not guessed by the AI. Every finding has a severity: error, warning or information. It finds:
+  - default and empty names, elements without a description, orphans;
+  - repeated names and relationships, relationships to elements that do not exist;
+  - empty packages and diagrams, flows that break UML or BPMN rules.
+  - Example: "Check the quality of the Domain package and list the main problems."
+- **Organisation rules.** In governance.json next to the settings, or from the team hub: naming conventions, required tagged values, allowed relationships between types (metamodel / MDG).
+  - Example: "Check whether all components in the Systems package have the tagged value Owner."
+- **As-is / to-be gap analysis.** What is new, what is to be retired and what changed (stereotype, description, relationships); to Excel on request.
+  - Example: "Compare the As-is package with the To-be package and save the gaps to Excel."
+- **Spelling in the Compass language.** Element and diagram notes, scenario steps and the project glossary are checked with the Windows spell checker. Element names and glossary terms count as known words; corrections only after your approval.
+  - Saving the language in Settings also switches EA's spell checker to that language, if EA has a dictionary for it.
+  - Language missing: Windows Settings → Time & language → Language → add the language.
+  - Example: "Check the spelling of the notes in the whole model and fix the mistakes."
+
+### Saves you can trust
+
+- **"Before → after" preview.** The approval window shows what is created, which value changes to which, and what is deleted.
+- **Verification after every save.** Compass reads the model again and compares it with the request. If anything differs, the assistant tells you instead of saying "done". It checks that:
+  - created objects exist, relationships have the right ends, elements are in the requested package;
+  - names, descriptions, stereotypes and tagged values have the new values;
+  - deleted objects are gone, XMI files and reports were written.
+- **All-or-nothing saves.** If a save fails halfway, the objects it had already created are removed.
+- **Safe deletion.** Deleting an element that has relationships always needs your approval, even in auto mode, and the window lists those relationships.
+- **Time machine.** Every save goes into an undo journal with the reverse operations; what was created or changed can be undone. Compass does not undo a deletion: before it, Compass takes an EA baseline of the package, which you restore in EA. Compass always asks before undoing.
+  - Examples: "Undo the last change.", "Show the history of the changes you made in this model.", "Undo the last two changes."
+
+### Requirements, code and estimates
+
+- **Requirements against the model.** A Word document, text or Markdown, a Confluence page or text pasted into the conversation becomes a traceability matrix: covered, likely covered, not covered, "same id, different content", and model elements that no requirement asks for. Trace relationships are created only after your approval.
+  - Example: "Compare the requirements in C:\Projects\BRD.docx with the model: what is covered and what is missing?", then "Add trace relationships for the covered requirements."
+- **Model against code.** A source folder, read only: classes, interfaces, enums and records with their fields (Java, Kotlin, C#, TypeScript, Rust, Python), SQL tables with columns, API operations (OpenAPI operationId). The report shows what is missing from the model, what is no longer in the code and how the fields differ.
+  - Example: "Compare the Domain package with the code in C:\repo\shop – what is missing in the model and what is missing in the code?"
+- **Change estimate.** The impact of a change becomes a list of tasks in plain language (change, adapt, check) with hours by element type and level of relationship, diagram updates, tests, analysis, documentation and a risk buffer; to Excel on request.
+  - The norms are in estimate.json next to the settings. This is one way to estimate, not the only one: adjust the norms to your team.
+  - Example: "Estimate a change to the Order class: what has to change and how long will it take?"
+
+### New model operations
+
+- **Automatic diagram layout.** Down, right, up or left, with the spacing you choose.
+  - Example: "Lay out the Domain model diagram from left to right."
+- **XMI export and import of a package.** Import gives new GUIDs unless you ask to keep them.
+  - Example: "Export the Domain package to C:\Export\domain.xml."
+- **Documents from EA document templates.** DOCX, PDF or RTF, as with Publish → Report Builder.
+  - Example: "Generate a report from the Model Report template for the Domain package to C:\Reports\domain.docx."
+- **More editing.** Diagram swimlanes, linked documents of elements, reversing a relationship, package details (name, description, version, status, stereotype). Aggregation and composition are created as proper UML relationships.
+  - Examples: "Add the lanes Sales and Warehouse to the Order process diagram.", "Reverse the relationship between Customer and Order."
+- **Structured scenarios.** Scenarios of elements with actor and system steps.
+  - Example: "Add a five-step basic scenario to the use case Place order."
+
+### EA scripts
+
+- **Read, save and run scripts.** The assistant lists groups and scripts and reads a script. It saves JScript, VBScript and JavaScript (a missing group is created; approved like any save) and runs a script after your approval every time, in the open EA window or in the background.
+  - Repository and Session.Output work as in EA; "!INC Group.Script" includes are resolved from the model.
+  - Example: "Create and run a JScript EA script that prints the names of all packages in the model."
+
+### Teamwork: Compass Hub
+
+- **An optional team service.** `LoonarCompass.exe --hub hub.json` on a team computer or server. hub.json holds the listen address, the team's models (EA databases and files), users with tokens and roles (viewer, architect, admin) and the policy.
+  - In Compass: Settings → "Team (Compass Hub)" card, with the address and your token from the hub administrator.
+- **Shared policy.** Model-check rules and the minimum approval mode apply on every workstation; every save goes to the central audit trail; shared team notes.
+- **Change sets for review.** Instead of saving, the assistant proposes the change to the hub. A second architect comments on it and approves it in the web view (four-eyes rule); the author then applies the approved change set, with verification.
+  - Examples: "Propose a change to the team for review: add the class Warehouse to the Domain package.", "Show the approved change sets and apply change set 3."
+- **A web view for people without EA.** The hub address in a browser, with the tabs Ask, Search, Model check, Gaps, Audit trail, Team notes and Change sets. In "Ask", a stakeholder asks a question about the model and the assistant answers read-only.
+- **The hub's MCP server.** Read-only, for other AI tools: sources, package tree, element search and details, impact analysis, model check and gap analysis.
+
+### Jira and your own MCP servers
+
+- **Jira (Cloud and Data Center).** Issues by key or JQL search as context for the model; after your approval, new issues, comments and links to elements. Where: Settings → "Jira" card.
+  - Examples: "Read issue SHOP-123 and check which model elements it concerns.", "Create a Jira issue for the missing description of the Invoice class."
+- **Your own MCP servers.** "MCP servers" card, stored in mcp_servers.json: a local program (stdio) or HTTP; tokens from ${secret:name} (Credential Manager) or ${env:NAME}.
+  - A tool that is not read-only asks for approval before every call, unless its server has "trusted": true.
+  - "Save and test MCP servers" shows how many tools each server has.
+  - Example: "Through the MCP server hub, list the team's model sources."
+
+### Compass in Enterprise Architect
+
+- **Live check.** A newly drawn relationship or a changed element is checked straight away (rules and the spelling of notes); remarks appear on the "Loonar Compass" tab of the System Output window.
+- **Event agents.** "Event agents (Compass in EA)" card, stored in event_agents.json: when an element is created or changed, or a relationship or diagram is created, the assistant does what the rule says.
+  - It reads the model and answers in System Output (lines starting with 🤖); it never changes the model by itself; the same agent and object at most once a minute.
+  - Example rule for a new component: "check that it has a description and an owner, and suggest the missing relationships".
+- **Renaming a conversation.** The pencil next to the conversation list.
+- **Reading a model file open in EA.** Reads go through the EA window, so they see the latest changes even before EA writes them to disk.
+
+### Other changes and fixes
+
+- Settings cards are no longer numbered; the first card is "AI model".
 - Progress messages say "The assistant …" instead of "Claude …".
-- User guide: new chapter "Compass in Enterprise Architect", the "AI model" card, the project glossary and scenarios.
-- Verification after every save: Compass reads the model again and compares it with the request (created objects exist, new relationships have the asked ends, new elements are in the asked package, changed names, notes, stereotypes and tagged values have the new values, deleted objects are gone). Differences are given to the assistant, which must report them instead of saying "done".
-- All-or-nothing saves: if a save fails halfway, the objects it created are deleted again, so nothing half-done is left in the model.
-- Deleting an element that has relationships always asks for consent (also in auto mode) and lists the relationships.
-- Your own MCP servers (new "MCP servers" card): servers from mcp_servers.json give the assistant extra tools – a local program (stdio) or HTTP; tokens from ${secret:NAME} (Credential Manager) or ${env:NAME}. A tool that is not read-only asks for consent before each call unless the server has "trusted": true. "Save and test MCP servers" shows the number of tools per server.
-- EA scripts: the assistant lists script groups and scripts, reads a script, saves it (JScript, VBScript, JavaScript; a missing group is created; approved like a save) and runs it (approved every time) – in the open EA window or, without one, in Compass's own background EA session. Repository and Session.Output work as in EA; "!INC Group.Script" includes are resolved from the model. If another model is open in EA, the run stops with a message.
-- New model operations: automatic diagram layout (direction down, right, up, left; spacing), XMI export and import of a package (import replaces GUIDs unless asked to keep them), linked documents of elements (from text), diagram swimlanes, reversing a relationship, editing a package (name, notes, version, status, stereotype) and a document from an EA document template (DOCX/PDF/RTF, e.g. "Model Report", like Publish → Report Builder).
-- Event agents (new "Event agents (Compass in EA)" card): rules in event_agents.json (events element_created, element_changed, connector_created, diagram_created). They work while Compass is open in its EA tab; the assistant reads the model and answers in the "Loonar Compass" tab of System Output (lines start with 🤖) and never changes the model on its own; the same agent and object at most once a minute.
-- Spelling in the language of Compass: the spell_check tool checks element and diagram notes, scenario steps and the project glossary with the Windows spelling dictionary (EA's own checker has only English dictionaries); element names and glossary terms count as known words; corrections only after consent. In the EA tab, the notes of a changed element are checked live ("✎ Spelling: …"). Saving the language in Settings switches EA's own spell checker to it if EA has a dictionary for it. If Windows has no dictionary for the language, add it in Windows Settings → Time & language → Language.
-- Reads of an EA file that is open in an EA window go through that window (the file on disk may not have the latest changes yet).
+- File models: after every save the changes are on disk at once, so the next reads see the new state.
+- EA error dialogs (SQL, XML) no longer block background work; queries with expressions and repeated column names return correct results.
+- User guide in 4 languages: a new chapter of use cases with ready-made prompts, the chapter "Compass in Enterprise Architect" and the cards "AI model", "Jira", "Team", "MCP servers" and "Event agents".
 
 ## Version 0.7.5 (2026-10-22)
 
