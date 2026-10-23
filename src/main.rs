@@ -3939,7 +3939,7 @@ fn tool_step(name: &str, input: &Value) -> String {
 
 /// One answer of an event agent: a conversation of one message, reading tools only (a write is refused: nobody is
 /// there to approve it). Returns the assistant's text.
-fn run_agent(cfg: &AppConfig, prompt: &str) -> anyhow::Result<String> {
+pub(crate) fn run_agent(cfg: &AppConfig, prompt: &str) -> anyhow::Result<String> {
     let messages = vec![Message { role: "user".into(), text: prompt.into(), attachments: vec![], created: chrono::Utc::now().to_rfc3339() }];
     let approver = tools::Approver::new(ApprovalMode::Ask, Box::new(|_| false));
     let (_tx, inbox) = mpsc::channel();

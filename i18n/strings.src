@@ -1347,3 +1347,5 @@ Risk buffer ‖ Bufor ryzyka ‖ Risikopuffer ‖ Marge de risque
 Hours by type ‖ Godziny według typu ‖ Stunden nach Typ ‖ Heures par type
 Risks ‖ Ryzyka ‖ Risiken ‖ Risques
 This is a model-based baseline: adjust the hours with the team's knowledge; the norms are in estimate.json. ‖ To punkt wyjścia z modelu: skoryguj godziny wiedzą zespołu; normy są w estimate.json. ‖ Dies ist ein Ausgangswert aus dem Modell: passen Sie die Stunden mit dem Wissen des Teams an; die Normen stehen in estimate.json. ‖ C'est une base issue du modèle : ajustez les heures avec la connaissance de l'équipe ; les normes sont dans estimate.json.
+type a question ‖ wpisz pytanie ‖ Frage eingeben ‖ saisissez une question
+the question is too long (at most 2000 characters) ‖ pytanie jest za długie (najwyżej 2000 znaków) ‖ die Frage ist zu lang (höchstens 2000 Zeichen) ‖ la question est trop longue (2000 caractères au maximum)

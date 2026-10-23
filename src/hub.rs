@@ -60,6 +60,7 @@ pub struct Hub {
     users: Vec<(String, String, Role)>,
     policy: Mutex<Value>,
     audit_lock: Mutex<()>,
+    ask_lock: Mutex<()>,
 }
 
 /// Loads `hub.json`: {"listen", "sources": [{"id", "name", "properties"}], "users": [{"name", "token", "role"}], "policy": {…}}.
@@ -87,7 +88,7 @@ pub fn load(file: &Path) -> Result<(Hub, String)> {
         users.push((u["name"].as_str().unwrap_or("?").to_string(), token, Role::parse(u["role"].as_str().unwrap_or("viewer"))));
     }
     let listen = value["listen"].as_str().unwrap_or(DEFAULT_LISTEN).to_string();
-    let hub = Hub { file: file.to_path_buf(), dir, sources, users, policy: Mutex::new(value["policy"].clone()), audit_lock: Mutex::new(()) };
+    let hub = Hub { file: file.to_path_buf(), dir, sources, users, policy: Mutex::new(value["policy"].clone()), audit_lock: Mutex::new(()), ask_lock: Mutex::new(()) };
     Ok((hub, listen))
 }
 
@@ -339,6 +340,27 @@ fn route(hub: &Hub, request: &Request) -> Result<(u16, Value), HttpError> {
             Ok((200, json!({ "ok": true })))
         }
         ("GET", ["api", "sources"]) => Ok((200, json!(hub.sources.iter().map(|s| json!({ "id": s.id, "name": s.name, "kind": if s.cfg.uses_file() { "file" } else { "database" } })).collect::<Vec<_>>()))),
+        // Questions of people without EA: the assistant reads the source and answers (it cannot change the model).
+        ("POST", ["api", "sources", id, "ask"]) => {
+            let source = hub.source(id)?;
+            let question = body()?["question"].as_str().unwrap_or("").trim().to_string();
+            if question.chars().count() < 3 {
+                return Err(deny(400, crate::i18n::tr("type a question")));
+            }
+            if question.chars().count() > 2000 {
+                return Err(deny(400, crate::i18n::tr("the question is too long (at most 2000 characters)")));
+            }
+            // One question at a time: the cost of the model stays under control.
+            let _turn = hub.ask_lock.lock().unwrap_or_else(|p| p.into_inner());
+            let started = std::time::Instant::now();
+            let prompt = format!(
+                "[A question from {user} through the team hub; read-only] {question}\n\nAnswer for a person who does not use Enterprise Architect: plain language, \
+in the language of the question, short. You can only read the model (db_query and the other reading tools); you cannot change it."
+            );
+            let answer = crate::run_agent(&source.cfg, &prompt).map_err(|e| deny(500, format!("{e:#}")))?;
+            let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": id, "summary": format!("question: {}", question.chars().take(200).collect::<String>()), "ok": true }));
+            Ok((200, json!({ "answer": answer, "seconds": started.elapsed().as_secs() })))
+        }
         ("GET", ["api", "sources", id, rest @ ..]) => {
             let source = hub.source(id)?;
             let text = match rest {
@@ -837,4 +859,44 @@ mod tests {
         assert!(unknown.contains("-32601"));
         let _ = std::fs::remove_dir_all(&dir);
     }
+}
+
+#[cfg(test)]
+mod ask_tests {
+    use super::*;
+
+    /// Questions of stakeholders on both sources (LOONAR_HUB_DB_PROPS, LOONAR_HUB_FILE_PROPS), answered by the model of
+    /// the source's settings (an API key on this computer). Run with: `cargo test hub_ask -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "requires an API key and two test models"]
+    fn hub_ask() {
+        crate::i18n::set(crate::i18n::Lang::Pl);
+        let dir = std::env::temp_dir().join(format!("loonar-hub-ask-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0",
+            "sources": [{ "id": "db", "name": "DB", "properties": std::env::var("LOONAR_HUB_DB_PROPS").unwrap() }, { "id": "file", "name": "File", "properties": std::env::var("LOONAR_HUB_FILE_PROPS").unwrap() }],
+            "users": [{ "name": "pm", "token": "viewer-token-0123456789", "role": "viewer" }] }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let base = format!("http://{}", rx.recv().unwrap());
+        let http = reqwest::blocking::Client::builder().timeout(Duration::from_secs(300)).build().unwrap();
+        for (source, sql) in [("db", LOONAR_DB_CLASSES), ("file", LOONAR_DB_CLASSES)] {
+            let props = std::env::var(if source == "db" { "LOONAR_HUB_DB_PROPS" } else { "LOONAR_HUB_FILE_PROPS" }).unwrap();
+            let classes = crate::tools::query_rows(&AppConfig::load(Path::new(&props)).unwrap(), sql).unwrap()[0][0].clone();
+            let r = http.post(format!("{base}/api/sources/{source}/ask")).bearer_auth("viewer-token-0123456789").json(&json!({ "question": "Ile klas (elementów typu Class) jest w tym modelu? Podaj liczbę." })).send().unwrap();
+            let status = r.status().as_u16();
+            let v: Value = r.json().unwrap();
+            println!("{source}: {status} {} s, expected {classes}: {}", v["seconds"], v["answer"].as_str().unwrap_or(&v.to_string()).chars().take(300).collect::<String>());
+            assert_eq!(status, 200);
+            assert!(v["answer"].as_str().unwrap_or("").contains(&classes), "{source}: the number of classes");
+        }
+        let forbidden = http.post(format!("{base}/api/sources/db/ask")).json(&json!({ "question": "x y z" })).send().unwrap().status().as_u16();
+        assert_eq!(forbidden, 401);
+        let audit = std::fs::read_to_string(dir.join("audit.jsonl")).unwrap();
+        assert!(audit.contains("question: Ile klas"), "questions are in the audit trail");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    const LOONAR_DB_CLASSES: &str = "select count(*) from t_object where object_type = 'Class'";
 }

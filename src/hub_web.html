@@ -52,14 +52,20 @@ h3 { font-size:14px; margin:16px 0 6px; }
   </section>
   <section>
     <div class="tabs" id="tabs">
-      <button data-tab="search" class="on">Search</button>
+      <button data-tab="ask" class="on">Ask</button>
+      <button data-tab="search">Search</button>
       <button data-tab="lint">Model check</button>
       <button data-tab="gap">Gaps</button>
       <button data-tab="audit">Audit trail</button>
       <button data-tab="notes">Team notes</button>
       <button data-tab="changes">Change sets</button>
     </div>
-    <div id="view-search">
+    <div id="view-ask">
+      <p class="muted">Ask about the selected model in your own words, e.g. "Which systems use the payment gateway?" The assistant only reads the model.</p>
+      <div class="row"><input id="question" placeholder="Your question"><button id="askgo">Ask</button></div>
+      <div id="answer"></div>
+    </div>
+    <div id="view-search" hidden>
       <div class="row"><input id="q" placeholder="Element name (at least 2 characters)"><button id="go">Search</button></div>
       <div id="results"></div>
     </div>
@@ -186,9 +192,15 @@ async function openChange(id) {
   }
 }
 $('changes') && ($('changes').onclick = e => { const tr = e.target.closest('tr[data-id]'); if (tr) openChange(tr.dataset.id); });
+async function ask() {
+  const q = $('question').value.trim(); if (!q) return;
+  $('answer').innerHTML = '<p class="muted">The assistant is reading the model…</p>';
+  try { const v = await post('/api/sources/' + source() + '/ask', { question: q }); $('answer').innerHTML = '<pre>' + esc(v.answer) + '</pre><p class="muted">' + v.seconds + ' s</p>'; }
+  catch (e) { $('answer').innerHTML = '<p class="error">' + esc(e.message) + '</p>'; }
+}
 function show(tab) {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-  ['search', 'lint', 'gap', 'audit', 'notes', 'changes'].forEach(t => $('view-' + t).hidden = t !== tab);
+  ['ask', 'search', 'lint', 'gap', 'audit', 'notes', 'changes'].forEach(t => $('view-' + t).hidden = t !== tab);
   if (tab === 'changes') loadChanges().catch(e => $('changes').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
   if (tab === 'audit') loadAudit().catch(e => $('audit').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
   if (tab === 'notes') loadNotes().catch(e => $('notes').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
@@ -196,6 +208,8 @@ function show(tab) {
 $('tabs').onclick = e => { const b = e.target.closest('button'); if (b) show(b.dataset.tab); };
 $('login').onclick = login;
 $('go').onclick = search;
+$('askgo').onclick = ask;
+$('question').onkeydown = e => { if (e.key === 'Enter') ask(); };
 $('q').onkeydown = e => { if (e.key === 'Enter') search(); };
 $('source').onchange = () => { loadTree(); $('results').innerHTML = ''; $('lint').innerHTML = ''; };
 if (token) login();
