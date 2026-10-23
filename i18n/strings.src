@@ -1331,3 +1331,19 @@ Made by Compass before a change that cannot be undone by operations ‖ Utworzon
 there is nothing to undo in this model ‖ w tym modelu nie ma nic do cofnięcia ‖ in diesem Modell gibt es nichts rückgängig zu machen ‖ il n'y a rien à annuler dans ce modèle
 Undo the latest saves of the assistant ({0}):\n{1} ‖ Cofnąć ostatnie zapisy asystenta ({0}):\n{1} ‖ Die letzten Speicherungen des Assistenten rückgängig machen ({0}):\n{1} ‖ Annuler les derniers enregistrements de l'assistant ({0}) :\n{1}
 Time machine: {0} ‖ Wehikuł czasu: {0} ‖ Zeitmaschine: {0} ‖ Machine à remonter le temps : {0}
+Estimate of the change from its impact ‖ Wycena zmiany na podstawie wpływu ‖ Schätzung der Änderung aus ihrer Auswirkung ‖ Estimation de la modification à partir de son impact
+give the elements the change is about (object_id) ‖ podaj elementy, których dotyczy zmiana (object_id) ‖ geben Sie die Elemente der Änderung an (object_id) ‖ indiquez les éléments concernés par la modification (object_id)
+Change: {0} ‖ Zmiana: {0} ‖ Änderung: {0} ‖ Modification : {0}
+Adapt: {0} ‖ Dostosowanie: {0} ‖ Anpassung: {0} ‖ Adaptation : {0}
+Check the impact on: {0} ‖ Sprawdzenie wpływu na: {0} ‖ Auswirkung prüfen auf: {0} ‖ Vérifier l'impact sur : {0}
+"{0}" has {1} relationships: the change reaches far ‖ "{0}" ma relacji: {1} – zmiana sięga daleko ‖ "{0}" hat {1} Beziehungen: die Änderung reicht weit ‖ "{0}" a {1} relations : la modification va loin
+"{0}" has no description: its behaviour has to be clarified first ‖ "{0}" nie ma opisu – najpierw trzeba ustalić jego zachowanie ‖ "{0}" hat keine Beschreibung: sein Verhalten muss zuerst geklärt werden ‖ "{0}" n'a pas de description : son comportement doit d'abord être clarifié
+the change touches {0} packages (areas): coordinate with their owners ‖ zmiana dotyka pakietów (obszarów): {0} – uzgodnij z ich właścicielami ‖ die Änderung betrifft {0} Pakete (Bereiche): mit deren Verantwortlichen abstimmen ‖ la modification touche {0} paquetages (domaines) : coordonnez avec leurs responsables
+Estimate from the impact of the change: {0} elements to change, {1} related, {2} further; {3} diagrams. Total {4} h = {5} person-days (work {6} h, tests {7} h, analysis and documentation {8} h, risk buffer {9} h = {10}%). ‖ Wycena na podstawie wpływu zmiany: elementy do zmiany {0}, powiązane {1}, dalsze {2}; diagramy {3}. Razem {4} h = {5} osobodni (prace {6} h, testy {7} h, analiza i dokumentacja {8} h, bufor ryzyka {9} h = {10}%). ‖ Schätzung aus der Auswirkung der Änderung: {0} zu ändernde Elemente, {1} verbundene, {2} weitere; {3} Diagramme. Gesamt {4} h = {5} Personentage (Arbeit {6} h, Tests {7} h, Analyse und Dokumentation {8} h, Risikopuffer {9} h = {10} %). ‖ Estimation à partir de l'impact : {0} éléments à modifier, {1} liés, {2} plus éloignés ; {3} diagrammes. Total {4} h = {5} jours-personne (travail {6} h, tests {7} h, analyse et documentation {8} h, marge de risque {9} h = {10} %).
+Update the diagram: {0} ‖ Aktualizacja diagramu: {0} ‖ Diagramm aktualisieren: {0} ‖ Mettre à jour le diagramme : {0}
+Tests of the change ‖ Testy zmiany ‖ Tests der Änderung ‖ Tests de la modification
+Analysis and documentation ‖ Analiza i dokumentacja ‖ Analyse und Dokumentation ‖ Analyse et documentation
+Risk buffer ‖ Bufor ryzyka ‖ Risikopuffer ‖ Marge de risque
+Hours by type ‖ Godziny według typu ‖ Stunden nach Typ ‖ Heures par type
+Risks ‖ Ryzyka ‖ Risiken ‖ Risques
+This is a model-based baseline: adjust the hours with the team's knowledge; the norms are in estimate.json. ‖ To punkt wyjścia z modelu: skoryguj godziny wiedzą zespołu; normy są w estimate.json. ‖ Dies ist ein Ausgangswert aus dem Modell: passen Sie die Stunden mit dem Wissen des Teams an; die Normen stehen in estimate.json. ‖ C'est une base issue du modèle : ajustez les heures avec la connaissance de l'équipe ; les normes sont dans estimate.json.

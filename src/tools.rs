@@ -84,6 +84,7 @@ pub fn definitions() -> Value {
         items.push(crate::traceability::definition());
         items.push(crate::code_drift::definition());
         items.push(crate::undo::definition());
+        items.push(crate::estimate::definition());
         items.push(json!({
             "name": "propose_change",
             "description": "Proposes a change of the model to the team instead of saving it: the operations (as for ea_write) with a summary and a before → after preview \
@@ -567,6 +568,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "trace_requirements" => trace_requirements(input, ctx).map(Into::into),
         "propose_change" => propose_change(input, ctx).map(Into::into),
         "undo_change" => undo_change(input, ctx).map(Into::into),
+        "estimate_change" => crate::estimate::estimate(ctx.cfg, &input["elements"].as_array().into_iter().flatten().filter_map(|v| v.as_i64()).collect::<Vec<_>>(), input["depth"].as_u64().unwrap_or(2) as usize).map(Into::into),
         "change_sets" => change_sets(input, ctx).map(Into::into),
         "code_drift" => crate::code_drift::compare(ctx.cfg, std::path::Path::new(input["path"].as_str().unwrap_or("").trim()), input["package"].as_i64()).map(Into::into),
         "spell_check" => crate::model_spell::check(ctx.cfg, input["package"].as_i64(), crate::i18n::current().code()).map(Into::into),

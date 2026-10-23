@@ -34,6 +34,7 @@ mod model_spell;
 mod traceability;
 mod code_drift;
 mod undo;
+mod estimate;
 mod templates;
 mod tools;
 mod window;
@@ -3912,6 +3913,7 @@ fn tool_step(name: &str, input: &Value) -> String {
         "jira_search" => crate::i18n::fmt("Jira search: {0}", &[input["jql"].as_str().unwrap_or("").to_string()]),
         "spell_check" => crate::i18n::tr("Spelling of the model's texts").to_string(),
         "trace_requirements" => crate::i18n::tr("Requirements of the document against the model").to_string(),
+        "estimate_change" => crate::i18n::tr("Estimate of the change from its impact").to_string(),
         "undo_change" => crate::i18n::fmt("Time machine: {0}", &[input["action"].as_str().unwrap_or("list").to_string()]),
         "propose_change" => crate::i18n::fmt("Change set for the team: {0}", &[input["title"].as_str().unwrap_or("").to_string()]),
         "change_sets" => crate::i18n::fmt("Team change sets: {0} {1}", &[input["action"].as_str().unwrap_or("list").to_string(), input["id"].as_str().unwrap_or("").to_string()]),
