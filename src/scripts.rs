@@ -165,8 +165,11 @@ fn xml_text(text: &str) -> String {
 
 /// Runs the script in Windows Script Host attached to the open EA window, or without one in the application's own
 /// EA session in the background; returns what it printed.
-pub fn run(cfg: &AppConfig, name: &str) -> Result<String> {
-    let script = find(cfg, name)?;
+/// Runs the script with exactly the code the user approved (`approved`: the code with its includes resolved).
+pub fn run(cfg: &AppConfig, name: &str, approved: &str) -> Result<String> {
+    let mut script = find(cfg, name)?;
+    // What runs is what was shown: the approved code, not a version read again (someone may have changed it meanwhile).
+    script.code = approved.to_string();
     let background = !crate::ea_ui::file_or_db_open_in_window(cfg);
     if background {
         // The background session registers as EA.App as well: the script attaches to it.
@@ -187,7 +190,8 @@ fn run_attached(cfg: &AppConfig, script: &Script) -> Result<String> {
         // EA's JavaScript (SpiderMonkey) scripts run as JScript: most use only ES3/ES5 features.
         _ => "JScript",
     };
-    let code = resolve_includes(cfg, &script)?;
+    // The code was resolved (includes) before the approval.
+    let code = script.code.clone();
     let job = format!(
         r#"<?xml version="1.0"?>
 <job>
@@ -238,7 +242,7 @@ End If
     };
     let job = job.replace("{out}", &out_file.to_string_lossy()).replace("{model}", &model.replace('"', ""));
     std::fs::write(&file, job).context("script file")?;
-    let mut cmd = std::process::Command::new("cscript.exe");
+    let mut cmd = std::process::Command::new(crate::config::system_program("cscript.exe"));
     cmd.arg("//nologo").arg(&file).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
     #[cfg(windows)]
     {

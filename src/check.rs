@@ -252,7 +252,7 @@ extern "system" {
 
 /// The application is a window program: its output reaches a console only after attaching to the parent's one. When
 /// the output is redirected (a CI runner, `| Out-Host`), the inherited handles are used as they are.
-fn attach_console() {
+pub fn attach_console() {
     const STD_OUTPUT_HANDLE: u32 = -11i32 as u32;
     const ATTACH_PARENT_PROCESS: u32 = u32::MAX;
     unsafe {

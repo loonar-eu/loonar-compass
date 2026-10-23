@@ -8,19 +8,48 @@
 //! - users with tokens and roles: viewer (reading), architect (+ audit, notes), admin (+ policy).
 //!
 //! Plain HTTP on a single port without extra libraries; put it behind HTTPS (reverse proxy) outside one computer.
+//!
+//! Hardening: requests are limited in size, header count and time, and authenticated before the body is read; at most
+//! MAX_CONNECTIONS connections at a time; repeated wrong tokens from one address are refused for a while; tokens are kept
+//! as SHA-256 hashes; internal errors reach the client only as an id (details in hub.log); the web page is served with
+//! a strict Content-Security-Policy and may not be framed.
 
 use crate::config::AppConfig;
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{IpAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub const DEFAULT_LISTEN: &str = "127.0.0.1:8730";
 const MAX_BODY: usize = 4 * 1024 * 1024;
+/// Request line and headers together.
+const MAX_HEAD: usize = 16 * 1024;
+const MAX_HEADERS: usize = 100;
+/// Connections served at the same time; more get 503.
+const MAX_CONNECTIONS: usize = 64;
+/// The whole request (head and body) must arrive within this time.
+const REQUEST_DEADLINE: Duration = Duration::from_secs(30);
+/// Wrong tokens from one address within FAILURE_WINDOW before it is refused (429).
+const MAX_FAILURES: usize = 20;
+const FAILURE_WINDOW: Duration = Duration::from_secs(600);
+const MAX_NOTE: usize = 256 * 1024;
+const MAX_NOTES: usize = 500;
+/// An audit entry sent by a client (after its fields are cut to size).
+const MAX_AUDIT_TEXT: usize = 4 * 1024;
+/// audit.jsonl and hub.log are renamed with a date when they get bigger than this.
+const ROTATE_BYTES: u64 = 20 * 1024 * 1024;
+/// Questions (Ask) per user and hour unless the policy says otherwise ("ask_per_hour").
+const ASK_PER_HOUR: usize = 20;
+/// The longest answer of the assistant in the web view.
+const ASK_TIMEOUT: Duration = Duration::from_secs(180);
+/// A change set claimed for applying is free again after this time (the client stopped half-way).
+const CLAIM_TIMEOUT_MINUTES: i64 = 30;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Role {
@@ -57,13 +86,36 @@ pub struct Hub {
     file: PathBuf,
     dir: PathBuf,
     sources: Vec<Source>,
-    users: Vec<(String, String, Role)>,
+    /// Name, SHA-256 of the token, role.
+    users: Vec<(String, [u8; 32], Role)>,
     policy: Mutex<Value>,
     audit_lock: Mutex<()>,
     ask_lock: Mutex<()>,
+    /// Load → change → save of change sets one at a time.
+    change_lock: Mutex<()>,
+    /// Wrong tokens per address.
+    failures: Mutex<HashMap<IpAddr, Vec<Instant>>>,
+    /// Questions per user.
+    asks: Mutex<HashMap<String, Vec<Instant>>>,
 }
 
-/// Loads `hub.json`: {"listen", "sources": [{"id", "name", "properties"}], "users": [{"name", "token", "role"}], "policy": {…}}.
+/// SHA-256 of a token (hub.json may keep only the hash: "token_sha256").
+pub fn token_hash(token: &str) -> [u8; 32] {
+    Sha256::digest(token.as_bytes()).into()
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// A new random token and its SHA-256 for hub.json (`LoonarCompass.exe --hub-token`).
+pub fn new_token() -> (String, String) {
+    let token = format!("lch_{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
+    let hash = hex(&token_hash(&token));
+    (token, hash)
+}
+
+/// Loads `hub.json`: {"listen", "sources": [{"id", "name", "properties"}], "users": [{"name", "token" or "token_sha256", "role"}], "policy": {…}}.
 /// `properties` is the app.properties of a model (as in Compass), relative to hub.json or absolute.
 pub fn load(file: &Path) -> Result<(Hub, String)> {
     let text = std::fs::read_to_string(file).with_context(|| crate::i18n::fmt("cannot read {0}", &[file.display().to_string()]))?;
@@ -79,16 +131,31 @@ pub fn load(file: &Path) -> Result<(Hub, String)> {
         let cfg = AppConfig::load(&props).with_context(|| crate::i18n::fmt("hub source {0}", &[id.clone()]))?;
         sources.push(Source { name: s["name"].as_str().unwrap_or(&id).to_string(), id, cfg });
     }
-    let mut users = Vec::new();
+    let mut users: Vec<(String, [u8; 32], Role)> = Vec::new();
     for u in value["users"].as_array().into_iter().flatten() {
-        let token = u["token"].as_str().unwrap_or("").to_string();
-        if token.len() < 16 {
-            bail!("{}", crate::i18n::fmt("hub user {0}: the token must have at least 16 characters", &[u["name"].as_str().unwrap_or("?").to_string()]));
+        let name = u["name"].as_str().unwrap_or("").trim().to_string();
+        if name.is_empty() {
+            bail!("{}", crate::i18n::tr("a hub user needs a name"));
         }
-        users.push((u["name"].as_str().unwrap_or("?").to_string(), token, Role::parse(u["role"].as_str().unwrap_or("viewer"))));
+        let hash: [u8; 32] = match (u["token"].as_str(), u["token_sha256"].as_str()) {
+            (_, Some(h)) => {
+                let h = h.trim().to_ascii_lowercase();
+                let bytes: Vec<u8> = (0..h.len()).step_by(2).filter_map(|i| h.get(i..i + 2).and_then(|b| u8::from_str_radix(b, 16).ok())).collect();
+                bytes.try_into().map_err(|_| anyhow!("{}", crate::i18n::fmt("hub user {0}: token_sha256 must be 64 hexadecimal characters", &[name.clone()])))?
+            }
+            (Some(token), None) if token.len() >= 16 => token_hash(token),
+            _ => bail!("{}", crate::i18n::fmt("hub user {0}: the token must have at least 16 characters", &[name.clone()])),
+        };
+        if users.iter().any(|(n, h, _)| n.eq_ignore_ascii_case(&name) || *h == hash) {
+            bail!("{}", crate::i18n::fmt("hub user {0}: the name or the token is used twice", &[name]));
+        }
+        users.push((name, hash, Role::parse(u["role"].as_str().unwrap_or("viewer"))));
     }
     let listen = value["listen"].as_str().unwrap_or(DEFAULT_LISTEN).to_string();
-    let hub = Hub { file: file.to_path_buf(), dir, sources, users, policy: Mutex::new(value["policy"].clone()), audit_lock: Mutex::new(()), ask_lock: Mutex::new(()) };
+    let hub = Hub {
+        file: file.to_path_buf(), dir, sources, users, policy: Mutex::new(value["policy"].clone()), audit_lock: Mutex::new(()), ask_lock: Mutex::new(()),
+        change_lock: Mutex::new(()), failures: Mutex::new(HashMap::new()), asks: Mutex::new(HashMap::new()),
+    };
     Ok((hub, listen))
 }
 
@@ -97,21 +164,45 @@ pub fn serve(hub: Hub, listen: &str, ready: impl FnOnce(String)) -> Result<()> {
     let listener = TcpListener::bind(listen).with_context(|| crate::i18n::fmt("cannot listen on {0}", &[listen.to_string()]))?;
     ready(listener.local_addr()?.to_string());
     let hub = Arc::new(hub);
+    let active = Arc::new(AtomicUsize::new(0));
     for stream in listener.incoming() {
         let Ok(stream) = stream else { continue };
-        let hub = hub.clone();
-        std::thread::spawn(move || {
-            let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
+        let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+        let _ = stream.set_write_timeout(Some(Duration::from_secs(30)));
+        if active.load(Ordering::SeqCst) >= MAX_CONNECTIONS {
+            let _ = respond(&stream, 503, "application/json; charset=utf-8", br#"{"error":"busy"}"#);
+            continue;
+        }
+        active.fetch_add(1, Ordering::SeqCst);
+        let (hub, counter) = (hub.clone(), active.clone());
+        let spawned = std::thread::Builder::new().spawn(move || {
             if let Err(e) = handle(&hub, stream) {
                 log(&hub.dir, &format!("connection error: {e:#}"));
             }
+            counter.fetch_sub(1, Ordering::SeqCst);
         });
+        if spawned.is_err() {
+            active.fetch_sub(1, Ordering::SeqCst);
+        }
     }
     Ok(())
 }
 
+/// Renames a file with the date when it gets too big (audit.jsonl, hub.log).
+fn rotate(path: &Path) {
+    if std::fs::metadata(path).map(|m| m.len() > ROTATE_BYTES).unwrap_or(false) {
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
+        let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("txt");
+        let _ = std::fs::rename(path, path.with_file_name(format!("{stem}-{}.{ext}", chrono::Local::now().format("%Y%m%d-%H%M%S"))));
+    }
+}
+
 fn log(dir: &Path, line: &str) {
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("hub.log")) {
+    let path = dir.join("hub.log");
+    rotate(&path);
+    // Control characters from requests are escaped: a request cannot write lines of its own into the log.
+    let line: String = line.chars().take(2000).flat_map(|c| if c.is_control() { c.escape_default().collect::<Vec<_>>() } else { vec![c] }).collect();
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
         let _ = writeln!(f, "{} {line}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"));
     }
 }
@@ -124,21 +215,22 @@ struct Request {
     body: Vec<u8>,
 }
 
+/// Percent-decoding on bytes (a `%` before a multi-byte character is kept as it is).
 fn url_decode(text: &str) -> String {
     let bytes = text.as_bytes();
-    let mut out = Vec::new();
+    let hex_value = |b: u8| (b as char).to_digit(16).map(|d| d as u8);
+    let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {
         match bytes[i] {
             b'+' => out.push(b' '),
-            b'%' if i + 2 < bytes.len() => {
-                if let Ok(b) = u8::from_str_radix(&text[i + 1..i + 3], 16) {
-                    out.push(b);
+            b'%' if i + 2 < bytes.len() => match (hex_value(bytes[i + 1]), hex_value(bytes[i + 2])) {
+                (Some(h), Some(l)) => {
+                    out.push(h * 16 + l);
                     i += 2;
-                } else {
-                    out.push(b'%');
                 }
-            }
+                _ => out.push(b'%'),
+            },
             b => out.push(b),
         }
         i += 1;
@@ -146,37 +238,75 @@ fn url_decode(text: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-fn read_request(stream: &TcpStream) -> Result<Request> {
-    let mut reader = BufReader::new(stream);
-    let mut first = String::new();
-    reader.read_line(&mut first)?;
+/// The request line and the headers (at most MAX_HEAD bytes, MAX_HEADERS lines, within the deadline).
+struct Head {
+    method: String,
+    target: String,
+    length: usize,
+    token: String,
+}
+
+fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Head, HttpError> {
+    let mut used = 0usize;
+    let mut next_line = |reader: &mut BufReader<&TcpStream>| -> Result<String, HttpError> {
+        if started.elapsed() > REQUEST_DEADLINE {
+            return Err(deny(408, "request timeout"));
+        }
+        let mut raw = Vec::new();
+        let n = reader.by_ref().take((MAX_HEAD - used) as u64 + 1).read_until(b'\n', &mut raw).map_err(|e| deny(400, e.to_string()))?;
+        used += n;
+        if used > MAX_HEAD {
+            return Err(deny(431, "request header too large"));
+        }
+        Ok(String::from_utf8_lossy(&raw).trim_end().to_string())
+    };
+    let first = next_line(reader)?;
     let mut parts = first.split_whitespace();
     let method = parts.next().unwrap_or("").to_string();
     let target = parts.next().unwrap_or("/").to_string();
     let (mut length, mut token) = (0usize, String::new());
-    loop {
-        let mut line = String::new();
-        if reader.read_line(&mut line)? == 0 {
-            break;
+    for count in 0.. {
+        if count > MAX_HEADERS {
+            return Err(deny(431, "too many headers"));
         }
-        let line = line.trim_end();
+        let line = next_line(reader)?;
         if line.is_empty() {
             break;
         }
         if let Some((name, value)) = line.split_once(':') {
             match name.trim().to_ascii_lowercase().as_str() {
-                "content-length" => length = value.trim().parse().unwrap_or(0),
+                "content-length" => length = value.trim().parse().map_err(|_| deny(400, "Content-Length"))?,
+                "transfer-encoding" => return Err(deny(501, "Transfer-Encoding is not supported")),
                 "authorization" => token = value.trim().strip_prefix("Bearer ").unwrap_or("").trim().to_string(),
                 _ => {}
             }
         }
     }
     if length > MAX_BODY {
-        bail!("request body too large");
+        return Err(deny(413, "request body too large"));
     }
-    let mut body = vec![0u8; length];
-    reader.read_exact(&mut body)?;
-    let (path, query_text) = target.split_once('?').unwrap_or((&target, ""));
+    Ok(Head { method, target, length, token })
+}
+
+fn read_body(reader: &mut BufReader<&TcpStream>, length: usize, started: Instant) -> Result<Vec<u8>, HttpError> {
+    let mut body = Vec::with_capacity(length.min(64 * 1024));
+    let mut chunk = [0u8; 16 * 1024];
+    while body.len() < length {
+        if started.elapsed() > REQUEST_DEADLINE {
+            return Err(deny(408, "request timeout"));
+        }
+        let want = chunk.len().min(length - body.len());
+        let n = reader.read(&mut chunk[..want]).map_err(|e| deny(400, e.to_string()))?;
+        if n == 0 {
+            return Err(deny(400, "request body incomplete"));
+        }
+        body.extend_from_slice(&chunk[..n]);
+    }
+    Ok(body)
+}
+
+fn split_target(target: &str) -> (String, HashMap<String, String>) {
+    let (path, query_text) = target.split_once('?').unwrap_or((target, ""));
     let query = query_text
         .split('&')
         .filter(|p| !p.is_empty())
@@ -185,7 +315,7 @@ fn read_request(stream: &TcpStream) -> Result<Request> {
             (url_decode(k), url_decode(v))
         })
         .collect();
-    Ok(Request { method, path: url_decode(path), query, token, body })
+    (url_decode(path), query)
 }
 
 fn respond(mut stream: &TcpStream, status: u16, content_type: &str, body: &[u8]) -> Result<()> {
@@ -197,11 +327,19 @@ fn respond(mut stream: &TcpStream, status: u16, content_type: &str, body: &[u8])
         401 => "Unauthorized",
         403 => "Forbidden",
         404 => "Not Found",
+        408 => "Request Timeout",
+        413 => "Payload Too Large",
+        429 => "Too Many Requests",
+        431 => "Request Header Fields Too Large",
+        501 => "Not Implemented",
+        503 => "Service Unavailable",
         _ => "Error",
     };
     write!(
         stream,
-        "HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n",
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n\
+         Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'\r\n\
+         X-Frame-Options: DENY\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\n\r\n",
         body.len()
     )?;
     stream.write_all(body)?;
@@ -216,25 +354,76 @@ fn deny(status: u16, message: impl Into<String>) -> HttpError {
     HttpError(status, message.into())
 }
 
+/// Internal errors (reading a model, files of the hub): the client gets only an id, the details go to hub.log.
 impl From<anyhow::Error> for HttpError {
     fn from(e: anyhow::Error) -> Self {
-        HttpError(400, format!("{e:#}"))
+        HttpError(500, format!("{e:#}"))
     }
 }
 
+/// The page and its script (served separately, so the Content-Security-Policy allows only scripts of the hub).
+fn web_page() -> (String, String) {
+    let start = WEB_PAGE.find("<script>").unwrap_or(WEB_PAGE.len());
+    let end = WEB_PAGE.rfind("</script>").unwrap_or(WEB_PAGE.len());
+    let script = WEB_PAGE.get(start + "<script>".len()..end).unwrap_or("").to_string();
+    let page = format!("{}<script src=\"app.js\"></script>{}", &WEB_PAGE[..start], WEB_PAGE.get(end + "</script>".len()..).unwrap_or(""));
+    (page, script)
+}
+
 fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
-    let request = read_request(&stream)?;
-    if request.method == "GET" && (request.path == "/" || request.path == "/index.html") {
-        return respond(&stream, 200, "text/html; charset=utf-8", WEB_PAGE.as_bytes());
+    let started = Instant::now();
+    let peer = stream.peer_addr().map(|a| a.ip()).ok();
+    let mut reader = BufReader::new(&stream);
+    let head = match read_head(&mut reader, started) {
+        Ok(head) => head,
+        Err(HttpError(status, message)) => return respond(&stream, status, "application/json; charset=utf-8", json!({ "error": message }).to_string().as_bytes()),
+    };
+    let (path, query) = split_target(&head.target);
+    if head.method == "GET" {
+        match path.as_str() {
+            "/" | "/index.html" => return respond(&stream, 200, "text/html; charset=utf-8", web_page().0.as_bytes()),
+            "/app.js" => return respond(&stream, 200, "text/javascript; charset=utf-8", web_page().1.as_bytes()),
+            "/api/health" => return respond(&stream, 200, "application/json; charset=utf-8", json!({ "ok": true, "app": crate::config::APP_NAME, "version": env!("CARGO_PKG_VERSION") }).to_string().as_bytes()),
+            _ => {}
+        }
     }
-    let result = route(hub, &request);
-    match result {
+    // Who is asking, before the body is read; an address with many wrong tokens waits.
+    if let Some(ip) = peer {
+        let mut failures = hub.failures.lock().unwrap_or_else(|p| p.into_inner());
+        let list = failures.entry(ip).or_default();
+        list.retain(|t| t.elapsed() < FAILURE_WINDOW);
+        if list.len() >= MAX_FAILURES {
+            return respond(&stream, 429, "application/json; charset=utf-8", json!({ "error": "too many wrong tokens, try again later" }).to_string().as_bytes());
+        }
+    }
+    let Some((user, role)) = hub.user(&head.token) else {
+        if let Some(ip) = peer {
+            let mut failures = hub.failures.lock().unwrap_or_else(|p| p.into_inner());
+            let list = failures.entry(ip).or_default();
+            list.push(Instant::now());
+            if list.len() == MAX_FAILURES {
+                log(&hub.dir, &format!("{ip}: {MAX_FAILURES} wrong tokens, refused for {} minutes", FAILURE_WINDOW.as_secs() / 60));
+            }
+        }
+        return respond(&stream, 401, "application/json; charset=utf-8", json!({ "error": crate::i18n::tr("missing or unknown hub token") }).to_string().as_bytes());
+    };
+    let body = match read_body(&mut reader, head.length, started) {
+        Ok(body) => body,
+        Err(HttpError(status, message)) => return respond(&stream, status, "application/json; charset=utf-8", json!({ "error": message }).to_string().as_bytes()),
+    };
+    let request = Request { method: head.method, path, query, token: head.token, body };
+    match route(hub, &request, user.to_string(), role) {
         Ok((status, value)) => respond(&stream, status, "application/json; charset=utf-8", value.to_string().as_bytes()),
         Err(HttpError(status, message)) => {
-            if status != 401 {
-                log(&hub.dir, &format!("{} {} -> {status} {message}", request.method, request.path));
-            }
-            respond(&stream, status, "application/json; charset=utf-8", json!({ "error": message }).to_string().as_bytes())
+            let shown = if status >= 500 {
+                let id = uuid::Uuid::new_v4().simple().to_string()[..8].to_string();
+                log(&hub.dir, &format!("{} {} ({user}) -> {status} [{id}] {message}", request.method, request.path));
+                crate::i18n::fmt("internal error of the hub (id {0}; details in hub.log)", &[id])
+            } else {
+                log(&hub.dir, &format!("{} {} ({user}) -> {status} {message}", request.method, request.path));
+                message
+            };
+            respond(&stream, status, "application/json; charset=utf-8", json!({ "error": shown }).to_string().as_bytes())
         }
     }
 }
@@ -244,8 +433,15 @@ impl Hub {
         if token.is_empty() {
             return None;
         }
-        // Comparing every byte (no early exit on the first difference).
-        self.users.iter().find(|(_, t, _)| t.len() == token.len() && t.bytes().zip(token.bytes()).fold(0u8, |acc, (a, b)| acc | (a ^ b)) == 0).map(|(n, _, r)| (n.as_str(), *r))
+        // The hashes are compared in full for every user (no early exit).
+        let hash = token_hash(token);
+        let mut found = None;
+        for (name, h, role) in &self.users {
+            if h.iter().zip(hash.iter()).fold(0u8, |acc, (a, b)| acc | (a ^ b)) == 0 {
+                found = Some((name.as_str(), *role));
+            }
+        }
+        found
     }
 
     fn source(&self, id: &str) -> Result<&Source, HttpError> {
@@ -258,7 +454,8 @@ impl Hub {
     }
 
     fn append_audit(&self, entry: &Value) -> Result<()> {
-        let _guard = self.audit_lock.lock().unwrap();
+        let _guard = self.audit_lock.lock().unwrap_or_else(|p| p.into_inner());
+        rotate(&self.dir.join("audit.jsonl"));
         let mut f = std::fs::OpenOptions::new().create(true).append(true).open(self.dir.join("audit.jsonl"))?;
         writeln!(f, "{entry}")?;
         Ok(())
@@ -276,10 +473,14 @@ impl Hub {
         self.dir.join("changes")
     }
 
+    /// Saves a change set atomically (a temporary file renamed over the old one).
     fn save_change(&self, change: &Value) -> Result<()> {
         std::fs::create_dir_all(self.changes_dir())?;
         let id = change["id"].as_str().unwrap_or("x").replace(['/', '\\', '.'], "_");
-        std::fs::write(self.changes_dir().join(format!("{id}.json")), serde_json::to_string_pretty(change)?)?;
+        let path = self.changes_dir().join(format!("{id}.json"));
+        let temp = self.changes_dir().join(format!("{id}.json.tmp"));
+        std::fs::write(&temp, serde_json::to_string_pretty(change)?)?;
+        std::fs::rename(&temp, &path)?;
         Ok(())
     }
 
@@ -291,7 +492,13 @@ impl Hub {
     }
 
     fn changes(&self) -> Vec<Value> {
-        std::fs::read_dir(self.changes_dir()).into_iter().flatten().flatten().filter_map(|e| serde_json::from_str(&std::fs::read_to_string(e.path()).ok()?).ok()).collect()
+        std::fs::read_dir(self.changes_dir())
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
+            .filter_map(|e| serde_json::from_str(&std::fs::read_to_string(e.path()).ok()?).ok())
+            .collect()
     }
 
     fn notes_dir(&self) -> PathBuf {
@@ -300,8 +507,19 @@ impl Hub {
 }
 
 fn note_name(name: &str) -> Result<String, HttpError> {
-    let ok = !name.is_empty() && name.len() <= 80 && name.chars().all(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | ' ' | '.')) && !name.starts_with('.');
+    // Windows device names (CON, NUL, COM1…) are not files.
+    let base = name.split('.').next().unwrap_or("").trim().to_ascii_uppercase();
+    let device = matches!(base.as_str(), "CON" | "PRN" | "AUX" | "NUL") || ((base.starts_with("COM") || base.starts_with("LPT")) && base.len() == 4 && base.as_bytes()[3].is_ascii_digit());
+    let ok = !name.is_empty() && name.len() <= 80 && name.chars().all(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | ' ' | '.')) && !name.starts_with('.') && !name.ends_with('.') && !name.ends_with(' ') && !device;
     if ok { Ok(name.to_string()) } else { Err(deny(400, crate::i18n::tr("a note name: letters, digits, spaces, '-', '_' and '.'"))) }
+}
+
+/// A text field of a client's audit entry, cut to size.
+fn short(value: &Value, max: usize) -> Value {
+    match value.as_str() {
+        Some(s) => json!(s.chars().take(max).collect::<String>()),
+        None => Value::Null,
+    }
 }
 
 fn require(role: Role, needed: Role) -> Result<(), HttpError> {
@@ -315,13 +533,8 @@ fn int_param(request: &Request, name: &str) -> Result<i64, HttpError> {
     request.query.get(name).and_then(|v| v.parse().ok()).ok_or_else(|| deny(400, crate::i18n::fmt("missing number '{0}'", &[name.to_string()])))
 }
 
-fn route(hub: &Hub, request: &Request) -> Result<(u16, Value), HttpError> {
+fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16, Value), HttpError> {
     let segments: Vec<&str> = request.path.trim_matches('/').split('/').collect();
-    if request.method == "GET" && segments == ["api", "health"] {
-        return Ok((200, json!({ "ok": true, "app": crate::config::APP_NAME, "version": env!("CARGO_PKG_VERSION"), "sources": hub.sources.len() })));
-    }
-    let (user, role) = hub.user(&request.token).ok_or_else(|| deny(401, crate::i18n::tr("missing or unknown hub token")))?;
-    let user = user.to_string();
     let body = || -> Result<Value, HttpError> { serde_json::from_slice(&request.body).map_err(|e| deny(400, format!("JSON: {e}"))) };
     match (request.method.as_str(), segments.as_slice()) {
         ("GET", ["api", "me"]) => Ok((200, json!({ "name": user, "role": role.name() }))),
@@ -334,7 +547,8 @@ fn route(hub: &Hub, request: &Request) -> Result<(u16, Value), HttpError> {
             }
             let mut file: Value = serde_json::from_str(&std::fs::read_to_string(&hub.file).map_err(|e| deny(500, e.to_string()))?).map_err(|e| deny(500, e.to_string()))?;
             file["policy"] = policy.clone();
-            std::fs::write(&hub.file, serde_json::to_string_pretty(&file).unwrap()).map_err(|e| deny(500, e.to_string()))?;
+            let temp = hub.file.with_extension("json.tmp");
+            std::fs::write(&temp, serde_json::to_string_pretty(&file).unwrap_or_default()).and_then(|_| std::fs::rename(&temp, &hub.file)).map_err(|e| deny(500, e.to_string()))?;
             *hub.policy.lock().unwrap() = policy;
             let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": "", "summary": crate::i18n::tr("team policy changed"), "ok": true }));
             Ok((200, json!({ "ok": true })))
@@ -350,19 +564,39 @@ fn route(hub: &Hub, request: &Request) -> Result<(u16, Value), HttpError> {
             if question.chars().count() > 2000 {
                 return Err(deny(400, crate::i18n::tr("the question is too long (at most 2000 characters)")));
             }
-            // One question at a time: the cost of the model stays under control.
-            let _turn = hub.ask_lock.lock().unwrap_or_else(|p| p.into_inner());
-            let started = std::time::Instant::now();
+            // Who may ask (the policy, "ask_min_role"; everyone by default) and how often ("ask_per_hour").
+            let (min_role, per_hour) = {
+                let policy = hub.policy.lock().unwrap_or_else(|p| p.into_inner());
+                (Role::parse(policy["ask_min_role"].as_str().unwrap_or("viewer")), policy["ask_per_hour"].as_u64().map(|n| n as usize).unwrap_or(ASK_PER_HOUR))
+            };
+            require(role, min_role)?;
+            {
+                let mut asks = hub.asks.lock().unwrap_or_else(|p| p.into_inner());
+                let list = asks.entry(user.clone()).or_default();
+                list.retain(|t| t.elapsed() < Duration::from_secs(3600));
+                if list.len() >= per_hour {
+                    return Err(deny(429, crate::i18n::fmt("at most {0} questions per hour", &[per_hour.to_string()])));
+                }
+                list.push(Instant::now());
+            }
+            // One question at a time: the cost of the model stays under control; the others are told to wait.
+            let Ok(_turn) = hub.ask_lock.try_lock() else {
+                return Err(deny(429, crate::i18n::tr("the assistant is answering another question, try again in a moment")));
+            };
+            let started = Instant::now();
             let prompt = format!(
                 "[A question from {user} through the team hub; read-only] {question}\n\nAnswer for a person who does not use Enterprise Architect: plain language, \
 in the language of the question, short. You can only read the model (db_query and the other reading tools); you cannot change it."
             );
-            let answer = crate::run_agent(&source.cfg, &prompt).map_err(|e| deny(500, format!("{e:#}")))?;
+            let answer = crate::run_agent(&source.cfg, &prompt, ASK_TIMEOUT)?;
             let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": id, "summary": format!("question: {}", question.chars().take(200).collect::<String>()), "ok": true }));
             Ok((200, json!({ "answer": answer, "seconds": started.elapsed().as_secs() })))
         }
         ("GET", ["api", "sources", id, rest @ ..]) => {
             let source = hub.source(id)?;
+            if rest == ["search"] && request.query.get("q").map(|q| q.trim().chars().count()).unwrap_or(0) < 2 {
+                return Err(deny(400, crate::i18n::tr("type at least 2 characters")));
+            }
             let text = match rest {
                 ["packages"] => packages(&source.cfg)?,
                 ["search"] => search(&source.cfg, request.query.get("q").map(String::as_str).unwrap_or(""))?,
@@ -376,19 +610,40 @@ in the language of the question, short. You can only read the model (db_query an
         }
         ("POST", ["api", "audit"]) => {
             require(role, Role::Architect)?;
-            let mut entry = body()?;
-            if !entry.is_object() {
+            let sent = body()?;
+            if !sent.is_object() {
                 return Err(deny(400, crate::i18n::tr("an audit entry is a JSON object")));
             }
-            // Who and when are set by the hub, not by the client.
-            entry["user"] = json!(user);
-            entry["received"] = json!(chrono::Local::now().to_rfc3339());
+            // Only the known fields, cut to size; who and when are set by the hub (the client's time is kept apart).
+            let entry = json!({
+                "time": chrono::Local::now().to_rfc3339(),
+                "user": user,
+                "client_time": short(&sent["time"], 40),
+                "source": short(&sent["source"], 200),
+                "database": short(&sent["database"], 300),
+                "ea_user": short(&sent["ea_user"], 100),
+                "approval": short(&sent["approval"], 20),
+                "summary": short(&sent["summary"], MAX_AUDIT_TEXT),
+                "operations": sent["operations"].as_u64().map(Value::from).unwrap_or(Value::Null),
+                "ok": sent["ok"].as_bool().unwrap_or(false),
+                "error": short(&sent["error"], MAX_AUDIT_TEXT / 2),
+            });
             hub.append_audit(&entry).map_err(|e| deny(500, e.to_string()))?;
             Ok((201, json!({ "ok": true })))
         }
         ("GET", ["api", "audit"]) => {
             let limit = request.query.get("limit").and_then(|l| l.parse().ok()).unwrap_or(100usize).min(1000);
-            Ok((200, json!(hub.read_audit(request.query.get("source").map(String::as_str), limit))))
+            let mut entries = hub.read_audit(request.query.get("source").map(String::as_str), limit);
+            // Connection details of the workstations are for the admin only.
+            if role < Role::Admin {
+                for e in entries.iter_mut() {
+                    if let Some(o) = e.as_object_mut() {
+                        o.remove("database");
+                        o.remove("ea_user");
+                    }
+                }
+            }
+            Ok((200, json!(entries)))
         }
         ("GET", ["api", "notes"]) => {
             let mut names: Vec<String> = std::fs::read_dir(hub.notes_dir()).into_iter().flatten().flatten().filter_map(|e| e.file_name().to_str().and_then(|n| n.strip_suffix(".md")).map(String::from)).collect();
@@ -404,6 +659,13 @@ in the language of the question, short. You can only read the model (db_query an
             require(role, Role::Architect)?;
             let name = note_name(name)?;
             let text = body()?["text"].as_str().unwrap_or("").to_string();
+            if text.len() > MAX_NOTE {
+                return Err(deny(413, crate::i18n::fmt("a note may have at most {0} KB", &[(MAX_NOTE / 1024).to_string()])));
+            }
+            let exists = hub.notes_dir().join(format!("{name}.md")).is_file();
+            if !exists && std::fs::read_dir(hub.notes_dir()).map(|d| d.count()).unwrap_or(0) >= MAX_NOTES {
+                return Err(deny(400, crate::i18n::fmt("at most {0} notes", &[MAX_NOTES.to_string()])));
+            }
             std::fs::create_dir_all(hub.notes_dir()).map_err(|e| deny(500, e.to_string()))?;
             std::fs::write(hub.notes_dir().join(format!("{name}.md")), text).map_err(|e| deny(500, e.to_string()))?;
             Ok((200, json!({ "ok": true })))
@@ -413,9 +675,23 @@ in the language of the question, short. You can only read the model (db_query an
             require(role, Role::Architect)?;
             let b = body()?;
             let ops = b["ops"].as_array().filter(|o| !o.is_empty()).ok_or_else(|| deny(400, crate::i18n::tr("a change set needs operations")))?;
-            let id = format!("CH-{}", chrono::Local::now().format("%Y%m%d-%H%M%S%3f"));
+            for (i, op) in ops.iter().enumerate() {
+                let name = op["op"].as_str().unwrap_or("");
+                if !crate::ea::MODEL_OPS.contains(&name) {
+                    return Err(deny(400, crate::i18n::fmt("operation {0} ('{1}') is not allowed. Allowed: {2}", &[(i + 1).to_string(), name.to_string(), crate::ea::MODEL_OPS.join(", ")])));
+                }
+            }
+            let source = hub.source(b["source"].as_str().unwrap_or(""))?;
+            // What the reviewers see is computed here from the operations, not taken from the author.
+            let summary = crate::ea::describe(ops);
+            let preview = crate::governance::preview(&source.cfg, ops);
+            let _guard = hub.change_lock.lock().unwrap_or_else(|p| p.into_inner());
+            let mut id = format!("CH-{}", chrono::Local::now().format("%Y%m%d-%H%M%S%3f"));
+            while hub.changes_dir().join(format!("{id}.json")).exists() {
+                id = format!("{id}x");
+            }
             let change = json!({
-                "id": id, "source": b["source"], "title": b["title"].as_str().unwrap_or("Change"), "summary": b["summary"], "preview": b["preview"],
+                "id": id, "source": source.id, "title": b["title"].as_str().unwrap_or("Change").chars().take(200).collect::<String>(), "summary": summary, "preview": preview,
                 "ops": ops, "author": user, "created": chrono::Local::now().to_rfc3339(), "status": "pending", "comments": []
             });
             hub.save_change(&change).map_err(|e| deny(500, e.to_string()))?;
@@ -429,14 +705,18 @@ in the language of the question, short. You can only read the model (db_query an
         }
         ("GET", ["api", "changes", id]) => Ok((200, hub.change(id).ok_or_else(|| deny(404, crate::i18n::fmt("there is no change set {0}", &[id.to_string()])))?)),
         ("POST", ["api", "changes", id, action]) => {
+            let _guard = hub.change_lock.lock().unwrap_or_else(|p| p.into_inner());
             let mut change = hub.change(id).ok_or_else(|| deny(404, crate::i18n::fmt("there is no change set {0}", &[id.to_string()])))?;
             let b = body()?;
             let now = chrono::Local::now().to_rfc3339();
             match *action {
                 "comment" => {
-                    let text = b["text"].as_str().unwrap_or("").trim().to_string();
+                    let text = b["text"].as_str().unwrap_or("").trim().chars().take(MAX_AUDIT_TEXT).collect::<String>();
                     if text.is_empty() {
                         return Err(deny(400, crate::i18n::tr("empty comment")));
+                    }
+                    if change["comments"].as_array().is_some_and(|c| c.len() >= 200) {
+                        return Err(deny(400, crate::i18n::tr("too many comments")));
                     }
                     change["comments"].as_array_mut().map(|c| c.push(json!({ "user": user, "time": now, "text": text })));
                 }
@@ -445,25 +725,37 @@ in the language of the question, short. You can only read the model (db_query an
                     if change["status"] != "pending" {
                         return Err(deny(400, crate::i18n::fmt("the change set is already {0}", &[change["status"].as_str().unwrap_or("").to_string()])));
                     }
-                    // Four eyes: the author does not approve their own change set (an admin may).
-                    if change["author"] == user.as_str() && role < Role::Admin {
+                    // Four eyes: the author does not approve their own change set (an admin neither).
+                    if change["author"] == user.as_str() {
                         return Err(deny(403, crate::i18n::tr("the author cannot approve their own change set")));
                     }
                     let approve = b["approve"] == true;
                     change["status"] = json!(if approve { "approved" } else { "rejected" });
                     change["decided_by"] = json!(user);
                     change["decided"] = json!(now);
-                    change["reason"] = b["reason"].clone();
+                    change["reason"] = short(&b["reason"], MAX_AUDIT_TEXT);
+                }
+                // Applying in two steps: one client claims the approved set, applies it and reports the result.
+                "claim" => {
+                    require(role, Role::Architect)?;
+                    let stale = change["status"] == "applying"
+                        && change["claimed"].as_str().and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok()).is_some_and(|t| chrono::Local::now().signed_duration_since(t).num_minutes() >= CLAIM_TIMEOUT_MINUTES);
+                    if change["status"] != "approved" && !stale {
+                        return Err(deny(409, crate::i18n::fmt("the change set is {0}: only an approved change set can be applied", &[change["status"].as_str().unwrap_or("").to_string()])));
+                    }
+                    change["status"] = json!("applying");
+                    change["claimed_by"] = json!(user);
+                    change["claimed"] = json!(now);
                 }
                 "applied" => {
                     require(role, Role::Architect)?;
-                    if change["status"] != "approved" {
-                        return Err(deny(400, crate::i18n::tr("only an approved change set can be applied")));
+                    if change["status"] != "applying" || change["claimed_by"] != user.as_str() {
+                        return Err(deny(409, crate::i18n::tr("only the user who claimed the change set reports it as applied")));
                     }
                     change["status"] = json!(if b["ok"] == true { "applied" } else { "approved" });
                     change["applied_by"] = json!(user);
                     change["applied"] = json!(now);
-                    change["result"] = b["result"].clone();
+                    change["result"] = short(&b["result"], MAX_AUDIT_TEXT / 2);
                 }
                 _ => return Err(deny(404, "not found")),
             }
@@ -694,7 +986,7 @@ impl Client {
     }
 
     pub fn note(&self, name: &str) -> Result<String> {
-        Ok(self.call(reqwest::Method::GET, &format!("/api/notes/{}", name.replace(' ', "%20")), None)?["text"].as_str().unwrap_or("").to_string())
+        Ok(self.call(reqwest::Method::GET, &format!("/api/notes/{}", encode(name)), None)?["text"].as_str().unwrap_or("").to_string())
     }
 
     pub fn propose(&self, change: &Value) -> Result<String> {
@@ -702,21 +994,38 @@ impl Client {
     }
 
     pub fn changes(&self, status: Option<&str>) -> Result<Vec<Value>> {
-        let path = match status { Some(s) => format!("/api/changes?status={s}"), None => "/api/changes".into() };
+        let path = match status { Some(s) => format!("/api/changes?status={}", encode(s)), None => "/api/changes".into() };
         Ok(self.call(reqwest::Method::GET, &path, None)?.as_array().cloned().unwrap_or_default())
     }
 
     pub fn change(&self, id: &str) -> Result<Value> {
-        self.call(reqwest::Method::GET, &format!("/api/changes/{id}"), None)
+        self.call(reqwest::Method::GET, &format!("/api/changes/{}", change_id(id)?), None)
     }
 
     pub fn change_action(&self, id: &str, action: &str, body: &Value) -> Result<Value> {
-        self.call(reqwest::Method::POST, &format!("/api/changes/{id}/{action}"), Some(body))
+        if !matches!(action, "comment" | "decision" | "claim" | "applied") {
+            bail!("unknown change set action {action}");
+        }
+        self.call(reqwest::Method::POST, &format!("/api/changes/{}/{action}", change_id(id)?), Some(body))
     }
 
     pub fn save_note(&self, name: &str, text: &str) -> Result<()> {
-        self.call(reqwest::Method::PUT, &format!("/api/notes/{}", name.replace(' ', "%20")), Some(&json!({ "text": text }))).map(|_| ())
+        self.call(reqwest::Method::PUT, &format!("/api/notes/{}", encode(name)), Some(&json!({ "text": text }))).map(|_| ())
     }
+}
+
+/// Percent-encoding of a path segment or a query value.
+fn encode(text: &str) -> String {
+    text.bytes().map(|b| if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') { (b as char).to_string() } else { format!("%{b:02X}") }).collect()
+}
+
+/// A change set id as the hub gives it (CH-…: letters, digits and '-').
+fn change_id(id: &str) -> Result<&str> {
+    let id = id.trim();
+    if id.is_empty() || id.len() > 40 || !id.starts_with("CH-") || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        bail!("{}", crate::i18n::fmt("there is no change set {0}", &[id.to_string()]));
+    }
+    Ok(id)
 }
 
 /// The web view: one page, the token is kept in the browser (localStorage) and sent as a Bearer header.
@@ -735,6 +1044,14 @@ mod tests {
         assert!(note_name("../secret").is_err());
         assert!(note_name(".hidden").is_err());
         assert_eq!(url_decode("a%20b+c%C5%82"), "a b cł");
+        assert_eq!(url_decode("/%1é"), "/%1é", "no panic on a multi-byte character after %");
+        assert_eq!(url_decode("%€%"), "%€%");
+        assert_eq!(url_decode("%4"), "%4");
+        assert!(note_name("COM1").is_err() && note_name("nul.txt").is_err() && note_name("Console").is_ok());
+        assert_eq!(encode("a b/ł"), "a%20b%2F%C5%82");
+        assert!(change_id("CH-20261023-101010123").is_ok() && change_id("../policy").is_err());
+        let (token, hash) = new_token();
+        assert!(token.len() > 60 && hex(&token_hash(&token)) == hash);
     }
 
     /// The hub with two data sources (a PostgreSQL database and an EA project file, from LOONAR_HUB_DB_PROPS and

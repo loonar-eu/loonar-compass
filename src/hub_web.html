@@ -44,6 +44,7 @@ h3 { font-size:14px; margin:16px 0 6px; }
   <span class="who" id="who"></span>
   <input id="token" type="password" placeholder="Hub token" aria-label="Hub token" style="width:220px">
   <button id="login">Sign in</button>
+  <button class="ghost" id="logout">Sign out</button>
 </header>
 <main>
   <section>
@@ -82,7 +83,7 @@ h3 { font-size:14px; margin:16px 0 6px; }
 <script>
 const $ = id => document.getElementById(id);
 let token = '';
-try { token = localStorage.getItem('hubToken') || ''; } catch (e) {}
+try { token = sessionStorage.getItem('hubToken') || ''; } catch (e) {}
 let selectedPackage = null;
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 async function api(path) {
@@ -109,7 +110,7 @@ function table(text, onRow) {
 }
 async function login() {
   token = $('token').value.trim() || token;
-  try { localStorage.setItem('hubToken', token); } catch (e) {}
+  try { sessionStorage.setItem('hubToken', token); } catch (e) {}
   try {
     me = await api('/api/me');
     $('who').textContent = me.name + ' · ' + me.role;
@@ -181,6 +182,7 @@ async function openChange(id) {
   $('changes').innerHTML = '<button class="ghost" id="cback">← Change sets</button><h3>' + esc(c.id) + ' – ' + esc(c.title) + '</h3>' +
     '<p class="muted">' + esc(c.author) + ' · ' + esc((c.created || '').slice(0, 16).replace('T', ' ')) + ' · model ' + esc(c.source) + ' · <b>' + esc(c.status) + '</b>' + (c.decided_by ? ' by ' + esc(c.decided_by) : '') + '</p>' +
     '<pre>' + esc(c.summary || '') + '\n\n' + esc(c.preview || '') + '</pre>' +
+    '<h3>Operations (what will be saved)</h3><pre>' + esc((c.ops || []).map(o => JSON.stringify(o)).join('\n')) + '</pre>' +
     '<h3>Comments</h3>' + ((c.comments || []).map(m => '<p><b>' + esc(m.user) + '</b> <span class="muted">' + esc((m.time || '').slice(0, 16).replace('T', ' ')) + '</span><br>' + esc(m.text) + '</p>').join('') || '<p class="muted">No comments.</p>') +
     '<div class="row"><input id="ctext" placeholder="Comment"><button id="csend">Comment</button></div>' +
     (canDecide ? '<div class="row"><button id="capprove">Approve</button><button class="ghost" id="creject">Reject</button></div>' : '');
@@ -207,6 +209,7 @@ function show(tab) {
 }
 $('tabs').onclick = e => { const b = e.target.closest('button'); if (b) show(b.dataset.tab); };
 $('login').onclick = login;
+$('logout').onclick = () => { token = ''; try { sessionStorage.removeItem('hubToken'); localStorage.removeItem('hubToken'); } catch (e) {} location.reload(); };
 $('go').onclick = search;
 $('askgo').onclick = ask;
 $('question').onkeydown = e => { if (e.key === 'Enter') ask(); };
