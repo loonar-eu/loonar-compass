@@ -517,10 +517,17 @@ pub fn to_ops(model: &Value, changes: &Value) -> Vec<Value> {
         ops.push(route(&c["id"], &c));
     }
     // Properties from the panel: fields of the model, then what applies to this diagram only.
+    // Objects of this diagram (or created in this save, by key): the editor changes nothing else.
+    let editable = |key: &str, id: &Value| id.as_str().is_some_and(|s| s.starts_with('#')) || model[key].as_array().is_some_and(|list| list.iter().any(|o| o["id"].as_i64().is_some() && o["id"].as_i64() == id.as_i64()));
     let with_fields = |op: &str, target: &str, c: &Value| -> Option<Value> {
+        let collection = if target == "connector" { "connectors" } else { "elements" };
+        if !editable(collection, &c["id"]) {
+            return None;
+        }
         let mut out = json!({ "op": op });
         out[target] = c["id"].clone();
-        for (k, v) in c["fields"].as_object().into_iter().flatten() {
+        // Field names from the page never replace the operation or point it at another object.
+        for (k, v) in c["fields"].as_object().into_iter().flatten().filter(|(k, _)| k.as_str() != "op" && !crate::tools::REF_FIELDS.contains(&k.as_str())) {
             out[k] = v.clone();
         }
         if c["tags"].as_object().is_some_and(|t| !t.is_empty()) {

@@ -185,9 +185,14 @@ async function openChange(id) {
     '<h3>Operations (what will be saved)</h3><pre>' + esc((c.ops || []).map(o => JSON.stringify(o)).join('\n')) + '</pre>' +
     '<h3>Comments</h3>' + ((c.comments || []).map(m => '<p><b>' + esc(m.user) + '</b> <span class="muted">' + esc((m.time || '').slice(0, 16).replace('T', ' ')) + '</span><br>' + esc(m.text) + '</p>').join('') || '<p class="muted">No comments.</p>') +
     '<div class="row"><input id="ctext" placeholder="Comment"><button id="csend">Comment</button></div>' +
-    (canDecide ? '<div class="row"><button id="capprove">Approve</button><button class="ghost" id="creject">Reject</button></div>' : '');
+    (canDecide ? '<div class="row"><button id="capprove">Approve</button><button class="ghost" id="creject">Reject</button></div>' : '') +
+    (me.role === 'admin' && c.status === 'applying' ? '<p class="muted">Being applied by ' + esc(c.claimed_by) + ' since ' + esc((c.claimed || '').slice(0, 16).replace('T', ' ')) + '. If that Compass stopped, check the model, then:</p><div class="row"><button id="cfree">Not applied – free it</button><button class="ghost" id="cdone">It is in the model – mark applied</button></div>' : '');
   $('cback').onclick = loadChanges;
   $('csend').onclick = async () => { await post('/api/changes/' + id + '/comment', { text: $('ctext').value }); openChange(id); };
+  if ($('cfree')) {
+    $('cfree').onclick = async () => { try { await post('/api/changes/' + id + '/reset', { applied: false }); openChange(id); } catch (e) { alert(e.message); } };
+    $('cdone').onclick = async () => { try { await post('/api/changes/' + id + '/reset', { applied: true }); openChange(id); } catch (e) { alert(e.message); } };
+  }
   if (canDecide) {
     $('capprove').onclick = async () => { try { await post('/api/changes/' + id + '/decision', { approve: true }); openChange(id); } catch (e) { alert(e.message); } };
     $('creject').onclick = async () => { try { await post('/api/changes/' + id + '/decision', { approve: false, reason: $('ctext').value }); openChange(id); } catch (e) { alert(e.message); } };

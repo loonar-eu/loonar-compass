@@ -48,8 +48,6 @@ const ROTATE_BYTES: u64 = 20 * 1024 * 1024;
 const ASK_PER_HOUR: usize = 20;
 /// The longest answer of the assistant in the web view.
 const ASK_TIMEOUT: Duration = Duration::from_secs(180);
-/// A change set claimed for applying is free again after this time (the client stopped half-way).
-const CLAIM_TIMEOUT_MINUTES: i64 = 30;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Role {
@@ -140,7 +138,8 @@ pub fn load(file: &Path) -> Result<(Hub, String)> {
         let hash: [u8; 32] = match (u["token"].as_str(), u["token_sha256"].as_str()) {
             (_, Some(h)) => {
                 let h = h.trim().to_ascii_lowercase();
-                let bytes: Vec<u8> = (0..h.len()).step_by(2).filter_map(|i| h.get(i..i + 2).and_then(|b| u8::from_str_radix(b, 16).ok())).collect();
+                let valid = h.len() == 64 && h.bytes().all(|b| b.is_ascii_hexdigit());
+                let bytes: Vec<u8> = if valid { (0..64).step_by(2).filter_map(|i| u8::from_str_radix(&h[i..i + 2], 16).ok()).collect() } else { Vec::new() };
                 bytes.try_into().map_err(|_| anyhow!("{}", crate::i18n::fmt("hub user {0}: token_sha256 must be 64 hexadecimal characters", &[name.clone()])))?
             }
             (Some(token), None) if token.len() >= 16 => token_hash(token),
@@ -176,10 +175,16 @@ pub fn serve(hub: Hub, listen: &str, ready: impl FnOnce(String)) -> Result<()> {
         active.fetch_add(1, Ordering::SeqCst);
         let (hub, counter) = (hub.clone(), active.clone());
         let spawned = std::thread::Builder::new().spawn(move || {
+            struct Slot(Arc<AtomicUsize>);
+            impl Drop for Slot {
+                fn drop(&mut self) {
+                    self.0.fetch_sub(1, Ordering::SeqCst);
+                }
+            }
+            let _slot = Slot(counter);
             if let Err(e) = handle(&hub, stream) {
                 log(&hub.dir, &format!("connection error: {e:#}"));
             }
-            counter.fetch_sub(1, Ordering::SeqCst);
         });
         if spawned.is_err() {
             active.fetch_sub(1, Ordering::SeqCst);
@@ -248,15 +253,30 @@ struct Head {
 
 fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Head, HttpError> {
     let mut used = 0usize;
+    // Byte by byte from the buffer, with the deadline checked before every read of the socket (a line sent slowly
+    // does not keep the connection).
     let mut next_line = |reader: &mut BufReader<&TcpStream>| -> Result<String, HttpError> {
-        if started.elapsed() > REQUEST_DEADLINE {
-            return Err(deny(408, "request timeout"));
-        }
         let mut raw = Vec::new();
-        let n = reader.by_ref().take((MAX_HEAD - used) as u64 + 1).read_until(b'\n', &mut raw).map_err(|e| deny(400, e.to_string()))?;
-        used += n;
-        if used > MAX_HEAD {
-            return Err(deny(431, "request header too large"));
+        loop {
+            let left = REQUEST_DEADLINE.checked_sub(started.elapsed()).filter(|d| !d.is_zero()).ok_or_else(|| deny(408, "request timeout"))?;
+            let _ = reader.get_ref().set_read_timeout(Some(left.min(Duration::from_secs(10))));
+            let available = reader.fill_buf().map_err(|e| deny(400, e.to_string()))?;
+            if available.is_empty() {
+                break;
+            }
+            let (take, done) = match available.iter().position(|b| *b == b'\n') {
+                Some(i) => (i + 1, true),
+                None => (available.len(), false),
+            };
+            raw.extend_from_slice(&available[..take]);
+            reader.consume(take);
+            used += take;
+            if used > MAX_HEAD {
+                return Err(deny(431, "request header too large"));
+            }
+            if done {
+                break;
+            }
         }
         Ok(String::from_utf8_lossy(&raw).trim_end().to_string())
     };
@@ -296,6 +316,8 @@ fn read_body(reader: &mut BufReader<&TcpStream>, length: usize, started: Instant
             return Err(deny(408, "request timeout"));
         }
         let want = chunk.len().min(length - body.len());
+        let left = REQUEST_DEADLINE.checked_sub(started.elapsed()).filter(|d| !d.is_zero()).ok_or_else(|| deny(408, "request timeout"))?;
+        let _ = reader.get_ref().set_read_timeout(Some(left.min(Duration::from_secs(10))));
         let n = reader.read(&mut chunk[..want]).map_err(|e| deny(400, e.to_string()))?;
         if n == 0 {
             return Err(deny(400, "request body incomplete"));
@@ -322,6 +344,7 @@ fn respond(mut stream: &TcpStream, status: u16, content_type: &str, body: &[u8])
     let reason = match status {
         200 => "OK",
         201 => "Created",
+        204 => "No Content",
         202 => "Accepted",
         400 => "Bad Request",
         401 => "Unauthorized",
@@ -384,28 +407,36 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
             "/" | "/index.html" => return respond(&stream, 200, "text/html; charset=utf-8", web_page().0.as_bytes()),
             "/app.js" => return respond(&stream, 200, "text/javascript; charset=utf-8", web_page().1.as_bytes()),
             "/api/health" => return respond(&stream, 200, "application/json; charset=utf-8", json!({ "ok": true, "app": crate::config::APP_NAME, "version": env!("CARGO_PKG_VERSION") }).to_string().as_bytes()),
+            "/favicon.ico" => return respond(&stream, 204, "text/plain", b""),
             _ => {}
         }
     }
-    // Who is asking, before the body is read; an address with many wrong tokens waits.
-    if let Some(ip) = peer {
-        let mut failures = hub.failures.lock().unwrap_or_else(|p| p.into_inner());
-        let list = failures.entry(ip).or_default();
-        list.retain(|t| t.elapsed() < FAILURE_WINDOW);
-        if list.len() >= MAX_FAILURES {
-            return respond(&stream, 429, "application/json; charset=utf-8", json!({ "error": "too many wrong tokens, try again later" }).to_string().as_bytes());
-        }
-    }
+    // Who is asking, before the body is read. A valid token always passes; an address that sent many wrong tokens
+    // gets 429 for a while (a request without a token is not counted: browsers and probes send those).
     let Some((user, role)) = hub.user(&head.token) else {
-        if let Some(ip) = peer {
+        let mut locked = false;
+        if let (Some(ip), false) = (peer, head.token.is_empty()) {
             let mut failures = hub.failures.lock().unwrap_or_else(|p| p.into_inner());
+            if failures.len() > 10_000 {
+                failures.retain(|_, list| list.last().is_some_and(|t| t.elapsed() < FAILURE_WINDOW));
+            }
             let list = failures.entry(ip).or_default();
+            list.retain(|t| t.elapsed() < FAILURE_WINDOW);
             list.push(Instant::now());
+            locked = list.len() > MAX_FAILURES;
             if list.len() == MAX_FAILURES {
                 log(&hub.dir, &format!("{ip}: {MAX_FAILURES} wrong tokens, refused for {} minutes", FAILURE_WINDOW.as_secs() / 60));
             }
         }
-        return respond(&stream, 401, "application/json; charset=utf-8", json!({ "error": crate::i18n::tr("missing or unknown hub token") }).to_string().as_bytes());
+        // A small body is read first, so the client gets the answer instead of a reset connection.
+        if head.length <= 64 * 1024 {
+            let _ = read_body(&mut reader, head.length, started);
+        }
+        return if locked {
+            respond(&stream, 429, "application/json; charset=utf-8", json!({ "error": "too many wrong tokens, try again later" }).to_string().as_bytes())
+        } else {
+            respond(&stream, 401, "application/json; charset=utf-8", json!({ "error": crate::i18n::tr("missing or unknown hub token") }).to_string().as_bytes())
+        };
     };
     let body = match read_body(&mut reader, head.length, started) {
         Ok(body) => body,
@@ -509,7 +540,8 @@ impl Hub {
 fn note_name(name: &str) -> Result<String, HttpError> {
     // Windows device names (CON, NUL, COM1…) are not files.
     let base = name.split('.').next().unwrap_or("").trim().to_ascii_uppercase();
-    let device = matches!(base.as_str(), "CON" | "PRN" | "AUX" | "NUL") || ((base.starts_with("COM") || base.starts_with("LPT")) && base.len() == 4 && base.as_bytes()[3].is_ascii_digit());
+    let device = matches!(base.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || ((base.starts_with("COM") || base.starts_with("LPT")) && base.chars().count() == 4 && base.chars().nth(3).is_some_and(|c| c.is_numeric()));
     let ok = !name.is_empty() && name.len() <= 80 && name.chars().all(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | ' ' | '.')) && !name.starts_with('.') && !name.ends_with('.') && !name.ends_with(' ') && !device;
     if ok { Ok(name.to_string()) } else { Err(deny(400, crate::i18n::tr("a note name: letters, digits, spaces, '-', '_' and '.'"))) }
 }
@@ -577,12 +609,14 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
                 if list.len() >= per_hour {
                     return Err(deny(429, crate::i18n::fmt("at most {0} questions per hour", &[per_hour.to_string()])));
                 }
-                list.push(Instant::now());
             }
             // One question at a time: the cost of the model stays under control; the others are told to wait.
-            let Ok(_turn) = hub.ask_lock.try_lock() else {
-                return Err(deny(429, crate::i18n::tr("the assistant is answering another question, try again in a moment")));
+            let _turn = match hub.ask_lock.try_lock() {
+                Ok(guard) => guard,
+                Err(std::sync::TryLockError::Poisoned(p)) => p.into_inner(),
+                Err(std::sync::TryLockError::WouldBlock) => return Err(deny(429, crate::i18n::tr("the assistant is answering another question, try again in a moment"))),
             };
+            hub.asks.lock().unwrap_or_else(|p| p.into_inner()).entry(user.clone()).or_default().push(Instant::now());
             let started = Instant::now();
             let prompt = format!(
                 "[A question from {user} through the team hub; read-only] {question}\n\nAnswer for a person who does not use Enterprise Architect: plain language, \
@@ -743,9 +777,7 @@ in the language of the question, short. You can only read the model (db_query an
                 // Applying in two steps: one client claims the approved set, applies it and reports the result.
                 "claim" => {
                     require(role, Role::Architect)?;
-                    let stale = change["status"] == "applying"
-                        && change["claimed"].as_str().and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok()).is_some_and(|t| chrono::Local::now().signed_duration_since(t).num_minutes() >= CLAIM_TIMEOUT_MINUTES);
-                    if change["status"] != "approved" && !stale {
+                    if change["status"] != "approved" {
                         return Err(deny(409, crate::i18n::fmt("the change set is {0}: only an approved change set can be applied", &[change["status"].as_str().unwrap_or("").to_string()])));
                     }
                     change["status"] = json!("applying");
@@ -757,10 +789,33 @@ in the language of the question, short. You can only read the model (db_query an
                     if change["status"] != "applying" || change["claimed_by"] != user.as_str() {
                         return Err(deny(409, crate::i18n::tr("only the user who claimed the change set reports it as applied")));
                     }
-                    change["status"] = json!(if b["ok"] == true { "applied" } else { "approved" });
-                    change["applied_by"] = json!(user);
-                    change["applied"] = json!(now);
-                    change["result"] = short(&b["result"], MAX_AUDIT_TEXT / 2);
+                    if b["ok"] == true {
+                        change["status"] = json!("applied");
+                        change["applied_by"] = json!(user);
+                        change["applied"] = json!(now);
+                        change["result"] = short(&b["result"], MAX_AUDIT_TEXT / 2);
+                    } else {
+                        change["status"] = json!("approved");
+                        change["last_failure"] = json!({ "user": user, "time": now, "result": short(&b["result"], MAX_AUDIT_TEXT / 2) });
+                    }
+                    if let Some(o) = change.as_object_mut() {
+                        o.remove("claimed_by");
+                        o.remove("claimed");
+                    }
+                }
+                // A claim left by a Compass that stopped: an admin checks the model, then frees or closes the set.
+                "reset" => {
+                    require(role, Role::Admin)?;
+                    if change["status"] != "applying" {
+                        return Err(deny(409, crate::i18n::tr("only a change set being applied can be reset")));
+                    }
+                    change["status"] = json!(if b["applied"] == true { "applied" } else { "approved" });
+                    change["reset_by"] = json!(user);
+                    change["reset"] = json!(now);
+                    if let Some(o) = change.as_object_mut() {
+                        o.remove("claimed_by");
+                        o.remove("claimed");
+                    }
                 }
                 _ => return Err(deny(404, "not found")),
             }
@@ -1008,7 +1063,7 @@ impl Client {
     }
 
     pub fn change_action(&self, id: &str, action: &str, body: &Value) -> Result<Value> {
-        if !matches!(action, "comment" | "decision" | "claim" | "applied") {
+        if !matches!(action, "comment" | "decision" | "claim" | "applied" | "reset") {
             bail!("unknown change set action {action}");
         }
         self.call(reqwest::Method::POST, &format!("/api/changes/{}/{action}", change_id(id)?), Some(body))
@@ -1218,11 +1273,18 @@ mod tests {
         let entries: Value = serde_json::from_str(&get("/api/audit?limit=5", viewer).1).unwrap();
         let entry = entries.as_array().unwrap().iter().find(|e| e["summary"] == "x").unwrap().clone();
         assert!(entry["time"] != "2000-01-01" && entry.get("anything").is_none() && entry.get("database").is_none(), "{entry}");
-        // Wrong tokens: after 20 the address waits.
+        // Wrong tokens: after 20 the address waits; requests without a token are not counted; a valid token still works.
+        for _ in 0..30 {
+            get("/favicon.ico", "");
+            get("/api/me", "");
+        }
+        assert_eq!(get("/api/me", "wrong-token-0123456789").0, 401, "requests without a token do not lock the address");
         for _ in 0..20 {
             get("/api/me", "wrong-token-0123456789");
         }
-        assert_eq!(get("/api/me", viewer).0, 429, "this address is refused for a while");
+        assert_eq!(get("/api/me", "wrong-token-0123456789").0, 429, "this address is refused for a while");
+        assert_eq!(get("/api/me", viewer).0, 200, "a valid token is never locked out");
+        assert_eq!(get("/favicon.ico", "").0, 204);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
