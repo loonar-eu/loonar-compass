@@ -3,12 +3,15 @@
 //! in names, aliases, notes and tagged values, existing trace / realisation relationships, and word similarity.
 //! The result is a traceability matrix: covered, likely covered (candidates), not covered, and model elements that
 //! no requirement mentions. The assistant judges the candidates and, on request, saves trace relationships.
+//! With a source folder, every requirement is followed further: model element → code → test → issue key, and the
+//! report says where the chain breaks.
 
 use crate::config::AppConfig;
 use crate::tools::query_rows;
 use anyhow::{bail, Context, Result};
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
+use std::path::Path;
 
 #[derive(Clone, Debug)]
 pub struct Requirement {
@@ -121,6 +124,16 @@ fn leading_id(text: &str) -> Option<(String, String)> {
         return None;
     }
     Some((id.to_string(), rest.to_string()))
+}
+
+/// The text of a requirements document: Word (.docx), HTML or plain text / Markdown.
+pub fn read_document(path: &Path) -> Result<String> {
+    let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+    match ext.as_str() {
+        "docx" => docx_text(path),
+        "html" | "htm" => Ok(html_text(&std::fs::read_to_string(path).with_context(|| crate::i18n::fmt("cannot read {0}", &[path.display().to_string()]))?)),
+        _ => std::fs::read_to_string(path).with_context(|| crate::i18n::fmt("cannot read {0}", &[path.display().to_string()])),
+    }
 }
 
 /// Requirements of a document: lines (or table rows) starting with a requirement id. Without any ids, every
@@ -236,8 +249,50 @@ fn mentions(text: &str, id: &str) -> bool {
     false
 }
 
-/// The traceability matrix as text for the assistant (and a table for Excel).
-pub fn trace(cfg: &AppConfig, requirements: &[Requirement], package: Option<i64>) -> Result<String> {
+/// Coverage of one requirement in the model.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Coverage {
+    Covered,
+    Candidates,
+    Missing,
+    ContentDiffers,
+}
+
+/// One requirement with the elements that carry it and the candidates by word similarity.
+pub struct TraceRow {
+    pub id: String,
+    pub text: String,
+    pub coverage: Coverage,
+    /// Elements carrying the id or linked to them by a trace relationship: (id, name, kind, text for searching).
+    pub traced: Vec<(String, String, String, String)>,
+    /// Candidates as "name [kind] #id (score)".
+    pub candidates: Vec<String>,
+}
+
+/// The traceability matrix as data.
+pub struct Trace {
+    pub rows: Vec<TraceRow>,
+    pub elements_checked: usize,
+    pub unreferenced: Vec<String>,
+}
+
+impl Trace {
+    pub fn count(&self, coverage: Coverage) -> usize {
+        self.rows.iter().filter(|r| r.coverage == coverage).count()
+    }
+}
+
+fn coverage_label(c: Coverage) -> &'static str {
+    match c {
+        Coverage::Covered => crate::i18n::tr("covered"),
+        Coverage::Candidates => crate::i18n::tr("candidates"),
+        Coverage::Missing => crate::i18n::tr("NOT COVERED"),
+        Coverage::ContentDiffers => crate::i18n::tr("ID MATCHES, CONTENT DIFFERS"),
+    }
+}
+
+/// Requirements matched with the model (elements of one package with subpackages, or the whole model).
+pub fn trace_data(cfg: &AppConfig, requirements: &[Requirement], package: Option<i64>) -> Result<Trace> {
     if requirements.is_empty() {
         bail!("{}", crate::i18n::tr("no requirements found in the document (lines starting with an id such as W1, R.1.2, REQ-12)"));
     }
@@ -251,8 +306,7 @@ pub fn trace(cfg: &AppConfig, requirements: &[Requirement], package: Option<i64>
     }
     let by_id: HashMap<&str, &ModelElement> = elements.iter().map(|e| (e.id.as_str(), e)).collect();
     let mut referenced: HashSet<String> = HashSet::new();
-    let mut lines = Vec::new();
-    let (mut covered, mut likely, mut missing, mut conflicts) = (0, 0, 0, 0);
+    let mut rows = Vec::new();
     for req in requirements {
         // 1. Elements that carry the requirement id (a Requirement element named "W1 …", an alias, a note, a tag).
         let direct: Vec<&ModelElement> = elements.iter().filter(|e| mentions(&e.text, &req.id)).collect();
@@ -281,24 +335,19 @@ pub fn trace(cfg: &AppConfig, requirements: &[Requirement], package: Option<i64>
             .collect();
         similar.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
         similar.truncate(3);
-        let show = |e: &ModelElement| format!("{} [{}] #{}", e.name, e.kind, e.id);
         // The id matches but the content does not: no meaningful word of the requirement in the elements carrying the id.
         let id_token = tokens(&req.id);
         let content_differs = !direct.is_empty()
             && req_tokens.len() >= 3
             && direct.iter().all(|e| req_tokens.difference(&id_token).filter(|w| e.tokens.contains(*w)).count() == 0);
-        let status = if content_differs {
-            conflicts += 1;
-            crate::i18n::tr("ID MATCHES, CONTENT DIFFERS")
+        let coverage = if content_differs {
+            Coverage::ContentDiffers
         } else if !direct.is_empty() || !linked.is_empty() {
-            covered += 1;
-            crate::i18n::tr("covered")
+            Coverage::Covered
         } else if !similar.is_empty() {
-            likely += 1;
-            crate::i18n::tr("candidates")
+            Coverage::Candidates
         } else {
-            missing += 1;
-            crate::i18n::tr("NOT COVERED")
+            Coverage::Missing
         };
         for e in direct.iter().chain(linked.iter()) {
             referenced.insert(e.id.clone());
@@ -306,14 +355,13 @@ pub fn trace(cfg: &AppConfig, requirements: &[Requirement], package: Option<i64>
         for (_, e) in &similar {
             referenced.insert(e.id.clone());
         }
-        lines.push(format!(
-            "{} | {} | {} | {} | {}",
-            req.id,
-            req.text.chars().take(160).collect::<String>(),
-            status,
-            direct.iter().chain(linked.iter()).map(|e| show(e)).collect::<Vec<_>>().join("; "),
-            similar.iter().map(|(s, e)| format!("{} ({:.1})", show(e), s)).collect::<Vec<_>>().join("; ")
-        ));
+        rows.push(TraceRow {
+            id: req.id.clone(),
+            text: req.text.clone(),
+            coverage,
+            traced: direct.iter().chain(linked.iter()).map(|e| (e.id.clone(), e.name.clone(), e.kind.clone(), e.text.clone())).collect(),
+            candidates: similar.iter().map(|(s, e)| format!("{} [{}] #{} ({:.1})", e.name, e.kind, e.id, s)).collect(),
+        });
     }
     // Elements of the main kinds that no requirement refers to.
     let main = ["UseCase", "Requirement", "Activity", "Component", "Class", "Interface", "Feature"];
@@ -323,18 +371,243 @@ pub fn trace(cfg: &AppConfig, requirements: &[Requirement], package: Option<i64>
         .take(150)
         .map(|e| format!("{} [{}] #{} ({})", e.name, e.kind, e.id, e.package))
         .collect();
+    Ok(Trace { rows, elements_checked: elements.len(), unreferenced })
+}
+
+/// The traceability matrix as text for the assistant (and a table for Excel); with a source folder also the chain
+/// requirement → model → code → test → issue.
+pub fn trace(cfg: &AppConfig, requirements: &[Requirement], package: Option<i64>) -> Result<String> {
+    trace_with_code(cfg, requirements, package, None)
+}
+
+pub fn trace_with_code(cfg: &AppConfig, requirements: &[Requirement], package: Option<i64>, code: Option<&Path>) -> Result<String> {
+    let t = trace_data(cfg, requirements, package)?;
     let mut out = vec![crate::i18n::fmt(
         "Traceability: {0} requirements – covered {1}, only candidates {2}, NOT covered {3}, id matches but content differs {6}; model elements checked: {4}; elements no requirement refers to: {5}.",
-        &[requirements.len().to_string(), covered.to_string(), likely.to_string(), missing.to_string(), elements.len().to_string(), unreferenced.len().to_string(), conflicts.to_string()],
+        &[t.rows.len().to_string(), t.count(Coverage::Covered).to_string(), t.count(Coverage::Candidates).to_string(), t.count(Coverage::Missing).to_string(), t.elements_checked.to_string(), t.unreferenced.len().to_string(), t.count(Coverage::ContentDiffers).to_string()],
     )];
     out.push("requirement | text | status | traced elements (id in the model or a trace relationship) | candidates by word similarity (score)".into());
-    out.extend(lines);
-    if !unreferenced.is_empty() {
+    for r in &t.rows {
+        out.push(format!(
+            "{} | {} | {} | {} | {}",
+            r.id,
+            r.text.chars().take(160).collect::<String>(),
+            coverage_label(r.coverage),
+            r.traced.iter().map(|(id, name, kind, _)| format!("{name} [{kind}] #{id}")).collect::<Vec<_>>().join("; "),
+            r.candidates.join("; ")
+        ));
+    }
+    if !t.unreferenced.is_empty() {
         out.push(format!("\n{}:", crate::i18n::tr("Model elements no requirement refers to")));
-        out.extend(unreferenced);
+        out.extend(t.unreferenced.iter().cloned());
+    }
+    if let Some(root) = code {
+        let rows = chain(&t, requirements, root)?;
+        out.push(String::new());
+        out.push(chain_report(&rows));
     }
     out.push(crate::i18n::tr("Judge the candidates yourself (read the elements if needed): a candidate is only a hint. Point out requirements that contradict the model.").to_string());
     Ok(out.join("\n"))
+}
+
+/// Where the chain of a requirement ends.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum ChainStatus {
+    Complete,
+    NotInModel,
+    NoCode,
+    NoTests,
+}
+
+pub fn chain_label(s: ChainStatus) -> &'static str {
+    match s {
+        ChainStatus::Complete => crate::i18n::tr("complete"),
+        ChainStatus::NotInModel => crate::i18n::tr("BROKEN: not in the model"),
+        ChainStatus::NoCode => crate::i18n::tr("BROKEN: no code"),
+        ChainStatus::NoTests => crate::i18n::tr("BROKEN: no tests"),
+    }
+}
+
+/// One requirement along the chain requirement → model → code → test → issue.
+pub struct ChainRow {
+    pub id: String,
+    pub model: Vec<String>,
+    pub code: Vec<String>,
+    pub tests: Vec<String>,
+    pub issues: Vec<String>,
+    pub status: ChainStatus,
+}
+
+/// Whether a path is a test: a test folder or a test file name (OrderTest.java, OrderIT.java, order.spec.ts, test_order.py…).
+pub fn is_test_path(rel: &str) -> bool {
+    let p = rel.replace('\\', "/");
+    let file = p.rsplit('/').next().unwrap_or(&p);
+    let stem = file.split('.').next().unwrap_or(file);
+    let (lp, lfile, lstem) = (p.to_lowercase(), file.to_lowercase(), stem.to_lowercase());
+    let folder = lp.starts_with("test/") || lp.starts_with("tests/") || lp.contains("/test/") || lp.contains("/tests/") || lp.contains("__tests__/");
+    folder || stem.ends_with("Test") || stem.ends_with("Tests") || stem.ends_with("IT") || lstem.ends_with("_test") || lstem.starts_with("test_")
+        || lfile.contains(".spec.") || lfile.contains(".test.") || lfile.ends_with(".feature") || lfile.ends_with(".robot")
+}
+
+/// The name a test file is about: OrderTest.java → order, order.spec.ts → order, test_order.py → order.
+fn test_subject(rel: &str) -> String {
+    let file = rel.rsplit(['/', '\\']).next().unwrap_or(rel);
+    let stem = file.split('.').next().unwrap_or(file);
+    let stem = stem.strip_prefix("test_").unwrap_or(stem);
+    let stem = stem.trim_end_matches("Tests").trim_end_matches("Test").trim_end_matches("IT").trim_end_matches("_test");
+    crate::code_drift::norm(stem)
+}
+
+/// Whether an identifier appears in the text as a whole word.
+fn has_word(text: &str, word: &str) -> bool {
+    if word.is_empty() {
+        return false;
+    }
+    let ident = |c: char| c.is_alphanumeric() || c == '_';
+    let mut start = 0;
+    while let Some(i) = text[start..].find(word) {
+        let at = start + i;
+        let before = text[..at].chars().last();
+        let after = text[at + word.len()..].chars().next();
+        if !before.is_some_and(ident) && !after.is_some_and(ident) {
+            return true;
+        }
+        start = at + word.len();
+    }
+    false
+}
+
+/// Issue keys (ABC-123) in a text, except the given requirement ids.
+pub fn issue_keys(text: &str, except: &HashSet<String>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for w in text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-')) {
+        let Some((project, number)) = w.split_once('-') else { continue };
+        let ok = project.len() >= 2
+            && project.len() <= 10
+            && project.starts_with(|c: char| c.is_ascii_uppercase())
+            && project.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+            && !number.is_empty()
+            && number.len() <= 7
+            && number.chars().all(|c| c.is_ascii_digit());
+        // Standards and encodings look like keys (UTF-8, ISO-9001, SHA-256): not issues.
+        const NOT_PROJECTS: &[&str] = &["UTF", "ISO", "SHA", "RFC", "TLS", "SSL", "IEC", "EN", "DIN", "MD", "AES", "RSA", "WCAG", "PCI", "GDPR"];
+        if ok && !NOT_PROJECTS.contains(&project) && !except.contains(&w.to_uppercase()) && !out.iter().any(|k| k == w) {
+            out.push(w.to_string());
+        }
+    }
+    out
+}
+
+/// Text files of a source folder (code, tests, API definitions): (path relative to the folder, content).
+fn source_files(root: &Path) -> Result<Vec<(String, String)>> {
+    if !root.is_dir() {
+        bail!("{}", crate::i18n::fmt("folder {0} does not exist", &[root.display().to_string()]));
+    }
+    const EXT: &[&str] = &["java", "cs", "kt", "ts", "tsx", "js", "jsx", "rs", "py", "go", "sql", "yaml", "yml", "json", "feature", "robot", "groovy", "scala", "swift", "php", "rb"];
+    let mut out = Vec::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if path.is_dir() {
+                if !crate::code_drift::SKIP_DIRS.contains(&name.as_str()) && !name.starts_with('.') {
+                    stack.push(path);
+                }
+                continue;
+            }
+            let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+            if !EXT.contains(&ext.as_str()) || out.len() >= crate::code_drift::MAX_FILES || entry.metadata().map(|m| m.len() > crate::code_drift::MAX_FILE_BYTES).unwrap_or(true) {
+                continue;
+            }
+            if let Ok(text) = std::fs::read_to_string(&path) {
+                out.push((path.strip_prefix(root).unwrap_or(&path).display().to_string().replace('\\', "/"), text));
+            }
+        }
+    }
+    out.sort();
+    Ok(out)
+}
+
+/// The chain requirement → model element → code → test → issue for every requirement of the matrix.
+pub fn chain(t: &Trace, requirements: &[Requirement], root: &Path) -> Result<Vec<ChainRow>> {
+    let files = source_files(root)?;
+    let code_model = crate::code_drift::scan(root)?;
+    // Code types by normalized name → files declaring them.
+    let mut declared: HashMap<String, Vec<String>> = HashMap::new();
+    for (name, (_, _, file)) in &code_model.types {
+        declared.entry(crate::code_drift::norm(name)).or_default().push(file.replace('\\', "/"));
+    }
+    let tests: Vec<&(String, String)> = files.iter().filter(|(p, _)| is_test_path(p)).collect();
+    let ids: HashSet<String> = requirements.iter().map(|r| r.id.to_uppercase()).collect();
+    let mut rows = Vec::new();
+    for r in &t.rows {
+        let model: Vec<String> = r.traced.iter().map(|(id, name, kind, _)| format!("{name} [{kind}] #{id}")).collect();
+        // Code: files declaring a type named like a traced element, and source files naming the requirement id.
+        let mut code: Vec<String> = Vec::new();
+        let mut subjects: Vec<(String, String)> = Vec::new();
+        for (_, name, _, _) in &r.traced {
+            if let Some(found) = declared.get(&crate::code_drift::norm(name)) {
+                for f in found {
+                    if !is_test_path(f) && !code.contains(f) {
+                        code.push(f.clone());
+                    }
+                }
+                if !subjects.iter().any(|(n, _)| n == name) {
+                    subjects.push((name.clone(), crate::code_drift::norm(name)));
+                }
+            }
+        }
+        for (path, text) in &files {
+            if !is_test_path(path) && mentions(text, &r.id) && !code.contains(path) {
+                code.push(path.clone());
+            }
+        }
+        // Tests: test files naming the requirement id, or about a type of the code above (file name or a whole word in the text).
+        let mut tested: Vec<String> = Vec::new();
+        for (path, text) in &tests {
+            let about = subjects.iter().any(|(name, n)| test_subject(path) == *n || has_word(text, name.replace(' ', "").as_str()));
+            if (mentions(text, &r.id) || about) && !tested.contains(path) {
+                tested.push(path.clone());
+            }
+        }
+        // Issues: keys in the requirement and in the traced elements (name, alias, notes, tagged values).
+        let mut issues = issue_keys(&r.text, &ids);
+        for (_, _, _, text) in &r.traced {
+            for k in issue_keys(text, &ids) {
+                if !issues.contains(&k) {
+                    issues.push(k);
+                }
+            }
+        }
+        let status = if !matches!(r.coverage, Coverage::Covered | Coverage::ContentDiffers) {
+            ChainStatus::NotInModel
+        } else if code.is_empty() {
+            ChainStatus::NoCode
+        } else if tested.is_empty() {
+            ChainStatus::NoTests
+        } else {
+            ChainStatus::Complete
+        };
+        rows.push(ChainRow { id: r.id.clone(), model, code, tests: tested, issues, status });
+    }
+    Ok(rows)
+}
+
+/// The chain as a text table with a summary line.
+pub fn chain_report(rows: &[ChainRow]) -> String {
+    let count = |s: ChainStatus| rows.iter().filter(|r| r.status == s).count().to_string();
+    let mut out = vec![crate::i18n::fmt(
+        "Chain requirement → model → code → test → issue: complete {0}; broken: not in the model {1}, no code {2}, no tests {3}.",
+        &[count(ChainStatus::Complete), count(ChainStatus::NotInModel), count(ChainStatus::NoCode), count(ChainStatus::NoTests)],
+    )];
+    out.push("requirement | chain | model | code | tests | issues".into());
+    let list = |v: &Vec<String>| if v.is_empty() { "–".to_string() } else { v.iter().take(6).cloned().collect::<Vec<_>>().join("; ") + if v.len() > 6 { " …" } else { "" } };
+    for r in rows {
+        out.push(format!("{} | {} | {} | {} | {} | {}", r.id, chain_label(r.status), list(&r.model), list(&r.code), list(&r.tests), list(&r.issues)));
+    }
+    out.join("\n")
 }
 
 /// Tool definition for the model.
@@ -346,14 +619,17 @@ an attachment of the conversation has its saved path), confluence_page (page id,
 Requirements are lines or table rows starting with an id (W1, R.1.2, REQ-12, FR-01…). Matches them with the model: elements carrying the id (name, alias, notes, \
 tagged values), trace / realisation relationships, and similar words (candidates with a score). Returns covered / candidates / NOT COVERED per requirement \
 and model elements no requirement refers to. Judge the candidates, point out contradictions; on request save the matrix (create_spreadsheet) or create trace \
-relationships in the model (ea_write create_connector, type Realisation or Dependency «trace», after the user agrees).",
+relationships in the model (ea_write create_connector, type Realisation or Dependency «trace», after the user agrees). With 'code' (a source folder, \
+read only) every requirement is also followed to the code (types named like the traced elements, files naming the requirement id), the tests (test files \
+naming the id or the type) and issue keys (ABC-123 in the requirement and the elements); the chain table says where it breaks: not in the model, no code, no tests.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "file": { "type": "string" },
                 "confluence_page": { "type": "string" },
                 "text": { "type": "string" },
-                "package": { "type": "integer", "description": "Optionally only this package with subpackages." }
+                "package": { "type": "integer", "description": "Optionally only this package with subpackages." },
+                "code": { "type": "string", "description": "Optionally a source folder (full path) for the chain requirement → model → code → test → issue." }
             }
         }
     })
@@ -378,6 +654,41 @@ R.1.2 | Płatność kartą przez bramkę płatności | TAK\nREQ-12 The shop send
         let word = "<w:body><w:p><w:r><w:t>W7 Zwrot towaru w ciągu 14 dni.</w:t></w:r></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>W8</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Program lojalnościowy dla klientów VIP</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body>";
         let reqs = extract(&word_xml_text(word));
         assert_eq!(reqs.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), ["W7", "W8"]);
+    }
+
+    #[test]
+    fn chain_helpers() {
+        assert!(is_test_path("src/test/java/shop/OrderTest.java") && is_test_path("OrderIT.java") && is_test_path("web/order.spec.ts"));
+        assert!(is_test_path("tests/test_order.py") && is_test_path("features/checkout.feature") && is_test_path("pkg/order_test.go"));
+        assert!(!is_test_path("src/main/java/shop/Order.java") && !is_test_path("src/Latest.java") && !is_test_path("src/Contest.ts"));
+        assert_eq!(test_subject("src/test/java/OrderTest.java"), "order");
+        assert_eq!(test_subject("test_order_item.py"), "orderitem");
+        assert!(has_word("new Order(1)", "Order") && !has_word("new OrderItem()", "Order"));
+        let except: HashSet<String> = ["REQ-12".to_string()].into_iter().collect();
+        assert_eq!(issue_keys("See SHOP-123 and REQ-12, also UTF-8 and ab-1, X-1, SHOP-123.", &except), ["SHOP-123"]);
+    }
+
+    #[test]
+    fn chain_of_requirements() {
+        let dir = std::env::temp_dir().join(format!("loonar-chain-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(dir.join("src/main/java"));
+        let _ = std::fs::create_dir_all(dir.join("src/test/java"));
+        std::fs::write(dir.join("src/main/java/Order.java"), "public class Order {\n  private long id;\n}\n").unwrap();
+        std::fs::write(dir.join("src/main/java/Invoice.java"), "// W2 invoice after payment\npublic class Invoice {\n  private long id;\n}\n").unwrap();
+        std::fs::write(dir.join("src/test/java/OrderTest.java"), "class OrderTest { void places() { new Order(); } }\n").unwrap();
+        let row = |id: &str, name: &str| TraceRow {
+            id: id.into(), text: "text of the requirement SHOP-7".into(), coverage: if name.is_empty() { Coverage::Missing } else { Coverage::Covered },
+            traced: if name.is_empty() { vec![] } else { vec![("1".into(), name.into(), "Class".into(), format!("{name} notes ARCH-9"))] }, candidates: vec![],
+        };
+        let t = Trace { rows: vec![row("W1", "Order"), row("W2", "Payment"), row("W3", "Shipment"), row("W4", "")], elements_checked: 3, unreferenced: vec![] };
+        let reqs: Vec<Requirement> = ["W1", "W2", "W3", "W4"].iter().map(|id| Requirement { id: id.to_string(), text: String::new() }).collect();
+        let rows = chain(&t, &reqs, &dir).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(rows.iter().map(|r| r.status).collect::<Vec<_>>(), [ChainStatus::Complete, ChainStatus::NoTests, ChainStatus::NoCode, ChainStatus::NotInModel]);
+        assert_eq!(rows[0].code, ["src/main/java/Order.java"]);
+        assert_eq!(rows[0].tests, ["src/test/java/OrderTest.java"]);
+        assert_eq!(rows[1].code, ["src/main/java/Invoice.java"], "the file names the requirement id");
+        assert_eq!(rows[0].issues, ["SHOP-7", "ARCH-9"]);
     }
 }
 

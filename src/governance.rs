@@ -1,5 +1,6 @@
 //! Model governance without the AI: deterministic quality checks of a package (model linter), the organization's
-//! rules from `governance.json`, comparison of two packages (as-is vs to-be) and the before/after preview of a write.
+//! rules from `governance.json`, the ArchiMate 3.2 relationship rules, comparison of two packages (as-is vs to-be) and
+//! the before/after preview of a write.
 
 use crate::config::AppConfig;
 use crate::tools::query_rows;
@@ -38,13 +39,23 @@ const NOT_FLOW_NODES: &[&str] = &["Actor", "Class", "Component", "Interface", "P
 
 /// One rule finding: which rule, object id, kind of object, name, package and what is wrong.
 #[derive(Clone)]
-struct Finding {
-    rule: &'static str,
-    id: String,
-    kind: &'static str,
-    name: String,
-    package: String,
-    detail: String,
+pub struct Finding {
+    pub rule: &'static str,
+    pub id: String,
+    pub kind: &'static str,
+    pub name: String,
+    pub package: String,
+    pub detail: String,
+}
+
+/// The result of a model check: what was checked and the findings.
+pub struct LintResult {
+    pub package: i64,
+    pub packages: usize,
+    pub elements: usize,
+    pub connectors: usize,
+    pub findings: Vec<Finding>,
+    pub rules: Value,
 }
 
 fn sql_list(values: &[String]) -> String {
@@ -117,6 +128,12 @@ pub fn load_rules(cfg: &AppConfig, given: &Value) -> Value {
 
 /// Model linter: checks the package with its subpackages and returns the findings grouped by rule.
 pub fn lint(input: &Value, cfg: &AppConfig) -> Result<String> {
+    let r = lint_result(input, cfg)?;
+    Ok(report(r.package, r.packages, r.elements, r.connectors, &r.findings, &r.rules))
+}
+
+/// The model check as data (for the report, the check mode and its JUnit output).
+pub fn lint_result(input: &Value, cfg: &AppConfig) -> Result<LintResult> {
     let package = input["package"].as_i64().context(crate::i18n::tr("missing field 'package' (package_id)"))?;
     let rules = load_rules(cfg, &input["rules"]);
     let skip: HashSet<String> = input["skip"].as_array().into_iter().flatten().filter_map(|v| v.as_str()).map(String::from).collect();
@@ -224,6 +241,11 @@ pub fn lint(input: &Value, cfg: &AppConfig) -> Result<String> {
         if let Some(problem) = uml_problem(&c[1], &c[6], &c[9]) {
             findings.push(base("invalid_relation", problem));
         }
+        if rules["archimate"].as_bool() != Some(false) {
+            if let Some(problem) = archimate_problem(&c[2], &c[7], &c[10]) {
+                findings.push(base("archimate_relation", problem));
+            }
+        }
         *seen.entry((c[1].clone(), c[2].clone(), c[3].clone(), c[4].clone())).or_default() += 1;
         if checked_types.contains(&c[1].to_lowercase()) || checked_types.contains(&c[2].to_lowercase()) {
             let ok = allowed.iter().any(|r| {
@@ -261,10 +283,10 @@ pub fn lint(input: &Value, cfg: &AppConfig) -> Result<String> {
     }
 
     findings.retain(|f| !skip.contains(f.rule));
-    Ok(report(package, packages.len(), elements.len(), connectors.len(), &findings, &rules))
+    Ok(LintResult { package, packages: packages.len(), elements: elements.len(), connectors: connectors.len(), findings, rules })
 }
 
-fn rule_title(rule: &str) -> &'static str {
+pub fn rule_title(rule: &str) -> &'static str {
     match rule {
         "default_name" => crate::i18n::tr("Default or empty names"),
         "missing_notes" => crate::i18n::tr("Elements without a description"),
@@ -276,6 +298,7 @@ fn rule_title(rule: &str) -> &'static str {
         "self_relation" => crate::i18n::tr("Relationships of an element to itself"),
         "duplicate_relation" => crate::i18n::tr("Duplicate relationships"),
         "invalid_relation" => crate::i18n::tr("Relationships not allowed by the rules"),
+        "archimate_relation" => crate::i18n::tr("Relationships not allowed in ArchiMate 3.2"),
         "empty_package" => crate::i18n::tr("Empty packages"),
         "empty_diagram" => crate::i18n::tr("Empty diagrams"),
         _ => crate::i18n::tr("other operations"),
@@ -283,9 +306,9 @@ fn rule_title(rule: &str) -> &'static str {
 }
 
 /// How serious the rule is: errors break the model, warnings lower its quality, info is worth a look.
-fn severity(rule: &str) -> &'static str {
+pub fn severity(rule: &str) -> &'static str {
     match rule {
-        "broken_connector" | "invalid_relation" | "required_tag" => "error",
+        "broken_connector" | "invalid_relation" | "archimate_relation" | "required_tag" => "error",
         "default_name" | "orphan" | "duplicate_name" | "naming" | "duplicate_relation" | "self_relation" => "warning",
         _ => "info",
     }
@@ -328,6 +351,60 @@ fn uml_problem(connector_type: &str, source_type: &str, target_type: &str) -> Op
         return Some(crate::i18n::fmt("{0} between {1} and {2}: a generalization connects elements of the same kind", &[connector_type.to_string(), source_type.to_string(), target_type.to_string()]));
     }
     None
+}
+
+/// ArchiMate element categories that the relationship rules depend on.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum ArchiCategory {
+    /// Business object, contract, representation, data object, artifact, material.
+    Passive,
+    /// Stakeholder, driver, assessment, goal, outcome, principle, requirement, constraint, meaning, value.
+    Motivation,
+    /// Every other ArchiMate element (active structure, behaviour, strategy, implementation, composite, junction).
+    Other,
+}
+
+/// The ArchiMate concept of a stereotype list: "ArchiMate_BusinessObject", "ArchiMate3::ArchiMate_Access" → "BusinessObject", "Access".
+fn archimate_concept(stereotype: &str) -> Option<String> {
+    stereotype.split(',').map(str::trim).find_map(|s| {
+        let s = s.rsplit("::").next().unwrap_or(s);
+        s.strip_prefix("ArchiMate_").map(String::from)
+    })
+}
+
+fn archimate_category(concept: &str) -> ArchiCategory {
+    match concept {
+        "BusinessObject" | "Contract" | "Representation" | "DataObject" | "Artifact" | "Material" => ArchiCategory::Passive,
+        "Stakeholder" | "Driver" | "Assessment" | "Goal" | "Outcome" | "Principle" | "Requirement" | "Constraint" | "Meaning" | "Value" => ArchiCategory::Motivation,
+        _ => ArchiCategory::Other,
+    }
+}
+
+/// A relationship that ArchiMate 3.2 does not allow between the concepts of its ends (only certain violations: derived
+/// relationships make most other combinations valid). None when the relationship or an end is not an ArchiMate concept.
+fn archimate_problem(connector_stereotype: &str, source_stereotype: &str, target_stereotype: &str) -> Option<String> {
+    let relation = archimate_concept(connector_stereotype)?;
+    let source = archimate_concept(source_stereotype)?;
+    let target = archimate_concept(target_stereotype)?;
+    if matches!(source.as_str(), "Junction" | "AndJunction" | "OrJunction" | "Grouping") || matches!(target.as_str(), "Junction" | "AndJunction" | "OrJunction" | "Grouping") {
+        return None;
+    }
+    use ArchiCategory::*;
+    let (s, t) = (archimate_category(&source), archimate_category(&target));
+    let message = match relation.as_str() {
+        "Access" if t != Passive => "an access relationship ends at a passive structure element (business object, data object, artifact…)",
+        "Access" if s != Other => "an access relationship starts at a behaviour or active structure element",
+        "Influence" if t != Motivation => "an influence relationship ends at a motivation element",
+        "Triggering" | "Flow" if s != Other || t != Other => "triggering and flow connect behaviour or active structure elements, not passive or motivation elements",
+        "Serving" | "UsedBy" if s != Other || t != Other => "a serving relationship connects behaviour or active structure elements, not passive or motivation elements",
+        "Assignment" if s != Other || t == Motivation || (t == Passive && target != "Artifact") => "an assignment goes from active structure to behaviour (or from a node to an artifact)",
+        "Specialization" if source != target => "a specialization connects two elements of the same type",
+        "Realization" | "Realisation" if s == Motivation && t != Motivation => "a motivation element can realize only another motivation element",
+        "Composition" | "Aggregation" if s == Motivation && t != Motivation => "a motivation element can be composed only of motivation elements",
+        "Composition" | "Aggregation" if s == Passive && t != Passive => "a passive structure element can be composed only of passive structure elements",
+        _ => return None,
+    };
+    Some(crate::i18n::fmt("ArchiMate: {0} {1} → {2}: {3}", &[relation, source, target, crate::i18n::tr(message).to_string()]))
 }
 
 /// Gap analysis: compares two packages (with subpackages) by element name and type.
@@ -532,6 +609,11 @@ pub fn check_object_with(cfg: &AppConfig, kind: &str, id: i64, rules: &Value) ->
             if let Some(problem) = uml_problem(&c[0], &c[5], &c[8]) {
                 out.push(crate::i18n::fmt("\"{0}\": {1}", &[label.clone(), problem]));
             }
+            if rules["archimate"].as_bool() != Some(false) {
+                if let Some(problem) = archimate_problem(&c[1], &c[6], &c[9]) {
+                    out.push(crate::i18n::fmt("\"{0}\": {1}", &[label.clone(), problem]));
+                }
+            }
             if c[2] == c[3] && !matches!(c[0].as_str(), "StateFlow" | "Sequence" | "Transition" | "SelfMessage") {
                 out.push(crate::i18n::fmt("\"{0}\": {1}", &[label.clone(), crate::i18n::fmt("{0} from the element to itself", &[kind.clone()])]));
             }
@@ -580,5 +662,41 @@ mod tests {
         assert!(!wildcard("*Service", "OrderController"));
         assert!(matches_selector("«ArchiMate_*»", "Component", "ArchiMate_ApplicationComponent"));
         assert!(!matches_selector("Class", "Component", ""));
+    }
+
+    #[test]
+    fn archimate_relationships() {
+        let bad = |r: &str, s: &str, t: &str| archimate_problem(&format!("ArchiMate_{r}"), &format!("ArchiMate_{s}"), &format!("ArchiMate_{t}")).is_some();
+        // Valid relationships of the standard.
+        assert!(!bad("Access", "BusinessProcess", "BusinessObject"));
+        assert!(!bad("Access", "ApplicationComponent", "DataObject"));
+        assert!(!bad("Serving", "ApplicationService", "BusinessProcess"));
+        assert!(!bad("Assignment", "BusinessActor", "BusinessRole"));
+        assert!(!bad("Assignment", "Node", "Artifact"));
+        assert!(!bad("Realization", "Artifact", "ApplicationComponent"));
+        assert!(!bad("Realization", "DataObject", "BusinessObject"));
+        assert!(!bad("Realization", "ApplicationComponent", "Requirement"));
+        assert!(!bad("Realization", "Outcome", "Goal"));
+        assert!(!bad("Influence", "Driver", "Goal"));
+        assert!(!bad("Triggering", "BusinessEvent", "BusinessProcess"));
+        assert!(!bad("Aggregation", "BusinessObject", "BusinessObject"));
+        assert!(!bad("Aggregation", "Grouping", "DataObject"));
+        assert!(!bad("Association", "Goal", "DataObject"));
+        assert!(!bad("Flow", "Junction", "DataObject"));
+        // Violations.
+        assert!(bad("Access", "BusinessProcess", "BusinessActor"));
+        assert!(bad("Access", "DataObject", "BusinessObject"));
+        assert!(bad("Influence", "Goal", "ApplicationComponent"));
+        assert!(bad("Triggering", "BusinessObject", "BusinessProcess"));
+        assert!(bad("Flow", "BusinessProcess", "Goal"));
+        assert!(bad("Serving", "DataObject", "BusinessProcess"));
+        assert!(bad("Assignment", "BusinessObject", "BusinessProcess"));
+        assert!(bad("Assignment", "BusinessActor", "BusinessObject"));
+        assert!(bad("Specialization", "BusinessActor", "BusinessRole"));
+        assert!(bad("Realization", "Goal", "ApplicationComponent"));
+        assert!(bad("Composition", "BusinessObject", "BusinessProcess"));
+        // Not ArchiMate: nothing to say; a fully qualified stereotype works too.
+        assert!(archimate_problem("", "ArchiMate_DataObject", "ArchiMate_BusinessActor").is_none());
+        assert!(archimate_problem("ArchiMate3::ArchiMate_Access", "ArchiMate3::ArchiMate_BusinessProcess", "ArchiMate3::ArchiMate_BusinessActor").is_some());
     }
 }

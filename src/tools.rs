@@ -758,13 +758,7 @@ fn trace_requirements(input: &Value, ctx: &ToolContext) -> Result<String> {
     let text = if let Some(file) = input["file"].as_str().filter(|f| !f.trim().is_empty()) {
         let path = std::path::Path::new(file.trim());
         let path = if path.is_file() { path.to_path_buf() } else { ctx.cfg.attachments_dir.join(file.trim()) };
-        if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("docx")) {
-            crate::traceability::docx_text(&path)?
-        } else if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("html") || e.eq_ignore_ascii_case("htm")) {
-            crate::traceability::html_text(&std::fs::read_to_string(&path)?)
-        } else {
-            std::fs::read_to_string(&path).with_context(|| crate::i18n::fmt("cannot read {0}", &[path.display().to_string()]))?
-        }
+        crate::traceability::read_document(&path)?
     } else if let Some(page) = input["confluence_page"].as_str().filter(|p| !p.trim().is_empty()) {
         if ctx.cfg.confluence_url.trim().is_empty() {
             bail!("{}", crate::i18n::tr("Confluence is not configured in the settings"));
@@ -776,7 +770,8 @@ fn trace_requirements(input: &Value, ctx: &ToolContext) -> Result<String> {
         input["text"].as_str().filter(|t| !t.trim().is_empty()).with_context(|| crate::i18n::tr("give 'file', 'confluence_page' or 'text'"))?.to_string()
     };
     let requirements = crate::traceability::extract(&text);
-    crate::traceability::trace(ctx.cfg, &requirements, input["package"].as_i64())
+    let code = input["code"].as_str().map(str::trim).filter(|c| !c.is_empty()).map(std::path::Path::new);
+    crate::traceability::trace_with_code(ctx.cfg, &requirements, input["package"].as_i64(), code)
 }
 
 /// EA scripts: list, read, save (approved like a write) and run (approved every time).

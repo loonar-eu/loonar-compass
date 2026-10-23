@@ -3,6 +3,7 @@
 //! All configuration is in the "Settings" window: `app.properties` plus secrets in Windows Credential Manager.
 //! Attachments: drag files from Explorer and the browser; limit 10 MB per file, 5 files per message.
 
+mod check;
 mod claude;
 mod com;
 mod confluence;
@@ -560,6 +561,10 @@ fn main() -> eframe::Result {
             Err(e) => format!("error: {e:#}"),
         });
         std::process::exit(if result.is_ok() { 0 } else { 1 });
+    }
+    // Check mode for CI pipelines: `--check …` (report on the standard output, exit code 0 / 1 / 2).
+    if args.iter().any(|a| a == "--check") {
+        std::process::exit(check::run(&args, &props_path));
     }
     // Team hub without a window: `--hub <hub.json>` (log in hub.log next to hub.json).
     if let Some(file) = args.iter().position(|a| a == "--hub").and_then(|i| args.get(i + 1)) {

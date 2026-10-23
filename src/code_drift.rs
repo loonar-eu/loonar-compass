@@ -9,9 +9,9 @@ use anyhow::{bail, Result};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 
-const SKIP_DIRS: &[&str] = &["node_modules", "target", "build", "dist", ".git", ".idea", "bin", "obj", "out", "vendor", "__pycache__", ".gradle", "coverage"];
-const MAX_FILES: usize = 20_000;
-const MAX_FILE_BYTES: u64 = 1_000_000;
+pub const SKIP_DIRS: &[&str] = &["node_modules", "target", "build", "dist", ".git", ".idea", "bin", "obj", "out", "vendor", "__pycache__", ".gradle", "coverage"];
+pub const MAX_FILES: usize = 20_000;
+pub const MAX_FILE_BYTES: u64 = 1_000_000;
 
 #[derive(Default, Debug)]
 pub struct CodeModel {
@@ -224,12 +224,59 @@ fn scan_sql(text: &str, model: &mut CodeModel) {
     }
 }
 
-fn norm(name: &str) -> String {
+pub fn norm(name: &str) -> String {
     name.to_lowercase().replace(['_', '-', ' '], "")
+}
+
+/// Model ↔ code differences as data (for the report and the check mode).
+pub struct Drift {
+    pub files: usize,
+    pub types: usize,
+    pub tables: usize,
+    pub operations: usize,
+    pub only_code: Vec<String>,
+    pub only_model: Vec<String>,
+    pub differences: Vec<String>,
+    pub table_differences: Vec<String>,
+    pub api_missing: Vec<String>,
+}
+
+impl Drift {
+    /// Number of differences of all kinds.
+    pub fn count(&self) -> usize {
+        self.only_code.len() + self.only_model.len() + self.differences.len() + self.table_differences.len() + self.api_missing.len()
+    }
+
+    /// The sections of the report: (title, items).
+    pub fn sections(&self) -> Vec<(&'static str, &Vec<String>)> {
+        vec![
+            (crate::i18n::tr("In the code, not in the model"), &self.only_code),
+            (crate::i18n::tr("In the model, not in the code"), &self.only_model),
+            (crate::i18n::tr("Different fields (code vs model attributes)"), &self.differences),
+            (crate::i18n::tr("Database tables"), &self.table_differences),
+            (crate::i18n::tr("API operations (OpenAPI operationId) not in the model"), &self.api_missing),
+        ]
+    }
 }
 
 /// The drift report.
 pub fn compare(cfg: &AppConfig, root: &Path, package: Option<i64>) -> Result<String> {
+    let d = drift(cfg, root, package)?;
+    let mut out = vec![crate::i18n::fmt(
+        "Model ↔ code: {0} source files; in the code {1} types, {2} tables, {3} API operations. Types only in the code: {4}; only in the model: {5}; field differences: {6}; table differences: {7}; API operations missing in the model: {8}.",
+        &[d.files.to_string(), d.types.to_string(), d.tables.to_string(), d.operations.to_string(), d.only_code.len().to_string(), d.only_model.len().to_string(), d.differences.len().to_string(), d.table_differences.len().to_string(), d.api_missing.len().to_string()],
+    )];
+    for (title, items) in d.sections() {
+        if !items.is_empty() {
+            out.push(format!("\n## {title}"));
+            out.extend(items.iter().take(200).cloned());
+        }
+    }
+    Ok(out.join("\n"))
+}
+
+/// Model ↔ code differences of a source folder and the model (or one package with subpackages).
+pub fn drift(cfg: &AppConfig, root: &Path, package: Option<i64>) -> Result<Drift> {
     let code = scan(root)?;
     let filter = match package {
         Some(p) => {
@@ -301,23 +348,18 @@ pub fn compare(cfg: &AppConfig, root: &Path, package: Option<i64>) -> Result<Str
             }
         }
     }
-    let api_missing: Vec<&String> = code.operations.iter().filter(|o| !model_operations.contains(&norm(o))).collect();
-    let mut out = vec![crate::i18n::fmt(
-        "Model ↔ code: {0} source files; in the code {1} types, {2} tables, {3} API operations. Types only in the code: {4}; only in the model: {5}; field differences: {6}; table differences: {7}; API operations missing in the model: {8}.",
-        &[code.files.to_string(), code.types.len().to_string(), code.tables.len().to_string(), code.operations.len().to_string(), only_code.len().to_string(), only_model.len().to_string(), differences.len().to_string(), tables.len().to_string(), api_missing.len().to_string()],
-    )];
-    let mut section = |title: &str, items: Vec<String>| {
-        if !items.is_empty() {
-            out.push(format!("\n## {title}"));
-            out.extend(items.into_iter().take(200));
-        }
-    };
-    section(crate::i18n::tr("In the code, not in the model"), only_code);
-    section(crate::i18n::tr("In the model, not in the code"), only_model);
-    section(crate::i18n::tr("Different fields (code vs model attributes)"), differences);
-    section(crate::i18n::tr("Database tables"), tables);
-    section(crate::i18n::tr("API operations (OpenAPI operationId) not in the model"), api_missing.into_iter().cloned().collect());
-    Ok(out.join("\n"))
+    let api_missing: Vec<String> = code.operations.iter().filter(|o| !model_operations.contains(&norm(o))).cloned().collect();
+    Ok(Drift {
+        files: code.files,
+        types: code.types.len(),
+        tables: code.tables.len(),
+        operations: code.operations.len(),
+        only_code,
+        only_model,
+        differences,
+        table_differences: tables,
+        api_missing,
+    })
 }
 
 pub fn definition() -> serde_json::Value {
