@@ -83,6 +83,7 @@ pub fn definitions() -> Value {
         items.push(crate::scripts::definition());
         items.push(crate::traceability::definition());
         items.push(crate::code_drift::definition());
+        items.push(crate::undo::definition());
         items.push(json!({
             "name": "propose_change",
             "description": "Proposes a change of the model to the team instead of saving it: the operations (as for ea_write) with a summary and a before → after preview \
@@ -565,6 +566,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "ea_script" => ea_script(input, ctx).map(Into::into),
         "trace_requirements" => trace_requirements(input, ctx).map(Into::into),
         "propose_change" => propose_change(input, ctx).map(Into::into),
+        "undo_change" => undo_change(input, ctx).map(Into::into),
         "change_sets" => change_sets(input, ctx).map(Into::into),
         "code_drift" => crate::code_drift::compare(ctx.cfg, std::path::Path::new(input["path"].as_str().unwrap_or("").trim()), input["package"].as_i64()).map(Into::into),
         "spell_check" => crate::model_spell::check(ctx.cfg, input["package"].as_i64(), crate::i18n::current().code()).map(Into::into),
@@ -645,6 +647,47 @@ pub fn page_images_dir(attachments_dir: &std::path::Path, stored_page: &str) -> 
 }
 
 /// Confluence page: source (.confluence.md), page code for the source editor (.confluence.xml) and images in a folder next to them.
+/// Undoes the latest saves of the assistant (reverse operations from the journal).
+fn undo_change(input: &Value, ctx: &ToolContext) -> Result<String> {
+    if input["action"].as_str() != Some("undo") {
+        return crate::undo::list_text(ctx.cfg);
+    }
+    let count = input["count"].as_u64().unwrap_or(1).clamp(1, 20) as usize;
+    let entries = crate::undo::latest(ctx.cfg, count);
+    if entries.is_empty() {
+        bail!("{}", crate::i18n::tr("there is nothing to undo in this model"));
+    }
+    let summary: Vec<String> = entries.iter().map(|e| format!("- {} {}", e["time"].as_str().unwrap_or("").get(..19).unwrap_or("").replace('T', " "), e["summary"].as_str().unwrap_or("").replace('\n', "; "))).collect();
+    ctx.approver.confirm_risky(&crate::i18n::fmt("Undo the latest saves of the assistant ({0}):\n{1}", &[entries.len().to_string(), summary.join("\n")]))?;
+    let mut out = Vec::new();
+    let mut undone = Vec::new();
+    for e in &entries {
+        let ops: Vec<Value> = e["reverse"].as_array().cloned().unwrap_or_default();
+        let label = e["summary"].as_str().unwrap_or("").replace('\n', "; ");
+        if !ops.is_empty() {
+            match ea::run_batch(ctx.cfg, &ops, &BatchOptions::default()) {
+                Ok(done) => {
+                    let check = crate::verify::verify(ctx.cfg, &ops, &done);
+                    out.push(if check.problems.is_empty() { format!("Undone and verified: {label}") } else { format!("Undone, but the model differs: {label}: {}", check.problems.join("; ")) });
+                }
+                Err(err) => {
+                    out.push(format!("COULD NOT undo: {label}: {err:#}"));
+                    break;
+                }
+            }
+        }
+        let rest: Vec<&str> = e["not_undoable"].as_array().into_iter().flatten().filter_map(|v| v.as_str()).collect();
+        if !rest.is_empty() {
+            let baselines: Vec<&str> = e["baselines"].as_array().into_iter().flatten().filter_map(|v| v.as_str()).collect();
+            out.push(format!("Not undone by operations ({}){}", rest.join(", "), if baselines.is_empty() { String::new() } else { format!(" - restore the EA baseline: {} (package → Manage Baselines → Restore)", baselines.join("; ")) }));
+        }
+        undone.push(e["id"].as_str().unwrap_or("").to_string());
+    }
+    crate::undo::mark_undone(ctx.cfg, &undone);
+    refresh_user_ea(ctx.cfg, &[], &json!({}));
+    Ok(out.join("\n"))
+}
+
 fn hub_client(cfg: &AppConfig) -> Result<crate::hub::Client> {
     crate::hub::Client::from_config(cfg).with_context(|| crate::i18n::tr("no team hub in the settings (Settings → Team (Compass Hub))"))
 }
@@ -1248,8 +1291,21 @@ fn ea_write(input: &Value, ctx: &ToolContext) -> Result<String> {
         ctx.approver.confirm_destructive(&format!("{summary}\n\n{}", destructive.join("\n")))?;
     }
 
+    // Time machine: what reverses this save, read before it; a baseline of the packages a deletion touches.
+    let (reverse, not_undoable) = crate::undo::before(ctx.cfg, ops);
+    let mut baselines = Vec::new();
+    for package in crate::undo::packages_to_baseline(ctx.cfg, ops) {
+        let version = format!("Compass {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"));
+        let made = ea::run_batch(ctx.cfg, &[json!({ "op": "create_baseline", "package": package, "version": version, "notes": crate::i18n::tr("Made by Compass before a change that cannot be undone by operations") })], &BatchOptions::default());
+        if made.is_ok() {
+            baselines.push(format!("package {package}: {version}"));
+        }
+    }
     let result = ea::run_batch(ctx.cfg, ops, &BatchOptions::default());
     audit(ctx.cfg, ops, &result);
+    if let Ok(done) = &result {
+        crate::undo::record(ctx.cfg, &ea::describe(ops), done, reverse, not_undoable, baselines.clone());
+    }
     if let Ok(done) = &result {
         refresh_user_ea(ctx.cfg, ops, done);
     }

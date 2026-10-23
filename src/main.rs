@@ -33,6 +33,7 @@ mod agents;
 mod model_spell;
 mod traceability;
 mod code_drift;
+mod undo;
 mod templates;
 mod tools;
 mod window;
@@ -3911,6 +3912,7 @@ fn tool_step(name: &str, input: &Value) -> String {
         "jira_search" => crate::i18n::fmt("Jira search: {0}", &[input["jql"].as_str().unwrap_or("").to_string()]),
         "spell_check" => crate::i18n::tr("Spelling of the model's texts").to_string(),
         "trace_requirements" => crate::i18n::tr("Requirements of the document against the model").to_string(),
+        "undo_change" => crate::i18n::fmt("Time machine: {0}", &[input["action"].as_str().unwrap_or("list").to_string()]),
         "propose_change" => crate::i18n::fmt("Change set for the team: {0}", &[input["title"].as_str().unwrap_or("").to_string()]),
         "change_sets" => crate::i18n::fmt("Team change sets: {0} {1}", &[input["action"].as_str().unwrap_or("list").to_string(), input["id"].as_str().unwrap_or("").to_string()]),
         "code_drift" => crate::i18n::fmt("Model against the code in {0}", &[input["path"].as_str().unwrap_or("").to_string()]),
@@ -6089,6 +6091,59 @@ mod tests {
         assert_eq!(in_model, "1");
         assert_eq!(status, "applied");
         assert!(shown.contains("Looks good") && shown.contains("decided by ola"));
+    }
+
+    /// Time machine: a change is undone to the previous values, a creation is undone by deleting, a deletion gets an EA
+    /// baseline first. LOONAR_TEST_PROPS = a test model. Run with: `cargo test undo_time_machine -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "requires EA and a test model"]
+    fn undo_time_machine() {
+        i18n::set(i18n::Lang::En);
+        let mut cfg = AppConfig::load(Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).unwrap();
+        let dir = std::env::temp_dir().join(format!("loonar-undo-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        cfg.base_dir = dir.clone();
+        cfg.hub_url = String::new();
+        let approver = tools::Approver::new(ApprovalMode::Auto, Box::new(|_| true));
+        let ctx = tools::ToolContext { cfg: &cfg, approver: &approver };
+        let q = |sql: &str| tools::query_rows(&cfg, sql).expect(sql);
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id limit 1")[0][0].parse().unwrap();
+        let name = format!("ZZ_undo_{}", chrono::Local::now().format("%H%M%S"));
+        let w = |ops: Value| tools::run("ea_write", &json!({ "ops": ops }), &ctx).map(|o| o.text);
+        w(json!([
+            {"op":"create_package","key":"p","parent":root,"name":name},
+            {"op":"create_element","key":"a","package":"#p","name":"Alpha","type":"Class","notes":"first","tags":{"Owner":"Team A"}},
+            {"op":"create_element","key":"b","package":"#p","name":"Beta","type":"Class"},
+            {"op":"create_connector","source":"#a","target":"#b","type":"Association"}
+        ])).expect("create");
+        let pkg: i64 = q(&format!("select package_id from t_package where name = '{name}'"))[0][0].parse().unwrap();
+        let alpha: i64 = q(&format!("select object_id from t_object where package_id = {pkg} and name = 'Alpha'"))[0][0].parse().unwrap();
+        w(json!([{"op":"update_element","element":alpha,"name":"Alpha2","notes":"second","stereotype":"entity","tags":{"Owner":"Team B","Extra":"x"}}])).expect("update");
+        let state = || q(&format!("select name, coalesce(note,''), coalesce(stereotype,''), (select coalesce(value,'') from t_objectproperties where object_id = {alpha} and property = 'Owner'), (select count(*) from t_objectproperties where object_id = {alpha} and property = 'Extra') from t_object where object_id = {alpha}"))[0].clone();
+        let changed = state();
+        let listed = tools::run("undo_change", &json!({"action":"list"}), &ctx).unwrap().text;
+        let undo1 = tools::run("undo_change", &json!({"action":"undo"}), &ctx).map(|o| o.text);
+        let restored = state();
+        let undo2 = tools::run("undo_change", &json!({"action":"undo"}), &ctx).map(|o| o.text);
+        let left = q(&format!("select count(*) from t_package where package_id = {pkg}"))[0][0].clone();
+        // A deletion: a baseline first, and it is reported as not undoable by operations.
+        w(json!([{"op":"create_package","key":"p","parent":root,"name":format!("{name}_del")},{"op":"create_element","key":"c","package":"#p","name":"Gamma","type":"Class"}])).expect("create 2");
+        let pkg2: i64 = q(&format!("select package_id from t_package where name = '{name}_del'"))[0][0].parse().unwrap();
+        let gamma: i64 = q(&format!("select object_id from t_object where package_id = {pkg2}"))[0][0].parse().unwrap();
+        w(json!([{"op":"delete","element":gamma}])).expect("delete");
+        let baselines = q(&format!("select count(*) from t_document where doctype = 'Baseline' and elementid = (select ea_guid from t_package where package_id = {pkg2})"))[0][0].clone();
+        let undo3 = tools::run("undo_change", &json!({"action":"undo"}), &ctx).map(|o| o.text);
+        ea::run_batch(&cfg, &[json!({"op":"delete","package":pkg2})], &ea::BatchOptions::default()).ok();
+        ea::shutdown();
+        let _ = std::fs::remove_dir_all(&dir);
+        println!("changed {changed:?}\nrestored {restored:?}\n{listed}\nundo1 {undo1:?}\nundo2 {undo2:?}\npackage left {left}\nbaselines {baselines}\nundo3 {undo3:?}");
+        assert_eq!(changed, vec!["Alpha2", "second", "entity", "Team B", "1"]);
+        assert_eq!(restored, vec!["Alpha", "first", "", "Team A", "0"], "the change is undone to the previous values");
+        assert!(undo1.unwrap().contains("Undone and verified"));
+        assert!(undo2.unwrap().contains("Undone and verified"));
+        assert_eq!(left, "0", "the created package is deleted");
+        assert_eq!(baselines, "1", "a baseline before the deletion");
+        assert!(undo3.unwrap().contains("Manage Baselines"), "the deletion points to the baseline");
     }
 
     /// Settings tests (the same ones the "Save and test" buttons run) on the saved configuration.

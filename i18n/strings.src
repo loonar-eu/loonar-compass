@@ -1327,3 +1327,7 @@ change set {0} is for the model {1}, not for this one ‖ zestaw zmian {0} dotyc
 unknown change_sets action: {0} ‖ nieznana akcja change_sets: {0} ‖ unbekannte change_sets-Aktion: {0} ‖ action change_sets inconnue : {0}
 Change set for the team: {0} ‖ Zestaw zmian dla zespołu: {0} ‖ Änderungssatz für das Team: {0} ‖ Ensemble de modifications pour l'équipe : {0}
 Team change sets: {0} {1} ‖ Zestawy zmian zespołu: {0} {1} ‖ Änderungssätze des Teams: {0} {1} ‖ Ensembles de modifications de l'équipe : {0} {1}
+Made by Compass before a change that cannot be undone by operations ‖ Utworzony przez Compass przed zmianą, której nie da się cofnąć operacjami ‖ Von Compass vor einer Änderung erstellt, die sich nicht durch Operationen rückgängig machen lässt ‖ Créé par Compass avant une modification qui ne peut pas être annulée par des opérations
+there is nothing to undo in this model ‖ w tym modelu nie ma nic do cofnięcia ‖ in diesem Modell gibt es nichts rückgängig zu machen ‖ il n'y a rien à annuler dans ce modèle
+Undo the latest saves of the assistant ({0}):\n{1} ‖ Cofnąć ostatnie zapisy asystenta ({0}):\n{1} ‖ Die letzten Speicherungen des Assistenten rückgängig machen ({0}):\n{1} ‖ Annuler les derniers enregistrements de l'assistant ({0}) :\n{1}
+Time machine: {0} ‖ Wehikuł czasu: {0} ‖ Zeitmaschine: {0} ‖ Machine à remonter le temps : {0}
