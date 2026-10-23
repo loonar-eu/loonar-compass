@@ -29,6 +29,7 @@ mod hub;
 mod verify;
 mod mcp_client;
 mod scripts;
+mod agents;
 mod templates;
 mod tools;
 mod window;
@@ -657,6 +658,8 @@ struct Form {
     hub_token: String,
     /// Content of mcp_servers.json, edited on the "MCP servers" card.
     mcp_json: String,
+    /// Content of event_agents.json ("Event agents" card).
+    agents_json: String,
     miro_token: String,
     ui_language: String,
 }
@@ -693,6 +696,7 @@ impl Form {
             hub_url: c.hub_url.clone(),
             hub_source: c.hub_source.clone(),
             mcp_json: std::fs::read_to_string(mcp_client::config_file(&c.base_dir)).unwrap_or_default(),
+            agents_json: std::fs::read_to_string(agents::config_file(&c.base_dir)).unwrap_or_default(),
             ui_language: c.ui_language.clone(),
             ..Default::default()
         }
@@ -828,9 +832,11 @@ struct App {
     /// Conversations in which the assistant finished working in the background and the user has not looked at yet (conversation ids).
     unseen: std::collections::HashSet<String>,
     /// Result of the last save and test of each of the four settings groups.
-    group_status: [GroupStatus; 9],
+    group_status: [GroupStatus; 10],
     /// Findings of the live model check already shown in EA (not repeated).
     live_reported: Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
+    /// When each event agent last ran for an object (not more than once a minute).
+    agent_runs: Arc<std::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>>,
     /// Channel through which settings tests (run in the background) return their result: group number and message.
     settings_tx: mpsc::Sender<(usize, Result<String, String>)>,
     settings_rx: mpsc::Receiver<(usize, Result<String, String>)>,
@@ -1015,6 +1021,7 @@ impl App {
             unseen: std::collections::HashSet::new(),
             group_status: Default::default(),
             live_reported: Default::default(),
+            agent_runs: Default::default(),
             settings_tx,
             settings_rx,
         }
@@ -2170,6 +2177,12 @@ impl App {
                     self.form.miro_token.clear();
                 }
             }
+            GROUP_AGENTS => {
+                let text = f.agents_json.trim().to_string();
+                agents::parse(&text)?;
+                let base = self.cfg.as_ref().map(|c| c.base_dir.clone()).context("settings")?;
+                std::fs::write(agents::config_file(&base), text).context(crate::i18n::tr("could not save event_agents.json"))?;
+            }
             GROUP_MCP => {
                 let text = f.mcp_json.trim().to_string();
                 if !text.is_empty() {
@@ -2860,6 +2873,20 @@ impl App {
             self.group_footer(ui, &ctx2, GROUP_JIRA, crate::i18n::tr("Save and test Jira connection"));
         });
         ui.add_space(12.0);
+        settings_group(ui, crate::i18n::tr("Event agents (Compass in EA)"), inner_width * 2.0 + 44.0, |ui| {
+            ui.add(egui::Label::new(
+                egui::RichText::new(crate::i18n::tr("Rules for the assistant to react to what happens in EA while Compass is open in its tab: a new element, a changed element, a new relationship or diagram. The assistant reads the model and answers in the \"Loonar Compass\" tab of System Output; it does not change the model on its own. \"applies_to\": an element type, «stereotype» or * (wildcards * ?)."))
+                .color(theme::MUTED),
+            ).wrap());
+            ui.add_space(6.0);
+            if self.form.agents_json.trim().is_empty() {
+                ui.label(egui::RichText::new(crate::i18n::tr("Example:")).small().color(theme::MUTED));
+                ui.label(egui::RichText::new("{\"agents\": [\n  {\"name\": \"Component owner\", \"event\": \"element_created\", \"applies_to\": \"Component\",\n   \"prompt\": \"Check that the new component has an owner and a description; suggest what to fill in.\"},\n  {\"name\": \"Flows\", \"event\": \"connector_created\", \"applies_to\": \"ControlFlow\", \"prompt\": \"Does this flow make sense in the process?\"}\n]}").small().monospace().color(theme::MUTED));
+            }
+            ui.add(egui::TextEdit::multiline(&mut self.form.agents_json).code_editor().desired_rows(6).desired_width(f32::INFINITY));
+            self.group_footer(ui, &ctx2, GROUP_AGENTS, crate::i18n::tr("Save event agents"));
+        });
+        ui.add_space(12.0);
         settings_group(ui, crate::i18n::tr("MCP servers"), inner_width * 2.0 + 44.0, |ui| {
             ui.add(egui::Label::new(
                 egui::RichText::new(crate::i18n::tr("Your own MCP servers give the assistant extra tools (e.g. a ticket system, a repository, a company knowledge base, a Compass Hub). A local program: \"command\" and \"args\"; a server over HTTP: \"url\" and \"headers\". Tokens can come from Credential Manager or the environment: ${secret:name}, ${env:NAME}. A tool that is not read-only asks for your consent before each call, unless the server has \"trusted\": true."))
@@ -3427,6 +3454,7 @@ const GROUP_MIRO: usize = 5;
 const GROUP_JIRA: usize = 6;
 const GROUP_HUB: usize = 7;
 const GROUP_MCP: usize = 8;
+const GROUP_AGENTS: usize = 9;
 
 /// "Send to Miro" window: the diagram, the board, and where on the board the frame goes (shown on a thumbnail
 /// of the board, where the user can move it).
@@ -3740,6 +3768,10 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
             let boards = miro::Client::new(&token)?.check()?;
             Ok(crate::i18n::fmt("Saved. Connected to Miro: boards available: {0}.", &[boards.to_string()]))
         }
+        GROUP_AGENTS => {
+            let n = agents::load(&cfg.base_dir).len();
+            Ok(crate::i18n::fmt("Saved. Event agents: {0}. They work while Compass is open in a tab of EA.", &[n.to_string()]))
+        }
         GROUP_MCP => {
             let result = mcp_client::check(&cfg.base_dir)?;
             Ok(crate::i18n::fmt("Saved. {0}", &[result]))
@@ -3889,6 +3921,25 @@ fn tool_step(name: &str, input: &Value) -> String {
         }
         other => crate::i18n::fmt("Tool {0}", &[(other).to_string()]),
     }
+}
+
+/// One answer of an event agent: a conversation of one message, reading tools only (a write is refused: nobody is
+/// there to approve it). Returns the assistant's text.
+fn run_agent(cfg: &AppConfig, prompt: &str) -> anyhow::Result<String> {
+    let messages = vec![Message { role: "user".into(), text: prompt.into(), attachments: vec![], created: chrono::Utc::now().to_rfc3339() }];
+    let approver = tools::Approver::new(ApprovalMode::Ask, Box::new(|_| false));
+    let (_tx, inbox) = mpsc::channel();
+    let cancel = AtomicBool::new(false);
+    let answer = std::sync::Mutex::new(String::new());
+    let emit = |event: WorkerEvent| {
+        if let WorkerEvent::Text(text) = event {
+            let mut a = answer.lock().unwrap();
+            a.clear();
+            a.push_str(&text);
+        }
+    };
+    run_turn(cfg, &messages, &approver, &inbox, &cancel, &emit)?;
+    Ok(answer.into_inner().unwrap())
 }
 
 /// Result of a tool in the step list. Tool results are written for the model in English; in English the start of
@@ -4564,8 +4615,38 @@ impl eframe::App for App {
             if !events.is_empty() {
                 if let Some(cfg) = self.cfg.clone() {
                     let reported = self.live_reported.clone();
+                    let agent_runs = self.agent_runs.clone();
                     std::thread::spawn(move || {
+                        let agents = agents::load(&cfg.base_dir);
                         for (kind, id) in events {
+                            // Event agents (AI): advice in System Output; the same agent and object at most once a minute.
+                            if !agents.is_empty() {
+                                let event = agents::event_of(&kind);
+                                if let Some((object, object_type, stereotype)) = agents::describe(&cfg, &kind, id) {
+                                    for agent in agents::matching(&agents, event, &object_type, &stereotype) {
+                                        let key = format!("{}:{kind}:{id}", agent.name);
+                                        {
+                                            let mut runs = agent_runs.lock().unwrap();
+                                            if runs.get(&key).is_some_and(|t: &std::time::Instant| t.elapsed() < std::time::Duration::from_secs(60)) {
+                                                continue;
+                                            }
+                                            runs.insert(key, std::time::Instant::now());
+                                        }
+                                        ea_ui::output(&crate::i18n::fmt("🤖 {0}: {1}…", &[agent.name.clone(), object.clone()]));
+                                        match run_agent(&cfg, &agents::prompt_for(agent, event, &object)) {
+                                            Ok(answer) => {
+                                                for line in answer.lines().filter(|l| !l.trim().is_empty()).take(8) {
+                                                    ea_ui::output(&format!("🤖 {}: {}", agent.name, line.trim()));
+                                                }
+                                            }
+                                            Err(e) => ea_ui::output(&crate::i18n::fmt("🤖 {0}: error - {1}", &[agent.name.clone(), format!("{e:#}")])),
+                                        }
+                                    }
+                                }
+                            }
+                            if kind != "element" && kind != "connector" {
+                                continue;
+                            }
                             match governance::check_object(&cfg, &kind, id) {
                                 Ok(findings) => {
                                     ea_ui::debug(&format!("live check {kind} {id}: {} findings", findings.len()));

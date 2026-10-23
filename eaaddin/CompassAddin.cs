@@ -32,6 +32,20 @@ namespace LoonarCompass
             return "";
         }
 
+        /// <summary>A new element in EA: for event agents (Compass in the tab). Nothing is changed here.</summary>
+        public bool EA_OnPostNewElement(object repository, object info)
+        {
+            Pass("new_element", info, "ElementID");
+            return false;
+        }
+
+        /// <summary>A new diagram in EA: for event agents.</summary>
+        public bool EA_OnPostNewDiagram(object repository, object info)
+        {
+            Pass("new_diagram", info, "DiagramID");
+            return false;
+        }
+
         /// <summary>A relationship drawn in EA: Compass checks it by the model rules (System Output). Nothing is changed here.</summary>
         public bool EA_OnPostNewConnector(object repository, object info)
         {

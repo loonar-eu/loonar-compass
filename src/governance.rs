@@ -97,6 +97,11 @@ fn matches_selector(selector: &str, object_type: &str, stereotype: &str) -> bool
     wildcard(s, object_type) || (!stereotype.is_empty() && stereotype.split(',').any(|st| wildcard(s, st.trim())))
 }
 
+/// Rule selector for other modules (event agents): "Class", "«stereotype»", wildcards, "*".
+pub fn selector_matches(selector: &str, object_type: &str, stereotype: &str) -> bool {
+    matches_selector(selector, object_type, stereotype)
+}
+
 /// The organization's rules: `governance.json` next to the settings, overridden by the rules given in the call.
 pub fn load_rules(cfg: &AppConfig, given: &Value) -> Value {
     if given.is_object() {
