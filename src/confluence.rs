@@ -358,6 +358,14 @@ impl Connection {
         Ok(serde_json::from_str(&text).unwrap_or(Value::Null))
     }
 
+    /// Title and storage-format body of a page (for reading requirements from it).
+    pub fn page_body(&self, page_id: &str) -> Result<(String, String)> {
+        check_page_id(page_id.trim())?;
+        let client = self.client()?;
+        let page = self.send(client.get(self.url(&format!("/rest/api/content/{}?expand=body.storage", page_id.trim()))), crate::i18n::tr("reading the page"))?;
+        Ok((page["title"].as_str().unwrap_or("").to_string(), page["body"]["storage"]["value"].as_str().unwrap_or("").to_string()))
+    }
+
     /// Connection check: the space exists and the token has access to it. Returns the space name.
     pub fn check(&self, space: &str) -> Result<String> {
         let client = self.client()?;

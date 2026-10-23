@@ -81,6 +81,7 @@ pub fn definitions() -> Value {
     let mut list = definitions_core();
     if let Some(items) = list.as_array_mut() {
         items.push(crate::scripts::definition());
+        items.push(crate::traceability::definition());
         items.push(json!({
             "name": "spell_check",
             "description": "Spelling of the model's texts in the language of the conversation (the language of Compass), with the Windows dictionary: \
@@ -541,6 +542,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "impact_analysis" => impact_analysis(input, ctx.cfg).map(Into::into),
         "model_lint" => crate::governance::lint(input, ctx.cfg).map(Into::into),
         "ea_script" => ea_script(input, ctx).map(Into::into),
+        "trace_requirements" => trace_requirements(input, ctx).map(Into::into),
         "spell_check" => crate::model_spell::check(ctx.cfg, input["package"].as_i64(), crate::i18n::current().code()).map(Into::into),
         "jira_search" => jira(ctx.cfg)?.search(input["jql"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["jql".to_string()]))?, input["max"].as_u64().unwrap_or(30) as usize).map(Into::into),
         "jira_issue" => jira(ctx.cfg)?.issue(input["key"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["key".to_string()]))?.trim()).map(Into::into),
@@ -619,6 +621,32 @@ pub fn page_images_dir(attachments_dir: &std::path::Path, stored_page: &str) -> 
 }
 
 /// Confluence page: source (.confluence.md), page code for the source editor (.confluence.xml) and images in a folder next to them.
+/// Requirements of a document (file, Confluence page or text) matched with the model.
+fn trace_requirements(input: &Value, ctx: &ToolContext) -> Result<String> {
+    let text = if let Some(file) = input["file"].as_str().filter(|f| !f.trim().is_empty()) {
+        let path = std::path::Path::new(file.trim());
+        let path = if path.is_file() { path.to_path_buf() } else { ctx.cfg.attachments_dir.join(file.trim()) };
+        if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("docx")) {
+            crate::traceability::docx_text(&path)?
+        } else if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("html") || e.eq_ignore_ascii_case("htm")) {
+            crate::traceability::html_text(&std::fs::read_to_string(&path)?)
+        } else {
+            std::fs::read_to_string(&path).with_context(|| crate::i18n::fmt("cannot read {0}", &[path.display().to_string()]))?
+        }
+    } else if let Some(page) = input["confluence_page"].as_str().filter(|p| !p.trim().is_empty()) {
+        if ctx.cfg.confluence_url.trim().is_empty() {
+            bail!("{}", crate::i18n::tr("Confluence is not configured in the settings"));
+        }
+        let token = crate::config::secrets::get(crate::config::secrets::CONFLUENCE_TOKEN).context(crate::i18n::tr("no Confluence token"))?;
+        let connection = crate::confluence::Connection { base_url: ctx.cfg.confluence_url.clone(), user: ctx.cfg.confluence_user.clone(), token };
+        crate::traceability::html_text(&connection.page_body(page)?.1)
+    } else {
+        input["text"].as_str().filter(|t| !t.trim().is_empty()).with_context(|| crate::i18n::tr("give 'file', 'confluence_page' or 'text'"))?.to_string()
+    };
+    let requirements = crate::traceability::extract(&text);
+    crate::traceability::trace(ctx.cfg, &requirements, input["package"].as_i64())
+}
+
 /// EA scripts: list, read, save (approved like a write) and run (approved every time).
 fn ea_script(input: &Value, ctx: &ToolContext) -> Result<String> {
     let name = input["name"].as_str().unwrap_or("").to_string();

@@ -178,6 +178,7 @@ mod tests {
             include_str!("report.rs"),
             include_str!("templates.rs"),
             include_str!("tools.rs"),
+            include_str!("traceability.rs"),
             include_str!("model_spell.rs"),
             include_str!("agents.rs"),
             include_str!("scripts.rs"),
