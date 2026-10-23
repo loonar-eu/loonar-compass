@@ -2,7 +2,7 @@
 <html lang="pl">
 <head>
 <meta charset="utf-8">
-<title>Loonar Compass 0.7 – Instrukcja użytkownika</title>
+<title>Loonar Compass 0.8 – Instrukcja użytkownika</title>
 <style>
   @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
   body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1f1e1b; }
@@ -30,6 +30,7 @@
   .toc { page-break-after: always; }
   .toc ol { line-height: 1.9; font-size: 11.5pt; }
   .break { page-break-before: always; }
+  pre { font-family: Consolas, monospace; font-size: 8.5pt; background: #f6f5f1; border: 0.75pt solid #c9c5b9; padding: 5pt 8pt; margin: 4pt 0 8pt 0; white-space: pre-wrap; page-break-inside: avoid; }
 </style>
 </head>
 <body>
@@ -38,7 +39,7 @@
   <img src="img/logo.png" alt="Logo Loonar Compass">
   <h1 style="margin-top: 10mm;">Loonar Compass</h1>
   <div class="sub">Instrukcja użytkownika</div>
-  <div class="sub" style="font-size: 11pt;">wersja 0.7 &middot; październik 2026</div>
+  <div class="sub" style="font-size: 11pt;">wersja 0.8 &middot; październik 2026</div>
   <div class="owner">
     Loonar Mariusz Głowacki<br>
     ul. Gombrowicza 12, 73-110 Stargard<br>
@@ -69,7 +70,8 @@
     <li><a href="#s18">Rozwiązywanie problemów</a></li>
     <li><a href="#s19">Zgłaszanie błędów i nowe wydania</a></li>
     <li><a href="#s20">Aktualizacja i odinstalowanie</a></li>
-    <li><a href="#s21">Licencja, znaki towarowe i kontakt</a></li>
+    <li><a href="#s21">Compass Hub (usługa zespołowa)</a></li>
+    <li><a href="#s22">Licencja, znaki towarowe i kontakt</a></li>
   </ol>
 </div>
 
@@ -87,7 +89,7 @@
 </ul>
 <p>Aplikacja korzysta przez Internet z modelu językowego AI, z Twoim kluczem API: domyślnie z Claude Haiku 5.5 (Anthropic), a w ustawieniach możesz wybrać inny model Claude albo model OpenAI (rozdział 5). Z modelem EA łączy się na dwa sposoby: czyta go wprost (z bazy PostgreSQL albo z pliku .qea/.qeax), a zapisuje przez Enterprise Architect, na koncie użytkownika modelu podanym w ustawieniach, jeśli model ma takie konto. Gdy plik modelu masz otwarty w EA, zmiany idą przez Twoje okno EA; w pozostałych przypadkach EA działa w tle. Zmiany w modelu możesz przed zapisem zatwierdzić albo odrzucić (rozdział 15).</p>
 <p>Loonar Compass działa jako osobne okno, uruchamiane z menu Start, albo jako okno zadokowane w samym Enterprise Architect, które pracuje na projekcie otwartym w tym oknie EA (rozdział 9).</p>
-<p>Interfejs i odpowiedzi asystenta są dostępne w czterech językach: polskim, angielskim, niemieckim i francuskim (rozdział 5). Aplikacja jest bezpłatna, także do użytku komercyjnego (rozdział 21).</p>
+<p>Interfejs i odpowiedzi asystenta są dostępne w czterech językach: polskim, angielskim, niemieckim i francuskim (rozdział 5). Aplikacja jest bezpłatna, także do użytku komercyjnego (rozdział 22).</p>
 
 <h2 id="s2" data-page="install">2. Wymagania</h2>
 <div class="note">
@@ -114,7 +116,7 @@
 <div class="note"><b>Koszty.</b> Sama aplikacja jest bezpłatna. Za korzystanie z modelu AI płacisz wybranemu dostawcy (Anthropic albo OpenAI) według zużycia, na koncie, do którego należy klucz API.</div>
 
 <h2 id="s3" data-page="install">3. Instalacja</h2>
-<p>Uruchom plik <code>LoonarCompass-Setup-0.7.exe</code>. Kreator prowadzi przez kolejne strony przyciskami <b>Dalej</b> i <b>Wstecz</b>. Uprawnień administratora nie potrzebujesz, chyba że instalujesz aplikację dla wszystkich użytkowników komputera.</p>
+<p>Uruchom plik <code>LoonarCompass-Setup-0.8.exe</code>. Kreator prowadzi przez kolejne strony przyciskami <b>Dalej</b> i <b>Wstecz</b>. Uprawnień administratora nie potrzebujesz, chyba że instalujesz aplikację dla wszystkich użytkowników komputera.</p>
 <div class="note"><b>Ostrzeżenie Windows SmartScreen.</b> Instalator nie jest jeszcze podpisany cyfrowo, dlatego przy pierwszym uruchomieniu Windows może pokazać komunikat „System Windows ochronił ten komputer”. Kliknij <b>Więcej informacji</b>, a potem <b>Uruchom mimo to</b>. Gdy w systemie jest włączona Inteligentna kontrola aplikacji (Smart App Control), Windows blokuje niepodpisane aplikacje bez możliwości ich uruchomienia: poczekaj wtedy na wersję podpisaną. Instalator pobieraj tylko z loonar.eu albo z wydań projektu na GitHubie.</div>
 <figure class="small"><img src="img/en/installer-language.png" alt="Kreator instalacji: pierwsza strona z wyborem jednego z czterech języków"><figcaption>Pierwsza strona kreatora: wybór języka</figcaption></figure>
 <ol>
@@ -159,7 +161,7 @@
   <tr><td><b>Changelog</b></td><td>Lista zmian i znanych ograniczeń każdej wersji</td></tr>
   <tr><td><b>Zgłoś błąd</b></td><td>Formularz zgłoszenia błędu ze zdjęciami (rozdział 19)</td></tr>
   <tr><td><b>Wesprzyj projekt</b> (ikona serca, na dole paska, nad ikoną Informacje)</td><td>Dobrowolne wsparcie rozwoju aplikacji (opis niżej)</td></tr>
-  <tr><td><b>Informacje</b> (na dole paska)</td><td>Wersja, właściciel aplikacji, linki (polityka prywatności, kod źródłowy na GitHubie, loonar.eu), informacja o znakach towarowych, licencja i komponenty open source (rozdział 21)</td></tr>
+  <tr><td><b>Informacje</b> (na dole paska)</td><td>Wersja, właściciel aplikacji, linki (polityka prywatności, kod źródłowy na GitHubie, loonar.eu), informacja o znakach towarowych, licencja i komponenty open source (rozdział 22)</td></tr>
 </table>
 <p>Pomarańczowy znak <b>„!”</b> na ikonach Ustawienia, Pamięć asystenta i Szablony dokumentów oznacza, że po zmianie języka tłumaczenie jeszcze się nie zakończyło (rozdział 5).</p>
 <p><b>Wesprzyj projekt.</b> Loonar Compass jest bezpłatny, także do użytku komercyjnego, i taki pozostanie. Przycisk <b>Wesprzyj na suppi.pl</b> otwiera stronę <a href="https://suppi.pl/loonar">https://suppi.pl/loonar</a>, na której możesz dobrowolnie wesprzeć rozwój aplikacji; wpłaty pokrywają między innymi certyfikat do podpisywania kodu, dzięki któremu Windows rozpozna aplikację jako pochodzącą od zweryfikowanego wydawcy. W części „Inne sposoby wsparcia” są linki do kodu źródłowego na GitHubie i do loonar.eu: możesz zgłaszać błędy i pomysły, polecić aplikację innym użytkownikom Enterprise Architect albo dać projektowi gwiazdkę na GitHubie.</p>
@@ -174,7 +176,7 @@
 </ul>
 
 <h2 id="s5">5. Ustawienia i język</h2>
-<p>Widok <b>Ustawienia</b> ma siedem kart: <b>Model AI</b> i <b>Język i zatwierdzanie zmian</b> w lewej kolumnie, <b>Model</b> i <b>Enterprise Architect</b> w prawej, a pod nimi <b>Nowe wydania (newsletter)</b>, <b>Confluence</b> i <b>Miro</b>. W Compass otwartym w Enterprise Architect nie ma kart Model i Enterprise Architect, bo modelem jest projekt otwarty w tym oknie EA (rozdział 9). Każdą kartę zapisujesz osobno przyciskiem pod nią, a aplikacja od razu sprawdza, czy dane działają. Wynik pojawia się pod przyciskiem: zielony z opisem albo czerwony z przyczyną błędu.</p>
+<p>Widok <b>Ustawienia</b> ma dziewięć kart: <b>Model AI</b> i <b>Język i zatwierdzanie zmian</b> w lewej kolumnie, <b>Model</b> i <b>Enterprise Architect</b> w prawej, a pod nimi <b>Nowe wydania (newsletter)</b>, <b>Confluence</b> i <b>Miro</b>. W Compass otwartym w Enterprise Architect nie ma kart Model i Enterprise Architect, bo modelem jest projekt otwarty w tym oknie EA (rozdział 9). Każdą kartę zapisujesz osobno przyciskiem pod nią, a aplikacja od razu sprawdza, czy dane działają. Wynik pojawia się pod przyciskiem: zielony z opisem albo czerwony z przyczyną błędu.</p>
 <figure><img src="img/en/settings.png" alt="Widok Ustawienia z wcześniejszej wersji aplikacji, z numerowanymi kartami"><figcaption>Ustawienia: każda karta z własnym zapisem i testem (zrzut z wcześniejszej wersji: karty miały numery, karta „Model AI” nazywała się „Claude”, a konto EA było w karcie Enterprise Architect)</figcaption></figure>
 <table>
   <tr><th style="width: 24%;">Karta</th><th>Pola</th><th style="width: 36%;">Co sprawdza test</th></tr>
@@ -185,6 +187,8 @@
   <tr><td>Nowe wydania (newsletter)</td><td>Adres e-mail i zgoda „Chcę dostawać informacje o nowych wydaniach”, z informacją o wykorzystaniu adresu i linkiem do polityki prywatności (rozdział 19)</td><td>„Zapisz” przygotowuje wiadomość w programie pocztowym</td></tr>
   <tr><td>Confluence</td><td>Adres Confluence, E-mail (tylko Cloud), Token, Przestrzeń (klucz), Strona nadrzędna (ID) (rozdział 12)</td><td>„Zapisz i sprawdź połączenie z Confluence” łączy się z Confluence i sprawdza przestrzeń</td></tr>
   <tr><td>Miro</td><td>Token dostępu aplikacji Miro z uprawnieniami boards:read i boards:write (rozdział 11)</td><td>Łączy się z Miro i liczy tablice, które widzi token</td></tr>
+  <tr><td>Jira</td><td>Adres Jira, E-mail (tylko Cloud), Token, Domyślny klucz projektu (rozdział 7). Adres musi zaczynać się od <code>https://</code>.</td><td>„Zapisz i sprawdź połączenie z Jira” łączy się z Jira i sprawdza projekt</td></tr>
+  <tr><td>Zespół (Compass Hub)</td><td>Adres huba, Token, Ten model w hubie (opcjonalnie) (rozdział 21)</td><td>„Zapisz i sprawdź połączenie z hubem” łączy się z hubem i pokazuje Twoje konto, rolę i politykę zespołu</td></tr>
 </table>
 <p>Puste pole hasła, klucza lub tokena oznacza „bez zmian”. Napis <b>zapisano</b> obok pola mówi, że wartość jest już zapamiętana w Menedżerze poświadczeń, a <b>BRAK</b>, że jeszcze jej nie ma. Hasło do bazy nie może zawierać średnika (;), bo Enterprise Architect nie przekaże go w swoim ciągu połączenia. Adres Confluence musi zaczynać się od <code>https://</code>; adres <code>http://</code> jest dopuszczalny tylko dla serwera na tym samym komputerze.</p>
 <p><b>Wartości domyślne.</b> Gdy nie ma jeszcze ustawień, pola serwera, nazwy bazy, konta użytkownika EA i haseł są puste (przy serwerze szara podpowiedź „np. 127.0.0.1”), port to 5432, konto bazy to <code>postgres</code>, ścieżka do EA to <code>C:\Program Files\Sparx Systems\EA\EA.exe</code>, tryb zatwierdzania to <b>ask</b>, dostawca to Anthropic (Claude), model to <code>claude-haiku-5-5</code>, poziom wysiłku to „domyślny dla modelu”, a Max tokenów to 10000. Jeśli brakuje ustawień albo któregoś z haseł lub klucza, aplikacja otwiera się w widoku Ustawienia i podaje, co trzeba uzupełnić.</p>
@@ -199,6 +203,7 @@
   <tr><td>Poziom wysiłku</td><td><b>domyślny dla modelu</b> (domyślnie), <b>low</b>, <b>medium</b>, <b>high</b>, <b>xhigh</b> albo <b>max</b>. Wyższy poziom daje dokładniejsze odpowiedzi i pracę na modelu, ale zużywa więcej tokenów i czasu, więc więcej kosztuje; niższy działa szybciej i taniej. Przy OpenAI poziom przekłada się na reasoning effort modelu.</td></tr>
   <tr><td>Max tokenów</td><td>Limit długości jednej odpowiedzi modelu (opis niżej).</td></tr>
   <tr><td>Workspace ID</td><td>Tylko Claude, opcjonalnie: identyfikator obszaru roboczego (workspace) z konsoli Anthropic, na przykład <code>wrkspc_…</code>.</td></tr>
+  <tr><td>Endpoint</td><td>Tylko OpenAI. Puste = OpenAI. Możesz wpisać adres innego serwera zgodnego z API OpenAI: Azure OpenAI (<code>https://&lt;zasób&gt;.openai.azure.com/openai/v1</code>; klucz idzie nagłówkiem <code>api-key</code>), Ollama (<code>http://localhost:11434/v1</code>), LM Studio (<code>http://localhost:1234/v1</code>) albo firmową bramkę. Serwery lokalne działają bez klucza, a <code>http://</code> jest dopuszczalny tylko dla localhost. W polu Model wpisz wtedy nazwę modelu (w Azure: nazwę wdrożenia, deployment).</td></tr>
   <tr><td>Klucz API Claude / Klucz API OpenAI</td><td>Klucz wybranego dostawcy. Klucz Claude tworzysz w konsoli Anthropic (Anthropic Console). Klucz OpenAI tworzysz na platformie OpenAI: <code>platform.openai.com</code> → <b>API keys</b> → <b>Create new secret key</b>. Klucze są zapisywane w Menedżerze poświadczeń Windows, każdy osobno.</td></tr>
 </table>
 <p><b>Zapisz i sprawdź klucz</b> sprawdza klucz krótkim zapytaniem do wybranego modelu. Dane potrzebne do odpowiedzi trafiają wyłącznie do wybranego dostawcy: do api.anthropic.com albo do api.openai.com (rozdział 17). Jeśli niczego w tej karcie nie zmienisz, aplikacja działa tak jak wcześniej: z Claude Haiku 5.5 i poziomem wysiłku domyślnym dla modelu. Większe modele i wyższy poziom wysiłku kosztują więcej; ceny podają Anthropic i OpenAI.</p>
@@ -317,6 +322,42 @@
 <h3>Scenariusze elementów</h3>
 <p>Asystent tworzy, zmienia i usuwa scenariusze elementów, na przykład przypadków użycia. Są to scenariusze strukturalne, widoczne w EA w zakładce <b>Scenarios</b> elementu, z krokami wykonywanymi przez aktora albo przez system.</p>
 <div class="prompt">Dodaj do przypadku użycia „Złóż zamówienie” scenariusz główny: klient potwierdza koszyk, system liczy wartość zamówienia, klient wybiera płatność, system zapisuje zamówienie.</div>
+<h3>Kontrola jakości modelu</h3>
+<p>Jednym poleceniem asystent sprawdza pakiet razem z podpakietami. Sprawdzenie wykonuje program, a nie model AI, więc nic nie jest zgadywane. Wbudowane kontrole:</p>
+<ul>
+  <li>domyślne i puste nazwy (na przykład Class1, Activity 2),</li>
+  <li>elementy bez opisu,</li>
+  <li>osierocone elementy (bez relacji i na żadnym diagramie),</li>
+  <li>powtórzone nazwy w pakiecie i powtórzone relacje,</li>
+  <li>relacje elementu do samego siebie oraz do nieistniejących elementów,</li>
+  <li>puste pakiety i puste diagramy.</li>
+</ul>
+<p>Każde ustalenie ma wagę: <b>błąd</b>, <b>ostrzeżenie</b> albo <b>informacja</b>. Poprawki asystent wprowadza dopiero po Twojej zgodzie.</p>
+<div class="prompt">Sprawdź jakość pakietu Zamówienia.</div>
+<p><b>Reguły organizacji.</b> Własne reguły wpisujesz w pliku <code>governance.json</code>, który leży obok <code>app.properties</code> (pliku ustawień w folderze danych użytkownika). Gdy takiego pliku nie ma, a Compass jest połączony z hubem zespołu, reguły pochodzą z polityki zespołu (rozdział 21). Przykład:</p>
+<pre>{"naming":[{"applies_to":"Component","pattern":"*Service","message":"Nazwa komponentu kończy się na Service"}],
+ "required_tags":[{"applies_to":"«ArchiMate_ApplicationComponent»","tag":"Owner"}],
+ "allowed_relations":[{"connector_type":"Realisation","source":"Component","target":"Interface"}]}</pre>
+<ul>
+  <li><b>naming</b>: nazwy elementów danego typu muszą pasować do wzorca (<code>pattern</code>); <code>message</code> to treść ustalenia.</li>
+  <li><b>required_tags</b>: element danego typu musi mieć wskazany tagged value.</li>
+  <li><b>allowed_relations</b>: typ relacji wpisany na tej liście jest dozwolony tylko między wymienionymi końcami; typy relacji, których na liście nie ma, nie są ograniczane.</li>
+</ul>
+<p>W <code>applies_to</code> podajesz typ elementu albo «stereotyp»; działają symbole wieloznaczne <code>*</code> i <code>?</code>.</p>
+<h3>Analiza luk as-is / to-be</h3>
+<p>Asystent porównuje dwa pakiety, na przykład stan obecny i docelowy, i podaje, co jest <b>nowe</b>, co jest <b>do wycofania</b> i co się <b>zmieniło</b> (stereotyp, opis, relacje). Wynik możesz zapisać do Excela.</p>
+<div class="prompt">Porównaj pakiet „Sklep as-is” z pakietem „Sklep to-be” i zapisz luki do Excela.</div>
+<h3>Zgłoszenia Jira</h3>
+<p>Po uzupełnieniu karty <b>Jira</b> (rozdział 5) asystent czyta zgłoszenia po kluczu albo wyszukiwaniem JQL i używa ich jako kontekstu: rysuje diagramy na podstawie opisu zgłoszenia (story) albo sprawdza, czy model pokrywa jego wymagania. <b>Zawsze po Twojej zgodzie w panelu zatwierdzania</b> tworzy zgłoszenia, dodaje komentarze i linki do elementów modelu.</p>
+<table>
+  <tr><th style="width: 30%;">Pole karty „Jira”</th><th>Co wpisać</th></tr>
+  <tr><td>Adres Jira</td><td>Cloud: <code>https://firma.atlassian.net</code>; Data Center: adres serwera firmy. Musi zaczynać się od <code>https://</code>.</td></tr>
+  <tr><td>E-mail (tylko Cloud)</td><td>Cloud: e-mail konta Atlassian. Przy osobistym tokenie dostępu (Data Center) zostaw puste.</td></tr>
+  <tr><td>Token</td><td>Cloud: token API konta (tworzysz go tak jak dla Confluence, rozdział 12). Data Center: osobisty token dostępu. Token jest zapisywany w Menedżerze poświadczeń Windows.</td></tr>
+  <tr><td>Domyślny klucz projektu</td><td>Na przykład <code>ARCH</code>: projekt, w którym powstają nowe zgłoszenia, gdy nie wskażesz innego.</td></tr>
+</table>
+<div class="prompt">Narysuj diagram sekwencji na podstawie zgłoszenia ARCH-123.</div>
+<div class="prompt">Dodaj do zgłoszenia ARCH-123 link do elementu „Koszyk”.</div>
 <h3>O czym warto wiedzieć</h3>
 <ul>
   <li><b>Pierwsze wywołanie EA trwa od kilku do kilkunastu sekund</b>, bo aplikacja uruchamia Enterprise Architect w tle i otwiera model. Kolejne zapisy i pobrania diagramów trwają już krócej niż sekundę. Po 10 minutach bez wywołań EA w tle zamyka się i zwalnia licencję. Zamknięcie aplikacji też zamyka jej sesję EA. Compass w EA (rozdział 9) nie uruchamia EA w tle: zapisuje przez Twoje okno EA.</li>
@@ -354,7 +395,7 @@
   <li>Rozmowy wybierasz z listy rozwijanej u góry okna. Lista pokazuje tylko rozmowy z tym projektem. Przycisk <b>+</b> zaczyna nową rozmowę, a ołówek zmienia nazwę wybranej.</li>
   <li>Ikony widoków są na dole okna, a w wąskim oknie strony przewijają się w poziomie i w pionie.</li>
   <li><span class="key">Ctrl</span> + <span class="key">V</span> wkleja obrazy, pliki i tekst, tak jak w osobnej aplikacji.</li>
-  <li>Ustawienia w EA nie mają kart Model i Enterprise Architect. Karty Model AI, Język i zatwierdzanie zmian, Confluence i Miro działają tak samo jak w osobnej aplikacji (rozdział 5).</li>
+  <li>Ustawienia w EA nie mają kart Model i Enterprise Architect. Karty Model AI, Język i zatwierdzanie zmian, Confluence, Miro, Jira i Zespół (Compass Hub) działają tak samo jak w osobnej aplikacji (rozdział 5).</li>
 </ul>
 <h3>Zmiany, diagramy i odwołania do obiektów</h3>
 <ul>
@@ -363,6 +404,8 @@
   <li>Kliknij element, pakiet albo diagram prawym przyciskiem myszy (w przeglądarce projektu albo na diagramie) i wybierz <b>Specialize</b> → <b>Dodaj do rozmowy w Compass</b>. Do wiadomości trafia odwołanie do obiektu, na przykład «Pakiet: Sklep (id 5)», a asystent wie, o który obiekt chodzi.</li>
 </ul>
 <div class="prompt">Opisz «Pakiet: Sklep (id 5)» i zaproponuj brakujące wymagania.</div>
+<h3>Kontrola na bieżąco</h3>
+<p>Gdy Compass jest zadokowany w EA, sprawdza zmiany w trakcie Twojej pracy według tych samych reguł co kontrola modelu (wbudowanych i z <code>governance.json</code> albo z huba). Kontrola rusza po narysowaniu relacji i po edycji elementu (nazwy, stereotypu, tagged values). Ustalenia pojawiają się w zakładce <b>Loonar Compass</b> okna System Output, każde tylko raz, jako „⚠ Kontrola modelu: …”. Nowy element jest sprawdzany dopiero po pierwszej edycji, bo EA nadaje mu najpierw nazwę Class1.</p>
 <h3>Kroki asystenta w System Output</h3>
 <p>Okno <b>System Output</b> w EA ma zakładkę <b>Loonar Compass</b>: Twoje wiadomości i każdy krok asystenta (odczyty modelu, zapisy do EA, wyniki) z godziną. Czat w oknie Compass pokazuje w tym czasie tylko ostatni krok, w jednej linii.</p>
 <p><b>Zamykanie.</b> Compass zamyka się razem z Enterprise Architect i zapisuje rozmowę. Po zamknięciu projektu w EA Compass prosi o otwarcie projektu.</p>
@@ -504,6 +547,7 @@
 </table>
 <p>Gdy potrzebna jest zgoda, nad kartą wiadomości pojawia się panel <b>„Asystent chce zapisać zmiany w modelu”</b> z opisem zmian i przyciskami <b>Zatwierdź</b> oraz <b>Odrzuć</b>. Opis podaje, ile pakietów, diagramów, elementów i połączeń powstanie albo się zmieni, nazwy nowych pakietów i diagramów, a przy usuwaniu, przenoszeniu i kopiowaniu także osobne wiersze z nazwami tych obiektów (USUNIĘCIE, PRZENIESIENIE, KOPIOWANIE). Ten sam panel pyta o zgodę na zapis ustalenia w pamięci, nadpisanie szablonu i publikację w Confluence. Odrzucony zapis niczego nie zmienia, a asystent dostaje informację o odrzuceniu i może zaproponować coś innego.</p>
 <figure><img src="img/en/approval.png" alt="Panel zatwierdzania nad kartą wiadomości: opis zapisu do modelu EA z przyciskami Zatwierdź i Odrzuć"><figcaption>Panel zgody na zapis zmian w modelu</figcaption></figure>
+<p>Opis zmian w panelu zgody ma część <b>„Przed → po:”</b>: co powstaje (utworzone obiekty), co zmienia się z jakiej wartości na jaką (pole: stara → nowa wartość) i co jest usuwane. Dzięki temu widzisz skutek zapisu, zanim klikniesz <b>Zatwierdź</b>.</p>
 <h3>Dziennik zmian</h3>
 <p>Każdy zapis asystenta do modelu EA, także nieudany, trafia do dziennika zmian (plik <code>audit_log.jsonl</code> w folderze danych). Nie ma w nim zapisów odrzuconych przez Ciebie ani operacji, których aplikacja nie dopuściła do zapisu; dziennik nie obejmuje też pamięci, szablonów ani publikacji w Confluence.</p>
 <p>Widok <b>Dziennik zmian</b> (ikona „Dziennik zmian w modelu”) pokazuje 200 ostatnich zapisów, od najnowszych: wynik (OK albo BŁĄD), czas, konto EA i bazę, opis zmian oraz treść błędu. Przycisk <b>Eksportuj do Excela</b> zapisuje cały dziennik jako arkusz XLSX (kolumny: Czas, Wynik, Konto EA, Baza, Tryb, Zmiany, Utworzone, Błąd), na przykład do przeglądu zmian w zespole. Przycisk <b>Otwórz plik dziennika</b> otwiera plik dziennika w Notatniku.</p>
@@ -622,7 +666,42 @@
 </ul>
 <p>Usuwane są tylko dane użytkownika, który uruchomił odinstalowanie; dane innych użytkowników zostają w ich profilach.</p>
 
-<h2 id="s21">21. Licencja, znaki towarowe i kontakt</h2>
+<h2 id="s21" class="break">21. Compass Hub (usługa zespołowa)</h2>
+<p>Compass Hub to opcjonalna usługa dla zespołu, uruchamiana na komputerze lub serwerze zespołu. Daje wspólną politykę (reguły kontroli modelu i minimalny tryb zatwierdzania), centralny dziennik zmian ze wszystkich stanowisk, wspólne notatki, widok webowy modeli dla osób bez Enterprise Architect oraz serwer MCP (tylko odczyt) dla innych narzędzi AI. Bez huba Compass działa samodzielnie, jak dotąd.</p>
+<h3>Dla użytkownika</h3>
+<p>Adres huba i swój token dostajesz od administratora. Wpisz je w karcie <b>„Zespół (Compass Hub)”</b> w widoku Ustawienia: <b>Adres huba</b> (musi zaczynać się od <code>https://</code>; <code>http://</code> tylko na tym komputerze), <b>Token</b> i opcjonalnie <b>Ten model w hubie</b> (identyfikator źródła, czyli modelu huba odpowiadającego Twojemu), a potem kliknij <b>Zapisz i sprawdź połączenie z hubem</b>. Test pokazuje Twoje konto, rolę i politykę zespołu. Z hubem:</p>
+<ul>
+  <li>polityka zespołu <code>min_approval</code> może tylko zaostrzyć lokalny tryb zatwierdzania (od najluźniejszego: auto, plan, ask);</li>
+  <li>reguły kontroli modelu z huba obowiązują, gdy nie ma lokalnego pliku <code>governance.json</code> (rozdział 7);</li>
+  <li>każda zapisana zmiana trafia do zespołowego dziennika zmian; wysyłanie odbywa się w tle, więc niedostępny hub nie zatrzymuje pracy, a ostatni problem widać na karcie.</li>
+</ul>
+<h3>Dla administratora</h3>
+<p>Hub uruchamiasz poleceniem <code>LoonarCompass.exe --hub C:\sciezka\hub.json</code>. Program działa bez okna, a dziennik pracy zapisuje w pliku <code>hub.log</code> obok <code>hub.json</code>. Domyślnie nasłuchuje na <code>127.0.0.1:8730</code>; poza jednym komputerem postaw go za HTTPS (reverse proxy). Przykład <code>hub.json</code>:</p>
+<pre>{"listen":"127.0.0.1:8730",
+ "sources":[
+  {"id":"shop-db","name":"Shop (PostgreSQL)","properties":"shop-db/app.properties"},
+  {"id":"shop-file","name":"Shop (file)","properties":"shop-file/app.properties"}],
+ "users":[
+  {"name":"anna","token":"&lt;at least 16 random characters&gt;","role":"admin"},
+  {"name":"bob","token":"...","role":"architect"},
+  {"name":"carol","token":"...","role":"viewer"}],
+ "policy":{"min_approval":"ask",
+  "governance":{ ... governance.json ... }}}</pre>
+<ul>
+  <li><b>sources</b>: modele zespołu. <code>properties</code> to plik <code>app.properties</code> danego modelu (w tym samym formacie co plik ustawień Compassa), ścieżka względem <code>hub.json</code>.</li>
+  <li><b>users</b>: użytkownicy z tokenem (co najmniej 16 losowych znaków) i rolą.</li>
+  <li><b>policy</b>: <code>min_approval</code> (ask, plan lub auto) i <code>governance</code> w formacie <code>governance.json</code>.</li>
+</ul>
+<table>
+  <tr><th style="width: 18%;">Rola</th><th>Uprawnienia</th></tr>
+  <tr><td>viewer</td><td>Odczyt: widok webowy, REST, MCP</td></tr>
+  <tr><td>architect</td><td>To, co viewer, oraz wysyłanie wpisów do dziennika i edycja notatek zespołu</td></tr>
+  <tr><td>admin</td><td>To, co architect, oraz zmiana polityki (<code>PUT /api/policy</code>, zapisywana w <code>hub.json</code>)</td></tr>
+</table>
+<p><b>Widok webowy.</b> Pod adresem <code>http://&lt;hub&gt;/</code> logujesz się tokenem. Widok pokazuje drzewo pakietów, wyszukiwanie, szczegóły elementu z analizą wpływu, kontrolę modelu według reguł zespołu, luki, dziennik zmian i notatki zespołu.</p>
+<p><b>Serwer MCP</b> (tylko odczyt) działa jako JSON-RPC przez HTTP POST pod adresem <code>/mcp</code>, z nagłówkiem <code>Authorization: Bearer &lt;token&gt;</code>. Narzędzia: <code>list_sources</code>, <code>list_packages</code>, <code>search_elements</code>, <code>element_details</code>, <code>impact_analysis</code>, <code>model_lint</code>, <code>gap_analysis</code>.</p>
+
+<h2 id="s22">22. Licencja, znaki towarowe i kontakt</h2>
 <p><b>Licencja.</b> Loonar Compass jest oprogramowaniem typu freeware. W skrócie:</p>
 <ul>
   <li>korzystanie jest bezpłatne, także zawodowe i komercyjne, na dowolnej liczbie komputerów, bez ograniczeń czasu i terytorium,</li>
@@ -638,7 +717,7 @@
 <p><b>Znaki towarowe.</b> Sparx Systems i Enterprise Architect są zarejestrowanymi znakami towarowymi Sparx Systems Pty Ltd. Claude i Anthropic są znakami towarowymi Anthropic, PBC. OpenAI i GPT są znakami towarowymi OpenAI. Atlassian, Confluence i Jira są znakami towarowymi Atlassian. Microsoft, Windows, Word i Excel są znakami towarowymi grupy Microsoft. PostgreSQL jest zarejestrowanym znakiem towarowym PostgreSQL Community Association. Loonar Compass jest niezależnym produktem, niepowiązanym z tymi firmami, nieautoryzowanym ani niesponsorowanym przez nie.</p>
 <p><b>Właściciel i kontakt.</b> Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard.<br>E-mail: mariusz@loonar.eu, strona: <a href="https://loonar.eu">https://loonar.eu</a> (z pytaniami i odpowiedziami). Błędy najwygodniej zgłaszać przez widok <b>Zgłoś błąd</b> (rozdział 19). Problemy z bezpieczeństwem zgłaszaj prywatnie e-mailem na mariusz@loonar.eu, z tematem „Security: Loonar Compass”, a nie w publicznym zgłoszeniu na GitHubie.</p>
 <p><b>Wsparcie projektu.</b> Rozwój aplikacji możesz dobrowolnie wesprzeć na <a href="https://suppi.pl/loonar">https://suppi.pl/loonar</a> (widok <b>Wesprzyj projekt</b>, rozdział 4).</p>
-<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.7 &middot; © 2026 Loonar Mariusz Głowacki. Wszelkie prawa zastrzeżone.</p>
+<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.8 &middot; © 2026 Loonar Mariusz Głowacki. Wszelkie prawa zastrzeżone.</p>
 
 </body>
 </html>

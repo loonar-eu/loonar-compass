@@ -6,6 +6,13 @@ All notable changes to Loonar Compass (named Loonar EA Assistant until version 0
 
 - Choice of AI model: provider Anthropic (Claude) or OpenAI, any model (from a list or your own id) and an effort level (from "model default" to max). The default is unchanged: Claude Haiku 5.5. Each provider has its own API key in Credential Manager; data goes only to the chosen one.
 - Settings without card numbers; the first card is "AI model".
+- Model quality check (governance) without AI guessing: in one request the assistant checks a package with its subpackages – default and empty names, elements without a description, orphaned elements, duplicate names and relationships, relationships to non-existent elements, empty packages and diagrams – and the organization's rules from governance.json: naming conventions, required tagged values and allowed relationships (metamodel / MDG). Every finding has a severity (error, warning, info).
+- Compass in EA checks a relationship just drawn and an element just changed; findings appear in the "Loonar Compass" tab of System Output.
+- As-is / to-be gap analysis: two packages compared – what is new, what is to retire, what changed (stereotype, description, relationships); to Excel on request.
+- The save approval shows a "before → after" preview: what is created, what changes from which value to which, and what is deleted.
+- Jira (Cloud and Data Center): the assistant reads issues (by key and JQL search) as context for the model and, with your consent, creates issues, comments and links to model elements. New "Jira" card in the settings.
+- Any endpoint compatible with the OpenAI API: Azure OpenAI, Ollama, LM Studio or a company gateway – local models too, with no data sent to the cloud.
+- Compass Hub – an optional team service (LoonarCompass.exe --hub hub.json): the team's models (EA databases and files), a shared policy (model check rules, minimum approval mode), a central audit trail from every workstation, shared notes, users with tokens and roles (viewer, architect, admin), a web view of the models for people without EA and an MCP server (read-only) for other AI tools. New "Team (Compass Hub)" card in the settings.
 - Structured scenarios of elements: the assistant creates, changes and deletes scenarios in the Scenarios tab, with actor and system steps.
 - Compass in EA: renaming a conversation (pencil next to the conversation list).
 - Progress messages say "The assistant …" instead of "Claude …".

@@ -6,6 +6,13 @@ Toutes les modifications importantes de l'application Loonar Compass (nommée Lo
 
 - Choix du modèle d'IA : fournisseur Anthropic (Claude) ou OpenAI, n'importe quel modèle (dans la liste ou identifiant libre) et niveau d'effort (de « par défaut du modèle » à max). Par défaut, rien ne change : Claude Haiku 5.5. Chaque fournisseur a sa propre clé API dans le Gestionnaire d'identification ; les données vont uniquement au fournisseur choisi.
 - Paramètres sans numéros de cartes ; la première carte est « Modèle d'IA ».
+- Contrôle de la qualité du modèle (gouvernance) sans deviner par l'IA : l'assistant vérifie un paquetage et ses sous-paquetages – noms par défaut ou vides, éléments sans description, éléments orphelins, noms et relations en double, relations vers des éléments inexistants, paquetages et diagrammes vides – ainsi que les règles de l'organisation de governance.json : conventions de nommage, tagged values obligatoires et relations autorisées (métamodèle / MDG). Chaque constat a une gravité (erreur, avertissement, info).
+- Compass dans EA vérifie une relation qui vient d'être tracée et un élément qui vient d'être modifié ; les constats apparaissent dans l'onglet « Loonar Compass » de la sortie système.
+- Analyse des écarts existant / cible : deux paquetages comparés – nouveau, à retirer, modifié (stéréotype, description, relations) ; vers Excel sur demande.
+- L'approbation montre un aperçu « avant → après » : ce qui est créé, ce qui change de quelle valeur à quelle valeur et ce qui est supprimé.
+- Jira (Cloud et Data Center) : l'assistant lit les tickets (par clé et recherche JQL) comme contexte et, avec votre accord, crée des tickets, des commentaires et des liens vers les éléments du modèle. Nouvelle carte « Jira » dans les paramètres.
+- Tout point de terminaison compatible avec l'API OpenAI : Azure OpenAI, Ollama, LM Studio ou une passerelle d'entreprise – modèles locaux compris, sans envoi de données vers le cloud.
+- Compass Hub – service d'équipe facultatif (LoonarCompass.exe --hub hub.json) : modèles de l'équipe (bases et fichiers EA), politique commune (règles du contrôle du modèle, mode d'approbation minimal), journal d'audit central de tous les postes, notes communes, utilisateurs avec jetons et rôles (viewer, architect, admin), vue web des modèles pour les personnes sans EA et serveur MCP (lecture seule) pour d'autres outils d'IA. Nouvelle carte « Équipe (Compass Hub) ».
 - Scénarios structurés d'éléments : l'assistant crée, modifie et supprime des scénarios dans l'onglet Scenarios, avec étapes acteur et système.
 - Compass dans EA : renommer une conversation (crayon à côté de la liste).
 - Les messages de progression disent « L'assistant … » au lieu de « Claude … ».

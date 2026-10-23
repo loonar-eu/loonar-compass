@@ -6,6 +6,13 @@ Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Lo
 
 - Model AI do wyboru: dostawca Anthropic (Claude) albo OpenAI, dowolny model (lista albo własny identyfikator) i poziom wysiłku (od „domyślny dla modelu” do max). Domyślnie bez zmian: Claude Haiku 5.5. Każdy dostawca ma własny klucz API w Menedżerze poświadczeń; dane trafiają tylko do wybranego.
 - Ustawienia bez numeracji kart; pierwsza karta to „Model AI”.
+- Kontrola jakości modelu (governance) bez zgadywania przez AI: jednym poleceniem asystent sprawdza pakiet z podpakietami – domyślne i puste nazwy, elementy bez opisu, osierocone elementy, powtórzone nazwy i relacje, relacje do nieistniejących elementów, puste pakiety i diagramy – oraz reguły organizacji z pliku governance.json: konwencje nazw, wymagane tagged values i dozwolone relacje (metamodel / MDG). Każde ustalenie ma wagę (błąd, ostrzeżenie, informacja).
+- Compass w EA sprawdza na bieżąco nowo narysowaną relację i zmieniony element; uwagi pojawiają się w zakładce „Loonar Compass” okna System Output.
+- Analiza luk as-is / to-be: porównanie dwóch pakietów – co nowe, co do wycofania, co zmienione (stereotyp, opis, relacje); na życzenie do Excela.
+- Okno zatwierdzania zapisu pokazuje podgląd „przed → po”: co powstaje, co zmienia się z jakiej wartości na jaką i co jest usuwane.
+- Jira (Cloud i Data Center): asystent czyta zgłoszenia (po kluczu i wyszukiwaniem JQL) jako kontekst do modelu, a za Twoją zgodą tworzy zgłoszenia, komentarze i linki do elementów modelu. Nowa karta „Jira” w ustawieniach.
+- Dowolny endpoint zgodny z API OpenAI: Azure OpenAI, Ollama, LM Studio albo firmowa bramka – także modele lokalne, bez wysyłania danych do chmury.
+- Compass Hub – opcjonalna usługa zespołowa (LoonarCompass.exe --hub hub.json): modele zespołu (bazy i pliki EA), wspólna polityka (reguły kontroli modelu, minimalny tryb zatwierdzania), centralny dziennik zmian ze wszystkich stanowisk, wspólne notatki, użytkownicy z tokenami i rolami (viewer, architect, admin), widok webowy modeli dla osób bez EA oraz serwer MCP (tylko odczyt) dla innych narzędzi AI. Nowa karta „Zespół (Compass Hub)” w ustawieniach.
 - Scenariusze elementów (structured scenarios): asystent tworzy, zmienia i usuwa scenariusze w zakładce Scenarios, z krokami aktora i systemu.
 - Compass w EA: zmiana nazwy rozmowy (ołówek obok listy rozmów).
 - Komunikaty pracy mówią „Asystent …” zamiast „Claude …”.

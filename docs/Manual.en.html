@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Loonar Compass 0.7 - User guide</title>
+<title>Loonar Compass 0.8 - User guide</title>
 <style>
   @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
   body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1f1e1b; }
@@ -30,6 +30,7 @@
   .toc { page-break-after: always; }
   .toc ol { line-height: 1.9; font-size: 11.5pt; }
   .break { page-break-before: always; }
+  pre { font-family: Consolas, monospace; font-size: 8.5pt; background: #f6f5f1; border: 0.75pt solid #c9c5b9; padding: 5pt 8pt; margin: 4pt 0 8pt 0; white-space: pre-wrap; page-break-inside: avoid; }
 </style>
 </head>
 <body>
@@ -38,7 +39,7 @@
   <img src="img/logo.png" alt="Loonar Compass logo">
   <h1 style="margin-top: 10mm;">Loonar Compass</h1>
   <div class="sub">User guide</div>
-  <div class="sub" style="font-size: 11pt;">version 0.7 &middot; October 2026</div>
+  <div class="sub" style="font-size: 11pt;">version 0.8 &middot; October 2026</div>
   <div class="owner">
     Loonar Mariusz Głowacki<br>
     ul. Gombrowicza 12, 73-110 Stargard<br>
@@ -69,7 +70,8 @@
     <li><a href="#s18">Troubleshooting</a></li>
     <li><a href="#s19">Reporting bugs and new releases</a></li>
     <li><a href="#s20">Updating and uninstalling</a></li>
-    <li><a href="#s21">License, trademarks and contact</a></li>
+    <li><a href="#s21">Compass Hub (team service)</a></li>
+    <li><a href="#s22">License, trademarks and contact</a></li>
   </ol>
 </div>
 
@@ -113,7 +115,7 @@
 <div class="note"><b>Costs.</b> The application itself is free. You pay the chosen provider (Anthropic or OpenAI) for your use of the AI model, through the account the API key belongs to.</div>
 
 <h2 id="s3" data-page="install">3. Installation</h2>
-<p>Run the file <code>LoonarCompass-Setup-0.7.exe</code>. The wizard guides you through the steps with the <b>Next</b> and <b>Back</b> buttons. You do not need administrator rights unless you install the application for all users of the computer.</p>
+<p>Run the file <code>LoonarCompass-Setup-0.8.exe</code>. The wizard guides you through the steps with the <b>Next</b> and <b>Back</b> buttons. You do not need administrator rights unless you install the application for all users of the computer.</p>
 <div class="note"><b>Windows SmartScreen.</b> The installer is not digitally signed yet, so when you run it for the first time, Windows SmartScreen may show the warning “Windows protected your PC”. Click <b>More info</b> and then <b>Run anyway</b>. If Smart App Control is turned on, Windows blocks unsigned applications altogether; in that case, wait for the signed version.</div>
 <figure class="small"><img src="img/en/installer-language.png" alt="Setup wizard: the language selection page with Polish, English, German and French"><figcaption>The first page of the wizard: choosing the language</figcaption></figure>
 <ol>
@@ -158,7 +160,7 @@
   <tr><td><b>Changelog</b></td><td>The list of features and known limitations of each version</td></tr>
   <tr><td><b>Report a bug</b></td><td>A bug report form with images (chapter 19)</td></tr>
   <tr><td><b>Support the project</b> (heart icon, at the bottom of the bar)</td><td>Voluntary support for the development of the application, links to GitHub and loonar.eu</td></tr>
-  <tr><td><b>About</b> (at the very bottom of the bar)</td><td>Version, application owner, links (privacy policy, source code on GitHub, loonar.eu), trademark notice, license text and the licenses of the open-source components (chapter 21)</td></tr>
+  <tr><td><b>About</b> (at the very bottom of the bar)</td><td>Version, application owner, links (privacy policy, source code on GitHub, loonar.eu), trademark notice, license text and the licenses of the open-source components (chapter 22)</td></tr>
 </table>
 <p>An orange <b>“!”</b> on the Settings, Assistant memory and Document templates icons means that after a language change the translation has not finished yet (chapter 5).</p>
 <p><b>Support the project.</b> Loonar Compass is free, also for commercial use, and it will stay free. If it saves you time, you can support its development with a voluntary contribution: the <b>Support on suppi.pl</b> button opens <a href="https://suppi.pl/loonar">suppi.pl/loonar</a>. The contributions pay, among other things, for a code-signing certificate. Other ways to help: report bugs and ideas (Report a bug), recommend the application to other Enterprise Architect users or star the project on GitHub.</p>
@@ -172,7 +174,7 @@
 </ul>
 
 <h2 id="s5">5. Settings and language</h2>
-<p>The <b>Settings</b> view has seven cards: <b>AI model</b> and <b>Language and change approval</b> in the left column, <b>Model</b> and <b>Enterprise Architect</b> in the right one, and below them <b>New releases (newsletter)</b>, <b>Confluence</b> and <b>Miro</b>. In Compass opened in Enterprise Architect, there are no Model and Enterprise Architect cards, because the model is the project open in that EA window (chapter 9). You save each card separately with the button below the card, and the application immediately checks that the details work. The result appears below the button: green with a description or red with the cause of the error.</p>
+<p>The <b>Settings</b> view has nine cards: <b>AI model</b> and <b>Language and change approval</b> in the left column, <b>Model</b> and <b>Enterprise Architect</b> in the right one, and below them <b>New releases (newsletter)</b>, <b>Confluence</b> and <b>Miro</b>. In Compass opened in Enterprise Architect, there are no Model and Enterprise Architect cards, because the model is the project open in that EA window (chapter 9). You save each card separately with the button below the card, and the application immediately checks that the details work. The result appears below the button: green with a description or red with the cause of the error.</p>
 <figure><img src="img/en/settings.png" alt="Settings view of an earlier version of the application, with numbered cards"><figcaption>Settings: each card with its own save and test (screenshot of an earlier version: the cards had numbers, the “AI model” card was called “Claude”, and the EA account was on the Enterprise Architect card)</figcaption></figure>
 <table>
   <tr><th style="width: 26%;">Card</th><th>Fields</th><th style="width: 34%;">What the test checks</th></tr>
@@ -183,6 +185,8 @@
   <tr><td>New releases (newsletter)</td><td>Email address and consent to news about new releases, with an information note and a link to the privacy policy (chapter 19)</td><td>Prepares a message in the mail program</td></tr>
   <tr><td>Confluence</td><td>Confluence address, Email (Cloud only), Token, Space key, Parent page ID (chapter 12). The address must start with https:// (http:// only for a server on the same computer).</td><td>Connects to Confluence with the given token and checks the space</td></tr>
   <tr><td>Miro</td><td>Access token of a Miro app with the boards:read and boards:write permissions (chapter 11)</td><td>Connects to Miro and counts the boards the token can see</td></tr>
+  <tr><td>Jira</td><td>Jira address, Email (Cloud only), Token, Default project key (chapter 7). The address must start with <code>https://</code>.</td><td>“Save and test Jira connection” connects to Jira and checks the project</td></tr>
+  <tr><td>Team (Compass Hub)</td><td>Hub address, Token, This model in the hub (optional) (chapter 21)</td><td>“Save and test hub connection” connects to the hub and shows your account, role and the team policy</td></tr>
 </table>
 <p>An empty password or key field means “no change”. The label <b>saved</b> next to a field indicates that the value is already stored. The API keys, the passwords and the Confluence and Miro tokens are kept in Windows Credential Manager, never in the settings file. The database password must not contain a semicolon (<code>;</code>), because Enterprise Architect cannot pass it in its connection string.</p>
 <p><b>Default values.</b> When there are no settings yet, the server, database name, EA user account and password fields are empty (the Server field shows the gray hint “e.g. 127.0.0.1”), the port is 5432, the database user is <code>postgres</code>, the path to EA.exe is <code>C:\Program Files\Sparx Systems\EA\EA.exe</code>, the approval mode is ask, the provider is Anthropic (Claude), the model is <code>claude-haiku-5-5</code>, the effort is “model default” and Max tokens is 10000. Existing settings are not changed.</p>
@@ -197,6 +201,7 @@
   <tr><td>Effort</td><td><b>model default</b> (default), <b>low</b>, <b>medium</b>, <b>high</b>, <b>xhigh</b> or <b>max</b>. Higher effort gives more thorough answers and model work, but uses more tokens and time, so it costs more; lower effort is faster and cheaper. With OpenAI, the effort maps to the model's reasoning effort.</td></tr>
   <tr><td>Max tokens</td><td>The length limit of a single model answer (see below).</td></tr>
   <tr><td>Workspace ID</td><td>Claude only, optional: the ID of a workspace from the Anthropic Console, for example <code>wrkspc_…</code>.</td></tr>
+  <tr><td>Endpoint</td><td>OpenAI only. Empty = OpenAI. You can enter the address of another server compatible with the OpenAI API: Azure OpenAI (<code>https://&lt;resource&gt;.openai.azure.com/openai/v1</code>; the key is sent in the <code>api-key</code> header), Ollama (<code>http://localhost:11434/v1</code>), LM Studio (<code>http://localhost:1234/v1</code>) or a company gateway. Local servers work without a key, and <code>http://</code> is allowed only for localhost. In the Model field enter the model name (in Azure: the deployment name).</td></tr>
   <tr><td>Claude API key / OpenAI API key</td><td>The key of the chosen provider. You create a Claude key in the Anthropic Console. You create an OpenAI key on the OpenAI platform: <code>platform.openai.com</code> → <b>API keys</b> → <b>Create new secret key</b>. The keys are stored in Windows Credential Manager, each separately.</td></tr>
 </table>
 <p><b>Save and test key</b> checks the key with a short request to the chosen model. The data needed for the answers goes only to the chosen provider: to api.anthropic.com or to api.openai.com (chapter 17). If you change nothing on this card, the application works exactly as before: with Claude Haiku 5.5 and the model default effort. Larger models and higher effort cost more; Anthropic and OpenAI publish their prices.</p>
@@ -314,6 +319,42 @@
 <h3>Structured scenarios of elements</h3>
 <p>The assistant creates, changes and deletes structured scenarios of elements, for example of use cases. They appear in EA on the element's <b>Scenarios</b> tab, with steps performed by the actor or by the system.</p>
 <div class="prompt">Add a basic path scenario to the “Place order” use case: the customer confirms the cart, the system calculates the order value, the customer chooses a payment method, the system saves the order.</div>
+<h3>Model quality check</h3>
+<p>With a single command the assistant checks a package together with its subpackages. The check is done by the program, not by the AI model, so nothing is guessed. Built-in checks:</p>
+<ul>
+  <li>default and empty names (for example Class1, Activity 2),</li>
+  <li>elements without a description,</li>
+  <li>orphans (no relationships and on no diagram),</li>
+  <li>duplicate names in a package and duplicate relationships,</li>
+  <li>relationships of an element to itself and to non-existent elements,</li>
+  <li>empty packages and empty diagrams.</li>
+</ul>
+<p>Every finding has a severity: <b>error</b>, <b>warning</b> or <b>info</b>. The assistant makes fixes only after you agree.</p>
+<div class="prompt">Check the quality of the package Orders.</div>
+<p><b>Organization rules.</b> You write your own rules in the file <code>governance.json</code>, placed next to <code>app.properties</code> (the settings file in the user data folder). When there is no such file and Compass is connected to a team hub, the rules come from the team policy (chapter 21). Example:</p>
+<pre>{"naming":[{"applies_to":"Component","pattern":"*Service","message":"A component name ends with Service"}],
+ "required_tags":[{"applies_to":"«ArchiMate_ApplicationComponent»","tag":"Owner"}],
+ "allowed_relations":[{"connector_type":"Realisation","source":"Component","target":"Interface"}]}</pre>
+<ul>
+  <li><b>naming</b>: names of elements of the given type must match the pattern (<code>pattern</code>); <code>message</code> is the text of the finding.</li>
+  <li><b>required_tags</b>: an element of the given type must have the given tagged value.</li>
+  <li><b>allowed_relations</b>: a relationship type listed here is allowed only between the listed ends; relationship types that are not listed are not restricted.</li>
+</ul>
+<p>In <code>applies_to</code> you give an element type or a «stereotype»; the wildcards <code>*</code> and <code>?</code> work.</p>
+<h3>As-is / to-be gap analysis</h3>
+<p>The assistant compares two packages, for example the current and the target state, and reports what is <b>new</b>, what is <b>to retire</b> and what has <b>changed</b> (stereotype, description, relationships). You can save the result to Excel.</p>
+<div class="prompt">Compare the package “Shop as-is” with the package “Shop to-be” and save the gaps to Excel.</div>
+<h3>Jira issues</h3>
+<p>Once the <b>Jira</b> card is filled in (chapter 5), the assistant reads issues by key or by JQL search and uses them as context: it draws diagrams from the description of an issue (a story) or checks whether the model covers its requirements. <b>Always with your consent in the approval panel</b> it creates issues, adds comments and links to model elements.</p>
+<table>
+  <tr><th style="width: 30%;">“Jira” card field</th><th>What to enter</th></tr>
+  <tr><td>Jira address</td><td>Cloud: <code>https://company.atlassian.net</code>; Data Center: the address of your company's server. It must start with <code>https://</code>.</td></tr>
+  <tr><td>Email (Cloud only)</td><td>Cloud: the e-mail of the Atlassian account. With a personal access token (Data Center) leave it empty.</td></tr>
+  <tr><td>Token</td><td>Cloud: the account's API token (created as for Confluence, chapter 12). Data Center: a personal access token. The token is stored in Windows Credential Manager.</td></tr>
+  <tr><td>Default project key</td><td>For example <code>ARCH</code>: the project where new issues are created when you do not name another one.</td></tr>
+</table>
+<div class="prompt">Draw a sequence diagram based on the issue ARCH-123.</div>
+<div class="prompt">Add to the issue ARCH-123 a link to the element “Cart”.</div>
 <h3>Good to know</h3>
 <ul>
   <li><b>The first EA call takes from a few to over ten seconds</b>, because the application starts Enterprise Architect in the background and opens the model. Subsequent saves and diagram retrievals take less than a second. After 10 minutes without calls, the background EA closes and releases the license. Closing the application also closes its EA session. Compass in EA (chapter 9) does not start EA in the background: it saves through your EA window.</li>
@@ -351,7 +392,7 @@
   <li>You choose conversations from the drop-down at the top of the window. The list shows only the conversations with this project. The <b>+</b> button starts a new conversation, and the pencil renames the selected one.</li>
   <li>The view icons are at the bottom of the window; in a narrow window the pages scroll sideways and up and down.</li>
   <li><span class="key">Ctrl</span> + <span class="key">V</span> pastes pictures, files and text, as in the separate application.</li>
-  <li>The settings in EA have no Model and Enterprise Architect cards. The AI model, Language and change approval, Confluence and Miro cards work as in the separate application (chapter 5).</li>
+  <li>The settings in EA have no Model and Enterprise Architect cards. The AI model, Language and change approval, Confluence, Miro, Jira and Team (Compass Hub) cards work as in the separate application (chapter 5).</li>
 </ul>
 <h3>Changes, diagrams and references to objects</h3>
 <ul>
@@ -360,6 +401,8 @@
   <li>Right-click an element, package or diagram (in the Project Browser or on a diagram) and choose <b>Specialize</b> → <b>Add to the Compass conversation</b>. A reference to the object goes into the message, for example «Package: Shop (id 5)», so the assistant knows which object you mean.</li>
 </ul>
 <div class="prompt">Describe «Package: Shop (id 5)» and suggest the missing requirements.</div>
+<h3>Live check</h3>
+<p>When Compass is docked in EA, it checks changes while you work, by the same rules as the model check (built-in ones and those from <code>governance.json</code> or the hub). The check starts after you draw a relationship and after you edit an element (name, stereotype, tagged values). The findings appear in the <b>Loonar Compass</b> tab of the System Output window, each only once, as “⚠ Model check: …”. A new element is checked only after its first edit, because EA first names it Class1.</p>
 <h3>The assistant's steps in System Output</h3>
 <p>EA's <b>System Output</b> window has a <b>Loonar Compass</b> tab: your messages and every step of the assistant (model reads, writes to EA, results) with the time. Meanwhile, the chat in the Compass window shows only the last step, in one line.</p>
 <p><b>Closing.</b> Compass closes together with Enterprise Architect and saves the conversation. When you close the project in EA, Compass asks you to open a project.</p>
@@ -501,6 +544,7 @@
 <p>When approval is needed, a <b>“The assistant wants to save changes to the model”</b> panel appears above the message field, with a description of the changes (how many packages, diagrams, elements and connectors, and the names of the objects being deleted, moved or copied) and the <b>Approve</b> and <b>Reject</b> buttons. A rejected save does not change the model; the assistant is informed of the rejection and may suggest something else.</p>
 <figure><img src="img/en/approval.png" alt="Approval panel “The assistant wants to save changes to the model” with the Approve and Reject buttons"><figcaption>The approval panel for a change in the model</figcaption></figure>
 <p>Publishing to Confluence always asks for approval, in every mode, and says when an existing page will be replaced (chapter 12).</p>
+<p>In the approval panel the description of the changes has a <b>“Before → after:”</b> part: what is created (new objects), what changes from which value to which (field: old → new value) and what is deleted. So you see the effect of the save before you click <b>Approve</b>.</p>
 <h3>Audit log</h3>
 <p>Every save by the assistant to the model, including failed ones, goes into the audit log (saves you rejected are not recorded, because nothing was saved). The <b>Model audit log</b> view shows the latest 200 entries, newest first: time, result, EA account, database and changes. The <b>Export to Excel</b> button saves the whole log as an XLSX workbook, for example for reviewing changes as a team, and <b>Open log file</b> opens the <code>audit_log.jsonl</code> file.</p>
 
@@ -608,13 +652,48 @@
 </ul>
 <p>In an installation for all users, only your own data is removed; the data of other users stays in their profiles.</p>
 
-<h2 id="s21">21. License, trademarks and contact</h2>
+<h2 id="s21" class="break">21. Compass Hub (team service)</h2>
+<p>Compass Hub is an optional team service, run on a team computer or server. It provides a shared policy (model check rules and the minimum approval mode), a central audit trail of changes from all workstations, shared notes, a web view of the models for people without Enterprise Architect, and an MCP server (read-only) for other AI tools. Without a hub Compass works on its own, as before.</p>
+<h3>For the user</h3>
+<p>You get the hub address and your token from the administrator. Enter them in the <b>“Team (Compass Hub)”</b> card in the Settings view: <b>Hub address</b> (it must start with <code>https://</code>; <code>http://</code> only on this computer), <b>Token</b> and optionally <b>This model in the hub</b> (the source id, that is the hub's model that matches yours), then click <b>Save and test hub connection</b>. The test shows your account, role and the team policy. With a hub:</p>
+<ul>
+  <li>the team policy <code>min_approval</code> can only make the local approval mode stricter (from the loosest: auto, plan, ask);</li>
+  <li>the model check rules from the hub apply when there is no local <code>governance.json</code> (chapter 7);</li>
+  <li>every saved change goes to the team audit trail; it is sent in the background, so a hub that is down does not stop your work, and the last problem is shown on the card.</li>
+</ul>
+<h3>For the administrator</h3>
+<p>You start the hub with <code>LoonarCompass.exe --hub C:\path\hub.json</code>. The program runs without a window and writes its log to <code>hub.log</code> next to <code>hub.json</code>. By default it listens on <code>127.0.0.1:8730</code>; beyond a single computer put it behind HTTPS (a reverse proxy). Example <code>hub.json</code>:</p>
+<pre>{"listen":"127.0.0.1:8730",
+ "sources":[
+  {"id":"shop-db","name":"Shop (PostgreSQL)","properties":"shop-db/app.properties"},
+  {"id":"shop-file","name":"Shop (file)","properties":"shop-file/app.properties"}],
+ "users":[
+  {"name":"anna","token":"&lt;at least 16 random characters&gt;","role":"admin"},
+  {"name":"bob","token":"...","role":"architect"},
+  {"name":"carol","token":"...","role":"viewer"}],
+ "policy":{"min_approval":"ask",
+  "governance":{ ... governance.json ... }}}</pre>
+<ul>
+  <li><b>sources</b>: the team's models. <code>properties</code> is the <code>app.properties</code> of the given model (the same format as Compass's own settings file), relative to <code>hub.json</code>.</li>
+  <li><b>users</b>: users with a token (at least 16 random characters) and a role.</li>
+  <li><b>policy</b>: <code>min_approval</code> (ask, plan or auto) and <code>governance</code> in the <code>governance.json</code> format.</li>
+</ul>
+<table>
+  <tr><th style="width: 18%;">Role</th><th>Permissions</th></tr>
+  <tr><td>viewer</td><td>Reads: web view, REST, MCP</td></tr>
+  <tr><td>architect</td><td>Everything a viewer can, plus sending audit entries and editing team notes</td></tr>
+  <tr><td>admin</td><td>Everything an architect can, plus changing the policy (<code>PUT /api/policy</code>, saved into <code>hub.json</code>)</td></tr>
+</table>
+<p><b>Web view.</b> At <code>http://&lt;hub&gt;/</code> you sign in with the token. The view shows the package tree, search, element details with impact, the model check by the team rules, gaps, the audit trail and team notes.</p>
+<p><b>The MCP server</b> (read-only) works as JSON-RPC over HTTP POST at <code>/mcp</code>, with the header <code>Authorization: Bearer &lt;token&gt;</code>. Tools: <code>list_sources</code>, <code>list_packages</code>, <code>search_elements</code>, <code>element_details</code>, <code>impact_analysis</code>, <code>model_lint</code>, <code>gap_analysis</code>.</p>
+
+<h2 id="s22">22. License, trademarks and contact</h2>
 <p><b>License.</b> Loonar Compass is freeware: you may use it free of charge on any number of computers, also for professional and commercial purposes, without time or territorial limits, and pass on unmodified copies free of charge. Modifying the application is prohibited. The license also sets out rules on AI-generated output (you review it before you approve it or rely on it), on data and on open-source components. The Polish version of the license is binding; the English, German and French versions are translations. The full text is in the <b>About</b> view and in the installation folder: <code>LICENSE.txt</code> in the installation language and, for languages other than Polish, <code>LICENSE.pl.txt</code> with the binding Polish version.</p>
 <p><b>Privacy.</b> The application collects no data (no telemetry). How bug reports and newsletter sign-ups are processed is described in the <a href="https://loonar.eu/privacy/">privacy policy</a>; the owner's details are in the <a href="https://loonar.eu/legal/">legal notice</a>.</p>
 <p><b>Open-source components.</b> The application includes open-source libraries and fonts; each keeps its own license. The list and the license texts are in the <code>THIRD-PARTY-NOTICES.txt</code> file in the installation folder; in the <b>About</b> view, click <b>Show licenses of the components</b>.</p>
 <p><b>Support.</b> The application is free and will stay free. If you want to support its development, use the <b>Support the project</b> view or go to <a href="https://suppi.pl/loonar">suppi.pl/loonar</a>. The source code is at <a href="https://github.com/loonar-eu/loonar-compass">github.com/loonar-eu/loonar-compass</a>.</p>
 <p>Application owner: Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard.<br>Contact: mariusz@loonar.eu, <a href="https://loonar.eu">loonar.eu</a>. The most convenient way to report bugs is the <b>Report a bug</b> view.</p>
-<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.7. Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. OpenAI and GPT are trademarks of OpenAI. Atlassian, Confluence and Jira are trademarks of Atlassian. Microsoft, Windows, Word and Excel are trademarks of the Microsoft group of companies. PostgreSQL is a registered trademark of the PostgreSQL Community Association. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.</p>
+<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.8. Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. OpenAI and GPT are trademarks of OpenAI. Atlassian, Confluence and Jira are trademarks of Atlassian. Microsoft, Windows, Word and Excel are trademarks of the Microsoft group of companies. PostgreSQL is a registered trademark of the PostgreSQL Community Association. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.</p>
 
 </body>
 </html>

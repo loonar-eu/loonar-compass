@@ -6,6 +6,13 @@ Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen
 
 - KI-Modell wählbar: Anbieter Anthropic (Claude) oder OpenAI, beliebiges Modell (aus der Liste oder eigene ID) und Aufwandsstufe (von „Standard des Modells“ bis max). Standard unverändert: Claude Haiku 5.5. Jeder Anbieter hat einen eigenen API-Schlüssel in der Anmeldeinformationsverwaltung; Daten gehen nur an den gewählten.
 - Einstellungen ohne Kartennummern; die erste Karte heißt „KI-Modell“.
+- Modellqualitätsprüfung (Governance) ohne KI-Raten: der Assistent prüft ein Paket mit Unterpaketen – Standard- und leere Namen, Elemente ohne Beschreibung, verwaiste Elemente, doppelte Namen und Beziehungen, Beziehungen zu nicht vorhandenen Elementen, leere Pakete und Diagramme – sowie die Regeln der Organisation aus governance.json: Namenskonventionen, Pflicht-Tagged-Values und erlaubte Beziehungen (Metamodell / MDG). Jeder Befund hat eine Schwere (Fehler, Warnung, Info).
+- Compass in EA prüft eine gerade gezeichnete Beziehung und ein gerade geändertes Element; Befunde erscheinen im Reiter „Loonar Compass“ der Systemausgabe.
+- Lückenanalyse Ist / Soll: zwei Pakete im Vergleich – neu, abzulösen, geändert (Stereotyp, Beschreibung, Beziehungen); auf Wunsch nach Excel.
+- Die Freigabe zeigt eine Vorschau „vorher → nachher“: was entsteht, was sich von welchem Wert auf welchen ändert und was gelöscht wird.
+- Jira (Cloud und Data Center): der Assistent liest Vorgänge (per Schlüssel und JQL-Suche) als Kontext und legt mit Ihrer Zustimmung Vorgänge, Kommentare und Links zu Modellelementen an. Neue Karte „Jira“ in den Einstellungen.
+- Beliebiger Endpunkt kompatibel mit der OpenAI-API: Azure OpenAI, Ollama, LM Studio oder ein Firmen-Gateway – auch lokale Modelle, ohne Daten in die Cloud.
+- Compass Hub – optionaler Teamdienst (LoonarCompass.exe --hub hub.json): Modelle des Teams (EA-Datenbanken und -Dateien), gemeinsame Richtlinie (Regeln der Modellprüfung, minimaler Freigabemodus), zentrales Audit-Protokoll aller Arbeitsplätze, gemeinsame Notizen, Benutzer mit Tokens und Rollen (viewer, architect, admin), Weboberfläche der Modelle für Personen ohne EA und ein MCP-Server (nur Lesen) für andere KI-Werkzeuge. Neue Karte „Team (Compass Hub)“.
 - Strukturierte Szenarien von Elementen: Der Assistent legt Szenarien im Tab Scenarios an, ändert und löscht sie, mit Akteur- und Systemschritten.
 - Compass in EA: Unterhaltung umbenennen (Stift neben der Unterhaltungsliste).
 - Fortschrittsmeldungen lauten „Der Assistent …“ statt „Claude …“.

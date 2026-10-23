@@ -259,6 +259,12 @@ pub fn run_batch(cfg: &AppConfig, ops: &[Value], options: &BatchOptions) -> Resu
     if result["session_lost"] == true {
         guard.take();
     }
+    // An EA project file is written to disk only when EA closes it: the background session ends after each write,
+    // so the next read of the file (and the next write) sees the changes.
+    if cfg.uses_file() {
+        drop(guard);
+        shutdown();
+    }
     check_result(ops, result)
 }
 
