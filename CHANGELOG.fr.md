@@ -2,6 +2,43 @@
 
 Toutes les modifications importantes de l'application Loonar Compass (nommée Loonar EA Assistant jusqu'à la version 0.3).
 
+## Version 0.8.1 (2026-10-23)
+
+Version de correctifs de sécurité après un audit de toute l'application. Recommandée pour tous, en particulier pour les équipes avec Compass Hub. Certaines actions demandent maintenant votre accord plus souvent qu'avant : c'est voulu.
+
+### Compass Hub
+
+- **Robustesse :** une requête malformée n'arrête plus le hub. Les requêtes sont limitées en taille, en nombre d'en-têtes et en durée, et le jeton est vérifié avant la lecture du contenu.
+- **Jetons :** hub.json peut contenir "token_sha256" (empreinte du jeton) au lieu de "token" ; `LoonarCompass.exe --hub-token` crée un nouveau jeton aléatoire et son empreinte. Noms et jetons doivent être uniques. Après 20 jetons erronés, une adresse est refusée pendant 10 minutes (un jeton valide fonctionne toujours).
+- **Lots de modifications :** le hub calcule lui-même, à partir des opérations, la description et l'aperçu que voit le relecteur, et la vue web montre les opérations. Personne, pas même un admin, n'approuve son propre lot. L'application se fait en deux étapes (prise par un Compass, puis résultat), un lot ne peut donc pas être appliqué deux fois. Un admin peut libérer un lot resté bloqué.
+- **Ask :** l'assistant de la vue web ne fait que lire le modèle (pas de fichiers, ni Jira, ni Confluence, ni serveurs MCP) et répond à une question à la fois, avec une limite de temps. Nouveaux réglages de politique : "ask_min_role" (qui peut poser des questions) et "ask_per_hour" (20 questions par personne et par heure par défaut).
+- **Vue web :** Content-Security-Policy et protection contre l'intégration dans un cadre. Le jeton n'est conservé que pour la session du navigateur, avec un bouton « Sign out ». Les erreurs internes s'affichent sous forme d'identifiant ; les détails vont dans hub.log.
+- **Journal d'audit :** n'accepte que les champs connus, horodatés par le hub. Les données des postes ne sont visibles que par l'admin.
+
+### Accords et enregistrements dans le modèle
+
+- **Fichiers :** l'export XMI, les documents issus des modèles EA et l'import XMI demandent toujours votre accord (même en mode auto) et affichent le chemin complet. Seuls les chemins complets sur un lecteur local sont acceptés, sans partages réseau ni dossiers système.
+- **Suppression :** un identifiant donné en texte ou en nombre décimal ne contourne plus la question lors de la suppression d'un élément qui a des relations. Supprimer un paquetage demande toujours.
+- **Mémoire, modèles et scripts :** enregistrer une note de mémoire ou un modèle de document, et enregistrer ou exécuter un script EA, demandent toujours, avec tout le texte ou tout le code. Un script s'exécute exactement comme affiché, avec ses inclusions.
+- **Lecture de fichiers :** avant de lire un fichier hors des pièces jointes de la conversation (document d'exigences, dossier de code), l'assistant demande.
+- **Requêtes SQL :** l'assistant ne peut que lire. Les requêtes contenant des mots d'écriture (INSERT, UPDATE, DELETE, INTO…) ou des guillemets inhabituels sont refusées, y compris à la lecture par la fenêtre EA.
+- **Agents d'événements :** ils ne font que lire le modèle. Les noms d'objets entrent dans leur demande comme des données, pas comme des instructions.
+- **Annulation :** le journal d'annulation est vérifié avant exécution, et l'accord montre ce qui sera supprimé.
+
+### Serveurs MCP et connexions
+
+- **Accord MCP :** chaque appel d'outil MCP demande votre accord, sauf si le serveur a "trusted": true. La déclaration « lecture seule » du serveur ne suffit plus.
+- **Secrets :** les clés et mots de passe de Compass lui-même ne peuvent pas être transmis à un serveur MCP par ${secret:…}. Exception : ${secret:hub_token} pour le point /mcp du hub des Paramètres. Un programme MCP local ne reçoit que les variables d'environnement de base et celles de "env".
+- **Redirections et adresses :** les redirections HTTP ne sont suivies que sur le même serveur, les clés d'API ne partent donc pas ailleurs. Une adresse http:// n'est autorisée que pour cet ordinateur, sans nom d'utilisateur ni mot de passe.
+
+### Autres
+
+- **Éditeur de diagrammes :** les noms du modèle s'affichent comme du texte (pas de HTML), la page a une CSP, et seuls les objets du diagramme ouvert peuvent être supprimés ou modifiés.
+- **Complément EA :** le journal ne contient plus la chaîne de connexion, Compass démarre dans son propre dossier, et les DLL ne sont pas cherchées dans le dossier courant.
+- **Boîtes d'erreur EA :** seules celles qui apparaissent pendant la requête de Compass sont fermées.
+- **SQLite 3.50.2 :** corrige des vulnérabilités connues. Les fichiers de modèle sont ouverts en mode défensif.
+- **Recommandation pour les entreprises :** un rôle PostgreSQL dédié avec des droits minimaux (SELECT, plus INSERT, UPDATE et DELETE sur les tables t_* pour les enregistrements via EA ; jamais superutilisateur), et un chiffrement de la connexion avec vérification du certificat.
+
 ## Version 0.8 (2026-10-23)
 
 La plus grande version à ce jour. Compass contrôle la qualité du modèle, vérifie chaque enregistrement et permet de l'annuler, compare le modèle aux exigences et au code, estime les modifications et travaille en équipe. Chaque fonction a un exemple de demande : tapez-la telle quelle dans la conversation, ou avec vos propres mots.

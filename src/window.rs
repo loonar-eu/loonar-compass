@@ -124,3 +124,21 @@ pub fn show_error(title: &str, text: &str) {
     }
 }
 
+
+/// The application is a window program: its output reaches a console only after attaching to the parent's one. When
+/// the output is redirected, the inherited handles are used as they are.
+pub fn attach_console() {
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn AttachConsole(process: u32) -> i32;
+        fn GetStdHandle(kind: u32) -> isize;
+    }
+    const STD_OUTPUT_HANDLE: u32 = -11i32 as u32;
+    // SAFETY: plain Win32 calls with constant arguments.
+    unsafe {
+        let handle = GetStdHandle(STD_OUTPUT_HANDLE);
+        if handle == 0 || handle == -1 {
+            AttachConsole(u32::MAX);
+        }
+    }
+}

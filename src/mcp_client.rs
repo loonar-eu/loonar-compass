@@ -34,6 +34,8 @@ pub struct ServerConfig {
     pub url: Option<String>,
     pub headers: Vec<(String, String)>,
     pub trusted: bool,
+    /// The server is the MCP endpoint of the team hub from the settings: its headers may use ${secret:hub_token}.
+    pub is_team_hub: bool,
 }
 
 pub fn config_file(base_dir: &Path) -> PathBuf {
@@ -42,6 +44,11 @@ pub fn config_file(base_dir: &Path) -> PathBuf {
 
 /// `${secret:NAME}` and `${env:NAME}` in a value.
 fn expand(text: &str) -> Result<String> {
+    expand_for(text, false)
+}
+
+/// As `expand`; `team_hub`: the value goes to the team hub of the settings, so the hub token may be used.
+fn expand_for(text: &str, team_hub: bool) -> Result<String> {
     let mut out = String::new();
     let mut rest = text;
     while let Some(start) = rest.find("${") {
@@ -52,7 +59,8 @@ fn expand(text: &str) -> Result<String> {
         let value = if let Some(name) = inner.strip_prefix("secret:") {
             // Compass's own keys and passwords never go to an MCP server.
             let base = name.trim().split(':').next().unwrap_or("").to_ascii_lowercase();
-            if crate::config::secrets::ALL.iter().any(|s| s.eq_ignore_ascii_case(&base)) {
+            let hub_token = team_hub && base.eq_ignore_ascii_case(crate::config::secrets::HUB_TOKEN);
+            if !hub_token && crate::config::secrets::ALL.iter().any(|s| s.eq_ignore_ascii_case(&base)) {
                 bail!("{}", crate::i18n::fmt("the secret {0} belongs to Compass and cannot be given to an MCP server; save the server's token under another name", &[name.trim().to_string()]));
             }
             crate::config::secrets::get(name.trim()).with_context(|| crate::i18n::fmt("no secret {0} in Credential Manager", &[name.to_string()]))?
@@ -79,7 +87,17 @@ pub fn load(base_dir: &Path) -> Result<Vec<ServerConfig>> {
     if text.trim().is_empty() {
         return Ok(Vec::new());
     }
-    parse(&text)
+    let mut servers = parse(&text)?;
+    // The team hub of the settings (same scheme, host and port, path /mcp) may get the hub token.
+    let hub_url = std::fs::read_to_string(base_dir.join("app.properties")).ok().and_then(|p| crate::config::parse_properties(&p).get("hub.url").cloned()).unwrap_or_default();
+    if let Ok(hub) = reqwest::Url::parse(hub_url.trim()) {
+        for s in servers.iter_mut() {
+            if let Some(url) = s.url.as_deref().and_then(|u| reqwest::Url::parse(u).ok()) {
+                s.is_team_hub = url.scheme() == hub.scheme() && url.host_str() == hub.host_str() && url.port_or_known_default() == hub.port_or_known_default() && url.path().trim_end_matches('/').ends_with("/mcp");
+            }
+        }
+    }
+    Ok(servers)
 }
 
 pub fn parse(text: &str) -> Result<Vec<ServerConfig>> {
@@ -104,6 +122,7 @@ pub fn parse(text: &str) -> Result<Vec<ServerConfig>> {
             url: s["url"].as_str().map(String::from),
             headers: pairs(&s["headers"]),
             trusted: s["trusted"] == true,
+            is_team_hub: false,
         };
         if server.command.is_none() == server.url.is_none() {
             bail!("{}", crate::i18n::fmt("MCP server {0}: give either \"command\" (a local program) or \"url\" (HTTP)", &[name]));
@@ -176,8 +195,8 @@ impl Connection {
             });
             Transport::Stdio { child, stdin, lines }
         } else {
-            let headers = config.headers.iter().map(|(k, v)| Ok((k.clone(), expand(v)?))).collect::<Result<Vec<_>>>()?;
-            let client = reqwest::blocking::Client::builder().timeout(TIMEOUT).redirect(crate::config::same_origin_redirects()).build()?;
+            let headers = config.headers.iter().map(|(k, v)| Ok((k.clone(), expand_for(v, config.is_team_hub)?))).collect::<Result<Vec<_>>>()?;
+            let client = reqwest::blocking::Client::builder().timeout(TIMEOUT).redirect(crate::net::same_origin_redirects()).build()?;
             Transport::Http { client, url: config.url.clone().unwrap_or_default(), headers, session: None }
         };
         let mut conn = Connection { config: config.clone(), transport, next_id: 0, tools: Vec::new() };
@@ -461,6 +480,9 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
         assert!(expand("Bearer ${env:LOONAR_TEST_NOT_SET_123}").is_err());
         std::env::set_var("LOONAR_TEST_MCP_TOKEN", "t0k");
         assert_eq!(expand("Bearer ${env:LOONAR_TEST_MCP_TOKEN}").unwrap(), "Bearer t0k");
+        crate::i18n::set(crate::i18n::Lang::En);
+        assert!(format!("{:#}", expand("Bearer ${secret:claude_api_key}").unwrap_err()).contains("belongs to Compass"));
+        assert!(format!("{:#}", expand("Bearer ${secret:hub_token}").unwrap_err()).contains("belongs to Compass"), "only the team hub's own MCP endpoint gets the hub token");
     }
 
     #[test]

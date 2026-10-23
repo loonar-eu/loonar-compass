@@ -244,23 +244,9 @@ pub fn check(o: &Options, default_props: &Path) -> Result<(String, String, bool)
     Ok((md.join("\n") + "\n", junit(&items, o.fail_on, &["Model check", "Model and code", "Requirements"]), failed))
 }
 
-#[link(name = "kernel32")]
-extern "system" {
-    fn AttachConsole(process: u32) -> i32;
-    fn GetStdHandle(kind: u32) -> isize;
-}
-
-/// The application is a window program: its output reaches a console only after attaching to the parent's one. When
-/// the output is redirected (a CI runner, `| Out-Host`), the inherited handles are used as they are.
+/// The application is a window program: its output reaches a console only after attaching to the parent's one.
 pub fn attach_console() {
-    const STD_OUTPUT_HANDLE: u32 = -11i32 as u32;
-    const ATTACH_PARENT_PROCESS: u32 = u32::MAX;
-    unsafe {
-        let handle = GetStdHandle(STD_OUTPUT_HANDLE);
-        if handle == 0 || handle == -1 {
-            AttachConsole(ATTACH_PARENT_PROCESS);
-        }
-    }
+    crate::window::attach_console();
 }
 
 /// `--check` from the command line: prints the report and returns the exit code.

@@ -2,6 +2,43 @@
 
 Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen Loonar EA Assistant).
 
+## Version 0.8.1 (2026-10-23)
+
+Sicherheitsrelease nach einem Audit der gesamten Anwendung. Empfohlen für alle, besonders für Teams mit Compass Hub. Einige Aktionen fragen jetzt öfter nach Zustimmung als bisher – das ist beabsichtigt.
+
+### Compass Hub
+
+- **Robustheit:** eine fehlerhafte Anfrage stoppt den Hub nicht mehr. Anfragen sind in Größe, Anzahl der Header und Zeit begrenzt, und das Token wird vor dem Lesen des Inhalts geprüft.
+- **Tokens:** hub.json kann statt "token" auch "token_sha256" (Hash des Tokens) enthalten; `LoonarCompass.exe --hub-token` erzeugt ein neues zufälliges Token und seinen Hash. Namen und Tokens müssen eindeutig sein. Nach 20 falschen Tokens wird eine Adresse 10 Minuten lang abgewiesen (ein gültiges Token funktioniert weiter).
+- **Änderungssätze:** Beschreibung und Vorschau für den Prüfer berechnet der Hub selbst aus den Operationen, und die Weboberfläche zeigt die Operationen. Niemand, auch kein Admin, genehmigt den eigenen Satz. Die Übernahme hat zwei Schritte (ein Compass übernimmt, dann meldet es das Ergebnis), sodass ein Satz nicht zweimal übernommen werden kann. Ein Admin kann einen hängengebliebenen Satz freigeben.
+- **Ask:** der Assistent in der Weboberfläche liest nur das Modell (keine Dateien, kein Jira, kein Confluence, keine MCP-Server), beantwortet eine Frage nach der anderen, mit Zeitlimit. Neue Richtlinienwerte: "ask_min_role" (wer fragen darf) und "ask_per_hour" (Standard 20 Fragen pro Person und Stunde).
+- **Weboberfläche:** Content-Security-Policy und Schutz vor Einbettung in Frames. Das Token wird nur für die Browsersitzung gemerkt, und es gibt die Schaltfläche „Sign out“. Interne Fehler erscheinen als ID, die Details stehen in hub.log.
+- **Audit-Protokoll:** nimmt nur bekannte Felder mit der Zeit des Hubs an. Arbeitsplatzdaten sieht nur der Admin.
+
+### Zustimmung und Speichern im Modell
+
+- **Dateien:** XMI-Export, Dokumente aus EA-Vorlagen und XMI-Import fragen immer nach Zustimmung (auch im Auto-Modus) und zeigen den vollständigen Pfad. Erlaubt sind nur vollständige Pfade auf einem lokalen Laufwerk, keine Netzwerkfreigaben und keine Systemordner.
+- **Löschen:** eine ID als Text oder Bruchzahl umgeht die Frage beim Löschen eines Elements mit Beziehungen nicht mehr. Das Löschen eines Pakets fragt immer.
+- **Gedächtnis, Vorlagen und Skripte:** das Speichern einer Gedächtnisnotiz und einer Dokumentvorlage sowie das Speichern und Starten eines EA-Skripts fragen immer, mit dem ganzen Text oder Code. Ein Skript läuft genau so wie gezeigt, mit seinen Includes.
+- **Dateien lesen:** bevor der Assistent eine Datei außerhalb der Anhänge des Gesprächs liest (Anforderungsdokument, Quellordner), fragt er.
+- **SQL-Abfragen:** der Assistent darf nur lesen. Abfragen mit Schreibwörtern (INSERT, UPDATE, DELETE, INTO …) oder ungewöhnlichen Anführungen werden abgelehnt, auch beim Lesen über das EA-Fenster.
+- **Ereignis-Agenten:** sie lesen das Modell nur. Objektnamen gehen als Daten in ihren Auftrag, nicht als Anweisungen.
+- **Rückgängig:** das Rückgängig-Journal wird vor der Ausführung geprüft, und die Zustimmung zeigt, was gelöscht wird.
+
+### MCP-Server und Verbindungen
+
+- **MCP-Zustimmung:** jeder MCP-Werkzeugaufruf fragt nach Zustimmung, außer der Server hat "trusted": true. Die Angabe „nur lesend“ des Servers genügt nicht mehr.
+- **Geheimnisse:** die eigenen Schlüssel und Passwörter von Compass können nicht über ${secret:…} an einen MCP-Server gehen. Ausnahme: ${secret:hub_token} für den /mcp-Endpunkt des Hubs aus den Einstellungen. Ein lokales MCP-Programm erhält nur grundlegende Umgebungsvariablen und die aus "env".
+- **Weiterleitungen und Adressen:** HTTP-Weiterleitungen nur innerhalb desselben Servers (API-Schlüssel gehen nirgendwo anders hin). Eine http://-Adresse ist nur für diesen Rechner erlaubt, ohne Benutzername oder Passwort darin.
+
+### Weiteres
+
+- **Diagramm-Editor:** Namen aus dem Modell erscheinen als Text (kein HTML), die Seite hat eine CSP, und nur Objekte des geöffneten Diagramms können gelöscht oder geändert werden.
+- **EA-Add-in:** das Protokoll enthält keinen Connection-String mehr, Compass startet in seinem eigenen Ordner, und DLLs werden nicht im aktuellen Ordner gesucht.
+- **EA-Fehlerdialoge:** geschlossen werden nur die, die während der Abfrage von Compass erscheinen.
+- **SQLite 3.50.2:** behebt bekannte Schwachstellen. Modelldateien werden im Defensivmodus geöffnet.
+- **Empfehlung für Unternehmen:** eine eigene PostgreSQL-Rolle mit minimalen Rechten (SELECT, für das Speichern über EA zusätzlich INSERT, UPDATE und DELETE auf den t_*-Tabellen; nie Superuser) und Verbindungsverschlüsselung mit Zertifikatsprüfung.
+
 ## Version 0.8 (2026-10-23)
 
 Das bisher größte Release. Compass prüft die Modellqualität, kontrolliert jedes Speichern und macht es rückgängig, vergleicht das Modell mit Anforderungen und mit Code, schätzt Änderungen und arbeitet im Team. Zu jeder Funktion gibt es eine Beispielanfrage: Geben Sie sie so im Gespräch ein oder mit eigenen Worten.

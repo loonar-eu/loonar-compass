@@ -1605,7 +1605,7 @@ fn main() -> eframe::Result {
         let _ = windows::Win32::System::LibraryLoader::SetDefaultDllDirectories(windows::Win32::System::LibraryLoader::LOAD_LIBRARY_SEARCH_SYSTEM32);
     }
     window::use_system_dpi_awareness();
-    window::install_panic_hook(APP_NAME, CRASH_LOG);
+    window::install_panic_hook(APP_NAME, CRASH_LOG, true);
     let args: Vec<OsString> = std::env::args_os().collect();
     if let Some(i) = args.iter().position(|a| a == MACHINE_PART_ARG) {
         std::process::exit(args.get(i + 1).map_or(2, |plan| machine_part(Path::new(plan))));
