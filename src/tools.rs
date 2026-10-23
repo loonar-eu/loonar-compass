@@ -533,6 +533,9 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "memory_save" => {
             let name = input["name"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["name".to_string()]))?;
             let content = input["content"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["content".to_string()]))?;
+            if content.chars().count() > LONGEST_APPROVAL {
+                bail!("{}", crate::i18n::fmt("the text is too long to approve ({0} characters, at most {1}): make it shorter", &[content.chars().count().to_string(), LONGEST_APPROVAL.to_string()]));
+            }
             // Memory goes into every later conversation: always asked, with the whole text.
             ctx.approver.confirm_always(&crate::i18n::fmt("Save a note to the assistant's memory:\n\"{0}\"\n{1}", &[name.to_string(), shorten_long(content)]))?;
             let model = if input["only_this_model"] == true { ctx.cfg.model_label() } else { String::new() };
@@ -556,6 +559,9 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "save_template" => {
             let name = input["name"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["name".to_string()]))?;
             let content = input["content"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["content".to_string()]))?;
+            if content.chars().count() > LONGEST_APPROVAL {
+                bail!("{}", crate::i18n::fmt("the text is too long to approve ({0} characters, at most {1}): make it shorter", &[content.chars().count().to_string(), LONGEST_APPROVAL.to_string()]));
+            }
             // Templates guide later documents: saving one is always asked, with the whole text.
             let question = if crate::templates::exists(&ctx.cfg.templates_dir, name) { "Overwrite the document template \"{0}\":\n{1}" } else { "Save the document template \"{0}\":\n{1}" };
             ctx.approver.confirm_always(&crate::i18n::fmt(question, &[name.to_string(), shorten_long(content)]))?;
@@ -729,6 +735,9 @@ fn propose_change(input: &Value, ctx: &ToolContext) -> Result<String> {
     }
     let ops = &normalize_ops(ops);
     let client = hub_client(ctx.cfg)?;
+    if ctx.cfg.hub_source.trim().is_empty() {
+        bail!("{}", crate::i18n::tr("this model has no id in the team hub: enter it in Settings → Team (Compass Hub) → model id in the hub"));
+    }
     let title = input["title"].as_str().unwrap_or("Change").to_string();
     let id = client.propose(&json!({
         "source": hub_source(ctx.cfg), "title": title, "summary": ea::describe(ops), "preview": crate::governance::preview(ctx.cfg, ops), "ops": ops
@@ -754,6 +763,9 @@ fn change_sets(input: &Value, ctx: &ToolContext) -> Result<String> {
         "apply" => {
             let id = input["id"].as_str().unwrap_or("").to_string();
             let c = client.change(&id)?;
+            if c["status"] == "applying" {
+                bail!("{}", crate::i18n::fmt("change set {0} is being applied by {1} (or that attempt stopped): an admin of the hub checks the model and resets it", &[id.clone(), c["claimed_by"].as_str().unwrap_or("").to_string()]));
+            }
             if c["status"] != "approved" {
                 bail!("{}", crate::i18n::fmt("change set {0} is {1}: only an approved change set can be applied", &[id.clone(), c["status"].as_str().unwrap_or("").to_string()]));
             }
@@ -763,7 +775,15 @@ fn change_sets(input: &Value, ctx: &ToolContext) -> Result<String> {
             // Claimed first: only one Compass applies a change set, and only that one reports the result.
             client.change_action(&id, "claim", &json!({}))?;
             let result = ea_write(&json!({ "ops": c["ops"] }), ctx);
-            let reported = client.change_action(&id, "applied", &json!({ "ok": result.is_ok(), "result": result.as_ref().map(|t| t.chars().take(2000).collect::<String>()).unwrap_or_else(|e| e.to_string()) }));
+            let report = json!({ "ok": result.is_ok(), "result": result.as_ref().map(|t| t.chars().take(2000).collect::<String>()).unwrap_or_else(|e| e.to_string()) });
+            let mut reported = client.change_action(&id, "applied", &report);
+            for wait in [2, 5, 10] {
+                if reported.is_ok() {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_secs(wait));
+                reported = client.change_action(&id, "applied", &report);
+            }
             if let Err(e) = &reported {
                 crate::hub::note_failure(&format!("{e:#}"));
             }
@@ -813,7 +833,7 @@ fn ea_script(input: &Value, ctx: &ToolContext) -> Result<String> {
             // A script in the model can be run later by anyone from EA: saving it is always asked, with the whole code.
             ctx.approver.confirm_always(&crate::i18n::fmt("Save the EA script {0}.{1} ({2}, {3} lines){4}:\n{5}", &[
                 group.clone(), name.clone(), language.clone(), code.lines().count().to_string(),
-                if updated { crate::i18n::tr(" - REPLACES the existing script").to_string() } else { String::new() }, script_for_approval(&code),
+                if updated { crate::i18n::tr(" - REPLACES the existing script").to_string() } else { String::new() }, script_for_approval(&code)?,
             ]))?;
             ea::run_batch(ctx.cfg, &[json!({ "op": "execute_sql", "statements": statements })], &BatchOptions::default())?;
             let saved = crate::scripts::find(ctx.cfg, &format!("{group}.{name}"))?;
@@ -826,7 +846,7 @@ fn ea_script(input: &Value, ctx: &ToolContext) -> Result<String> {
             let s = crate::scripts::find(ctx.cfg, &name)?;
             // The whole code with its includes is shown, and exactly that code runs.
             let resolved = crate::scripts::resolve_includes(ctx.cfg, &s)?;
-            ctx.approver.confirm_always(&crate::i18n::fmt("Run the EA script {0}.{1} ({2}) in the open EA window? A script can change anything in the model.\n{3}", &[s.group.clone(), s.name.clone(), s.language.clone(), script_for_approval(&resolved)]))?;
+            ctx.approver.confirm_always(&crate::i18n::fmt("Run the EA script {0}.{1} ({2}) in the open EA window? A script can change anything in the model.\n{3}", &[s.group.clone(), s.name.clone(), s.language.clone(), script_for_approval(&resolved)?]))?;
             crate::scripts::run(ctx.cfg, &name, &resolved)
         }
         other => bail!("{}", crate::i18n::fmt("unknown ea_script action: {0}", &[other.to_string()])),
@@ -1323,7 +1343,7 @@ fn destructive_details(cfg: &AppConfig, ops: &[Value]) -> Vec<String> {
 
 /// Reference fields of operations: an id given as text ("123") or as 123.0 becomes a number before any check, so the
 /// checks see the same object that EA changes.
-const REF_FIELDS: &[&str] = &[
+pub const REF_FIELDS: &[&str] = &[
     "element", "package", "diagram", "connector", "child_package", "source", "target", "parent", "classifier", "from", "to", "object", "attribute",
     "operation", "target_package", "owner", "element_id", "diagram_id", "package_id", "connector_id",
 ];
@@ -1334,13 +1354,15 @@ pub fn normalize_ops(ops: &[Value]) -> Vec<Value> {
             let mut op = op.clone();
             if let Some(fields) = op.as_object_mut() {
                 for (name, value) in fields.iter_mut() {
-                    let whole = value.as_f64().filter(|f| f.fract() == 0.0 && !value.is_i64() && !value.is_u64() && f.abs() < 1e15).map(|f| f as i64);
-                    if let Some(n) = whole {
-                        *value = json!(n);
-                    } else if REF_FIELDS.contains(&name.as_str()) {
-                        if let Some(n) = value.as_str().and_then(|s| s.trim().parse::<i64>().ok()) {
+                    if REF_FIELDS.contains(&name.as_str()) {
+                        // A reference as EA reads it (ea_com int_of): a number rounded, or a whole number in text.
+                        if let Some(f) = value.as_f64().filter(|f| f.is_finite() && f.abs() < 2e9) {
+                            *value = json!(f.round() as i64);
+                        } else if let Some(n) = value.as_str().and_then(|s| s.trim().parse::<i64>().ok()) {
                             *value = json!(n);
                         }
+                    } else if let Some(n) = value.as_f64().filter(|f| f.fract() == 0.0 && !value.is_i64() && !value.is_u64() && f.abs() < 1e15).map(|f| f as i64) {
+                        *value = json!(n);
                     }
                 }
             }
@@ -1354,16 +1376,42 @@ pub fn check_file_path(file: &str) -> Result<std::path::PathBuf> {
     let text = file.trim().replace('/', "\\");
     let bytes = text.as_bytes();
     let drive = bytes.len() > 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'\\';
-    if !drive || text.contains("\\..\\") || text.ends_with("\\..") || text.contains('*') || text.contains('?') {
+    // No "." or ".." segments, no streams (":"), no segments ending in a dot or a space, no doubled separators, no wildcards.
+    let segments: Vec<&str> = text[3.min(text.len())..].split('\\').collect();
+    let odd = segments.iter().any(|s| s.is_empty() || *s == "." || *s == ".." || s.ends_with('.') || s.ends_with(' '))
+        || text[2.min(text.len())..].contains(':') || text.contains('*') || text.contains('?') || text.contains('"') || text.contains('<') || text.contains('>') || text.contains('|');
+    if !drive || odd {
         bail!("{}", crate::i18n::fmt("{0}: give a full path on a local drive; network shares and relative paths are not allowed", &[file.to_string()]));
     }
-    let lower = text.to_lowercase();
+    // The real path: the deepest existing folder resolved by Windows (short 8.3 names, junctions, links), then the rest.
+    let path = std::path::PathBuf::from(&text);
+    let mut existing = path.as_path();
+    let mut rest: Vec<std::ffi::OsString> = Vec::new();
+    while !existing.exists() {
+        rest.push(existing.file_name().map(|n| n.to_os_string()).unwrap_or_default());
+        existing = existing.parent().unwrap_or(std::path::Path::new(&text[..3]));
+        if existing.as_os_str().len() <= 3 {
+            break;
+        }
+    }
+    let mut real = std::fs::canonicalize(existing).unwrap_or_else(|_| existing.to_path_buf());
+    for name in rest.iter().rev() {
+        real.push(name);
+    }
+    let shown = real.display().to_string();
+    let shown = shown.strip_prefix(r"\\?\").unwrap_or(&shown).to_string();
+    if shown.starts_with(r"\\") || shown.starts_with(r"UNC\") {
+        bail!("{}", crate::i18n::fmt("{0}: give a full path on a local drive; network shares and relative paths are not allowed", &[file.to_string()]));
+    }
+    let lower = format!("{}\\", shown.to_lowercase());
     let windows = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into()).to_lowercase();
-    let forbidden = [windows.as_str(), r"c:\program files", r"c:\programdata", r"\appdata\roaming\microsoft\windows\start menu", r"\appdata\roaming\loonar compass", r"\appdata\local\programs\loonar compass"];
-    if forbidden.iter().any(|f| if f.starts_with('\\') { lower.contains(f) } else { lower.starts_with(f) }) {
+    // System folders, the program folders, autostart and the profile's application data (its Temp folder is allowed).
+    let forbidden_start = [format!("{windows}\\"), r"c:\program files".to_string(), r"c:\programdata\".to_string()];
+    let forbidden_inside = [r"\start menu\", r"\startup\", r"\appdata\roaming\", r"\appdata\locallow\", r"\appdata\local\microsoft\", r"\appdata\local\programs\"];
+    if forbidden_start.iter().any(|f| lower.starts_with(f.as_str())) || forbidden_inside.iter().any(|f| lower.contains(f)) {
         bail!("{}", crate::i18n::fmt("{0}: system and application folders are not allowed", &[file.to_string()]));
     }
-    Ok(std::path::PathBuf::from(text))
+    Ok(std::path::PathBuf::from(shown))
 }
 
 /// A local file or folder the assistant wants to read (requirements, source code): no network shares or devices; outside
@@ -1387,24 +1435,26 @@ fn read_path(ctx: &ToolContext, given: &str, folder: bool) -> Result<std::path::
     Ok(path)
 }
 
-/// The whole code of a script for the approval (long scripts up to 20 000 characters), with risky calls pointed out.
-fn script_for_approval(code: &str) -> String {
-    let risky = ["ActiveXObject", "CreateObject", "WScript.Shell", "Shell.Application", "Scripting.FileSystemObject", ".Run(", ".Exec(", "XMLHTTP", "ADODB"];
+/// The longest text shown whole in an approval; longer ones are refused (what is approved is what is saved or run).
+const LONGEST_APPROVAL: usize = 20_000;
+
+/// The whole code of a script for the approval, with risky calls pointed out; a longer script is refused.
+fn script_for_approval(code: &str) -> Result<String> {
+    if code.chars().count() > LONGEST_APPROVAL {
+        bail!("{}", crate::i18n::fmt("the script is too long to approve ({0} characters, at most {1}): run it from EA yourself", &[code.chars().count().to_string(), LONGEST_APPROVAL.to_string()]));
+    }
+    let risky = ["ActiveXObject", "CreateObject", "GetObject", "WScript.Shell", "Shell.Application", "Scripting.FileSystemObject", "winmgmts", ".Run(", ".Exec(", "XMLHTTP", "ADODB", "Repository.Execute", ".Execute("];
     let found: Vec<&str> = risky.iter().filter(|r| code.to_lowercase().contains(&r.to_lowercase())).copied().collect();
-    let mut text: String = code.chars().take(20_000).collect();
-    if code.chars().count() > 20_000 {
-        text.push_str("\n…");
-    }
-    if found.is_empty() {
-        text
+    Ok(if found.is_empty() {
+        code.to_string()
     } else {
-        format!("{}\n\n{text}", crate::i18n::fmt("⚠ The script uses: {0} (access to files, programs or the network outside EA).", &[found.join(", ")]))
-    }
+        format!("{}\n\n{code}", crate::i18n::fmt("⚠ The script uses: {0} (access to files, programs or the network outside EA).", &[found.join(", ")]))
+    })
 }
 
-/// A long text for an approval: the whole text up to 6000 characters.
+/// A text for an approval (callers refuse texts longer than LONGEST_APPROVAL).
 fn shorten_long(text: &str) -> String {
-    if text.chars().count() > 6000 { format!("{}…", text.chars().take(6000).collect::<String>()) } else { text.to_string() }
+    text.to_string()
 }
 
 fn ea_write(input: &Value, ctx: &ToolContext) -> Result<String> {
@@ -1415,18 +1465,18 @@ fn ea_write(input: &Value, ctx: &ToolContext) -> Result<String> {
             bail!("{}", crate::i18n::fmt("operation {0} ('{1}') is not allowed. Allowed: {2}", &[(i + 1).to_string(), name.to_string(), ea::MODEL_OPS.join(", ")]));
         }
     }
-    let normalized = normalize_ops(given);
-    let ops = &normalized;
+    let mut normalized = normalize_ops(given);
     let mut risky_files = Vec::new();
-    for op in ops.iter() {
-        let kind = op["op"].as_str().unwrap_or("");
-        if matches!(kind, "export_xmi" | "import_xmi" | "generate_report") {
+    for op in normalized.iter_mut() {
+        let kind = op["op"].as_str().unwrap_or("").to_string();
+        if matches!(kind.as_str(), "export_xmi" | "import_xmi" | "generate_report") {
+            // Files outside the model are always asked (also in auto), with the real full path in the dialog and for EA.
             let path = check_file_path(op["file"].as_str().unwrap_or(""))?;
-            if kind == "import_xmi" || path.exists() {
-                risky_files.push(path);
-            }
+            op["file"] = json!(path.display().to_string());
+            risky_files.push(path);
         }
     }
+    let ops = &normalized;
     check_unchanged(ctx.cfg, &input["expect_unchanged"])?;
     let summary = crate::i18n::fmt("Saving to the EA model:\n{0}\n\nBefore → after:\n{1}", &[ea::describe(ops), crate::governance::preview(ctx.cfg, ops)]);
     let destructive = destructive_details(ctx.cfg, ops);
@@ -1813,6 +1863,11 @@ fn db_query(sql: &str, cfg: &AppConfig) -> Result<String> {
     if let Some(f) = FORBIDDEN_FUNCTIONS.iter().find(|f| lower.contains(*f)) {
         bail!("{}", crate::i18n::fmt("the query uses a server function that is not allowed ({0}); only reading the model is allowed", &[f.trim_end_matches('_').to_string()]));
     }
+    // Quoting the check could read differently from the database (dollar quotes, backslash escapes, comments,
+    // [..] and `..` names) is not needed for reading the model: refused.
+    if s.contains('$') || s.contains('\\') || s.contains('`') || s.contains('[') || s.contains("--") || s.contains("/*") {
+        bail!("{}", crate::i18n::tr("the query uses $, \\, `, [ ] or comments: write it without them (plain SELECT on the model tables)"));
+    }
     if let Some(word) = write_word(s) {
         bail!("{}", crate::i18n::fmt("the query contains {0}: only reading the model is allowed (a SELECT without INSERT, UPDATE, DELETE, INTO…)", &[word.to_uppercase()]));
     }
@@ -1973,6 +2028,15 @@ mod tests {
         assert_eq!(ops[0]["element"], 123);
         assert_eq!(ops[1]["element"], 7);
         assert_eq!(ops[1]["name"], "2024", "names stay text");
+        assert_eq!(normalize_ops(&[json!({"op":"delete","package":12.4})])[0]["package"], 12, "rounded as EA rounds it");
+        assert!(check_file_path(r"C:\PROGRA~1\x.xml").is_err(), "a short name of Program Files is resolved and refused");
+        assert!(check_file_path(r"C:\x\.\y.xml").is_err() && check_file_path(r"C:\x\a.xml:s").is_err());
+        assert!(check_file_path(r"C:\x\y.\z.xml").is_err() && check_file_path(r"C:\x\\z.xml").is_err() && check_file_path(r"C:\Users\u\AppData\Roaming\x.xml").is_err());
+        let temp = std::env::temp_dir().join("loonar-export-test").join("m.xml");
+        assert!(check_file_path(&temp.display().to_string()).is_ok(), "the profile's Temp folder (also as a short name) is allowed");
+        for sql in ["select $$x$$ from t_object", "select e'a\\'b' from t_object", "select [name] from t_object", "select 1 /* x */ from t_object", "select 1 -- x"] {
+            assert!(db_query(sql, &test_config()).is_err(), "{sql}");
+        }
         assert_eq!((ops[2]["source"].as_str(), ops[2]["target"].as_i64()), (Some("#a"), Some(5)));
         // Files of XMI and reports: local full paths outside system folders.
         assert!(check_file_path(r"C:\Export\model.xml").is_ok() && check_file_path("D:/Reports/a.docx").is_ok());

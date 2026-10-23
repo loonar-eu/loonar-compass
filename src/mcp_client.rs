@@ -147,7 +147,8 @@ impl Connection {
             cmd.env_clear();
             for name in ["SystemRoot", "SystemDrive", "windir", "ComSpec", "PATH", "PATHEXT", "TEMP", "TMP", "USERPROFILE", "USERNAME", "USERDOMAIN", "HOMEDRIVE", "HOMEPATH",
                 "APPDATA", "LOCALAPPDATA", "ProgramData", "ProgramFiles", "ProgramFiles(x86)", "CommonProgramFiles", "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE",
-                "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy", "NODE_EXTRA_CA_CERTS", "JAVA_HOME"] {
+                "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy", "NODE_EXTRA_CA_CERTS", "JAVA_HOME", "ALLUSERSPROFILE",
+                "PUBLIC", "OS", "COMPUTERNAME", "USERDNSDOMAIN", "CommonProgramW6432", "ProgramW6432"] {
                 if let Some(value) = std::env::var_os(name) {
                     cmd.env(name, value);
                 }

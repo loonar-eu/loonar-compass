@@ -53,7 +53,7 @@ fn chrono_free_stamp() -> String {
 /// Shows a message instead of disappearing silently when the program panics (release builds abort on panic,
 /// which would close the window without a trace): writes the details to `%TEMP%\<log_name>` and shows them
 /// in a system message box. Call once, at the start of `main`.
-pub fn install_panic_hook(title: &'static str, log_name: &'static str) {
+pub fn install_panic_hook(title: &'static str, log_name: &'static str, dialog: bool) {
     std::panic::set_hook(Box::new(move |info| {
         let location = info.location().map(|l| format!("{}:{}", l.file(), l.line())).unwrap_or_default();
         let message = info
@@ -65,6 +65,10 @@ pub fn install_panic_hook(title: &'static str, log_name: &'static str) {
         let details = format!("{} {}\n{message}\n{location}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
         let log = std::env::temp_dir().join(log_name);
         let _ = std::fs::write(&log, format!("{}\n{details}\n", chrono_free_stamp()));
+        if !dialog {
+            eprintln!("{details}");
+            return;
+        }
         show_error(
             title,
             &crate::i18n::fmt(

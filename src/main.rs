@@ -513,18 +513,20 @@ fn privacy_url() -> &'static str {
 }
 
 fn main() -> eframe::Result {
-    // DLLs loaded at run time (graphics drivers, WebView2) only from the program's folder and System32: never from the
-    // current folder (e.g. the folder of a model opened in EA) or from PATH.
+    // DLLs loaded at run time are never searched in the current folder (e.g. the folder of a model opened in EA). The
+    // rest of the standard order stays (Office's MAPI and graphics drivers load their own dependencies).
     {
         #[link(name = "kernel32")]
         extern "system" {
-            fn SetDefaultDllDirectories(flags: u32) -> i32;
+            fn SetDllDirectoryW(path: *const u16) -> i32;
         }
-        const LOAD_LIBRARY_SEARCH_DEFAULT_DIRS: u32 = 0x0000_1000;
-        // SAFETY: a plain Win32 call with a constant flag.
-        unsafe { SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS) };
+        let empty: [u16; 1] = [0];
+        // SAFETY: a plain Win32 call with an empty, null-terminated string.
+        unsafe { SetDllDirectoryW(empty.as_ptr()) };
     }
-    window::install_panic_hook(config::APP_NAME, "loonar-compass-crash.log");
+    // The team hub and the check mode run without a desktop: a crash is logged, not shown in a dialog.
+    let service = std::env::args().any(|a| a == "--hub" || a == "--check");
+    window::install_panic_hook(config::APP_NAME, "loonar-compass-crash.log", !service);
     // System DPI awareness: in per-monitor mode the windowing library resizes the window on every move between
     // monitors with different scaling. LOONAR_DPI=per_monitor keeps the library's default (development only).
     if !(cfg!(debug_assertions) && std::env::var("LOONAR_DPI").as_deref() == Ok("per_monitor")) {
