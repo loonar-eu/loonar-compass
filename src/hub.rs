@@ -271,6 +271,28 @@ impl Hub {
         entries
     }
 
+    fn changes_dir(&self) -> PathBuf {
+        self.dir.join("changes")
+    }
+
+    fn save_change(&self, change: &Value) -> Result<()> {
+        std::fs::create_dir_all(self.changes_dir())?;
+        let id = change["id"].as_str().unwrap_or("x").replace(['/', '\\', '.'], "_");
+        std::fs::write(self.changes_dir().join(format!("{id}.json")), serde_json::to_string_pretty(change)?)?;
+        Ok(())
+    }
+
+    fn change(&self, id: &str) -> Option<Value> {
+        if !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            return None;
+        }
+        serde_json::from_str(&std::fs::read_to_string(self.changes_dir().join(format!("{id}.json"))).ok()?).ok()
+    }
+
+    fn changes(&self) -> Vec<Value> {
+        std::fs::read_dir(self.changes_dir()).into_iter().flatten().flatten().filter_map(|e| serde_json::from_str(&std::fs::read_to_string(e.path()).ok()?).ok()).collect()
+    }
+
     fn notes_dir(&self) -> PathBuf {
         self.dir.join("notes")
     }
@@ -363,6 +385,69 @@ fn route(hub: &Hub, request: &Request) -> Result<(u16, Value), HttpError> {
             std::fs::create_dir_all(hub.notes_dir()).map_err(|e| deny(500, e.to_string()))?;
             std::fs::write(hub.notes_dir().join(format!("{name}.md")), text).map_err(|e| deny(500, e.to_string()))?;
             Ok((200, json!({ "ok": true })))
+        }
+        // Change sets: proposed by the assistant, reviewed by the team, applied after approval.
+        ("POST", ["api", "changes"]) => {
+            require(role, Role::Architect)?;
+            let b = body()?;
+            let ops = b["ops"].as_array().filter(|o| !o.is_empty()).ok_or_else(|| deny(400, crate::i18n::tr("a change set needs operations")))?;
+            let id = format!("CH-{}", chrono::Local::now().format("%Y%m%d-%H%M%S%3f"));
+            let change = json!({
+                "id": id, "source": b["source"], "title": b["title"].as_str().unwrap_or("Change"), "summary": b["summary"], "preview": b["preview"],
+                "ops": ops, "author": user, "created": chrono::Local::now().to_rfc3339(), "status": "pending", "comments": []
+            });
+            hub.save_change(&change).map_err(|e| deny(500, e.to_string()))?;
+            Ok((201, json!({ "id": id })))
+        }
+        ("GET", ["api", "changes"]) => {
+            let status = request.query.get("status").cloned();
+            let mut list: Vec<Value> = hub.changes().into_iter().filter(|c| status.as_deref().is_none_or(|s| c["status"] == s)).collect();
+            list.sort_by(|a, b| b["created"].as_str().cmp(&a["created"].as_str()));
+            Ok((200, json!(list.into_iter().map(|mut c| { c.as_object_mut().map(|o| o.remove("ops")); c }).collect::<Vec<_>>())))
+        }
+        ("GET", ["api", "changes", id]) => Ok((200, hub.change(id).ok_or_else(|| deny(404, crate::i18n::fmt("there is no change set {0}", &[id.to_string()])))?)),
+        ("POST", ["api", "changes", id, action]) => {
+            let mut change = hub.change(id).ok_or_else(|| deny(404, crate::i18n::fmt("there is no change set {0}", &[id.to_string()])))?;
+            let b = body()?;
+            let now = chrono::Local::now().to_rfc3339();
+            match *action {
+                "comment" => {
+                    let text = b["text"].as_str().unwrap_or("").trim().to_string();
+                    if text.is_empty() {
+                        return Err(deny(400, crate::i18n::tr("empty comment")));
+                    }
+                    change["comments"].as_array_mut().map(|c| c.push(json!({ "user": user, "time": now, "text": text })));
+                }
+                "decision" => {
+                    require(role, Role::Architect)?;
+                    if change["status"] != "pending" {
+                        return Err(deny(400, crate::i18n::fmt("the change set is already {0}", &[change["status"].as_str().unwrap_or("").to_string()])));
+                    }
+                    // Four eyes: the author does not approve their own change set (an admin may).
+                    if change["author"] == user.as_str() && role < Role::Admin {
+                        return Err(deny(403, crate::i18n::tr("the author cannot approve their own change set")));
+                    }
+                    let approve = b["approve"] == true;
+                    change["status"] = json!(if approve { "approved" } else { "rejected" });
+                    change["decided_by"] = json!(user);
+                    change["decided"] = json!(now);
+                    change["reason"] = b["reason"].clone();
+                }
+                "applied" => {
+                    require(role, Role::Architect)?;
+                    if change["status"] != "approved" {
+                        return Err(deny(400, crate::i18n::tr("only an approved change set can be applied")));
+                    }
+                    change["status"] = json!(if b["ok"] == true { "applied" } else { "approved" });
+                    change["applied_by"] = json!(user);
+                    change["applied"] = json!(now);
+                    change["result"] = b["result"].clone();
+                }
+                _ => return Err(deny(404, "not found")),
+            }
+            hub.save_change(&change).map_err(|e| deny(500, e.to_string()))?;
+            let _ = hub.append_audit(&json!({ "time": now, "user": user, "source": change["source"], "summary": format!("{} {}: {}", action, id, change["title"].as_str().unwrap_or("")), "ok": true }));
+            Ok((200, change))
         }
         ("POST", ["mcp"]) => mcp(hub, &body()?).map(|reply| match reply {
             Some(reply) => (200, reply),
@@ -544,6 +629,10 @@ impl Client {
         if cfg.hub_url.trim().is_empty() {
             return None;
         }
+        #[cfg(test)]
+        if let Ok(token) = std::env::var("LOONAR_TEST_HUB_CLIENT_TOKEN") {
+            return Some(Client { url: cfg.hub_url.trim().trim_end_matches('/').to_string(), token });
+        }
         let token = crate::config::secrets::get(crate::config::secrets::HUB_TOKEN).ok()?;
         Some(Client { url: cfg.hub_url.trim().trim_end_matches('/').to_string(), token })
     }
@@ -584,6 +673,23 @@ impl Client {
 
     pub fn note(&self, name: &str) -> Result<String> {
         Ok(self.call(reqwest::Method::GET, &format!("/api/notes/{}", name.replace(' ', "%20")), None)?["text"].as_str().unwrap_or("").to_string())
+    }
+
+    pub fn propose(&self, change: &Value) -> Result<String> {
+        Ok(self.call(reqwest::Method::POST, "/api/changes", Some(change))?["id"].as_str().unwrap_or("").to_string())
+    }
+
+    pub fn changes(&self, status: Option<&str>) -> Result<Vec<Value>> {
+        let path = match status { Some(s) => format!("/api/changes?status={s}"), None => "/api/changes".into() };
+        Ok(self.call(reqwest::Method::GET, &path, None)?.as_array().cloned().unwrap_or_default())
+    }
+
+    pub fn change(&self, id: &str) -> Result<Value> {
+        self.call(reqwest::Method::GET, &format!("/api/changes/{id}"), None)
+    }
+
+    pub fn change_action(&self, id: &str, action: &str, body: &Value) -> Result<Value> {
+        self.call(reqwest::Method::POST, &format!("/api/changes/{id}/{action}"), Some(body))
     }
 
     pub fn save_note(&self, name: &str, text: &str) -> Result<()> {

@@ -57,6 +57,7 @@ h3 { font-size:14px; margin:16px 0 6px; }
       <button data-tab="gap">Gaps</button>
       <button data-tab="audit">Audit trail</button>
       <button data-tab="notes">Team notes</button>
+      <button data-tab="changes">Change sets</button>
     </div>
     <div id="view-search">
       <div class="row"><input id="q" placeholder="Element name (at least 2 characters)"><button id="go">Search</button></div>
@@ -69,6 +70,7 @@ h3 { font-size:14px; margin:16px 0 6px; }
     </div>
     <div id="view-audit" hidden><div id="audit"></div></div>
     <div id="view-notes" hidden><div id="notes"></div></div>
+    <div id="view-changes" hidden><div id="changes"></div></div>
   </section>
 </main>
 <script>
@@ -103,7 +105,7 @@ async function login() {
   token = $('token').value.trim() || token;
   try { localStorage.setItem('hubToken', token); } catch (e) {}
   try {
-    const me = await api('/api/me');
+    me = await api('/api/me');
     $('who').textContent = me.name + ' · ' + me.role;
     const sources = await api('/api/sources');
     $('source').innerHTML = sources.map(s => '<option value="' + esc(s.id) + '">' + esc(s.name) + ' (' + esc(s.kind) + ')</option>').join('');
@@ -154,9 +156,40 @@ async function loadNotes() {
   const notes = await Promise.all(names.map(n => api('/api/notes/' + encodeURIComponent(n))));
   $('notes').innerHTML = notes.map(n => '<h3>' + esc(n.name) + '</h3><pre>' + esc(n.text) + '</pre>').join('');
 }
+let me = {};
+async function post(path, body) {
+  const r = await fetch(path, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const v = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(v.error || r.status);
+  return v;
+}
+async function loadChanges() {
+  const list = await api('/api/changes');
+  if (!list.length) { $('changes').innerHTML = '<p class="muted">No change sets yet. The assistant proposes them with propose_change.</p>'; return; }
+  $('changes').innerHTML = '<table><tr><th>Id</th><th>Title</th><th>Model</th><th>Author</th><th>Status</th></tr>' +
+    list.map(c => '<tr class="click" data-id="' + esc(c.id) + '"><td>' + esc(c.id) + '</td><td>' + esc(c.title) + '</td><td>' + esc(c.source) + '</td><td>' + esc(c.author) + '</td><td><b>' + esc(c.status) + '</b></td></tr>').join('') + '</table>';
+}
+async function openChange(id) {
+  const c = await api('/api/changes/' + encodeURIComponent(id));
+  const canDecide = (me.role === 'architect' || me.role === 'admin') && c.status === 'pending';
+  $('changes').innerHTML = '<button class="ghost" id="cback">← Change sets</button><h3>' + esc(c.id) + ' – ' + esc(c.title) + '</h3>' +
+    '<p class="muted">' + esc(c.author) + ' · ' + esc((c.created || '').slice(0, 16).replace('T', ' ')) + ' · model ' + esc(c.source) + ' · <b>' + esc(c.status) + '</b>' + (c.decided_by ? ' by ' + esc(c.decided_by) : '') + '</p>' +
+    '<pre>' + esc(c.summary || '') + '\n\n' + esc(c.preview || '') + '</pre>' +
+    '<h3>Comments</h3>' + ((c.comments || []).map(m => '<p><b>' + esc(m.user) + '</b> <span class="muted">' + esc((m.time || '').slice(0, 16).replace('T', ' ')) + '</span><br>' + esc(m.text) + '</p>').join('') || '<p class="muted">No comments.</p>') +
+    '<div class="row"><input id="ctext" placeholder="Comment"><button id="csend">Comment</button></div>' +
+    (canDecide ? '<div class="row"><button id="capprove">Approve</button><button class="ghost" id="creject">Reject</button></div>' : '');
+  $('cback').onclick = loadChanges;
+  $('csend').onclick = async () => { await post('/api/changes/' + id + '/comment', { text: $('ctext').value }); openChange(id); };
+  if (canDecide) {
+    $('capprove').onclick = async () => { try { await post('/api/changes/' + id + '/decision', { approve: true }); openChange(id); } catch (e) { alert(e.message); } };
+    $('creject').onclick = async () => { try { await post('/api/changes/' + id + '/decision', { approve: false, reason: $('ctext').value }); openChange(id); } catch (e) { alert(e.message); } };
+  }
+}
+$('changes') && ($('changes').onclick = e => { const tr = e.target.closest('tr[data-id]'); if (tr) openChange(tr.dataset.id); });
 function show(tab) {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-  ['search', 'lint', 'gap', 'audit', 'notes'].forEach(t => $('view-' + t).hidden = t !== tab);
+  ['search', 'lint', 'gap', 'audit', 'notes', 'changes'].forEach(t => $('view-' + t).hidden = t !== tab);
+  if (tab === 'changes') loadChanges().catch(e => $('changes').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
   if (tab === 'audit') loadAudit().catch(e => $('audit').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
   if (tab === 'notes') loadNotes().catch(e => $('notes').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
 }

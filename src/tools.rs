@@ -84,6 +84,26 @@ pub fn definitions() -> Value {
         items.push(crate::traceability::definition());
         items.push(crate::code_drift::definition());
         items.push(json!({
+            "name": "propose_change",
+            "description": "Proposes a change of the model to the team instead of saving it: the operations (as for ea_write) with a summary and a before → after preview \
+go to the team hub as a change set for review; the team comments and an architect approves it in the hub's web view. Use it when the user asks to propose, \
+submit for review or prepare a change for approval. Nothing is changed in the model now.",
+            "input_schema": { "type": "object", "properties": {
+                "title": { "type": "string" },
+                "ops": { "type": "array", "items": { "type": "object" }, "description": "Operations as for ea_write." }
+            }, "required": ["title", "ops"] }
+        }));
+        items.push(json!({
+            "name": "change_sets",
+            "description": "Change sets in the team hub: action list (optionally status pending, approved, rejected, applied), show (id: summary, preview, comments, decision) \
+or apply (id: an APPROVED change set of this model is saved to the model with the usual approval and verification; the hub records it as applied).",
+            "input_schema": { "type": "object", "properties": {
+                "action": { "type": "string", "enum": ["list", "show", "apply"] },
+                "id": { "type": "string" },
+                "status": { "type": "string" }
+            }, "required": ["action"] }
+        }));
+        items.push(json!({
             "name": "spell_check",
             "description": "Spelling of the model's texts in the language of the conversation (the language of Compass), with the Windows dictionary: \
 notes of elements and diagrams, scenario steps and the project glossary (EA's own spell checker has only English dictionaries). Names of elements \
@@ -544,6 +564,8 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "model_lint" => crate::governance::lint(input, ctx.cfg).map(Into::into),
         "ea_script" => ea_script(input, ctx).map(Into::into),
         "trace_requirements" => trace_requirements(input, ctx).map(Into::into),
+        "propose_change" => propose_change(input, ctx).map(Into::into),
+        "change_sets" => change_sets(input, ctx).map(Into::into),
         "code_drift" => crate::code_drift::compare(ctx.cfg, std::path::Path::new(input["path"].as_str().unwrap_or("").trim()), input["package"].as_i64()).map(Into::into),
         "spell_check" => crate::model_spell::check(ctx.cfg, input["package"].as_i64(), crate::i18n::current().code()).map(Into::into),
         "jira_search" => jira(ctx.cfg)?.search(input["jql"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["jql".to_string()]))?, input["max"].as_u64().unwrap_or(30) as usize).map(Into::into),
@@ -623,6 +645,69 @@ pub fn page_images_dir(attachments_dir: &std::path::Path, stored_page: &str) -> 
 }
 
 /// Confluence page: source (.confluence.md), page code for the source editor (.confluence.xml) and images in a folder next to them.
+fn hub_client(cfg: &AppConfig) -> Result<crate::hub::Client> {
+    crate::hub::Client::from_config(cfg).with_context(|| crate::i18n::tr("no team hub in the settings (Settings → Team (Compass Hub))"))
+}
+
+fn hub_source(cfg: &AppConfig) -> String {
+    if !cfg.hub_source.trim().is_empty() {
+        cfg.hub_source.trim().to_string()
+    } else if cfg.uses_file() {
+        cfg.model_file.display().to_string()
+    } else {
+        format!("{}@{}:{}", cfg.db_name, cfg.db_host, cfg.db_port)
+    }
+}
+
+/// A change set for review in the hub (nothing is saved in the model).
+fn propose_change(input: &Value, ctx: &ToolContext) -> Result<String> {
+    let ops = input["ops"].as_array().with_context(|| crate::i18n::fmt("missing list '{0}'", &["ops".to_string()]))?;
+    for (i, op) in ops.iter().enumerate() {
+        let name = op["op"].as_str().unwrap_or("");
+        if !ea::MODEL_OPS.contains(&name) {
+            bail!("{}", crate::i18n::fmt("operation {0} ('{1}') is not allowed. Allowed: {2}", &[(i + 1).to_string(), name.to_string(), ea::MODEL_OPS.join(", ")]));
+        }
+    }
+    let client = hub_client(ctx.cfg)?;
+    let title = input["title"].as_str().unwrap_or("Change").to_string();
+    let id = client.propose(&json!({
+        "source": hub_source(ctx.cfg), "title": title, "summary": ea::describe(ops), "preview": crate::governance::preview(ctx.cfg, ops), "ops": ops
+    }))?;
+    Ok(format!("Proposed to the team as change set {id} (\"{title}\"): nothing was changed in the model. Tell the user it waits for review in the hub ({}/), where the team comments and an architect approves it; afterwards it can be applied with change_sets apply.", client.url))
+}
+
+fn change_sets(input: &Value, ctx: &ToolContext) -> Result<String> {
+    let client = hub_client(ctx.cfg)?;
+    match input["action"].as_str().unwrap_or("list") {
+        "list" => {
+            let list = client.changes(input["status"].as_str())?;
+            let mut out = vec![format!("Change sets: {}", list.len()), "id | status | title | author | model".into()];
+            out.extend(list.iter().map(|c| format!("{} | {} | {} | {} | {}", c["id"].as_str().unwrap_or(""), c["status"].as_str().unwrap_or(""), c["title"].as_str().unwrap_or(""), c["author"].as_str().unwrap_or(""), c["source"].as_str().unwrap_or(""))));
+            Ok(out.join("\n"))
+        }
+        "show" => {
+            let c = client.change(input["id"].as_str().unwrap_or(""))?;
+            let comments: Vec<String> = c["comments"].as_array().into_iter().flatten().map(|m| format!("- {}: {}", m["user"].as_str().unwrap_or(""), m["text"].as_str().unwrap_or(""))).collect();
+            Ok(format!("{} | {} | {} | by {}{}\n{}\n\n{}\n\nComments:\n{}", c["id"].as_str().unwrap_or(""), c["status"].as_str().unwrap_or(""), c["title"].as_str().unwrap_or(""), c["author"].as_str().unwrap_or(""),
+                c["decided_by"].as_str().map(|d| format!(", decided by {d}")).unwrap_or_default(), c["summary"].as_str().unwrap_or(""), c["preview"].as_str().unwrap_or(""), if comments.is_empty() { "-".into() } else { comments.join("\n") }))
+        }
+        "apply" => {
+            let id = input["id"].as_str().unwrap_or("").to_string();
+            let c = client.change(&id)?;
+            if c["status"] != "approved" {
+                bail!("{}", crate::i18n::fmt("change set {0} is {1}: only an approved change set can be applied", &[id.clone(), c["status"].as_str().unwrap_or("").to_string()]));
+            }
+            if c["source"].as_str().unwrap_or("") != hub_source(ctx.cfg) {
+                bail!("{}", crate::i18n::fmt("change set {0} is for the model {1}, not for this one", &[id.clone(), c["source"].as_str().unwrap_or("").to_string()]));
+            }
+            let result = ea_write(&json!({ "ops": c["ops"] }), ctx);
+            let _ = client.change_action(&id, "applied", &json!({ "ok": result.is_ok(), "result": result.as_ref().map(|t| t.chars().take(2000).collect::<String>()).unwrap_or_else(|e| e.to_string()) }));
+            result.map(|text| format!("Change set {id} applied.\n{text}"))
+        }
+        other => bail!("{}", crate::i18n::fmt("unknown change_sets action: {0}", &[other.to_string()])),
+    }
+}
+
 /// Requirements of a document (file, Confluence page or text) matched with the model.
 fn trace_requirements(input: &Value, ctx: &ToolContext) -> Result<String> {
     let text = if let Some(file) = input["file"].as_str().filter(|f| !f.trim().is_empty()) {

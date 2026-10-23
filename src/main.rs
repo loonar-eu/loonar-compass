@@ -3911,6 +3911,8 @@ fn tool_step(name: &str, input: &Value) -> String {
         "jira_search" => crate::i18n::fmt("Jira search: {0}", &[input["jql"].as_str().unwrap_or("").to_string()]),
         "spell_check" => crate::i18n::tr("Spelling of the model's texts").to_string(),
         "trace_requirements" => crate::i18n::tr("Requirements of the document against the model").to_string(),
+        "propose_change" => crate::i18n::fmt("Change set for the team: {0}", &[input["title"].as_str().unwrap_or("").to_string()]),
+        "change_sets" => crate::i18n::fmt("Team change sets: {0} {1}", &[input["action"].as_str().unwrap_or("list").to_string(), input["id"].as_str().unwrap_or("").to_string()]),
         "code_drift" => crate::i18n::fmt("Model against the code in {0}", &[input["path"].as_str().unwrap_or("").to_string()]),
         "ea_script" => crate::i18n::fmt("EA script ({0}): {1}", &[input["action"].as_str().unwrap_or("list").to_string(), input["name"].as_str().unwrap_or("").to_string()]),
         "jira_issue" => crate::i18n::fmt("Reading the Jira issue {0}", &[input["key"].as_str().unwrap_or("").to_string()]),
@@ -6031,6 +6033,62 @@ mod tests {
         assert!(s2.iter().any(|s| s.contains("MCP tickets: create_ticket")), "the writing tool used");
         assert_eq!(n2, 1, "the writing tool asked once");
         assert!(a2.contains("T-1"), "the ticket id from the server");
+    }
+
+    /// Change sets: Compass proposes, the author cannot approve, another architect comments and approves, Compass applies
+    /// (the element is in the model and verified), the hub records it as applied. LOONAR_TEST_PROPS = a test model.
+    /// Run with: `cargo test hub_change_set_flow -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "requires EA and a test model"]
+    fn hub_change_set_flow() {
+        i18n::set(i18n::Lang::En);
+        let props = std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS");
+        let dir = std::env::temp_dir().join(format!("loonar-changes-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0",
+            "sources": [{ "id": "shop", "name": "Shop", "properties": props }],
+            "users": [{ "name": "bartek", "token": "architect-1-0123456789", "role": "architect" }, { "name": "ola", "token": "architect-2-0123456789", "role": "architect" }] }).to_string()).unwrap();
+        let (hub, listen) = hub::load(&dir.join("hub.json")).unwrap();
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || hub::serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let url = format!("http://{}", rx.recv().unwrap());
+        let mut cfg = AppConfig::load(Path::new(&props)).unwrap();
+        cfg.hub_url = url.clone();
+        cfg.hub_source = "shop".into();
+        std::env::set_var("LOONAR_TEST_HUB_CLIENT_TOKEN", "architect-1-0123456789");
+        let q = |sql: &str| tools::query_rows(&cfg, sql).expect(sql);
+        let package: i64 = q("select package_id from t_package where parent_id <> 0 order by package_id limit 1")[0][0].parse().unwrap();
+        let name = format!("ZZ_change_{}", chrono::Local::now().format("%H%M%S"));
+        let approver = tools::Approver::new(ApprovalMode::Auto, Box::new(|_| true));
+        let ctx = tools::ToolContext { cfg: &cfg, approver: &approver };
+        let proposed = tools::run("propose_change", &json!({ "title": "Add a class", "ops": [{ "op": "create_element", "key": "a", "package": package, "name": name, "type": "Class", "notes": "Proposed." }] }), &ctx).unwrap().text;
+        let id = proposed.split_whitespace().find(|w| w.starts_with("CH-")).unwrap().to_string();
+        assert_eq!(q(&format!("select count(*) from t_object where name = '{name}'"))[0][0], "0", "proposing changes nothing");
+        let early = tools::run("change_sets", &json!({ "action": "apply", "id": id }), &ctx);
+        let author = hub::Client { url: url.clone(), token: "architect-1-0123456789".into() };
+        let other = hub::Client { url: url.clone(), token: "architect-2-0123456789".into() };
+        let self_approval = author.change_action(&id, "decision", &json!({ "approve": true }));
+        other.change_action(&id, "comment", &json!({ "text": "Looks good, add a description later." })).unwrap();
+        other.change_action(&id, "decision", &json!({ "approve": true })).unwrap();
+        let listed = tools::run("change_sets", &json!({ "action": "list", "status": "approved" }), &ctx).unwrap().text;
+        let applied = tools::run("change_sets", &json!({ "action": "apply", "id": id }), &ctx);
+        let in_model = q(&format!("select count(*) from t_object where name = '{name}'"))[0][0].clone();
+        let status = author.change(&id).unwrap()["status"].clone();
+        let shown = tools::run("change_sets", &json!({ "action": "show", "id": id }), &ctx).unwrap().text;
+        let created: Vec<String> = q(&format!("select object_id from t_object where name = '{name}'")).into_iter().map(|r| r[0].clone()).collect();
+        for id in &created {
+            ea::run_batch(&cfg, &[json!({"op":"delete","element": id.parse::<i64>().unwrap()})], &ea::BatchOptions::default()).ok();
+        }
+        ea::shutdown();
+        let self_denied = self_approval.as_ref().err().is_some_and(|e| e.to_string().contains("403"));
+        println!("{proposed}\nearly apply: {:?}\nself approval: {:?}\n{listed}\napplied: {:?}\nstatus {status}\n{shown}", early.as_ref().map(|o| o.text.clone()).map_err(|e| e.to_string()), self_approval.map_err(|e| e.to_string()), applied.as_ref().map(|o| o.text.chars().take(300).collect::<String>()).map_err(|e| e.to_string()));
+        assert!(early.err().map(|e| e.to_string()).unwrap_or_default().contains("only an approved"), "a pending change set is not applied");
+        assert!(self_denied, "the author cannot approve their own change set");
+        assert!(listed.contains(&id));
+        assert!(applied.map(|o| o.text).unwrap_or_default().contains("Verified in the model"), "applied with verification");
+        assert_eq!(in_model, "1");
+        assert_eq!(status, "applied");
+        assert!(shown.contains("Looks good") && shown.contains("decided by ola"));
     }
 
     /// Settings tests (the same ones the "Save and test" buttons run) on the saved configuration.

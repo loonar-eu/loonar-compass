@@ -1315,3 +1315,15 @@ In the model, not in the code ‖ W modelu, brak w kodzie ‖ Im Modell, nicht i
 Different fields (code vs model attributes) ‖ Różne pola (kod vs atrybuty modelu) ‖ Unterschiedliche Felder (Code vs. Modellattribute) ‖ Champs différents (code vs attributs du modèle)
 Database tables ‖ Tabele bazy danych ‖ Datenbanktabellen ‖ Tables de base de données
 API operations (OpenAPI operationId) not in the model ‖ Operacje API (OpenAPI operationId) bez odpowiednika w modelu ‖ API-Operationen (OpenAPI operationId) nicht im Modell ‖ Opérations API (OpenAPI operationId) absentes du modèle
+a change set needs operations ‖ zestaw zmian wymaga operacji ‖ ein Änderungssatz braucht Operationen ‖ un ensemble de modifications nécessite des opérations
+there is no change set {0} ‖ nie ma zestawu zmian {0} ‖ es gibt keinen Änderungssatz {0} ‖ il n'y a pas d'ensemble de modifications {0}
+empty comment ‖ pusty komentarz ‖ leerer Kommentar ‖ commentaire vide
+the change set is already {0} ‖ zestaw zmian ma już status {0} ‖ der Änderungssatz ist bereits {0} ‖ l'ensemble de modifications est déjà {0}
+the author cannot approve their own change set ‖ autor nie może zatwierdzić własnego zestawu zmian ‖ der Autor kann seinen eigenen Änderungssatz nicht freigeben ‖ l'auteur ne peut pas approuver son propre ensemble de modifications
+only an approved change set can be applied ‖ wprowadzić można tylko zatwierdzony zestaw zmian ‖ nur ein freigegebener Änderungssatz kann angewendet werden ‖ seul un ensemble de modifications approuvé peut être appliqué
+no team hub in the settings (Settings → Team (Compass Hub)) ‖ brak huba zespołu w ustawieniach (Ustawienia → Zespół (Compass Hub)) ‖ kein Team-Hub in den Einstellungen (Einstellungen → Team (Compass Hub)) ‖ aucun hub d'équipe dans les paramètres (Paramètres → Équipe (Compass Hub))
+change set {0} is {1}: only an approved change set can be applied ‖ zestaw zmian {0} ma status {1}: wprowadzić można tylko zatwierdzony ‖ Änderungssatz {0} ist {1}: nur ein freigegebener kann angewendet werden ‖ l'ensemble {0} est {1} : seul un ensemble approuvé peut être appliqué
+change set {0} is for the model {1}, not for this one ‖ zestaw zmian {0} dotyczy modelu {1}, nie tego ‖ Änderungssatz {0} gehört zum Modell {1}, nicht zu diesem ‖ l'ensemble {0} concerne le modèle {1}, pas celui-ci
+unknown change_sets action: {0} ‖ nieznana akcja change_sets: {0} ‖ unbekannte change_sets-Aktion: {0} ‖ action change_sets inconnue : {0}
+Change set for the team: {0} ‖ Zestaw zmian dla zespołu: {0} ‖ Änderungssatz für das Team: {0} ‖ Ensemble de modifications pour l'équipe : {0}
+Team change sets: {0} {1} ‖ Zestawy zmian zespołu: {0} {1} ‖ Änderungssätze des Teams: {0} {1} ‖ Ensembles de modifications de l'équipe : {0} {1}
