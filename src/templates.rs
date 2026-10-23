@@ -93,6 +93,11 @@ fn file_of(dir: &Path, name: &str) -> Result<PathBuf> {
     Ok(dir.join(format!("{clean}.md")))
 }
 
+/// Whether a template of this name (as it would be saved) exists.
+pub fn exists(dir: &Path, name: &str) -> bool {
+    file_of(dir, name).map(|p| p.is_file()).unwrap_or(false)
+}
+
 pub fn read(dir: &Path, name: &str) -> Result<String> {
     ensure_defaults(dir, crate::i18n::current());
     let path = file_of(dir, name)?;

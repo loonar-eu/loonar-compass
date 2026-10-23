@@ -844,7 +844,7 @@ mod tests {
         let (statements, updated) = crate::scripts::save_statements(&cfg, &group, "Count", "JScript", &format!("{main}\nSession.Output(\"v2\");")).unwrap();
         run_batch(&cfg, &[json!({"op":"execute_sql","statements":statements})], &BatchOptions::default()).expect("replace");
         let count_rows = crate::tools::query_rows(&cfg, &format!("select count(*) from t_script where notes like '%Name=_Count_%' and scriptauthor = (select scriptname from t_script where script = '{group}')")).unwrap();
-        let ran = if std::env::var("LOONAR_TEST_RUN_SCRIPT").is_ok() { Some(crate::scripts::run(&cfg, &format!("{group}.Count"))) } else { None };
+        let ran = if std::env::var("LOONAR_TEST_RUN_SCRIPT").is_ok() { { let s = crate::scripts::find(&cfg, &format!("{group}.Count")).unwrap(); let code = crate::scripts::resolve_includes(&cfg, &s).unwrap(); Some(crate::scripts::run(&cfg, &format!("{group}.Count"), &code)) } } else { None };
         let classes = crate::tools::query_rows(&cfg, "select count(*) from t_object where object_type = 'Class'").unwrap()[0][0].clone();
         // Cleanup: the scripts and the group.
         run_batch(&cfg, &[json!({"op":"execute_sql","statements":[

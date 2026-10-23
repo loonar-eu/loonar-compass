@@ -561,6 +561,13 @@ fn main() -> eframe::Result {
         });
         std::process::exit(if result.is_ok() { 0 } else { 1 });
     }
+    // A new hub token and its SHA-256 for hub.json: `--hub-token`.
+    if args.iter().any(|a| a == "--hub-token") {
+        window::attach_console();
+        let (token, hash) = hub::new_token();
+        println!("token (give it to the user, keep it secret): {token}\n\"token_sha256\" for hub.json: {hash}");
+        std::process::exit(0);
+    }
     // Team hub without a window: `--hub <hub.json>` (log in hub.log next to hub.json).
     if let Some(file) = args.iter().position(|a| a == "--hub").and_then(|i| args.get(i + 1)) {
         let file = PathBuf::from(file);
@@ -3939,11 +3946,23 @@ fn tool_step(name: &str, input: &Value) -> String {
 
 /// One answer of an event agent: a conversation of one message, reading tools only (a write is refused: nobody is
 /// there to approve it). Returns the assistant's text.
-pub(crate) fn run_agent(cfg: &AppConfig, prompt: &str) -> anyhow::Result<String> {
+/// Tools of an assistant nobody watches (event agents, questions in the hub): reading the model only. No files,
+/// no network services, no MCP servers, nothing that writes or proposes.
+const READ_ONLY_TOOLS: &[&str] = &["db_query", "impact_analysis", "model_lint", "gap_analysis", "operation_usage", "estimate_change", "spell_check"];
+
+/// The assistant without a user: reads the model with READ_ONLY_TOOLS, stops after `timeout`, every approval is refused.
+pub(crate) fn run_agent(cfg: &AppConfig, prompt: &str, timeout: std::time::Duration) -> anyhow::Result<String> {
     let messages = vec![Message { role: "user".into(), text: prompt.into(), attachments: vec![], created: chrono::Utc::now().to_rfc3339() }];
     let approver = tools::Approver::new(ApprovalMode::Ask, Box::new(|_| false));
     let (_tx, inbox) = mpsc::channel();
-    let cancel = AtomicBool::new(false);
+    let cancel = Arc::new(AtomicBool::new(false));
+    {
+        let cancel = cancel.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(timeout);
+            cancel.store(true, Ordering::Relaxed);
+        });
+    }
     let answer = std::sync::Mutex::new(String::new());
     let emit = |event: WorkerEvent| {
         if let WorkerEvent::Text(text) = event {
@@ -3952,8 +3971,8 @@ pub(crate) fn run_agent(cfg: &AppConfig, prompt: &str) -> anyhow::Result<String>
             a.push_str(&text);
         }
     };
-    run_turn(cfg, &messages, &approver, &inbox, &cancel, &emit)?;
-    Ok(answer.into_inner().unwrap())
+    run_turn_with(cfg, &messages, &approver, &inbox, &cancel, &emit, Some(READ_ONLY_TOOLS))?;
+    Ok(answer.into_inner().unwrap_or_else(|p| p.into_inner()))
 }
 
 /// Result of a tool in the step list. Tool results are written for the model in English; in English the start of
@@ -4012,18 +4031,40 @@ fn run_turn(
     cancel: &AtomicBool,
     emit: &dyn Fn(WorkerEvent),
 ) -> anyhow::Result<()> {
+    run_turn_with(cfg, messages, approver, inbox, cancel, emit, None)
+}
+
+/// One answer of the assistant; `allowed` limits the tools (an assistant nobody watches gets reading tools only).
+fn run_turn_with(
+    cfg: &AppConfig,
+    messages: &[Message],
+    approver: &tools::Approver,
+    inbox: &mpsc::Receiver<Message>,
+    cancel: &AtomicBool,
+    emit: &dyn Fn(WorkerEvent),
+    allowed: Option<&[&str]>,
+) -> anyhow::Result<()> {
     let tool_ctx = tools::ToolContext { cfg, approver };
     let client = claude::ClaudeClient::from_config(cfg, cfg.claude_max_tokens)?;
     let mut msgs = history_to_api(messages, &cfg.attachments_dir)?;
     let mut tools = tools::definitions();
-    // Tools of the user's own MCP servers (a server that does not start is reported once and left out).
-    let (mcp_tools, mcp_errors) = mcp_client::definitions(&cfg.base_dir);
-    if let Some(list) = tools.as_array_mut() {
-        list.extend(mcp_tools);
-    }
-    for error in mcp_errors {
-        emit(WorkerEvent::StepStart(crate::i18n::fmt("MCP server unavailable: {0}", &[error])));
-        emit(WorkerEvent::StepEnd { ok: false, detail: crate::i18n::tr("its tools are not available in this answer").into() });
+    match allowed {
+        Some(names) => {
+            if let Some(list) = tools.as_array_mut() {
+                list.retain(|t| t["name"].as_str().is_some_and(|n| names.contains(&n)));
+            }
+        }
+        None => {
+            // Tools of the user's own MCP servers (a server that does not start is reported once and left out).
+            let (mcp_tools, mcp_errors) = mcp_client::definitions(&cfg.base_dir);
+            if let Some(list) = tools.as_array_mut() {
+                list.extend(mcp_tools);
+            }
+            for error in mcp_errors {
+                emit(WorkerEvent::StepStart(crate::i18n::fmt("MCP server unavailable: {0}", &[error])));
+                emit(WorkerEvent::StepEnd { ok: false, detail: crate::i18n::tr("its tools are not available in this answer").into() });
+            }
+        }
     }
     // The system prompt (with memory) stays fixed for the whole response: the model's reasoning blocks are signed
     // for a specific prompt and the API rejects them when the prompt changes midway (e.g. after memory_save).
@@ -4092,7 +4133,12 @@ fn run_turn(
             }
             emit(WorkerEvent::Status(tool_status(name, &block["input"])));
             emit(WorkerEvent::StepStart(tool_step(name, &block["input"])));
-            let outcome = tools::run(name, &block["input"], &tool_ctx);
+            // A tool the model was not given is refused even if the model names it.
+            let outcome = if allowed.is_some_and(|names| !names.contains(&name)) {
+                Err(anyhow::anyhow!("the tool {name} is not available here: only reading the model is allowed"))
+            } else {
+                tools::run(name, &block["input"], &tool_ctx)
+            };
             emit(match &outcome {
                 Ok(output) => WorkerEvent::StepEnd { ok: true, detail: tool_result_summary(name, &output.text) },
                 Err(e) => WorkerEvent::StepEnd { ok: false, detail: shorten(&format!("{e:#}"), 200) },
@@ -4647,7 +4693,7 @@ impl eframe::App for App {
                                             runs.insert(key, std::time::Instant::now());
                                         }
                                         ea_ui::output(&crate::i18n::fmt("🤖 {0}: {1}…", &[agent.name.clone(), object.clone()]));
-                                        match run_agent(&cfg, &agents::prompt_for(agent, event, &object)) {
+                                        match run_agent(&cfg, &agents::prompt_for(agent, event, &object), std::time::Duration::from_secs(120)) {
                                             Ok(answer) => {
                                                 for line in answer.lines().filter(|l| !l.trim().is_empty()).take(8) {
                                                     ea_ui::output(&format!("🤖 {}: {}", agent.name, line.trim()));
