@@ -176,7 +176,7 @@
 </ul>
 
 <h2 id="s5">5. Ustawienia i język</h2>
-<p>Widok <b>Ustawienia</b> ma dziewięć kart: <b>Model AI</b> i <b>Język i zatwierdzanie zmian</b> w lewej kolumnie, <b>Model</b> i <b>Enterprise Architect</b> w prawej, a pod nimi <b>Nowe wydania (newsletter)</b>, <b>Confluence</b> i <b>Miro</b>. W Compass otwartym w Enterprise Architect nie ma kart Model i Enterprise Architect, bo modelem jest projekt otwarty w tym oknie EA (rozdział 9). Każdą kartę zapisujesz osobno przyciskiem pod nią, a aplikacja od razu sprawdza, czy dane działają. Wynik pojawia się pod przyciskiem: zielony z opisem albo czerwony z przyczyną błędu.</p>
+<p>Widok <b>Ustawienia</b> ma jedenaście kart: <b>Model AI</b> i <b>Język i zatwierdzanie zmian</b> w lewej kolumnie, <b>Model</b> i <b>Enterprise Architect</b> w prawej, a pod nimi <b>Nowe wydania (newsletter)</b>, <b>Confluence</b> i <b>Miro</b>. W Compass otwartym w Enterprise Architect nie ma kart Model i Enterprise Architect, bo modelem jest projekt otwarty w tym oknie EA (rozdział 9). Każdą kartę zapisujesz osobno przyciskiem pod nią, a aplikacja od razu sprawdza, czy dane działają. Wynik pojawia się pod przyciskiem: zielony z opisem albo czerwony z przyczyną błędu.</p>
 <figure><img src="img/en/settings.png" alt="Widok Ustawienia z wcześniejszej wersji aplikacji, z numerowanymi kartami"><figcaption>Ustawienia: każda karta z własnym zapisem i testem (zrzut z wcześniejszej wersji: karty miały numery, karta „Model AI” nazywała się „Claude”, a konto EA było w karcie Enterprise Architect)</figcaption></figure>
 <table>
   <tr><th style="width: 24%;">Karta</th><th>Pola</th><th style="width: 36%;">Co sprawdza test</th></tr>
@@ -189,6 +189,8 @@
   <tr><td>Miro</td><td>Token dostępu aplikacji Miro z uprawnieniami boards:read i boards:write (rozdział 11)</td><td>Łączy się z Miro i liczy tablice, które widzi token</td></tr>
   <tr><td>Jira</td><td>Adres Jira, E-mail (tylko Cloud), Token, Domyślny klucz projektu (rozdział 7). Adres musi zaczynać się od <code>https://</code>.</td><td>„Zapisz i sprawdź połączenie z Jira” łączy się z Jira i sprawdza projekt</td></tr>
   <tr><td>Zespół (Compass Hub)</td><td>Adres huba, Token, Ten model w hubie (opcjonalnie) (rozdział 21)</td><td>„Zapisz i sprawdź połączenie z hubem” łączy się z hubem i pokazuje Twoje konto, rolę i politykę zespołu</td></tr>
+  <tr><td>Serwery MCP</td><td>Lista własnych serwerów MCP, zapisana w pliku <code>mcp_servers.json</code> obok ustawień (rozdział 7)</td><td>„Zapisz i sprawdź serwery MCP” łączy się z każdym serwerem i podaje liczbę jego narzędzi</td></tr>
+  <tr><td>Agenci zdarzeń (Compass w EA)</td><td>Reguły w pliku <code>event_agents.json</code> (rozdział 9)</td><td>„Zapisz agentów zdarzeń” sprawdza reguły i podaje liczbę agentów</td></tr>
 </table>
 <p>Puste pole hasła, klucza lub tokena oznacza „bez zmian”. Napis <b>zapisano</b> obok pola mówi, że wartość jest już zapamiętana w Menedżerze poświadczeń, a <b>BRAK</b>, że jeszcze jej nie ma. Hasło do bazy nie może zawierać średnika (;), bo Enterprise Architect nie przekaże go w swoim ciągu połączenia. Adres Confluence musi zaczynać się od <code>https://</code>; adres <code>http://</code> jest dopuszczalny tylko dla serwera na tym samym komputerze.</p>
 <p><b>Wartości domyślne.</b> Gdy nie ma jeszcze ustawień, pola serwera, nazwy bazy, konta użytkownika EA i haseł są puste (przy serwerze szara podpowiedź „np. 127.0.0.1”), port to 5432, konto bazy to <code>postgres</code>, ścieżka do EA to <code>C:\Program Files\Sparx Systems\EA\EA.exe</code>, tryb zatwierdzania to <b>ask</b>, dostawca to Anthropic (Claude), model to <code>claude-haiku-5-5</code>, poziom wysiłku to „domyślny dla modelu”, a Max tokenów to 10000. Jeśli brakuje ustawień albo któregoś z haseł lub klucza, aplikacja otwiera się w widoku Ustawienia i podaje, co trzeba uzupełnić.</p>
@@ -216,6 +218,7 @@
 </ol>
 <p>Tłumaczone są tylko pamięć asystenta i szablony. <b>Historia rozmów nigdy nie jest tłumaczona</b>: rozmowy zostają w języku, w którym je prowadziłeś.</p>
 <div class="note"><b>Brak połączenia z modelem AI.</b> Tłumaczenie wymaga działającego klucza API. Jeśli połączenia nie ma, na ikonach <b>Ustawienia</b>, <b>Pamięć asystenta</b> i <b>Szablony dokumentów</b> pojawia się pomarańczowy znak <b>„!”</b>, a podpowiedź po najechaniu myszą wyjaśnia, że treści nie są jeszcze przetłumaczone. Tłumaczenie wznowi się przy następnym uruchomieniu aplikacji albo od razu po kliknięciu <b>Przetłumacz teraz</b> w karcie „Język i zatwierdzanie zmian”. Zapisywanie innych kart go nie wznawia.</div>
+<p>Po zapisaniu języka Compass przełącza też korektę pisowni samego EA na ten język, jeśli EA ma dla niego słownik. EA ma tylko słowniki angielskie, więc dla pozostałych języków teksty sprawdza Compass (rozdział 7, „Pisownia w języku Compassa”).</p>
 <h3>Szyfrowanie połączenia z bazą</h3>
 <p>Pole <b>Szyfrowanie połączenia</b> w karcie „Model” (opcja „Baza PostgreSQL”) decyduje, czy odczyt modelu przez asystenta idzie przez TLS:</p>
 <table>
@@ -358,12 +361,41 @@
 </table>
 <div class="prompt">Narysuj diagram sekwencji na podstawie zgłoszenia ARCH-123.</div>
 <div class="prompt">Dodaj do zgłoszenia ARCH-123 link do elementu „Koszyk”.</div>
+<h3>Sprawdzenie zapisu</h3>
+<p>Po każdym zapisie Compass czyta model jeszcze raz i porównuje go z prośbą: czy utworzone obiekty istnieją, czy nowe relacje mają wskazane końce, czy nowe elementy są we wskazanym pakiecie, czy zmienione nazwy, opisy, stereotypy i tagged values mają nowe wartości oraz czy usunięte obiekty zniknęły. Różnice trafiają do asystenta, który ma o nich powiedzieć, a nie napisać „gotowe”.</p>
+<p>Zapis jest <b>wszystko albo nic</b>: jeśli nie uda się w połowie, obiekty, które już powstały, są usuwane. Usunięcie elementu, który ma relacje, zawsze wymaga Twojej zgody (także w trybie <b>auto</b>), a lista tych relacji jest pokazana w panelu zgody.</p>
+<h3>Własne serwery MCP</h3>
+<p>Własne serwery MCP dają asystentowi dodatkowe narzędzia, na przykład system zgłoszeń, repozytorium albo firmową bazę wiedzy. Serwery wpisujesz w pliku <code>mcp_servers.json</code> obok pliku ustawień, a sprawdzasz w karcie <b>Serwery MCP</b>. Serwer może być programem lokalnym (<code>command</code> i <code>args</code>, komunikacja przez stdio) albo usługą HTTP (<code>url</code> i <code>headers</code>, Streamable HTTP):</p>
+<pre>{"servers":[{"name":"hub","url":"http://127.0.0.1:8730/mcp","headers":{"Authorization":"Bearer ${secret:hub_token}"}},
+ {"name":"files","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem","C:/docs"]}]}</pre>
+<ul>
+  <li><code>${secret:nazwa}</code> to wpis w Menedżerze poświadczeń Windows, a <code>${env:NAZWA}</code> to zmienna środowiska; dzięki temu tokeny nie leżą w pliku.</li>
+  <li>Narzędzie, które nie jest tylko do odczytu, pyta o Twoją zgodę przed każdym wywołaniem, chyba że serwer ma <code>"trusted": true</code>.</li>
+  <li>Przycisk <b>Zapisz i sprawdź serwery MCP</b> łączy się z każdym serwerem i pokazuje liczbę jego narzędzi.</li>
+</ul>
+<h3>Skrypty EA</h3>
+<p>Asystent pokazuje grupy skryptów i skrypty modelu, czyta skrypt, zapisuje skrypt (JScript, VBScript albo JavaScript; brakująca grupa powstaje sama) i go uruchamia. Zapis skryptu zatwierdzasz jak każdy zapis, a <b>uruchomienie skryptu wymaga zgody za każdym razem</b>, bo skrypt może zmienić w modelu wszystko. Skrypt działa w otwartym oknie EA albo, gdy go nie ma, w osobnej sesji EA działającej w tle. <code>Repository</code> i <code>Session.Output</code> działają jak w EA, a dołączenia <code>!INC Grupa.Skrypt</code> są rozwiązywane z modelu. Jeśli w EA jest otwarty inny model, uruchomienie kończy się komunikatem.</p>
+<div class="prompt">Pokaż skrypty w modelu, a potem uruchom skrypt „Raport.Brakujące opisy”.</div>
+<h3>Dalsze operacje na modelu</h3>
+<ul>
+  <li><b>Automatyczny układ diagramu</b>: kierunek w dół, w prawo, w górę albo w lewo i odstęp.</li>
+  <li><b>XMI</b>: eksport pakietu do pliku XMI i import pakietu z pliku (import zastępuje identyfikatory GUID, chyba że poprosisz o ich zachowanie).</li>
+  <li><b>Dokumenty powiązane</b> elementów (linked documents), tworzone z tekstu.</li>
+  <li><b>Pasy (swimlanes)</b> diagramu.</li>
+  <li><b>Odwrócenie relacji</b> (zamiana końców).</li>
+  <li><b>Edycja pakietu</b>: nazwa, opis, wersja, status i stereotyp.</li>
+  <li><b>Dokument z szablonu dokumentów EA</b> (DOCX, PDF albo RTF), na przykład szablon „Model Report”, jak w EA: Publish → Report Builder.</li>
+</ul>
+<div class="prompt">Ułóż automatycznie diagram „Architektura” w kierunku w prawo i wygeneruj z szablonu „Model Report” dokument DOCX dla pakietu Sklep.</div>
+<h3>Pisownia w języku Compassa</h3>
+<p>Narzędzie asystenta <code>spell_check</code> sprawdza notatki elementów i diagramów, kroki scenariuszy oraz słownik projektu słownikiem pisowni Windows w języku Compassa (korekta pisowni samego EA ma tylko słowniki angielskie). Nazwy elementów i pojęcia ze słownika projektu są uznawane za znane słowa. Asystent podaje podpowiedzi, a poprawia dopiero po Twojej zgodzie. Jeśli Windows nie ma słownika dla tego języka, dodaj język w Ustawieniach Windows → Czas i język → Język. W Compass w EA notatki zmienionego elementu są sprawdzane na bieżąco (linie „✎ Pisownia: …” w System Output, rozdział 9).</p>
+<div class="prompt">Sprawdź pisownię w notatkach pakietu Sklep.</div>
 <h3>O czym warto wiedzieć</h3>
 <ul>
   <li><b>Pierwsze wywołanie EA trwa od kilku do kilkunastu sekund</b>, bo aplikacja uruchamia Enterprise Architect w tle i otwiera model. Kolejne zapisy i pobrania diagramów trwają już krócej niż sekundę. Po 10 minutach bez wywołań EA w tle zamyka się i zwalnia licencję. Zamknięcie aplikacji też zamyka jej sesję EA. Compass w EA (rozdział 9) nie uruchamia EA w tle: zapisuje przez Twoje okno EA.</li>
   <li><b>Blokady.</b> Gdy w karcie Model jest włączona opcja „Model wymaga blokady do edycji”, asystent blokuje obiekt na swoje konto na czas zapisu i po zapisie blokadę zdejmuje. Obiektu zablokowanego przez innego użytkownika nie zmieni; komunikat podaje, kto blokuje element (konto lub grupa, od kiedy), jego pakiet i diagram.</li>
   <li><b>Usuwanie jest trwałe.</b> Usunięcie pakietu usuwa całą jego zawartość. W trybach <b>ask</b> i <b>plan</b> usuwanie zawsze wymaga osobnej zgody, a panel zgody podaje nazwy usuwanych obiektów (rozdział 15). Przy ważnych modelach używaj trybu <b>ask</b>, proś o baseline i rób kopie zapasowe bazy.</li>
-  <li><b>Zapis częściowy.</b> Gdy jedna z operacji zapisu się nie uda, wcześniejsze operacje z tego samego zapisu zostają w modelu; komunikat podaje, co zostało zapisane.</li>
+  <li><b>Zapis „wszystko albo nic”.</b> Gdy jedna z operacji zapisu się nie uda, obiekty utworzone wcześniej w tym zapisie są usuwane, więc w modelu nie zostaje nic niedokończonego; komunikat podaje przyczynę.</li>
   <li><b>Sprawdzaj wynik.</b> Asystent może się pomylić: źle odczytać zdjęcie, wybrać inny typ elementu albo ułożyć diagram nieczytelnie. Poproś o pokazanie diagramu po zmianach i o poprawki.</li>
   <li><b>Duże diagramy</b> asystent zapisuje w kilku krokach. To normalne.</li>
 </ul>
@@ -379,6 +411,8 @@
 <div class="prompt">Otwórz w moim EA diagram „Proces zamówienia” i wskaż w przeglądarce pakiet „Wymagania”.</div>
 <p>Klawisz <span class="key">F5</span> jest potrzebny tylko wtedy, gdy okno EA nie jest otwarte albo pokazuje inny model: asystent działa wtedy jak zwykle, a zmiany zobaczysz po odświeżeniu pakietu w EA. Jeśli w oknie EA jest otwarte okno dialogowe, EA nie odpowiada asystentowi; zamknij je i ponów prośbę.</p>
 <p>Opisana tu współpraca dotyczy osobnej aplikacji. Compass uruchomiony w samym Enterprise Architect zawsze pracuje na projekcie otwartym w swoim oknie EA (rozdział 9).</p>
+
+<p>Odczyty pliku EA, który jest otwarty w oknie EA, idą przez to okno, bo plik na dysku może jeszcze nie mieć Twoich ostatnich zmian.</p>
 
 <h2 id="s9" class="break">9. Compass w Enterprise Architect</h2>
 <p>Loonar Compass działa też wewnątrz Enterprise Architect, jako okno zadokowane obok przeglądarki projektu i diagramów. Pracujesz w nim tak samo jak w osobnej aplikacji: rozmowa, załączniki, zatwierdzanie zmian, pamięć, szablony i dokumenty działają bez zmian. Osobna aplikacja, uruchamiana z menu Start, też działa jak dotąd.</p>
@@ -406,6 +440,17 @@
 <div class="prompt">Opisz «Pakiet: Sklep (id 5)» i zaproponuj brakujące wymagania.</div>
 <h3>Kontrola na bieżąco</h3>
 <p>Gdy Compass jest zadokowany w EA, sprawdza zmiany w trakcie Twojej pracy według tych samych reguł co kontrola modelu (wbudowanych i z <code>governance.json</code> albo z huba). Kontrola rusza po narysowaniu relacji i po edycji elementu (nazwy, stereotypu, tagged values). Ustalenia pojawiają się w zakładce <b>Loonar Compass</b> okna System Output, każde tylko raz, jako „⚠ Kontrola modelu: …”. Nowy element jest sprawdzany dopiero po pierwszej edycji, bo EA nadaje mu najpierw nazwę Class1.</p>
+<h3>Agenci zdarzeń</h3>
+<p>Karta <b>Agenci zdarzeń (Compass w EA)</b> zawiera reguły, według których asystent reaguje na to, co dzieje się w EA. Reguły są w pliku <code>event_agents.json</code>:</p>
+<pre>{"agents":[{"name":"Component owner","event":"element_created","applies_to":"Component",
+  "prompt":"Check that the new component has an owner and a description; suggest what to fill in."}]}</pre>
+<ul>
+  <li>Zdarzenia (<code>event</code>): <code>element_created</code>, <code>element_changed</code>, <code>connector_created</code>, <code>diagram_created</code>. W <code>applies_to</code> podajesz typ elementu, «stereotyp» albo <code>*</code> (działają symbole <code>*</code> i <code>?</code>).</li>
+  <li>Agenci działają, gdy Compass jest otwarty w swojej zakładce w EA. Asystent czyta model i odpowiada w zakładce <b>Loonar Compass</b> okna System Output (linie zaczynają się od 🤖). <b>Sam nie zmienia modelu.</b></li>
+  <li>Ten sam agent reaguje na ten sam obiekt najwyżej raz na minutę.</li>
+  <li>Przycisk <b>Zapisz agentów zdarzeń</b> zapisuje reguły i podaje liczbę agentów.</li>
+</ul>
+<p><b>Pisownia na bieżąco.</b> Notatki zmienionego elementu są sprawdzane w języku Compassa; uwagi pojawiają się w System Output jako „✎ Pisownia: …”.</p>
 <h3>Kroki asystenta w System Output</h3>
 <p>Okno <b>System Output</b> w EA ma zakładkę <b>Loonar Compass</b>: Twoje wiadomości i każdy krok asystenta (odczyty modelu, zapisy do EA, wyniki) z godziną. Czat w oknie Compass pokazuje w tym czasie tylko ostatni krok, w jednej linii.</p>
 <p><b>Zamykanie.</b> Compass zamyka się razem z Enterprise Architect i zapisuje rozmowę. Po zamknięciu projektu w EA Compass prosi o otwarcie projektu.</p>
@@ -548,6 +593,7 @@
 <p>Gdy potrzebna jest zgoda, nad kartą wiadomości pojawia się panel <b>„Asystent chce zapisać zmiany w modelu”</b> z opisem zmian i przyciskami <b>Zatwierdź</b> oraz <b>Odrzuć</b>. Opis podaje, ile pakietów, diagramów, elementów i połączeń powstanie albo się zmieni, nazwy nowych pakietów i diagramów, a przy usuwaniu, przenoszeniu i kopiowaniu także osobne wiersze z nazwami tych obiektów (USUNIĘCIE, PRZENIESIENIE, KOPIOWANIE). Ten sam panel pyta o zgodę na zapis ustalenia w pamięci, nadpisanie szablonu i publikację w Confluence. Odrzucony zapis niczego nie zmienia, a asystent dostaje informację o odrzuceniu i może zaproponować coś innego.</p>
 <figure><img src="img/en/approval.png" alt="Panel zatwierdzania nad kartą wiadomości: opis zapisu do modelu EA z przyciskami Zatwierdź i Odrzuć"><figcaption>Panel zgody na zapis zmian w modelu</figcaption></figure>
 <p>Opis zmian w panelu zgody ma część <b>„Przed → po:”</b>: co powstaje (utworzone obiekty), co zmienia się z jakiej wartości na jaką (pole: stara → nowa wartość) i co jest usuwane. Dzięki temu widzisz skutek zapisu, zanim klikniesz <b>Zatwierdź</b>.</p>
+<p><b>Usuwanie elementu z relacjami.</b> Usunięcie elementu, który ma relacje, zawsze wymaga Twojej zgody, także w trybie <b>auto</b>. Panel zgody wymienia te relacje.</p>
 <h3>Dziennik zmian</h3>
 <p>Każdy zapis asystenta do modelu EA, także nieudany, trafia do dziennika zmian (plik <code>audit_log.jsonl</code> w folderze danych). Nie ma w nim zapisów odrzuconych przez Ciebie ani operacji, których aplikacja nie dopuściła do zapisu; dziennik nie obejmuje też pamięci, szablonów ani publikacji w Confluence.</p>
 <p>Widok <b>Dziennik zmian</b> (ikona „Dziennik zmian w modelu”) pokazuje 200 ostatnich zapisów, od najnowszych: wynik (OK albo BŁĄD), czas, konto EA i bazę, opis zmian oraz treść błędu. Przycisk <b>Eksportuj do Excela</b> zapisuje cały dziennik jako arkusz XLSX (kolumny: Czas, Wynik, Konto EA, Baza, Tryb, Zmiany, Utworzone, Błąd), na przykład do przeglądu zmian w zespole. Przycisk <b>Otwórz plik dziennika</b> otwiera plik dziennika w Notatniku.</p>

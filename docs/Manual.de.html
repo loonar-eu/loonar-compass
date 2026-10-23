@@ -175,7 +175,7 @@
 </ul>
 
 <h2 id="s5">5. Einstellungen und Sprache</h2>
-<p>Die Ansicht <b>Einstellungen</b> hat neun Karten: <b>KI-Modell</b> und <b>Sprache und Freigabe von Änderungen</b> in der linken Spalte, <b>Modell</b> und <b>Enterprise Architect</b> in der rechten, darunter <b>Neue Versionen (Newsletter)</b>, <b>Confluence</b> und <b>Miro</b>. In Compass in Enterprise Architect fehlen die Karten Modell und Enterprise Architect, weil das Modell das in diesem EA-Fenster geöffnete Projekt ist (Kapitel 9). Jede Karte speichern Sie einzeln mit der Schaltfläche unter der Karte, und die Anwendung prüft sofort, ob die Daten funktionieren. Das Ergebnis erscheint unter der Schaltfläche: grün mit Beschreibung oder rot mit der Fehlerursache.</p>
+<p>Die Ansicht <b>Einstellungen</b> hat elf Karten: <b>KI-Modell</b> und <b>Sprache und Freigabe von Änderungen</b> in der linken Spalte, <b>Modell</b> und <b>Enterprise Architect</b> in der rechten, darunter <b>Neue Versionen (Newsletter)</b>, <b>Confluence</b> und <b>Miro</b>. In Compass in Enterprise Architect fehlen die Karten Modell und Enterprise Architect, weil das Modell das in diesem EA-Fenster geöffnete Projekt ist (Kapitel 9). Jede Karte speichern Sie einzeln mit der Schaltfläche unter der Karte, und die Anwendung prüft sofort, ob die Daten funktionieren. Das Ergebnis erscheint unter der Schaltfläche: grün mit Beschreibung oder rot mit der Fehlerursache.</p>
 <figure><img src="img/en/settings.png" alt="Ansicht „Einstellungen“ einer früheren Version mit nummerierten Karten"><figcaption>Einstellungen: jede Karte mit eigenem Speichern und Test (Screenshot einer früheren Version: Die Karten hatten Nummern, die Karte „KI-Modell“ hieß „Claude“, und das EA-Konto stand auf der Karte Enterprise Architect)</figcaption></figure>
 <table>
   <tr><th style="width: 26%;">Karte</th><th>Felder</th><th style="width: 34%;">Was der Test prüft</th></tr>
@@ -188,6 +188,8 @@
   <tr><td>Miro</td><td>Zugriffstoken einer Miro-App mit den Berechtigungen boards:read und boards:write (Kapitel 11)</td><td>Verbindet sich mit Miro und zählt die Boards, die das Token sieht</td></tr>
   <tr><td>Jira</td><td>Jira-Adresse, E-Mail (nur Cloud), Token, Standard-Projektschlüssel (Kapitel 7). Die Adresse muss mit <code>https://</code> beginnen.</td><td>„Speichern und Jira-Verbindung testen“ verbindet sich mit Jira und prüft das Projekt</td></tr>
   <tr><td>Team (Compass Hub)</td><td>Hub-Adresse, Token, Dieses Modell im Hub (optional) (Kapitel 21)</td><td>„Speichern und Hub-Verbindung testen“ verbindet sich mit dem Hub und zeigt Ihr Konto, die Rolle und die Teamrichtlinie</td></tr>
+  <tr><td>MCP-Server</td><td>Liste Ihrer eigenen MCP-Server, gespeichert in der Datei <code>mcp_servers.json</code> neben den Einstellungen (Kapitel 7)</td><td>„MCP-Server speichern und testen“ verbindet sich mit jedem Server und zeigt die Anzahl seiner Werkzeuge</td></tr>
+  <tr><td>Ereignis-Agenten (Compass in EA)</td><td>Regeln in der Datei <code>event_agents.json</code> (Kapitel 9)</td><td>„Ereignis-Agenten speichern“ prüft die Regeln und zeigt die Anzahl der Agenten</td></tr>
 </table>
 <p>Ein leeres Passwort- oder Schlüsselfeld bedeutet „keine Änderung“. Der Hinweis <b>gespeichert</b> neben einem Feld zeigt an, dass der Wert bereits gespeichert ist. Alle Passwörter, die API-Schlüssel und die Tokens liegen in der Windows-Anmeldeinformationsverwaltung, nicht in der Einstellungsdatei. Das Datenbankpasswort darf kein Semikolon (<code>;</code>) enthalten, da Enterprise Architect es sonst nicht in seiner Verbindungszeichenfolge übergeben kann.</p>
 <p><b>Standardwerte.</b> Solange noch keine Einstellungen vorhanden sind, gilt: Server, Datenbankname, EA-Benutzerkonto und Passwörter sind leer (beim Server zeigt ein grauer Hinweis „z. B. 127.0.0.1“), der Port ist 5432, das Datenbankkonto „postgres“, der Pfad zu EA.exe <code>C:\Program Files\Sparx Systems\EA\EA.exe</code>, der Freigabemodus ask, der Anbieter Anthropic (Claude), das Modell <code>claude-haiku-5-5</code>, der Aufwand „Standard des Modells“, Max. Tokens 10000 und die Verschlüsselung „Bevorzugt“. Bestehende Einstellungen ändern weder das Setup noch die Anwendung.</p>
@@ -215,6 +217,7 @@
 </ol>
 <p>Übersetzt werden nur das Gedächtnis und die Vorlagen. <b>Der Unterhaltungsverlauf wird nie übersetzt</b>: Unterhaltungen bleiben in der Sprache, in der Sie sie geführt haben.</p>
 <div class="note"><b>Keine Verbindung zum KI-Modell.</b> Die Übersetzung erfordert einen funktionierenden API-Schlüssel. Besteht keine Verbindung, erscheint auf den Symbolen <b>Einstellungen</b>, <b>Gedächtnis des Assistenten</b> und <b>Dokumentvorlagen</b> ein orangefarbenes <b>„!“</b>, und der Tooltip erklärt, dass die Inhalte noch nicht übersetzt sind. Die Übersetzung wird beim nächsten Start der Anwendung fortgesetzt oder sofort nach einem Klick auf <b>Jetzt übersetzen</b> auf der Karte „Sprache und Freigabe von Änderungen“. Das Speichern anderer Karten setzt sie nicht fort.</div>
+<p>Beim Speichern der Sprache stellt Compass auch die Rechtschreibprüfung von EA auf diese Sprache um, wenn EA ein Wörterbuch dafür hat. EA bringt nur englische Wörterbücher mit; für andere Sprachen prüft Compass die Texte selbst (Kapitel 7, „Rechtschreibung in der Sprache von Compass“).</p>
 <h3>Verschlüsselung der Datenbankverbindung</h3>
 <p>Das Feld <b>Verschlüsselung der Verbindung</b> auf der Karte „Modell“ (Option „PostgreSQL-Datenbank“) legt fest, ob der Assistent das Modell über TLS liest:</p>
 <table>
@@ -356,12 +359,41 @@
 </table>
 <div class="prompt">Zeichne ein Sequenzdiagramm auf Grundlage des Vorgangs ARCH-123.</div>
 <div class="prompt">Füge dem Vorgang ARCH-123 einen Link zum Element „Warenkorb“ hinzu.</div>
+<h3>Überprüfung nach dem Speichern</h3>
+<p>Nach jedem Speichern liest Compass das Modell erneut und vergleicht es mit der Anfrage: ob die erstellten Objekte existieren, ob neue Beziehungen die gewünschten Enden haben, ob neue Elemente im gewünschten Paket liegen, ob geänderte Namen, Notizen, Stereotypen und Tagged Values die neuen Werte haben und ob gelöschte Objekte verschwunden sind. Abweichungen gehen an den Assistenten, der sie melden muss, statt „fertig“ zu sagen.</p>
+<p>Das Speichern ist <b>ganz oder gar nicht</b>: Schlägt es auf halbem Weg fehl, werden die bereits erstellten Objekte wieder gelöscht. Das Löschen eines Elements, das Beziehungen hat, erfordert immer Ihre Zustimmung (auch im Modus <b>auto</b>), und das Freigabepanel listet diese Beziehungen auf.</p>
+<h3>Eigene MCP-Server</h3>
+<p>Eigene MCP-Server geben dem Assistenten zusätzliche Werkzeuge, zum Beispiel ein Ticketsystem, ein Repository oder eine Wissensdatenbank des Unternehmens. Die Server tragen Sie in die Datei <code>mcp_servers.json</code> neben der Einstellungsdatei ein und testen sie auf der Karte <b>MCP-Server</b>. Ein Server kann ein lokales Programm sein (<code>command</code> und <code>args</code>, Kommunikation über stdio) oder ein HTTP-Dienst (<code>url</code> und <code>headers</code>, Streamable HTTP):</p>
+<pre>{"servers":[{"name":"hub","url":"http://127.0.0.1:8730/mcp","headers":{"Authorization":"Bearer ${secret:hub_token}"}},
+ {"name":"files","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem","C:/docs"]}]}</pre>
+<ul>
+  <li><code>${secret:NAME}</code> ist ein Eintrag in der Windows-Anmeldeinformationsverwaltung, <code>${env:NAME}</code> eine Umgebungsvariable; so müssen Tokens nicht in der Datei stehen.</li>
+  <li>Ein Werkzeug, das nicht nur liest, fragt vor jedem Aufruf nach Ihrer Zustimmung, außer der Server hat <code>"trusted": true</code>.</li>
+  <li>Die Schaltfläche <b>MCP-Server speichern und testen</b> verbindet sich mit jedem Server und zeigt die Anzahl seiner Werkzeuge.</li>
+</ul>
+<h3>EA-Skripte</h3>
+<p>Der Assistent listet die Skriptgruppen und Skripte des Modells auf, liest ein Skript, speichert ein Skript (JScript, VBScript oder JavaScript; eine fehlende Gruppe wird angelegt) und führt es aus. Das Speichern eines Skripts geben Sie wie jedes Speichern frei, und <b>das Ausführen eines Skripts erfordert jedes Mal Ihre Zustimmung</b>, weil ein Skript alles im Modell ändern kann. Das Skript läuft im geöffneten EA-Fenster oder, wenn es keines gibt, in der eigenen EA-Hintergrundsitzung von Compass. <code>Repository</code> und <code>Session.Output</code> funktionieren wie in EA, und Einbindungen mit <code>!INC Gruppe.Skript</code> werden aus dem Modell aufgelöst. Ist in EA ein anderes Modell geöffnet, endet die Ausführung mit einer Meldung.</p>
+<div class="prompt">Liste die Skripte im Modell auf und führe dann das Skript „Bericht.Fehlende Notizen“ aus.</div>
+<h3>Weitere Modelloperationen</h3>
+<ul>
+  <li><b>Automatisches Diagrammlayout</b>: Richtung nach unten, rechts, oben oder links sowie Abstand.</li>
+  <li><b>XMI</b>: Export eines Pakets in eine XMI-Datei und Import eines Pakets aus einer Datei (der Import ersetzt GUIDs, außer Sie bitten darum, sie zu behalten).</li>
+  <li><b>Verknüpfte Dokumente</b> von Elementen, aus Text erstellt.</li>
+  <li><b>Swimlanes</b> eines Diagramms.</li>
+  <li><b>Umkehren einer Beziehung</b> (Enden vertauschen).</li>
+  <li><b>Bearbeiten eines Pakets</b>: Name, Notizen, Version, Status und Stereotyp.</li>
+  <li><b>Dokument aus einer EA-Dokumentvorlage</b> (DOCX, PDF oder RTF), zum Beispiel die Vorlage „Model Report“, wie Publish → Report Builder in EA.</li>
+</ul>
+<div class="prompt">Ordne das Diagramm „Architektur“ automatisch nach rechts an und erzeuge aus der Vorlage „Model Report“ ein DOCX für das Paket Shop.</div>
+<h3>Rechtschreibung in der Sprache von Compass</h3>
+<p>Das Assistenten-Werkzeug <code>spell_check</code> prüft die Notizen von Elementen und Diagrammen, Szenarioschritte und das Projektglossar mit dem Windows-Rechtschreibwörterbuch der Compass-Sprache (die Rechtschreibprüfung von EA hat nur englische Wörterbücher). Namen von Elementen und Glossarbegriffe gelten als bekannte Wörter. Der Assistent macht Vorschläge und korrigiert erst nach Ihrer Zustimmung. Hat Windows kein Wörterbuch für die Sprache, fügen Sie die Sprache in den Windows-Einstellungen → Zeit und Sprache → Sprache hinzu. In Compass in EA werden die Notizen eines geänderten Elements laufend geprüft (Zeilen „✎ Rechtschreibung: …“ in System Output, Kapitel 9).</p>
+<div class="prompt">Prüfe die Rechtschreibung der Notizen im Paket Shop.</div>
 <h3>Gut zu wissen</h3>
 <ul>
   <li><b>Der erste Aufruf von EA dauert einige bis über zehn Sekunden</b>, weil die Anwendung Enterprise Architect im Hintergrund startet und das Modell öffnet. Weitere Speicherungen und Diagrammabrufe dauern dann weniger als eine Sekunde. Nach 10 Minuten ohne Aufrufe schließt sich EA im Hintergrund und gibt die Lizenz frei. Auch das Schließen der Anwendung schließt ihre EA-Sitzung. Compass in EA (Kapitel 9) startet kein EA im Hintergrund: Es speichert über Ihr EA-Fenster.</li>
   <li><b>Sperren.</b> Ist auf der Karte Modell die Option „Das Modell erfordert eine Sperre zum Bearbeiten“ aktiviert, sperrt der Assistent ein Objekt für die Dauer des Speicherns auf sein Konto und hebt die Sperre danach auf. Ein von einem anderen Benutzer gesperrtes Objekt ändert er nicht; die Meldung nennt, wer das Element sperrt (Konto oder Gruppe, seit wann), sein Paket und Diagramm.</li>
   <li><b>Löschen ist endgültig.</b> Das Löschen eines Pakets löscht seinen gesamten Inhalt. Verwenden Sie bei wichtigen Modellen den Modus <b>ask</b> (Kapitel 15), lassen Sie Baselines erstellen und sichern Sie die Datenbank.</li>
-  <li><b>Teilweise Speicherung.</b> Ein Speichervorgang kann mehrere Operationen umfassen. Schlägt eine davon fehl, bleiben die vorherigen Operationen desselben Vorgangs im Modell; die Meldung nennt, was gespeichert wurde.</li>
+  <li><b>Speichern ganz oder gar nicht.</b> Schlägt eine Operation eines Speichervorgangs fehl, werden die zuvor in diesem Vorgang erstellten Objekte wieder gelöscht, sodass nichts Halbfertiges im Modell bleibt; die Meldung nennt die Ursache.</li>
   <li><b>Prüfen Sie das Ergebnis.</b> Der Assistent kann sich irren: ein Foto falsch lesen, einen anderen Elementtyp wählen oder ein Diagramm unübersichtlich anordnen. Lassen Sie sich das Diagramm nach den Änderungen anzeigen und bitten Sie bei Bedarf um Korrekturen.</li>
   <li><b>Große Diagramme</b> speichert der Assistent in mehreren Schritten. Das ist normal.</li>
 </ul>
@@ -377,6 +409,8 @@
 <div class="prompt">Öffne in meinem EA das Diagramm „Bestellprozess“ und zeige im Browser das Paket „Anforderungen“ an.</div>
 <p>Nur wenn das EA-Fenster nicht geöffnet ist oder ein anderes Modell zeigt, arbeitet der Assistent ohne diese Zusammenarbeit, und Sie sehen die Änderungen nach dem Aktualisieren des Pakets in EA (<span class="key">F5</span>). Anmeldedaten aus der Verbindung Ihres EA-Fensters (Konto, Passwort) gehen nie an das Modell.</p>
 <p>Diese Zusammenarbeit betrifft die eigenständige Anwendung. Compass, das in Enterprise Architect selbst läuft, arbeitet immer mit dem in seinem EA-Fenster geöffneten Projekt (Kapitel 9).</p>
+
+<p>Lesezugriffe auf eine EA-Datei, die in einem EA-Fenster geöffnet ist, laufen über dieses Fenster, weil die Datei auf der Festplatte Ihre letzten Änderungen noch nicht enthalten muss.</p>
 
 <h2 id="s9" class="break">9. Compass in Enterprise Architect</h2>
 <p>Loonar Compass läuft auch innerhalb von Enterprise Architect, als angedocktes Fenster neben dem Projekt-Browser und den Diagrammen. Sie arbeiten darin genauso wie in der eigenständigen Anwendung: Unterhaltung, Anhänge, Freigabe von Änderungen, Gedächtnis, Vorlagen und Dokumente funktionieren unverändert. Die eigenständige Anwendung, die Sie über das Startmenü starten, arbeitet weiterhin wie bisher.</p>
@@ -404,6 +438,17 @@
 <div class="prompt">Beschreibe «Paket: Shop (id 5)» und schlage fehlende Anforderungen vor.</div>
 <h3>Prüfung während der Arbeit</h3>
 <p>Ist Compass in EA angedockt, prüft es Änderungen während Ihrer Arbeit nach denselben Regeln wie die Modellprüfung (eingebaute und die aus <code>governance.json</code> oder vom Hub). Die Prüfung startet, nachdem Sie eine Beziehung gezeichnet oder ein Element bearbeitet haben (Name, Stereotyp, Tagged Values). Die Befunde erscheinen auf der Registerkarte <b>Loonar Compass</b> des Fensters System Output, jeder nur einmal, als „⚠ Modellprüfung: …“. Ein neues Element wird erst nach der ersten Bearbeitung geprüft, weil EA es zuerst Class1 nennt.</p>
+<h3>Ereignis-Agenten</h3>
+<p>Die Karte <b>Ereignis-Agenten (Compass in EA)</b> enthält Regeln, nach denen der Assistent auf Vorgänge in EA reagiert. Die Regeln stehen in der Datei <code>event_agents.json</code>:</p>
+<pre>{"agents":[{"name":"Component owner","event":"element_created","applies_to":"Component",
+  "prompt":"Check that the new component has an owner and a description; suggest what to fill in."}]}</pre>
+<ul>
+  <li>Ereignisse (<code>event</code>): <code>element_created</code>, <code>element_changed</code>, <code>connector_created</code>, <code>diagram_created</code>. In <code>applies_to</code> geben Sie einen Elementtyp, «Stereotyp» oder <code>*</code> an (die Platzhalter <code>*</code> und <code>?</code> funktionieren).</li>
+  <li>Die Agenten arbeiten, solange Compass in seinem Reiter in EA geöffnet ist. Der Assistent liest das Modell und antwortet im Reiter <b>Loonar Compass</b> von System Output (Zeilen beginnen mit 🤖). <b>Er ändert das Modell nie von sich aus.</b></li>
+  <li>Derselbe Agent reagiert auf dasselbe Objekt höchstens einmal pro Minute.</li>
+  <li>Die Schaltfläche <b>Ereignis-Agenten speichern</b> speichert die Regeln und zeigt die Anzahl der Agenten.</li>
+</ul>
+<p><b>Laufende Rechtschreibprüfung.</b> Die Notizen eines geänderten Elements werden in der Sprache von Compass geprüft; Hinweise erscheinen in System Output als „✎ Rechtschreibung: …“.</p>
 <h3>Schritte des Assistenten in System Output</h3>
 <p>Das Fenster <b>System Output</b> in EA hat eine Registerkarte <b>Loonar Compass</b>: Ihre Nachrichten und jeden Schritt des Assistenten (Lesezugriffe auf das Modell, Speicherungen in EA, Ergebnisse) mit Uhrzeit. Der Chat im Compass-Fenster zeigt währenddessen nur den letzten Schritt in einer Zeile.</p>
 <p><b>Schließen.</b> Compass schließt sich zusammen mit Enterprise Architect und speichert die Unterhaltung. Nach dem Schließen des Projekts in EA bittet Compass darum, ein Projekt zu öffnen.</p>
@@ -547,6 +592,7 @@
 <figure><img src="img/en/approval.png" alt="Freigabepanel „Der Assistent möchte Änderungen im Modell speichern“ mit der Beschreibung der Änderungen und den Schaltflächen Freigeben und Ablehnen"><figcaption>Freigabepanel für eine Änderung am Modell</figcaption></figure>
 <p>Über dasselbe Panel laufen in den Modi <b>ask</b> und <b>plan</b> auch das Speichern einer Festlegung im Gedächtnis des Assistenten (Kapitel 14) und das Überschreiben einer Dokumentvorlage (Kapitel 13). Die Veröffentlichung in Confluence fragt in jedem Modus (Kapitel 12).</p>
 <p>Im Freigabefenster hat die Beschreibung der Änderungen einen Teil <b>„Vorher → nachher:“</b>: was entsteht (neue Objekte), was sich von welchem Wert auf welchen ändert (Feld: alter → neuer Wert) und was gelöscht wird. So sehen Sie die Wirkung der Speicherung, bevor Sie auf <b>Freigeben</b> klicken.</p>
+<p><b>Löschen eines Elements mit Beziehungen.</b> Das Löschen eines Elements, das Beziehungen hat, erfordert immer Ihre Zustimmung, auch im Modus <b>auto</b>. Das Freigabepanel listet diese Beziehungen auf.</p>
 <h3>Änderungsprotokoll</h3>
 <p>Jede Speicherung des Assistenten im EA-Modell, auch eine fehlgeschlagene, wird im Änderungsprotokoll erfasst (Datei <code>audit_log.jsonl</code> im Benutzerdatenordner). Nicht erfasst werden Speicherungen, die Sie abgelehnt haben, und Operationen, die die Anwendung nicht zum Speichern zugelassen hat; auch Gedächtnis, Vorlagen und Veröffentlichungen in Confluence stehen nicht im Protokoll.</p>
 <p>Die Ansicht <b>Änderungsprotokoll</b> (Symbol „Änderungsprotokoll des Modells“) zeigt die letzten 200 Einträge, die neuesten zuerst: Ergebnis (OK oder FEHLER), Zeit, EA-Konto und Datenbank, die Beschreibung der Änderungen und gegebenenfalls den Fehlertext. Die Schaltfläche <b>Nach Excel exportieren</b> speichert das gesamte Protokoll als XLSX-Arbeitsmappe (Spalten: Zeit, Ergebnis, EA-Konto, Datenbank, Modus, Änderungen, Erstellt, Fehler), zum Beispiel für eine Durchsicht der Änderungen im Team. <b>Protokolldatei öffnen</b> öffnet die Protokolldatei im Windows-Editor.</p>

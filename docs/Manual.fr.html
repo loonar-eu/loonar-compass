@@ -174,7 +174,7 @@
 </ul>
 
 <h2 id="s5">5. Paramètres et langue</h2>
-<p>La vue <b>Paramètres</b> comporte neuf cartes : <b>Modèle d'IA</b> et <b>Langue et validation des modifications</b> dans la colonne de gauche, <b>Modèle</b> et <b>Enterprise Architect</b> dans celle de droite, puis en dessous <b>Nouvelles versions (newsletter)</b>, <b>Confluence</b> et <b>Miro</b>. Dans Compass ouvert dans Enterprise Architect, les cartes Modèle et Enterprise Architect n'apparaissent pas, car le modèle est le projet ouvert dans cette fenêtre EA (chapitre 9). Vous enregistrez chacune séparément avec le bouton situé sous la carte, et l'application teste aussitôt les données saisies. Le résultat apparaît sous le bouton : en vert avec une description ou en rouge avec la cause de l'erreur.</p>
+<p>La vue <b>Paramètres</b> comporte onze cartes : <b>Modèle d'IA</b> et <b>Langue et validation des modifications</b> dans la colonne de gauche, <b>Modèle</b> et <b>Enterprise Architect</b> dans celle de droite, puis en dessous <b>Nouvelles versions (newsletter)</b>, <b>Confluence</b> et <b>Miro</b>. Dans Compass ouvert dans Enterprise Architect, les cartes Modèle et Enterprise Architect n'apparaissent pas, car le modèle est le projet ouvert dans cette fenêtre EA (chapitre 9). Vous enregistrez chacune séparément avec le bouton situé sous la carte, et l'application teste aussitôt les données saisies. Le résultat apparaît sous le bouton : en vert avec une description ou en rouge avec la cause de l'erreur.</p>
 <figure><img src="img/en/settings.png" alt="Vue Paramètres d'une version antérieure de l'application, avec des cartes numérotées"><figcaption>Paramètres : chaque carte avec son propre enregistrement et son test (capture d'une version antérieure : les cartes étaient numérotées, la carte « Modèle d'IA » s'appelait « Claude » et le compte EA se trouvait dans la carte Enterprise Architect)</figcaption></figure>
 <table>
   <tr><th style="width: 26%;">Carte</th><th>Champs</th><th style="width: 34%;">Ce que vérifie le test</th></tr>
@@ -187,6 +187,8 @@
   <tr><td>Miro</td><td>Jeton d'accès d'une application Miro avec les autorisations boards:read et boards:write (chapitre 11)</td><td>Se connecte à Miro et compte les tableaux visibles avec le jeton</td></tr>
   <tr><td>Jira</td><td>Adresse Jira, e-mail (Cloud uniquement), jeton, clé de projet par défaut (chapitre 7). L'adresse doit commencer par <code>https://</code>.</td><td>« Enregistrer et tester la connexion Jira » se connecte à Jira et vérifie le projet</td></tr>
   <tr><td>Équipe (Compass Hub)</td><td>Adresse du hub, jeton, Ce modèle dans le hub (facultatif) (chapitre 21)</td><td>« Enregistrer et tester la connexion au hub » se connecte au hub et affiche votre compte, votre rôle et la politique de l'équipe</td></tr>
+  <tr><td>Serveurs MCP</td><td>Liste de vos propres serveurs MCP, enregistrée dans le fichier <code>mcp_servers.json</code> à côté des paramètres (chapitre 7)</td><td>« Enregistrer et tester les serveurs MCP » se connecte à chaque serveur et affiche le nombre de ses outils</td></tr>
+  <tr><td>Agents d'événements (Compass dans EA)</td><td>Règles du fichier <code>event_agents.json</code> (chapitre 9)</td><td>« Enregistrer les agents d'événements » vérifie les règles et affiche le nombre d'agents</td></tr>
 </table>
 <p>Un champ de mot de passe ou de clé laissé vide conserve la valeur actuelle. La mention <b>enregistré</b> à côté d'un champ indique que la valeur est déjà mémorisée ; <b>ABSENT</b> signifie qu'elle manque encore.</p>
 <p><b>Valeurs par défaut.</b> Lorsqu'il n'existe encore aucun paramètre, les champs Serveur, Nom de la base et Compte utilisateur EA ainsi que les mots de passe sont vides (le champ Serveur affiche l'indication grise « p. ex. 127.0.0.1 ») ; le port est 5432, le compte de la base <code>postgres</code>, le chemin d'EA <code>C:\Program Files\Sparx Systems\EA\EA.exe</code>, le mode de validation ask, le fournisseur Anthropic (Claude), le modèle <code>claude-haiku-5-5</code>, l'effort « par défaut du modèle » et Jetons max. 10000. Les paramètres existants ne sont pas modifiés.</p>
@@ -216,6 +218,7 @@
 <p>Seules la mémoire et les modèles de documents sont traduits. <b>L'historique des conversations n'est jamais traduit</b> : les conversations restent dans la langue dans laquelle vous les avez menées.</p>
 <div class="note"><b>Pas de connexion au modèle d'IA.</b> La traduction nécessite une clé API fonctionnelle. En l'absence de connexion, un <b>« ! »</b> orange apparaît sur les icônes <b>Paramètres</b>, <b>Mémoire de l'assistant</b> et <b>Modèles de documents</b>, et l'info-bulle explique que les contenus ne sont pas encore traduits. La traduction reprend au prochain démarrage de l'application, ou immédiatement après un clic sur <b>Traduire maintenant</b> dans la carte « Langue et validation des modifications » ; l'enregistrement des autres cartes ne la relance pas.</div>
 
+<p>Lorsque vous enregistrez la langue, Compass règle aussi le correcteur orthographique d'EA sur cette langue, si EA a un dictionnaire pour elle. EA ne fournit que des dictionnaires anglais ; pour les autres langues, Compass vérifie lui-même les textes (chapitre 7, « Orthographe dans la langue de Compass »).</p>
 <h3>Chiffrement de la connexion à la base</h3>
 <p>Le champ <b>Chiffrement de la connexion</b> de la carte « Modèle » (option « Base PostgreSQL ») détermine si la lecture du modèle par l'assistant passe par TLS :</p>
 <table>
@@ -355,12 +358,41 @@
 </table>
 <div class="prompt">Dessine un diagramme de séquence d'après le ticket ARCH-123.</div>
 <div class="prompt">Ajoute au ticket ARCH-123 un lien vers l'élément « Panier ».</div>
+<h3>Vérification d'un enregistrement</h3>
+<p>Après chaque enregistrement, Compass relit le modèle et le compare à la demande : les objets créés existent-ils, les nouvelles relations ont-elles les extrémités demandées, les nouveaux éléments sont-ils dans le paquetage demandé, les noms, notes, stéréotypes et tagged values modifiés ont-ils les nouvelles valeurs, et les objets supprimés ont-ils disparu. Les différences sont transmises à l'assistant, qui doit les signaler au lieu de dire « terminé ».</p>
+<p>L'enregistrement est <b>tout ou rien</b> : s'il échoue à mi-chemin, les objets déjà créés sont de nouveau supprimés. La suppression d'un élément qui a des relations demande toujours votre accord (aussi en mode <b>auto</b>), et le panneau de validation énumère ces relations.</p>
+<h3>Vos propres serveurs MCP</h3>
+<p>Vos propres serveurs MCP donnent à l'assistant des outils supplémentaires, par exemple un système de tickets, un dépôt ou une base de connaissances de l'entreprise. Vous listez les serveurs dans le fichier <code>mcp_servers.json</code> à côté du fichier de paramètres et vous les testez dans la carte <b>Serveurs MCP</b>. Un serveur peut être un programme local (<code>command</code> et <code>args</code>, communication par stdio) ou un service HTTP (<code>url</code> et <code>headers</code>, Streamable HTTP) :</p>
+<pre>{"servers":[{"name":"hub","url":"http://127.0.0.1:8730/mcp","headers":{"Authorization":"Bearer ${secret:hub_token}"}},
+ {"name":"files","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem","C:/docs"]}]}</pre>
+<ul>
+  <li><code>${secret:NOM}</code> est une entrée du Gestionnaire d'identification Windows et <code>${env:NOM}</code> une variable d'environnement ; les jetons n'ont donc pas à figurer dans le fichier.</li>
+  <li>Un outil qui n'est pas en lecture seule demande votre accord avant chaque appel, sauf si le serveur a <code>"trusted": true</code>.</li>
+  <li>Le bouton <b>Enregistrer et tester les serveurs MCP</b> se connecte à chaque serveur et affiche le nombre de ses outils.</li>
+</ul>
+<h3>Scripts EA</h3>
+<p>L'assistant énumère les groupes de scripts et les scripts du modèle, lit un script, enregistre un script (JScript, VBScript ou JavaScript ; un groupe manquant est créé) et l'exécute. Vous validez l'enregistrement d'un script comme tout enregistrement, et <b>l'exécution d'un script demande votre accord à chaque fois</b>, car un script peut tout modifier dans le modèle. Le script s'exécute dans la fenêtre EA ouverte ou, s'il n'y en a pas, dans la session EA en arrière-plan propre à Compass. <code>Repository</code> et <code>Session.Output</code> fonctionnent comme dans EA, et les inclusions <code>!INC Groupe.Script</code> sont résolues à partir du modèle. Si un autre modèle est ouvert dans EA, l'exécution s'arrête avec un message.</p>
+<div class="prompt">Liste les scripts du modèle, puis exécute le script « Rapport.Notes manquantes ».</div>
+<h3>Autres opérations sur le modèle</h3>
+<ul>
+  <li><b>Disposition automatique du diagramme</b> : direction vers le bas, la droite, le haut ou la gauche, et espacement.</li>
+  <li><b>XMI</b> : export d'un paquetage vers un fichier XMI et import d'un paquetage depuis un fichier (l'import remplace les GUID, sauf si vous demandez de les conserver).</li>
+  <li><b>Documents liés</b> des éléments, créés à partir d'un texte.</li>
+  <li><b>Couloirs (swimlanes)</b> d'un diagramme.</li>
+  <li><b>Inversion d'une relation</b> (échange de ses extrémités).</li>
+  <li><b>Modification d'un paquetage</b> : nom, notes, version, statut et stéréotype.</li>
+  <li><b>Document à partir d'un modèle de document EA</b> (DOCX, PDF ou RTF), par exemple le modèle « Model Report », comme Publish → Report Builder dans EA.</li>
+</ul>
+<div class="prompt">Dispose automatiquement le diagramme « Architecture » vers la droite et génère un DOCX à partir du modèle « Model Report » pour le paquetage Boutique.</div>
+<h3>Orthographe dans la langue de Compass</h3>
+<p>L'outil de l'assistant <code>spell_check</code> vérifie les notes des éléments et des diagrammes, les étapes des scénarios et le glossaire du projet avec le dictionnaire orthographique de Windows dans la langue de Compass (le correcteur d'EA n'a que des dictionnaires anglais). Les noms des éléments et les termes du glossaire comptent comme des mots connus. L'assistant propose des corrections et ne corrige qu'avec votre accord. Si Windows n'a pas de dictionnaire pour la langue, ajoutez la langue dans Paramètres Windows → Heure et langue → Langue. Dans Compass dans EA, les notes d'un élément modifié sont vérifiées en continu (lignes « ✎ Orthographe : … » dans System Output, chapitre 9).</p>
+<div class="prompt">Vérifie l'orthographe des notes du paquetage Boutique.</div>
 <h3>Bon à savoir</h3>
 <ul>
   <li><b>Le premier appel à EA prend de quelques secondes à plus de dix secondes</b>, car l'application lance Enterprise Architect en arrière-plan et ouvre le modèle. Les enregistrements et récupérations de diagrammes suivants prennent moins d'une seconde. Après 10 minutes sans appel, EA en arrière-plan se ferme et libère la licence. La fermeture de l'application ferme aussi sa session EA. Compass dans EA (chapitre 9) ne lance pas EA en arrière-plan : il enregistre par votre fenêtre EA.</li>
   <li><b>Verrous.</b> Lorsque l'option « Le modèle exige un verrou pour modifier » est activée dans la carte Modèle, l'assistant verrouille un objet à son nom pendant l'enregistrement, puis lève le verrou. Il ne modifie pas un objet verrouillé par un autre utilisateur ; le message indique qui verrouille l'élément (compte ou groupe, depuis quand), son paquetage et son diagramme.</li>
   <li><b>La suppression est définitive.</b> La suppression d'un paquetage supprime tout son contenu. Pour les modèles importants, utilisez le mode <b>ask</b> (chapitre 15), servez-vous des baselines et faites des sauvegardes de la base.</li>
-  <li><b>Enregistrement partiel.</b> Si l'une des opérations d'un enregistrement échoue, les opérations précédentes de ce même enregistrement restent dans le modèle ; le message indique ce qui a été enregistré.</li>
+  <li><b>Enregistrement tout ou rien.</b> Si l'une des opérations d'un enregistrement échoue, les objets créés plus tôt par cet enregistrement sont de nouveau supprimés, de sorte qu'il ne reste rien d'inachevé dans le modèle ; le message indique la cause.</li>
   <li><b>Vérifiez le résultat.</b> L'assistant peut se tromper : mal lire une photo, choisir un autre type d'élément ou disposer un diagramme de façon peu lisible. Demandez-lui d'afficher le diagramme après les modifications et d'apporter des corrections.</li>
   <li><b>Les grands diagrammes</b> sont enregistrés par l'assistant en plusieurs étapes. C'est normal.</li>
 </ul>
@@ -376,6 +408,8 @@
 <div class="prompt">Ouvre dans mon EA le diagramme « Processus de commande » et indique dans le navigateur le paquetage « Exigences ».</div>
 <p>Lorsque la fenêtre EA n'est pas ouverte ou affiche un autre modèle, l'assistant fonctionne normalement, et vous verrez les modifications après avoir actualisé le paquetage dans EA (<span class="key">F5</span>).</p>
 <p>La collaboration décrite ici concerne l'application autonome. Compass lancé dans Enterprise Architect lui-même travaille toujours sur le projet ouvert dans sa fenêtre EA (chapitre 9).</p>
+
+<p>Les lectures d'un fichier EA ouvert dans une fenêtre EA passent par cette fenêtre, car le fichier sur le disque peut ne pas encore contenir vos dernières modifications.</p>
 
 <h2 id="s9" class="break">9. Compass dans Enterprise Architect</h2>
 <p>Loonar Compass fonctionne aussi à l'intérieur d'Enterprise Architect, comme une fenêtre ancrée à côté du navigateur de projet et des diagrammes. Vous y travaillez comme dans l'application autonome : la conversation, les pièces jointes, la validation des modifications, la mémoire, les modèles de documents et les documents fonctionnent de la même façon. L'application autonome, lancée depuis le menu Démarrer, fonctionne aussi comme avant.</p>
@@ -403,6 +437,17 @@
 <div class="prompt">Décris «Paquetage: Boutique (id 5)» et propose les exigences manquantes.</div>
 <h3>Contrôle en continu</h3>
 <p>Lorsque Compass est ancré dans EA, il contrôle les modifications pendant votre travail selon les mêmes règles que le contrôle du modèle (celles intégrées et celles de <code>governance.json</code> ou du hub). Le contrôle démarre après le dessin d'une relation et après la modification d'un élément (nom, stéréotype, tagged values). Les constats apparaissent dans l'onglet <b>Loonar Compass</b> de la fenêtre System Output, chacun une seule fois, sous la forme « ⚠ Contrôle du modèle : … ». Un nouvel élément n'est contrôlé qu'après sa première modification, car EA le nomme d'abord Class1.</p>
+<h3>Agents d'événements</h3>
+<p>La carte <b>Agents d'événements (Compass dans EA)</b> contient des règles selon lesquelles l'assistant réagit à ce qui se passe dans EA. Les règles se trouvent dans le fichier <code>event_agents.json</code> :</p>
+<pre>{"agents":[{"name":"Component owner","event":"element_created","applies_to":"Component",
+  "prompt":"Check that the new component has an owner and a description; suggest what to fill in."}]}</pre>
+<ul>
+  <li>Événements (<code>event</code>) : <code>element_created</code>, <code>element_changed</code>, <code>connector_created</code>, <code>diagram_created</code>. Dans <code>applies_to</code>, indiquez un type d'élément, «stéréotype» ou <code>*</code> (les jokers <code>*</code> et <code>?</code> fonctionnent).</li>
+  <li>Les agents fonctionnent tant que Compass est ouvert dans son onglet d'EA. L'assistant lit le modèle et répond dans l'onglet <b>Loonar Compass</b> de System Output (les lignes commencent par 🤖). <b>Il ne modifie jamais le modèle de lui-même.</b></li>
+  <li>Le même agent réagit au même objet au plus une fois par minute.</li>
+  <li>Le bouton <b>Enregistrer les agents d'événements</b> enregistre les règles et affiche le nombre d'agents.</li>
+</ul>
+<p><b>Orthographe en continu.</b> Les notes d'un élément modifié sont vérifiées dans la langue de Compass ; les remarques apparaissent dans System Output sous la forme « ✎ Orthographe : … ».</p>
 <h3>Étapes de l'assistant dans System Output</h3>
 <p>La fenêtre <b>System Output</b> d'EA comporte un onglet <b>Loonar Compass</b> : vos messages et chaque étape de l'assistant (lectures du modèle, enregistrements dans EA, résultats), avec l'heure. Pendant ce temps, le chat de la fenêtre Compass n'affiche que la dernière étape, sur une seule ligne.</p>
 <p><b>Fermeture.</b> Compass se ferme avec Enterprise Architect et enregistre la conversation. Après la fermeture du projet dans EA, Compass demande d'ouvrir un projet.</p>
@@ -545,6 +590,7 @@
 <p>Lorsqu'un accord est nécessaire, le panneau <b>« L'assistant veut enregistrer des modifications dans le modèle »</b> apparaît au-dessus du champ de message, avec une description des modifications (combien de paquetages, diagrammes, éléments, connecteurs, ce qui est supprimé) et les boutons <b>Valider</b> et <b>Refuser</b>. Pour une suppression, un déplacement ou une copie de paquetage, le panneau donne le nom de chaque objet concerné (lignes SUPPRESSION, DÉPLACEMENT et COPIE). Un enregistrement refusé ne modifie pas le modèle ; l'assistant est informé du refus et peut proposer autre chose.</p>
 <figure><img src="img/en/approval.png" alt="Panneau de validation d'une modification du modèle avec la description des modifications et les boutons Valider et Refuser"><figcaption>Le panneau de validation : vérifiez la description des modifications avant de cliquer sur Valider</figcaption></figure>
 <p>Dans le panneau de validation, la description des modifications comporte une partie <b>« Avant → après : »</b> : ce qui est créé (nouveaux objets), ce qui change de quelle valeur à quelle valeur (champ : ancienne → nouvelle valeur) et ce qui est supprimé. Vous voyez ainsi l'effet de l'enregistrement avant de cliquer sur <b>Valider</b>.</p>
+<p><b>Suppression d'un élément ayant des relations.</b> La suppression d'un élément qui a des relations demande toujours votre accord, y compris en mode <b>auto</b>. Le panneau de validation énumère ces relations.</p>
 <h3>Journal des modifications</h3>
 <p>Chaque enregistrement de l'assistant dans le modèle, y compris en cas d'échec, est consigné dans le journal des modifications (fichier <code>audit_log.jsonl</code>). Les enregistrements que vous refusez, ainsi que ceux rejetés avant l'envoi à EA (par exemple en cas de conflit de version), n'y figurent pas. La vue <b>Journal des modifications du modèle</b> affiche les 200 dernières entrées, de la plus récente à la plus ancienne : résultat, heure, compte EA, base et description des modifications. Le bouton <b>Exporter vers Excel</b> enregistre l'ensemble du journal sous forme de classeur XLSX, par exemple pour une revue des modifications en équipe ; <b>Ouvrir le fichier journal</b> ouvre le fichier dans le Bloc-notes.</p>
 
