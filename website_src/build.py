@@ -32,15 +32,15 @@ OWNER = "Loonar Mariusz Głowacki"
 EMAIL = "mariusz@loonar.eu"
 
 # ---- current release: change these lines for a new version (see website/README.md) ----
-VER = "0.7"
+VER = "0.8"
 # The only link to the installer: a GitHub release asset. The file name and the repository are taken from it.
-SETUP_URL = "https://github.com/loonar-eu/loonar-compass/releases/download/v0.7.5/LoonarCompass-Setup-0.7.5.exe"
-RELEASE = "2026-10-22"
-DATE = {"en": "21 October 2026", "pl": "21 października 2026", "de": "21. Oktober 2026", "fr": "21 octobre 2026"}
+SETUP_URL = "https://github.com/loonar-eu/loonar-compass/releases/download/v0.8.0/LoonarCompass-Setup-0.8.exe"
+RELEASE = "2026-10-23"
+DATE = {"en": "23 October 2026", "pl": "23 października 2026", "de": "23. Oktober 2026", "fr": "23 octobre 2026"}
 # SHA-256 of the installer, shown next to the download button (PowerShell: Get-FileHash <installer>).
 # When the installer is in DIST, the build checks this value against the file and takes the size from it;
 # without the file it uses SHA256 and SIZE_MB as written here and prints a warning.
-SHA256 = "72004ec63c4ed25df15ee4ab65f0c3cc41b3261ead8d98ca91d0a1056d512c17"
+SHA256 = "01ceb67a24de98f4f88d5223f5e8eeb99822c3a1525d73396333f0a8a8e77711"
 SIZE_MB = 28
 DIST = os.path.join(ROOT, "dist")
 # ---- services used by the website --------------------------------------------------------
@@ -48,7 +48,7 @@ GOATCOUNTER = "loonar"   # GoatCounter site code (https://loonar.goatcounter.com
 SUPPORT_URL = "https://suppi.pl/loonar"
 LINKEDIN_URL = "https://pl.linkedin.com/in/glowackimariusz"
 # -----------------------------------------------------------------------------------------
-ASSET_V = "8"  # raise after every change of assets/style.css or assets/site.js (cache busting)
+ASSET_V = "9"  # raise after every change of assets/style.css or assets/site.js (cache busting)
 
 SETUP = SETUP_URL.rsplit("/", 1)[1]
 REPO = SETUP_URL.split("/releases/")[0]
@@ -616,12 +616,12 @@ def md_inline(s):
 
 
 def changelog_html(text):
-    """The changelog Markdown (headings ##, paragraphs, lists) as HTML; the title line is the page's own heading."""
+    """The changelog Markdown (headings ## and ###, paragraphs, lists with one nested level) as HTML; the title line is the page's own heading."""
     out, items = [], []
 
     def flush():
         if items:
-            out.append("<ul>" + "".join(f"<li>{i}</li>" for i in items) + "</ul>")
+            out.append("<ul>" + "".join(f"<li>{i}" + (("<ul>" + "".join(f"<li>{s}</li>" for s in subs) + "</ul>") if subs else "") + "</li>" for i, subs in items) + "</ul>")
             items.clear()
     for line in text.splitlines()[1:]:
         s = line.strip()
@@ -634,8 +634,13 @@ def changelog_html(text):
             m = re.search(r"(\d+\.\d+(?:\.\d+)?)", head_text)
             anchor = f' id="{version_anchor(m.group(1))}"' if m else ""
             out.append(f"<h2{anchor}>{md_inline(head_text)}</h2>")
+        elif s.startswith("### "):
+            flush()
+            out.append(f"<h3>{md_inline(s[4:])}</h3>")
+        elif s.startswith("- ") and line.startswith(" ") and items:
+            items[-1][1].append(md_inline(s[2:]))
         elif s.startswith("- "):
-            items.append(md_inline(s[2:]))
+            items.append((md_inline(s[2:]), []))
         else:
             flush()
             out.append(f"<p>{md_inline(s)}</p>")

@@ -2223,9 +2223,11 @@ impl Setup {
                         ui.add_space(2.0);
                     }
                     for line in lines {
-                        let text = line.replace('`', "");
+                        let text = line.replace('`', "").replace("**", "");
                         if text.is_empty() {
                             ui.add_space(4.0);
+                        } else if let Some(item) = text.strip_prefix("  - ") {
+                            ui.add(egui::Label::new(egui::RichText::new(format!("        ◦  {item}")).size(12.5)).wrap());
                         } else if let Some(item) = text.strip_prefix("- ") {
                             ui.add(egui::Label::new(egui::RichText::new(format!("•  {item}")).size(13.0)).wrap());
                         } else if let Some(sub) = text.strip_prefix("### ") {
