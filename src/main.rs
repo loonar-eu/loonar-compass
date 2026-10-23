@@ -27,6 +27,7 @@ mod governance;
 mod jira;
 mod hub;
 mod verify;
+mod mcp_client;
 mod templates;
 mod tools;
 mod window;
@@ -653,6 +654,8 @@ struct Form {
     hub_url: String,
     hub_source: String,
     hub_token: String,
+    /// Content of mcp_servers.json, edited on the "MCP servers" card.
+    mcp_json: String,
     miro_token: String,
     ui_language: String,
 }
@@ -688,6 +691,7 @@ impl Form {
             jira_project: c.jira_project.clone(),
             hub_url: c.hub_url.clone(),
             hub_source: c.hub_source.clone(),
+            mcp_json: std::fs::read_to_string(mcp_client::config_file(&c.base_dir)).unwrap_or_default(),
             ui_language: c.ui_language.clone(),
             ..Default::default()
         }
@@ -823,7 +827,7 @@ struct App {
     /// Conversations in which the assistant finished working in the background and the user has not looked at yet (conversation ids).
     unseen: std::collections::HashSet<String>,
     /// Result of the last save and test of each of the four settings groups.
-    group_status: [GroupStatus; 8],
+    group_status: [GroupStatus; 9],
     /// Findings of the live model check already shown in EA (not repeated).
     live_reported: Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
     /// Channel through which settings tests (run in the background) return their result: group number and message.
@@ -2165,6 +2169,15 @@ impl App {
                     self.form.miro_token.clear();
                 }
             }
+            GROUP_MCP => {
+                let text = f.mcp_json.trim().to_string();
+                if !text.is_empty() {
+                    mcp_client::parse(&text)?;
+                }
+                let base = self.cfg.as_ref().map(|c| c.base_dir.clone()).context("settings")?;
+                std::fs::write(mcp_client::config_file(&base), text).context(crate::i18n::tr("could not save mcp_servers.json"))?;
+                mcp_client::shutdown();
+            }
             GROUP_HUB => {
                 let url = f.hub_url.trim().trim_end_matches('/').to_string();
                 if !url.is_empty() {
@@ -2846,6 +2859,20 @@ impl App {
             self.group_footer(ui, &ctx2, GROUP_JIRA, crate::i18n::tr("Save and test Jira connection"));
         });
         ui.add_space(12.0);
+        settings_group(ui, crate::i18n::tr("MCP servers"), inner_width * 2.0 + 44.0, |ui| {
+            ui.add(egui::Label::new(
+                egui::RichText::new(crate::i18n::tr("Your own MCP servers give the assistant extra tools (e.g. a ticket system, a repository, a company knowledge base, a Compass Hub). A local program: \"command\" and \"args\"; a server over HTTP: \"url\" and \"headers\". Tokens can come from Credential Manager or the environment: ${secret:name}, ${env:NAME}. A tool that is not read-only asks for your consent before each call, unless the server has \"trusted\": true."))
+                .color(theme::MUTED),
+            ).wrap());
+            ui.add_space(6.0);
+            if self.form.mcp_json.trim().is_empty() {
+                ui.label(egui::RichText::new(crate::i18n::tr("Example:")).small().color(theme::MUTED));
+                ui.label(egui::RichText::new("{\"servers\": [\n  {\"name\": \"hub\", \"url\": \"http://127.0.0.1:8730/mcp\", \"headers\": {\"Authorization\": \"Bearer ${secret:hub_token}\"}},\n  {\"name\": \"files\", \"command\": \"npx\", \"args\": [\"-y\", \"@modelcontextprotocol/server-filesystem\", \"C:/docs\"]}\n]}").small().monospace().color(theme::MUTED));
+            }
+            ui.add(egui::TextEdit::multiline(&mut self.form.mcp_json).code_editor().desired_rows(6).desired_width(f32::INFINITY));
+            self.group_footer(ui, &ctx2, GROUP_MCP, crate::i18n::tr("Save and test MCP servers"));
+        });
+        ui.add_space(12.0);
         settings_group(ui, crate::i18n::tr("Team (Compass Hub)"), inner_width * 2.0 + 44.0, |ui| {
             ui.add(egui::Label::new(
                 egui::RichText::new(crate::i18n::tr("Optional team service (LoonarCompass.exe --hub hub.json, on a team computer or server). With a hub, Compass takes the team policy (model check rules, the minimum approval mode) and sends every saved change to the team audit trail. People without EA see the models in the hub's web view; other AI tools read them through its MCP server. Ask the hub administrator for the address and your token."))
@@ -3398,6 +3425,7 @@ const GROUP_CONFLUENCE: usize = 4;
 const GROUP_MIRO: usize = 5;
 const GROUP_JIRA: usize = 6;
 const GROUP_HUB: usize = 7;
+const GROUP_MCP: usize = 8;
 
 /// "Send to Miro" window: the diagram, the board, and where on the board the frame goes (shown on a thumbnail
 /// of the board, where the user can move it).
@@ -3711,6 +3739,10 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
             let boards = miro::Client::new(&token)?.check()?;
             Ok(crate::i18n::fmt("Saved. Connected to Miro: boards available: {0}.", &[boards.to_string()]))
         }
+        GROUP_MCP => {
+            let result = mcp_client::check(&cfg.base_dir)?;
+            Ok(crate::i18n::fmt("Saved. {0}", &[result]))
+        }
         GROUP_HUB => {
             let Some(client) = hub::Client::from_config(cfg) else {
                 return Ok(crate::i18n::tr("Saved. Without a hub Compass works on its own.").into());
@@ -3849,6 +3881,10 @@ fn tool_step(name: &str, input: &Value) -> String {
         "impact_analysis" => crate::i18n::fmt("Impact analysis of element {0} (direction {1}, depth {2})", &[(input["element"]).to_string(), (input["direction"].as_str().unwrap_or("both")).to_string(), (input["depth"].as_i64().unwrap_or(3)).to_string()]),
         "memory_delete" => crate::i18n::fmt("Removing a note from memory: {0}", &[(input["name"].as_str().unwrap_or("")).to_string()]),
         "memory_read" => crate::i18n::fmt("Reading a note from memory: {0}", &[(input["name"].as_str().unwrap_or("")).to_string()]),
+        other if mcp_client::is_mcp_tool(other) => {
+            let mut parts = other.trim_start_matches("mcp__").splitn(2, "__");
+            crate::i18n::fmt("MCP {0}: {1}", &[parts.next().unwrap_or("").to_string(), parts.next().unwrap_or("").to_string()])
+        }
         other => crate::i18n::fmt("Tool {0}", &[(other).to_string()]),
     }
 }
@@ -3912,7 +3948,16 @@ fn run_turn(
     let tool_ctx = tools::ToolContext { cfg, approver };
     let client = claude::ClaudeClient::from_config(cfg, cfg.claude_max_tokens)?;
     let mut msgs = history_to_api(messages, &cfg.attachments_dir)?;
-    let tools = tools::definitions();
+    let mut tools = tools::definitions();
+    // Tools of the user's own MCP servers (a server that does not start is reported once and left out).
+    let (mcp_tools, mcp_errors) = mcp_client::definitions(&cfg.base_dir);
+    if let Some(list) = tools.as_array_mut() {
+        list.extend(mcp_tools);
+    }
+    for error in mcp_errors {
+        emit(WorkerEvent::StepStart(crate::i18n::fmt("MCP server unavailable: {0}", &[error])));
+        emit(WorkerEvent::StepEnd { ok: false, detail: crate::i18n::tr("its tools are not available in this answer").into() });
+    }
     // The system prompt (with memory) stays fixed for the whole response: the model's reasoning blocks are signed
     // for a specific prompt and the API rejects them when the prompt changes midway (e.g. after memory_save).
     // The model knows notes saved during this response from the tool results; in the next response they go into the prompt.
@@ -5824,6 +5869,69 @@ mod tests {
             std::fs::write(&out_path, serde_json::to_string_pretty(&Value::Object(results.clone())).unwrap()).unwrap();
         }
         ea::shutdown();
+    }
+
+    /// MCP tools in a real conversation (Haiku, effort low): the hub over HTTP with two sources and a local stdio server
+    /// with a writing tool (consent asked once). LOONAR_TEST_PROPS = a test model; LOONAR_HUB_DB_PROPS / LOONAR_HUB_FILE_PROPS.
+    /// Run with: `cargo test ai_mcp -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "requires an API key and two test models"]
+    fn ai_mcp() {
+        i18n::set(i18n::Lang::En);
+        let dir = std::env::temp_dir().join(format!("loonar-ai-mcp-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut cfg = AppConfig::load(Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("settings");
+        cfg.base_dir = dir.clone();
+        cfg.ai_provider = "anthropic".into();
+        cfg.claude_model = "claude-haiku-5-5".into();
+        cfg.claude_effort = "low".into();
+        cfg.hub_url = String::new();
+        let hub_json = dir.join("hub.json");
+        std::fs::write(&hub_json, json!({ "listen": "127.0.0.1:0",
+            "sources": [{ "id": "shop-db", "name": "Shop (PostgreSQL)", "properties": std::env::var("LOONAR_HUB_DB_PROPS").unwrap() },
+                        { "id": "shop-file", "name": "Shop (file)", "properties": std::env::var("LOONAR_HUB_FILE_PROPS").unwrap() }],
+            "users": [{ "name": "viewer", "token": "viewer-token-0123456789", "role": "viewer" }] }).to_string()).unwrap();
+        let (hub, listen) = hub::load(&hub_json).unwrap();
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || hub::serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let addr = rx.recv().unwrap();
+        std::env::set_var("LOONAR_TEST_HUB_TOKEN", "viewer-token-0123456789");
+        let script = dir.join("tickets.ps1");
+        std::fs::write(&script, include_str!("../tests_data/mcp_tickets.ps1")).unwrap();
+        std::fs::write(mcp_client::config_file(&dir), json!({ "servers": [
+            { "name": "hub", "url": format!("http://{addr}/mcp"), "headers": { "Authorization": "Bearer ${env:LOONAR_TEST_HUB_TOKEN}" } },
+            { "name": "tickets", "command": "powershell", "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script.to_string_lossy()] }
+        ] }).to_string()).unwrap();
+
+        let turn = |prompt: &str| -> (Vec<String>, String, usize) {
+            let messages = vec![Message { role: "user".into(), text: prompt.into(), attachments: vec![], created: chrono::Utc::now().to_rfc3339() }];
+            let asked = std::sync::Arc::new(std::sync::Mutex::new(0usize));
+            let counter = asked.clone();
+            let approver = tools::Approver::new(ApprovalMode::Auto, Box::new(move |_| { *counter.lock().unwrap() += 1; true }));
+            let (_tx, inbox) = mpsc::channel();
+            let cancel = AtomicBool::new(false);
+            let steps = std::sync::Mutex::new(Vec::<String>::new());
+            let answer = std::sync::Mutex::new(String::new());
+            let emit = |e: WorkerEvent| match e {
+                WorkerEvent::Text(t) => answer.lock().unwrap().push_str(&t),
+                WorkerEvent::StepStart(s) => steps.lock().unwrap().push(s),
+                _ => {}
+            };
+            run_turn(&cfg, &messages, &approver, &inbox, &cancel, &emit).expect("turn");
+            let (steps, answer) = (steps.into_inner().unwrap(), answer.into_inner().unwrap());
+            println!("=== {prompt}\nsteps {steps:#?}\napprovals {}\nANSWER {answer}", asked.lock().unwrap());
+            let n = *asked.lock().unwrap();
+            (steps, answer, n)
+        };
+        let (s1, a1, n1) = turn("Using the team hub (MCP), list the model sources available there and how many packages each has.");
+        let (s2, a2, n2) = turn("Create a ticket titled 'Rename default elements' with the tickets tool.");
+        mcp_client::shutdown();
+        assert!(s1.iter().any(|s| s.contains("MCP hub: list_sources")), "hub tool used");
+        assert!(a1.contains("shop-db") || a1.contains("PostgreSQL"), "both sources named");
+        assert_eq!(n1, 0, "read-only hub tools do not ask");
+        assert!(s2.iter().any(|s| s.contains("MCP tickets: create_ticket")), "the writing tool used");
+        assert_eq!(n2, 1, "the writing tool asked once");
+        assert!(a2.contains("T-1"), "the ticket id from the server");
     }
 
     /// Settings tests (the same ones the "Save and test" buttons run) on the saved configuration.

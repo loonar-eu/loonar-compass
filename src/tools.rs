@@ -468,6 +468,14 @@ impl From<String> for ToolOutput {
 
 /// Runs the tool with the given name.
 pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
+    if crate::mcp_client::is_mcp_tool(name) {
+        let (ask, server, tool) = crate::mcp_client::needs_consent(&ctx.cfg.base_dir, name)?;
+        if ask {
+            let args = serde_json::to_string_pretty(input).unwrap_or_default();
+            ctx.approver.confirm_always(&crate::i18n::fmt("Call the tool {0} of the MCP server {1}:\n{2}", &[tool, server, args.chars().take(1500).collect()]))?;
+        }
+        return crate::mcp_client::call(&ctx.cfg.base_dir, name, input).map(Into::into);
+    }
     match name {
         "db_query" => db_query(input["sql"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["sql".to_string()]))?, ctx.cfg).map(Into::into),
         "ea_write" => ea_write(input, ctx).map(Into::into),
