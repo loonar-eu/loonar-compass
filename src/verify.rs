@@ -88,10 +88,16 @@ pub fn verify(cfg: &AppConfig, ops: &[Value], result: &Value) -> Verification {
             }
             "create_element" => {
                 let name = op["name"].as_str().unwrap_or("").to_string();
-                match created.and_then(|id| one(format!("select object_type as c0, coalesce(stereotype,'') as c1 from t_object where object_id = {id}")).map(|r| (id, r))) {
+                match created.and_then(|id| one(format!("select object_type as c0, coalesce(stereotype,'') as c1, package_id as c2, parentid as c3 from t_object where object_id = {id}")).map(|r| (id, r))) {
                     None => check(false, crate::i18n::fmt("element \"{0}\" is not in the model", &[name.clone()]), &mut v),
                     Some((id, row)) => {
                         v.passed += 1;
+                        // In the package (or inside the element) that was asked for.
+                        if let Some(package) = id_of(&op["package"]) {
+                            check(row[2] == package.to_string(), crate::i18n::fmt("element \"{0}\" is in package {1} instead of {2}", &[name.clone(), row[2].clone(), package.to_string()]), &mut v);
+                        } else if let Some(parent) = id_of(&op["parent_element"]) {
+                            check(row[3] == parent.to_string(), crate::i18n::fmt("element \"{0}\" is not inside element {1}", &[name.clone(), parent.to_string()]), &mut v);
+                        }
                         if let Some(stereo) = op["stereotype"].as_str().filter(|s| !s.is_empty()) {
                             let want = stereo.rsplit("::").next().unwrap_or(stereo).to_lowercase();
                             check(row[1].to_lowercase().contains(&want), crate::i18n::fmt("element \"{0}\": stereotype \"{1}\" instead of \"{2}\"", &[name.clone(), row[1].clone(), stereo.to_string()]), &mut v);
@@ -101,11 +107,25 @@ pub fn verify(cfg: &AppConfig, ops: &[Value], result: &Value) -> Verification {
                 }
             }
             "create_connector" => {
-                let row = created.and_then(|id| one(format!("select connector_type as c0 from t_connector where connector_id = {id}")));
+                let row = created.and_then(|id| one(format!(
+                    "select c.connector_type as c0, c.start_object_id as c1, c.end_object_id as c2, coalesce(s.name,'') as c3, coalesce(t.name,'') as c4 \
+                     from t_connector c left join t_object s on s.object_id = c.start_object_id left join t_object t on t.object_id = c.end_object_id where c.connector_id = {id}"
+                )));
                 let want = op["type"].as_str().unwrap_or("");
                 match row {
                     None => check(false, crate::i18n::fmt("connector {0} is not in the model", &[want.to_string()]), &mut v),
-                    Some(r) => check(want.is_empty() || r[0].eq_ignore_ascii_case(want), crate::i18n::fmt("connector of type {0} instead of {1}", &[r[0].clone(), want.to_string()]), &mut v),
+                    Some(r) => {
+                        check(want.is_empty() || r[0].eq_ignore_ascii_case(want), crate::i18n::fmt("connector of type {0} instead of {1}", &[r[0].clone(), want.to_string()]), &mut v);
+                        // The ends as asked: the source and the target element.
+                        if let (Some(source), Some(target)) = (id_of(&op["source"]), id_of(&op["target"])) {
+                            let name = |id: i64| one(format!("select coalesce(name,'') as c0 from t_object where object_id = {id}")).map(|r| r[0].clone()).unwrap_or_else(|| id.to_string());
+                            check(
+                                r[1] == source.to_string() && r[2] == target.to_string(),
+                                crate::i18n::fmt("connector {0} goes {1} → {2} instead of {3} → {4}", &[want.to_string(), r[3].clone(), r[4].clone(), name(source), name(target)]),
+                                &mut v,
+                            );
+                        }
+                    }
                 }
             }
             "place" => {
