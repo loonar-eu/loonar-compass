@@ -2,6 +2,56 @@
 
 All notable changes to Loonar Compass (named Loonar EA Assistant until version 0.3).
 
+## Version 0.8.2 (2026-10-23)
+
+Compass Hub as a program of its own (Windows, Linux, Docker) with user accounts, the model check in CI pipelines, ArchiMate rules, the full traceability chain, comparison with a CMDB and ready-made MCP servers.
+
+### Compass Hub as its own program
+
+- **Standalone `compass-hub`:** a small program for Windows and Linux, with no window and no EA. Run it with `compass-hub hub.json`. `LoonarCompass.exe --hub` still works.
+- **Windows service:** `compass-hub --service-install C:\Hub\hub.json` (as administrator) makes the hub start with Windows; `--service-uninstall` removes the service.
+- **Docker on Linux:** the `compass-hub` image (`hub/Dockerfile`) keeps its data and `hub.json` in the `/data` volume and runs as a normal user.
+  - Example: `docker run -d -p 8730:8730 -v /srv/compass-hub:/data -e LOONAR_SECRET_CLAUDE_API_KEY=… compass-hub`.
+- **Hub secrets:** read from environment variables `LOONAR_SECRET_<NAME>` or files `LOONAR_SECRET_<NAME>_FILE` (e.g. `CLAUDE_API_KEY`, `JIRA_TOKEN`, `CONFLUENCE_TOKEN`, `DB_PASSWORD`).
+
+### Accounts and sign-in in the hub
+
+- **Sign-in screen:** a new screen with user name and password. Passwords are stored only as PBKDF2 hashes, and a session lasts 12 hours. Signing in with a token is still possible.
+- **Default account:** a new hub without users has the account **admin / passw0rd** (with a zero). Its password must be changed at the first sign-in; until then the account can do nothing else.
+- **"Users" tab (admin):**
+  - add a user, with a first password the user must change;
+  - change a user's role or reset their password;
+  - create a new API token for Compass and MCP clients (shown once);
+  - remove a user (one admin always remains).
+- **Lockout:** after 20 wrong passwords from one address, the hub refuses that address for 10 minutes.
+
+### Jira and Confluence from the hub
+
+- **Service account:** the administrator adds an `"integrations"` section to `hub.json` (Jira: address and project; Confluence: address and space) and gives the tokens as hub secrets.
+- **Buttons for architects in the web view:**
+  - "Create Jira issue" on an element and on a change set;
+  - "Publish this package to Confluence" in a package's model check. The page is text only (elements with descriptions and relationships), with no diagram pictures, because the hub has no EA.
+- **Audit and Ask:** every action goes to the audit trail. Ask still only reads the model.
+
+### The model check in CI pipelines
+
+- **Check mode:** `LoonarCompass.exe --check --model model.qea [--code src] [--requirements BRD.docx] [--cmdb cmdb.csv] [--report report.md] [--junit junit.xml] [--fail-on error|warning]`.
+- **Output:** a Markdown report, a JUnit file for GitLab, GitHub Actions and Azure DevOps, and exit code 0 (OK), 1 (findings) or 2 (error). No AI and no EA needed.
+
+### Model, requirements, code and CMDB
+
+- **ArchiMate 3.2 rules:** the model check checks the relationships of ArchiMate elements (e.g. access only to passive structure, influence only to motivation). Switch them off with `"archimate": false` in governance.json.
+- **Traceability chain:** `trace_requirements` with a source folder follows each requirement → model → code → test → issue, and shows where the chain breaks.
+  - Example: "Compare the requirements in C:\Projects\BRD.docx with the model and the code in C:\repo\shop".
+- **CMDB vs model:** a CSV/JSON export (e.g. from ServiceNow), or data fetched through an MCP server, is compared with the components of the model. The report shows what is missing in the model, what is not in the CMDB, and where the owner or status differs.
+  - Example: "Compare the CMDB export C:\Export\cmdb_ci_appl.csv with the components of the model".
+
+### MCP servers
+
+- **Ready-made servers:** Azure DevOps, GitHub, ServiceNow / CMDB, local files and Compass Hub on the "MCP servers" card. Pick one from the list, then add your organization or address.
+- **MCP server tokens:** saved from the card into Credential Manager (names start with `mcp_`).
+- **Node.js programs:** `npx` in the configuration works on Windows (started as `npx.cmd`).
+
 ## Version 0.8.1 (2026-10-23)
 
 A security release after an audit of the whole application. Recommended for everybody, especially teams with Compass Hub. Some actions now ask for consent more often than before; this is on purpose.

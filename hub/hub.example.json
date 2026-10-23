@@ -1,0 +1,15 @@
+{
+  "listen": "127.0.0.1:8730",
+  "sources": [
+    { "id": "shop", "name": "Shop (EA file)", "properties": "shop.properties" }
+  ],
+  "policy": {
+    "min_approval": "ask",
+    "ask_min_role": "viewer",
+    "ask_per_hour": 20
+  },
+  "integrations": {
+    "jira": { "url": "", "user": "", "project": "", "issue_type": "Task" },
+    "confluence": { "url": "", "user": "", "space": "", "parent": "" }
+  }
+}

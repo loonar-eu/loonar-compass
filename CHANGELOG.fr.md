@@ -2,6 +2,56 @@
 
 Toutes les modifications importantes de l'application Loonar Compass (nommée Loonar EA Assistant jusqu'à la version 0.3).
 
+## Version 0.8.2 (2026-10-23)
+
+Compass Hub devient un programme à part entière (Windows, Linux, Docker) avec des comptes utilisateurs. Cette version apporte aussi le contrôle du modèle dans les pipelines CI, les règles ArchiMate, la chaîne de traçabilité complète, la comparaison avec une CMDB et des serveurs MCP prêts à l'emploi.
+
+### Compass Hub, programme à part entière
+
+- **`compass-hub` autonome :** un petit programme sans fenêtre et sans EA, pour Windows et Linux. Lancement : `compass-hub hub.json`. `LoonarCompass.exe --hub` fonctionne toujours.
+- **Service Windows :** `compass-hub --service-install C:\Hub\hub.json` (en administrateur) fait démarrer le hub avec Windows. `--service-uninstall` retire le service.
+- **Docker sous Linux :** l'image `compass-hub` (`hub/Dockerfile`) garde ses données et `hub.json` dans le volume `/data` et s'exécute en utilisateur normal.
+  - Exemple : `docker run -d -p 8730:8730 -v /srv/compass-hub:/data -e LOONAR_SECRET_CLAUDE_API_KEY=… compass-hub`.
+- **Secrets du hub :** lus dans les variables d'environnement `LOONAR_SECRET_<NOM>` ou dans les fichiers `LOONAR_SECRET_<NOM>_FILE` (p. ex. `CLAUDE_API_KEY`, `JIRA_TOKEN`, `CONFLUENCE_TOKEN`, `DB_PASSWORD`).
+
+### Comptes et connexion au hub
+
+- **Écran de connexion :** connexion par nom d'utilisateur et mot de passe. Les mots de passe ne sont conservés que sous forme d'empreintes PBKDF2, et une session dure 12 heures. La connexion par jeton reste possible.
+- **Compte par défaut :** un nouveau hub sans utilisateurs a le compte **admin / passw0rd** (avec un zéro). Il faut changer son mot de passe à la première connexion ; d'ici là, le compte ne permet rien d'autre.
+- **Onglet « Users » (admin) :**
+  - ajouter un utilisateur, avec un premier mot de passe qu'il devra changer ;
+  - changer son rôle ou réinitialiser son mot de passe ;
+  - créer un nouveau jeton d'API pour Compass et les clients MCP (affiché une seule fois) ;
+  - supprimer un utilisateur (il reste toujours au moins un admin).
+- **Blocage :** après 20 mots de passe erronés depuis une adresse, le hub refuse cette adresse pendant 10 minutes.
+
+### Jira et Confluence depuis le hub
+
+- **Compte technique :** l'administrateur ajoute une section `"integrations"` dans `hub.json` (Jira : adresse et projet ; Confluence : adresse et espace) et fournit les jetons comme secrets du hub.
+- **Boutons pour les architectes dans la vue web :**
+  - « Create Jira issue » sur un élément et sur un lot de modifications ;
+  - « Publish this package to Confluence » dans le contrôle d'un paquetage. La page ne contient que du texte (éléments avec descriptions et relations), sans images de diagrammes, car le hub n'a pas d'EA.
+- **Journal et Ask :** chaque action est inscrite au journal d'audit. « Ask » ne fait toujours que lire le modèle.
+
+### Contrôle du modèle dans les pipelines CI
+
+- **Mode contrôle :** `LoonarCompass.exe --check --model modele.qea [--code src] [--requirements BRD.docx] [--cmdb cmdb.csv] [--report rapport.md] [--junit junit.xml] [--fail-on error|warning]`.
+- **Résultat :** un rapport Markdown, un fichier JUnit pour GitLab, GitHub Actions et Azure DevOps, et un code de sortie 0 (OK), 1 (constats) ou 2 (erreur). Sans IA et sans EA.
+
+### Modèle, exigences, code et CMDB
+
+- **Règles ArchiMate 3.2 :** le contrôle du modèle vérifie les relations des éléments ArchiMate (p. ex. access uniquement vers la structure passive, influence uniquement vers la motivation). Pour les désactiver : `"archimate": false` dans governance.json.
+- **Chaîne de traçabilité :** `trace_requirements` avec un dossier de code suit chaque exigence → modèle → code → test → ticket, et montre où la chaîne se rompt.
+  - Exemple : « Compare les exigences de C:\Projets\BRD.docx avec le modèle et le code dans C:\repo\boutique ».
+- **CMDB face au modèle :** un export CSV/JSON (p. ex. de ServiceNow), ou des données obtenues par un serveur MCP, est comparé aux composants du modèle. Le rapport montre ce qui manque dans le modèle, ce qui est absent de la CMDB, et où le responsable ou le statut diffère.
+  - Exemple : « Compare l'export CMDB C:\Export\cmdb_ci_appl.csv avec les composants du modèle ».
+
+### Serveurs MCP
+
+- **Serveurs prêts à l'emploi :** Azure DevOps, GitHub, ServiceNow / CMDB, fichiers locaux et Compass Hub sur la carte « Serveurs MCP ». Choisissez-en un dans la liste, puis complétez l'organisation ou l'adresse.
+- **Jeton d'un serveur MCP :** enregistré depuis la carte dans le Gestionnaire d'identification (les noms commencent par `mcp_`).
+- **Programmes Node.js :** `npx` dans la configuration fonctionne sous Windows (lancé en `npx.cmd`).
+
 ## Version 0.8.1 (2026-10-23)
 
 Version de correctifs de sécurité après un audit de toute l'application. Recommandée pour tous, en particulier pour les équipes avec Compass Hub. Certaines actions demandent maintenant votre accord plus souvent qu'avant : c'est voulu.

@@ -1363,6 +1363,8 @@ a motivation element can realize only another motivation element ‖ element mot
 a motivation element can be composed only of motivation elements ‖ element motywacji może składać się tylko z elementów motywacji ‖ ein Motivationselement kann nur aus Motivationselementen bestehen ‖ un élément de motivation ne peut être composé que d'éléments de motivation
 a passive structure element can be composed only of passive structure elements ‖ element struktury pasywnej może składać się tylko z elementów struktury pasywnej ‖ ein passives Strukturelement kann nur aus passiven Strukturelementen bestehen ‖ un élément de structure passive ne peut être composé que d'éléments de structure passive
 complete ‖ kompletny ‖ vollständig ‖ complète
+Package: {0} (#{1}) ‖ Pakiet: {0} (#{1}) ‖ Paket: {0} (#{1}) ‖ Paquet : {0} (#{1})
+BROKEN: no trace relation in the model, candidates only ‖ PRZERWANY: brak relacji trace w modelu, są tylko kandydaci ‖ UNTERBROCHEN: keine Trace-Beziehung im Modell, nur Kandidaten ‖ ROMPUE : pas de relation trace dans le modèle, seulement des candidats
 BROKEN: not in the model ‖ PRZERWANY: brak w modelu ‖ UNTERBROCHEN: nicht im Modell ‖ ROMPUE : absente du modèle
 BROKEN: no code ‖ PRZERWANY: brak kodu ‖ UNTERBROCHEN: kein Code ‖ ROMPUE : pas de code
 BROKEN: no tests ‖ PRZERWANY: brak testów ‖ UNTERBROCHEN: keine Tests ‖ ROMPUE : pas de tests

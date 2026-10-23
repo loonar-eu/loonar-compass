@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Loonar Compass 0.8.1 - User guide</title>
+<title>Loonar Compass 0.8.2 - User guide</title>
 <style>
   @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
   body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1f1e1b; }
@@ -39,7 +39,7 @@
   <img src="img/logo.png" alt="Loonar Compass logo">
   <h1 style="margin-top: 10mm;">Loonar Compass</h1>
   <div class="sub">User guide</div>
-  <div class="sub" style="font-size: 11pt;">version 0.8.1 &middot; October 2026</div>
+  <div class="sub" style="font-size: 11pt;">version 0.8.2 &middot; October 2026</div>
   <div class="owner">
     Loonar Mariusz Głowacki<br>
     ul. Gombrowicza 12, 73-110 Stargard<br>
@@ -72,7 +72,8 @@
     <li><a href="#s20">Reporting bugs and new releases</a></li>
     <li><a href="#s21">Updating and uninstalling</a></li>
     <li><a href="#s22">Compass Hub (team service)</a></li>
-    <li><a href="#s23">License, trademarks and contact</a></li>
+    <li><a href="#s23">Check mode for CI pipelines</a></li>
+    <li><a href="#s24">License, trademarks and contact</a></li>
   </ol>
 </div>
 
@@ -91,6 +92,7 @@
 <p>The application uses an AI language model over the Internet, with your API key: Claude Haiku 5.5 (Anthropic) by default; in the settings you can choose another Claude model or an OpenAI model (chapter 5). It connects to the EA model in two ways: it reads it directly (from the PostgreSQL database or from the .qea/.qeax file) and writes to it through Enterprise Architect, using the model user account given in the settings when the model has one. With a model file you have open in EA, the changes go through your EA window; otherwise EA runs in the background.</p>
 <p>The interface and the assistant's answers are available in four languages: Polish, English, German and French (chapter 5). Answers and changes are prepared by an AI model and may contain errors: review them before you approve them (chapter 16).</p>
 <p>Loonar Compass runs as a separate window, started from the Start menu, or as a window docked in Enterprise Architect itself, which works with the project open in that EA window (chapter 10).</p>
+<p>Without a window, Compass also checks the model in CI pipelines (chapter 23), and the separate program Compass Hub serves the team's models to people and tools (chapter 22).</p>
 
 <h2 id="s2" data-page="install">2. Requirements</h2>
 <div class="note">
@@ -111,12 +113,13 @@
   <tr><td>Internet</td><td>An HTTPS connection to api.anthropic.com (or to api.openai.com when OpenAI is the provider). The application uses the proxy from the Windows Internet settings or from the HTTPS_PROXY and ALL_PROXY variables (chapter 18).</td></tr>
   <tr><td>Confluence (optional)</td><td>Confluence Cloud or Data Center, only for publishing pages through the assistant: the Confluence address (https://), a token and the space key (chapter 13). Without them, pages are still created and you paste the code yourself.</td></tr>
   <tr><td>Miro (optional)</td><td>Only for sending diagrams to a Miro board: an access token of a Miro app (chapter 12).</td></tr>
+  <tr><td>Node.js (optional)</td><td>Only for MCP servers started with <code>npx</code>, for example the ready-made Azure DevOps and Files servers (chapter 7).</td></tr>
   <tr><td>Mail program (optional)</td><td>For reporting bugs and subscribing to news about new releases: a mail program set as the default in Windows, for example Outlook.</td></tr>
 </table>
 <div class="note"><b>Costs.</b> The application itself is free. You pay the chosen provider (Anthropic or OpenAI) for your use of the AI model, through the account the API key belongs to.</div>
 
 <h2 id="s3" data-page="install">3. Installation</h2>
-<p>Run the file <code>LoonarCompass-Setup-0.8.1.exe</code>. The wizard guides you through the steps with the <b>Next</b> and <b>Back</b> buttons. You do not need administrator rights unless you install the application for all users of the computer.</p>
+<p>Run the file <code>LoonarCompass-Setup-0.8.2.exe</code>. The wizard guides you through the steps with the <b>Next</b> and <b>Back</b> buttons. You do not need administrator rights unless you install the application for all users of the computer.</p>
 <div class="note"><b>Windows SmartScreen.</b> The installer is not digitally signed yet, so when you run it for the first time, Windows SmartScreen may show the warning “Windows protected your PC”. Click <b>More info</b> and then <b>Run anyway</b>. If Smart App Control is turned on, Windows blocks unsigned applications altogether; in that case, wait for the signed version.</div>
 <figure class="small"><img src="img/en/installer-language.png" alt="Setup wizard: the language selection page with Polish, English, German and French"><figcaption>The first page of the wizard: choosing the language</figcaption></figure>
 <ol>
@@ -161,7 +164,7 @@
   <tr><td><b>Changelog</b></td><td>The list of features and known limitations of each version</td></tr>
   <tr><td><b>Report a bug</b></td><td>A bug report form with images (chapter 20)</td></tr>
   <tr><td><b>Support the project</b> (heart icon, at the bottom of the bar)</td><td>Voluntary support for the development of the application, links to GitHub and loonar.eu</td></tr>
-  <tr><td><b>About</b> (at the very bottom of the bar)</td><td>Version, application owner, links (privacy policy, source code on GitHub, loonar.eu), trademark notice, license text and the licenses of the open-source components (chapter 23)</td></tr>
+  <tr><td><b>About</b> (at the very bottom of the bar)</td><td>Version, application owner, links (privacy policy, source code on GitHub, loonar.eu), trademark notice, license text and the licenses of the open-source components (chapter 24)</td></tr>
 </table>
 <p>An orange <b>“!”</b> on the Settings, Assistant memory and Document templates icons means that after a language change the translation has not finished yet (chapter 5).</p>
 <p><b>Support the project.</b> Loonar Compass is free, also for commercial use, and it will stay free. If it saves you time, you can support its development with a voluntary contribution: the <b>Support on suppi.pl</b> button opens <a href="https://suppi.pl/loonar">suppi.pl/loonar</a>. The contributions pay, among other things, for a code-signing certificate. Other ways to help: report bugs and ideas (Report a bug), recommend the application to other Enterprise Architect users or star the project on GitHub.</p>
@@ -188,7 +191,7 @@
   <tr><td>Miro</td><td>Access token of a Miro app with the boards:read and boards:write permissions (chapter 12)</td><td>Connects to Miro and counts the boards the token can see</td></tr>
   <tr><td>Jira</td><td>Jira address, Email (Cloud only), Token, Default project key (chapter 7). The address must start with <code>https://</code>.</td><td>“Save and test Jira connection” connects to Jira and checks the project</td></tr>
   <tr><td>Team (Compass Hub)</td><td>Hub address, Token, This model in the hub (optional) (chapter 22)</td><td>“Save and test hub connection” connects to the hub and shows your account, role and the team policy</td></tr>
-  <tr><td>MCP servers</td><td>The list of your own MCP servers, stored in the file <code>mcp_servers.json</code> next to the settings (chapter 7)</td><td>“Save and test MCP servers” connects to each server and shows the number of its tools</td></tr>
+  <tr><td>MCP servers</td><td>The list of your own MCP servers, stored in the file <code>mcp_servers.json</code> next to the settings, the list <b>Add a ready-made server</b> and the field <b>Token for an MCP server</b> (chapter 7)</td><td>“Save and test MCP servers” connects to each server and shows the number of its tools</td></tr>
   <tr><td>Event agents (Compass in EA)</td><td>Rules in the file <code>event_agents.json</code> (chapter 10)</td><td>“Save event agents” checks the rules and shows the number of agents</td></tr>
 </table>
 <p>An empty password or key field means “no change”. The label <b>saved</b> next to a field indicates that the value is already stored. The API keys, the passwords and the Confluence and Miro tokens are kept in Windows Credential Manager, never in the settings file. The database password must not contain a semicolon (<code>;</code>), because Enterprise Architect cannot pass it in its connection string.</p>
@@ -331,6 +334,7 @@
   <li>orphans (no relationships and on no diagram),</li>
   <li>duplicate names in a package and duplicate relationships,</li>
   <li>relationships of an element to itself and to non-existent elements,</li>
+  <li>relationships that ArchiMate 3.2 does not allow (described below),</li>
   <li>empty packages and empty diagrams.</li>
 </ul>
 <p>Every finding has a severity: <b>error</b>, <b>warning</b> or <b>info</b>. The assistant makes fixes only after you agree.</p>
@@ -345,9 +349,40 @@
   <li><b>allowed_relations</b>: a relationship type listed here is allowed only between the listed ends; relationship types that are not listed are not restricted.</li>
 </ul>
 <p>In <code>applies_to</code> you give an element type or a «stereotype»; the wildcards <code>*</code> and <code>?</code> work.</p>
+<p><b>ArchiMate 3.2 relationships.</b> When a relationship and both its ends have ArchiMate stereotypes (for example «ArchiMate_ApplicationComponent», «ArchiMate_DataObject»), the check also applies the relationship rules of ArchiMate 3.2, with no setup. It reports only certain violations, as errors; combinations that a derived relationship can make valid are not reported. For example:</p>
+<ul>
+  <li>an access relationship must end at a passive structure element (business object, data object, artifact…) and start at a behaviour or active structure element,</li>
+  <li>an influence relationship must end at a motivation element,</li>
+  <li>triggering, flow and serving relationships do not connect passive structure or motivation elements,</li>
+  <li>an assignment goes from active structure to behaviour (or from a node to an artifact),</li>
+  <li>a specialization connects two elements of the same type,</li>
+  <li>a motivation element realizes only another motivation element.</li>
+</ul>
+<p>Junctions and groupings are not checked. The live check in Compass in EA (chapter 10) uses the same rules. To switch the ArchiMate rules off, put <code>"archimate": false</code> in <code>governance.json</code>.</p>
+<div class="prompt">Check the package Application landscape for relationships that ArchiMate 3.2 does not allow.</div>
 <h3>As-is / to-be gap analysis</h3>
 <p>The assistant compares two packages, for example the current and the target state, and reports what is <b>new</b>, what is <b>to retire</b> and what has <b>changed</b> (stereotype, description, relationships). You can save the result to Excel.</p>
 <div class="prompt">Compare the package “Shop as-is” with the package “Shop to-be” and save the gaps to Excel.</div>
+<h3>Requirements chain: model, code, tests, issues</h3>
+<p>When you compare requirements with the model (section 8.5) and also give a source folder, the assistant (the tool <code>trace_requirements</code>) follows every requirement further: requirement → model element → code → test → issue keys. It reads the folder read-only.</p>
+<ul>
+  <li><b>Code:</b> files that declare a type named like the traced model element, and source files that name the requirement identifier.</li>
+  <li><b>Tests:</b> test files (in a test folder or named like <code>OrderTest.java</code>, <code>order.spec.ts</code>, <code>test_order.py</code>) that name the requirement identifier or are about a type of that code.</li>
+  <li><b>Issues:</b> keys such as <code>ARCH-123</code> in the requirement and in the traced elements (name, alias, notes, tagged values).</li>
+</ul>
+<p>Every requirement gets a status: <b>complete</b>, or broken: <b>not in the model</b>, <b>no code</b> or <b>no tests</b>.</p>
+<div class="prompt">Trace the requirements from C:\Documents\BRD.docx through the model to the code and tests in C:\repo\shop: where does the chain break?</div>
+<h3>CMDB and the model</h3>
+<p>The assistant compares the configuration items of a CMDB with the model (the tool <code>cmdb_compare</code>). It only reads: nothing is written to the model or to the CMDB.</p>
+<ul>
+  <li><b>Data:</b> a CSV or JSON export, for example a ServiceNow list export or the JSON of its Table API (<code>{"result": [...]}</code>), given as a path or an attachment, or the data an MCP server of the CMDB returned in the conversation. Columns such as name, sys_id, class, owner (owned_by) and status (install_status) are recognized by their headers.</li>
+  <li><b>Matching:</b> by the CMDB id kept in a tagged value of the element (<code>sys_id</code> or <code>CMDB id</code>), otherwise by name.</li>
+  <li><b>Elements:</b> by default components, nodes, devices, execution environments and ArchiMate application components, nodes, system software and services. You can name other types or stereotypes and limit the comparison to a package.</li>
+  <li><b>Report:</b> only in the CMDB, only in the model, and a different owner (tagged value Owner) or status.</li>
+</ul>
+<div class="prompt">Compare the CMDB export C:\Exports\cmdb_ci_appl.csv with the components of the model.</div>
+<div class="prompt">Fetch the application CIs from ServiceNow and compare them with the model.</div>
+<p>The second prompt needs an MCP server of ServiceNow on the <b>MCP servers</b> card (see “Your own MCP servers” below). On request, the assistant adds missing elements, owners or ids to the model (with your approval) or saves the report to Excel. In a pipeline, the same comparison runs with <code>--cmdb</code> (chapter 23).</p>
 <h3>Jira issues</h3>
 <p>Once the <b>Jira</b> card is filled in (chapter 5), the assistant reads issues by key or by JQL search and uses them as context: it draws diagrams from the description of an issue (a story) or checks whether the model covers its requirements. <b>Always with your consent in the approval panel</b> it creates issues, adds comments and links to model elements.</p>
 <table>
@@ -372,8 +407,19 @@
   <li>Every tool call asks for your consent, unless the server has <code>"trusted": true</code>. Set it only for servers you trust: the server's own claim that a tool only reads is not enough.</li>
   <li>Compass's own keys and passwords (the AI provider keys, the database, EA, Confluence, Jira and Miro passwords and tokens) cannot be used in <code>${secret:…}</code>. The only exception is <code>${secret:hub_token}</code> in the headers of the team hub's own MCP endpoint (the hub address from Settings with the path <code>/mcp</code>), as in the example above. Save the tokens of other servers under their own names in Windows Credential Manager.</li>
   <li>A local program (<code>command</code>) gets only the basic Windows environment variables (PATH, TEMP, the user profile folders, the proxy settings…) and the variables listed in its <code>"env"</code>.</li>
+  <li><code>"command": "npx"</code> works: Compass starts <code>npx.cmd</code> (likewise npm, pnpm and yarn). Servers started with npx need Node.js on the computer.</li>
   <li>The button <b>Save and test MCP servers</b> connects to each server and shows the number of its tools.</li>
 </ul>
+<p><b>Ready-made servers.</b> On the <b>MCP servers</b> card, choose a server in <b>Add a ready-made server</b> and click <b>Add</b>: its entry goes into the text of <code>mcp_servers.json</code>, where you complete it and save the card. A name that is already used gets a number.</p>
+<table>
+  <tr><th style="width: 26%;">Server</th><th>What to complete</th></tr>
+  <tr><td>Azure DevOps</td><td>A local server started with <code>npx</code>: put your organization in place of <code>YOUR-ORGANIZATION</code>. You sign in with your Microsoft account.</td></tr>
+  <tr><td>GitHub</td><td>The remote server <code>https://api.githubcopilot.com/mcp/</code>: save a GitHub personal access token as <code>mcp_github</code>.</td></tr>
+  <tr><td>ServiceNow / CMDB</td><td>Put the address of the MCP server approved in your company in place of <code>YOUR-SERVICENOW-MCP-SERVER</code> and save its token as <code>mcp_servicenow</code>.</td></tr>
+  <tr><td>Files (a local folder)</td><td>A local server started with <code>npx</code> that reads a folder: change <code>C:/docs</code> to your folder.</td></tr>
+  <tr><td>Compass Hub</td><td>Offered only when the hub address is filled in on the <b>Team (Compass Hub)</b> card: the hub's MCP server with your hub token, marked <code>"trusted": true</code>.</td></tr>
+</table>
+<p><b>Token for an MCP server.</b> Type a name that starts with <code>mcp_</code> (letters, digits and <code>_</code>, for example <code>mcp_github</code>) and the token, then click <b>Save and test MCP servers</b>. The token is saved in Windows Credential Manager; in <code>mcp_servers.json</code> you use it as <code>${secret:mcp_github}</code>.</p>
 <h3>EA scripts</h3>
 <p>The assistant lists the script groups and scripts of the model, reads a script, saves a script (JScript, VBScript or JavaScript; a missing group is created) and runs it. <b>Saving and running a script need your consent every time</b>, also in <b>auto</b> mode, because a script can change anything in the model; the approval panel shows the whole code. The script runs in the open EA window or, when there is none, in Compass's own background EA session. <code>Repository</code> and <code>Session.Output</code> work as in EA, and <code>!INC Group.Script</code> includes are resolved from the model. If another model is open in EA, the run stops with a message.</p>
 <div class="prompt">List the scripts in the model and then run the script “Report.Missing notes”.</div>
@@ -433,7 +479,7 @@
 <p><b>Tip:</b> you can undo several saves at once (“Undo the last three changes”); ask for the history first to see what the undo will include.</p>
 
 <h3>8.4 Model quality and team rules</h3>
-<p>The quality check is done by the program, not by the AI model, so nothing is guessed: default and empty names, elements without a description, orphaned elements, duplicates, relationships to non-existent elements, empty packages and diagrams, and the rules from the <code>governance.json</code> file (or from the team policy in the hub). Spelling of notes is checked with the Windows dictionary of the Compass language.</p>
+<p>The quality check is done by the program, not by the AI model, so nothing is guessed: default and empty names, elements without a description, orphaned elements, duplicates, relationships to non-existent elements, relationships not allowed in ArchiMate 3.2, empty packages and diagrams, and the rules from the <code>governance.json</code> file (or from the team policy in the hub). Spelling of notes is checked with the Windows dictionary of the Compass language.</p>
 <div class="prompt">Check the quality of the Shop domain package and list the most important problems.</div>
 <div class="prompt">Check the spelling of the notes in the whole model.</div>
 <p>An example of a short <code>governance.json</code> file (it lies next to <code>app.properties</code>) that requires the tagged value Owner on every class:</p>
@@ -447,7 +493,7 @@
 <div class="prompt">Compare the requirements from Confluence page 123456 with the model and save the traceability matrix to Excel.</div>
 <div class="prompt">Create trace relationships for the covered requirements.</div>
 <p><b>What you see:</b> for a file that is not an attachment of the conversation, first a question whether the assistant may read it; then a summary “Traceability: … requirements – covered …, only candidates …, NOT covered …, id matches but content differs …” and a list of requirements with one of four statuses: <b>covered</b>, <b>candidates</b>, <b>NOT COVERED</b> or <b>ID MATCHES, CONTENT DIFFERS</b>. A separate list is “Model elements no requirement refers to”. The assistant also points out requirements that contradict the model. You get the Excel matrix as a file card with the <b>Open</b> and <b>Save as…</b> buttons. Trace relationships (Realisation or Dependency «trace») are created only after your consent, in the usual approval panel.</p>
-<p><b>Tip:</b> a Confluence page can be read once the <b>Confluence</b> card in Settings is filled in (chapter 5). Matching is most reliable when the requirement identifier is written in the name, alias, note or tagged value of the element; without it only candidates remain. You can narrow the scope to a package: “…with the Shop domain package”.</p>
+<p><b>Tip:</b> a Confluence page can be read once the <b>Confluence</b> card in Settings is filled in (chapter 5). Matching is most reliable when the requirement identifier is written in the name, alias, note or tagged value of the element; without it only candidates remain. You can narrow the scope to a package: “…with the Shop domain package”. Add a source folder to follow the requirements on to the code, tests and issues (chapter 7, “Requirements chain”).</p>
 
 <h3>8.6 The model against the code</h3>
 <p>The assistant reads a code folder (for example a local clone of a repository) read-only and compares it with the model: classes, interfaces, enums and records with their fields (Java, Kotlin, C#, TypeScript, Rust, Python), tables and columns from SQL (<code>CREATE TABLE</code>) and API operations (<code>operationId</code> from OpenAPI) against the classes, attributes, tables and operations in the model.</p>
@@ -496,11 +542,11 @@
 <div class="prompt">Propose a change to the team for review: add the class Warehouse to the Shop domain package.</div>
 <div class="prompt">Show the approved change sets and apply CH-…</div>
 <p><b>What you see:</b> after the proposal a message “Change set for the team: …” with its number (CH-…), and in the hub's web view a new row in the <b>Change sets</b> tab. When applying: the usual approval panel and verification after the save; the hub marks the change set as applied. Only an approved change set that belongs to this model can be applied, and only once: Compass first claims it in the hub and reports the result after the save.</p>
-<p><b>Web view.</b> People without Enterprise Architect sign in to it with a token (address <code>https://&lt;hub&gt;/</code>; <code>http://</code> only on the same computer). The tabs are: <b>Ask</b> (questions about the model), <b>Search</b> (finding elements), <b>Model check</b> (model check by the team's rules), <b>Gaps</b> (as-is / to-be gaps), <b>Audit trail</b> (the team audit trail), <b>Team notes</b> (shared notes) and <b>Change sets</b> (proposed changes with comments and a decision). In the <b>Ask</b> tab you type a question in your own words, for example “Which systems use the payment gateway?”. The assistant there only reads the model: it has no access to files, Jira, Confluence or MCP servers and cannot propose or save anything. It answers one question at a time (a question is at most 2000 characters long), and the questions go into the hub's audit trail.</p>
+<p><b>Web view.</b> People without Enterprise Architect sign in to it with a user name and a password from the hub administrator (address <code>https://&lt;hub&gt;/</code>; <code>http://</code> only on the same computer). The tabs are: <b>Ask</b> (questions about the model), <b>Search</b> (finding elements), <b>Model check</b> (model check by the team's rules), <b>Gaps</b> (as-is / to-be gaps), <b>Audit trail</b> (the team audit trail), <b>Team notes</b> (shared notes) and <b>Change sets</b> (proposed changes with comments and a decision). In the <b>Ask</b> tab you type a question in your own words, for example “Which systems use the payment gateway?”. The assistant there only reads the model: it has no access to files, Jira, Confluence or MCP servers and cannot propose or save anything. It answers one question at a time (a question is at most 2000 characters long), and the questions go into the hub's audit trail.</p>
 <p><b>Tip:</b> give the proposal a title from which the reviewer can tell the scope of the change without opening the details. A change set belongs to a model: you can apply it only in a Compass connected to the same hub model.</p>
 
 <h3>8.13 Extra tools from MCP servers</h3>
-<p>Your own MCP servers give the assistant extra tools: a ticket system, a repository, a knowledge base or the MCP server of the hub itself. You list the servers in the <code>mcp_servers.json</code> file (chapter 7) and check them in Settings, on the <b>MCP servers</b> card, with the <b>Save and test MCP servers</b> button.</p>
+<p>Your own MCP servers give the assistant extra tools: a ticket system, a repository, a knowledge base or the MCP server of the hub itself. You list the servers in the <code>mcp_servers.json</code> file (chapter 7) or add a ready-made one (Azure DevOps, GitHub, ServiceNow / CMDB, Files, Compass Hub), and check them in Settings, on the <b>MCP servers</b> card, with the <b>Save and test MCP servers</b> button.</p>
 <div class="prompt">List the team's model sources through the MCP server hub.</div>
 <p><b>What you see:</b> in the steps card the call of the server's tool, then its result in the answer. Every tool call asks for your consent, unless the server has <code>"trusted": true</code>; set it only for servers you trust.</p>
 <p><b>Tip:</b> name the server from <code>mcp_servers.json</code> in the prompt (“through the MCP server hub…”) so that the assistant knows which one to use. Keep tokens in the Windows Credential Manager under their own names (<code>${secret:name}</code>), not in the file; Compass's own keys and passwords cannot be used there (chapter 7).</p>
@@ -517,6 +563,29 @@
   "prompt":"Check that the new component has an owner and a description; suggest what to fill in."}]}</pre>
 <p><b>What you see:</b> in System Output a line such as “🤖 Component owner: …” with the assistant's remarks. The agent <b>only reads the model</b>: it has no access to files, Jira, Confluence or MCP servers and cannot propose or save anything. The same agent reacts to the same object at most once a minute. A new element is checked only after its first edit, because EA first gives it the name Class1.</p>
 <p><b>Tip:</b> write short, concrete agent prompts and narrow them with <code>applies_to</code> (a type, a «stereotype» or <code>*</code>). After changing the file, click <b>Save event agents</b>.</p>
+
+<h3>8.15 Checking the model in a CI pipeline</h3>
+<p>Check mode runs the model check, the comparison with the code and with the CMDB, and the requirements chain without the window and without the AI model, and ends with an exit code that a pipeline understands (chapter 23).</p>
+<pre>LoonarCompass.exe --check --model model\shop.qea --rules governance.json --code src --requirements docs\requirements.md --junit junit.xml --fail-on error | Out-Host</pre>
+<p><b>What you see:</b> a Markdown report on the standard output that starts with the result, PASSED or FAILED, followed by the sections of the model check, the model and the code, and the requirements. In the pipeline, the JUnit file shows each group of findings as a test, failed when it is at or above <code>--fail-on</code>. The exit code is 0 when the check passed, 1 when there are such findings, and 2 for wrong arguments or a model that cannot be read.</p>
+<p><b>Tip:</b> start with <code>--fail-on error</code> and keep the warnings in the report; switch to <code>warning</code> when the model is clean. Keep <code>governance.json</code> in the repository and pass it with <code>--rules</code>, so that the pipeline and the people use the same rules.</p>
+
+<h3>8.16 Comparing the CMDB with the model</h3>
+<p>The assistant compares the configuration items of a CMDB (an export or the data of an MCP server) with the components of the model and shows what is missing on either side and where the owner or the status differs (chapter 7, “CMDB and the model”).</p>
+<div class="prompt">Compare the CMDB export C:\Exports\cmdb_ci_appl.csv with the components of the model.</div>
+<div class="prompt">Fetch the application CIs from ServiceNow and compare them with the model.</div>
+<p><b>What you see:</b> for a file that is not an attachment of the conversation, first a question whether the assistant may read it; with a ServiceNow MCP server, the call of its tool (it asks for your consent unless the server is trusted). Then a summary “CMDB ↔ model: … configuration items, … elements of the model, matched …” and the sections <b>In the CMDB, not in the model</b>, <b>In the model, not in the CMDB</b> and <b>Different owner or status</b>. Nothing is saved without your approval.</p>
+<p><b>Tip:</b> keep the CMDB id (<code>sys_id</code>) in a tagged value of the elements: then renamed items still match. Limit the comparison to a package or name the element types when the model holds more than the CMDB does.</p>
+
+<h3>8.17 Jira issues and Confluence pages from the hub</h3>
+<p>When the administrator has set up <code>integrations</code> in <code>hub.json</code> (chapter 22), architects and admins create Jira issues and Confluence pages straight from the hub's web view, without Compass and without EA. The hub uses its own service account.</p>
+<ul>
+  <li><b>Search</b> → click an element → <b>Create Jira issue</b>: type the summary; the issue gets the details of the element.</li>
+  <li><b>Change sets</b> → open a change set → <b>Create Jira issue for this change set</b>: one issue per change set.</li>
+  <li>Pick a package in the tree → <b>Model check</b> → <b>Publish this package to Confluence</b>: type the title (empty: the package and model name).</li>
+</ul>
+<p><b>What you see:</b> “Created ARCH-…” with the link to the issue; in the change set a line “Jira: ARCH-…”; for Confluence “Created:” or “Updated:” with a link to the page. Each action is recorded in the <b>Audit trail</b> tab under your name.</p>
+<p><b>Tip:</b> the Confluence page is a text summary of the package (elements with their descriptions and relationships, without diagrams) and is replaced at every publication: edit the model, not the page. For a page with diagrams, publish from Compass (chapter 13).</p>
 
 <h3>Tips for good prompts</h3>
 <ul>
@@ -754,7 +823,7 @@
   <tr><td>Assistant memory (<code>memory</code> folder with the <code>MEMORY.md</code> index)</td></tr>
   <tr><td>Document templates (<code>templates</code> folder)</td></tr>
   <tr><td>Audit log (<code>audit_log.jsonl</code>) and the list of published Confluence pages (<code>confluence_pages.json</code>)</td></tr>
-  <tr><td>Claude API key, OpenAI API key, EA account password, database password, Confluence and Miro tokens</td><td>Windows Credential Manager, entries “loonar-compass” (encrypted by the system). Nothing secret is stored in <code>app.properties</code>.</td></tr>
+  <tr><td>Claude API key, OpenAI API key, EA account password, database password, Confluence and Miro tokens, tokens of MCP servers (<code>mcp_…</code>)</td><td>Windows Credential Manager, entries “loonar-compass” (encrypted by the system). Nothing secret is stored in <code>app.properties</code>.</td></tr>
 </table>
 <p>Conversation history is stored as plain files in your Windows profile, protected by your Windows account; the application does not encrypt it.</p>
 <h3>What is sent to the AI model provider</h3>
@@ -802,6 +871,9 @@
   <tr><td>Files cannot be dragged into the window</td><td>The application was started as administrator. Close it and start it with the normal shortcut.</td></tr>
   <tr><td>“The program hit an unexpected error and has to close”</td><td>Your conversations and settings are saved. The details are in the file <code>%TEMP%\loonar-compass-crash.log</code>: attach it to a bug report (chapter 20).</td></tr>
   <tr><td>“The settings file … contains an error”</td><td>The message gives the faulty value. Correct it on the relevant card and save the card again.</td></tr>
+  <tr><td><code>LoonarCompass.exe --check</code> shows nothing in PowerShell, or <code>$LASTEXITCODE</code> is empty</td><td>Compass is a window program, so PowerShell does not wait for it. Pipe its output: <code>… | Out-Host</code> (chapter 23).</td></tr>
+  <tr><td>A ready-made MCP server started with <code>npx</code> does not start</td><td>Install Node.js (it brings npx) and restart Compass. Check the organization or the folder in the server's entry.</td></tr>
+  <tr><td>You cannot sign in to the web view of the hub</td><td>Check the user name and the password. After 20 wrong attempts from one address, the hub refuses it for 10 minutes. An admin can set a new password in the <b>Users</b> tab (chapter 22).</td></tr>
   <tr><td>Windows SmartScreen warns when the installer starts</td><td>The installer is not digitally signed yet. Click “More info” and then “Run anyway”. With Smart App Control turned on, Windows blocks unsigned applications; wait for the signed version.</td></tr>
 </table>
 
@@ -829,49 +901,177 @@
 <p>In an installation for all users, only your own data is removed; the data of other users stays in their profiles.</p>
 
 <h2 id="s22" class="break">22. Compass Hub (team service)</h2>
-<p>Compass Hub is an optional team service, run on a team computer or server. It provides a shared policy (model check rules and the minimum approval mode), a central audit trail of changes from all workstations, shared notes, a web view of the models for people without Enterprise Architect, and an MCP server (read-only) for other AI tools. Without a hub Compass works on its own, as before.</p>
+<p>Compass Hub is an optional team service, run on a team computer or server. It provides a shared policy (model check rules and the minimum approval mode), a central audit trail of changes from all workstations, shared notes, change sets for review, a web view of the models for people without Enterprise Architect, Jira issues and Confluence pages created from the web view, and an MCP server (read-only) for other AI tools. Without a hub Compass works on its own, as before.</p>
 <h3>For the user</h3>
-<p>You get the hub address and your token from the administrator. Enter them in the <b>“Team (Compass Hub)”</b> card in the Settings view: <b>Hub address</b> (it must start with <code>https://</code>; <code>http://</code> only on this computer), <b>Token</b> and optionally <b>This model in the hub</b> (the source id, that is the hub's model that matches yours), then click <b>Save and test hub connection</b>. The test shows your account, role and the team policy. With a hub:</p>
+<p>You get the hub address and your API token from the administrator (the <b>Users</b> tab of the web view). Enter them in the <b>“Team (Compass Hub)”</b> card in the Settings view: <b>Hub address</b> (it must start with <code>https://</code>; <code>http://</code> only on this computer), <b>Token</b> and optionally <b>This model in the hub</b> (the source id, that is the hub's model that matches yours), then click <b>Save and test hub connection</b>. The test shows your account, role and the team policy. With a hub:</p>
 <ul>
   <li>the team policy <code>min_approval</code> can only make the local approval mode stricter (from the loosest: auto, plan, ask);</li>
   <li>the model check rules from the hub apply when there is no local <code>governance.json</code> (chapter 7);</li>
   <li>every saved change goes to the team audit trail; it is sent in the background, so a hub that is down does not stop your work, and the last problem is shown on the card.</li>
 </ul>
-<h3>For the administrator</h3>
-<p>You start the hub with <code>LoonarCompass.exe --hub C:\path\hub.json</code>. The program runs without a window and writes its log to <code>hub.log</code> next to <code>hub.json</code>. By default it listens on <code>127.0.0.1:8730</code>; beyond a single computer put it behind HTTPS (a reverse proxy). Example <code>hub.json</code>:</p>
+<h3>Installing the hub</h3>
+<p>The hub is a program of its own, <code>compass-hub</code>, for Windows and Linux. It reads the models directly (a PostgreSQL database or .qea/.qeax files), so the server needs no Enterprise Architect. Downloads:</p>
+<ul>
+  <li><b>Windows:</b> <code>CompassHub-0.8.2-windows-x64.zip</code> with <code>compass-hub.exe</code>, an example <code>hub.json</code> and a README.</li>
+  <li><b>Docker:</b> the image <code>ghcr.io/loonar-eu/compass-hub:0.8.2</code>, or build it yourself in the root folder of the repository: <code>docker build -f hub/Dockerfile -t compass-hub .</code></li>
+</ul>
+<p><b>In a console</b> (Windows or Linux). The hub runs until you close the console:</p>
+<pre>compass-hub hub.json</pre>
+<p><b>As a Windows service</b>, in a console run as administrator. The service “CompassHub” starts at once and with Windows; you stop it in Services or with <code>sc stop CompassHub</code>, and remove it with <code>--service-uninstall</code>:</p>
+<pre>compass-hub --service-install C:\Hub\hub.json
+compass-hub --service-uninstall</pre>
+<p><b>In Docker.</b> Put <code>hub.json</code> with <code>"listen": "0.0.0.0:8730"</code> in the data folder, which the container sees as <code>/data</code>:</p>
+<pre>docker run -d --name compass-hub -p 8730:8730 -v /srv/compass-hub:/data \
+  -e LOONAR_SECRET_CLAUDE_API_KEY=... ghcr.io/loonar-eu/compass-hub:0.8.2</pre>
+<ul>
+  <li>The container runs as the user with id 10001: the data folder must be writable by it, because the hub writes <code>hub.json</code>, the audit trail, notes, change sets and <code>hub.log</code> there.</li>
+  <li>Models: .qea/.qeax files in the data folder, with paths as the container sees them (for example <code>model.file=/data/models/shop.qea</code> in the source's <code>app.properties</code>), or a PostgreSQL database.</li>
+</ul>
+<p><code>LoonarCompass.exe --hub C:\Hub\hub.json</code> still works: the desktop application then runs the hub without a window. The hub writes its log to <code>hub.log</code> next to <code>hub.json</code>. <code>compass-hub --version</code> prints the version.</p>
+<h3>Secrets of the hub</h3>
+<p>Keys, tokens and passwords are not kept in <code>hub.json</code>. <code>compass-hub</code> takes each of them from the environment variable <code>LOONAR_SECRET_&lt;NAME&gt;</code> or from the file named in <code>LOONAR_SECRET_&lt;NAME&gt;_FILE</code> (for example a Docker secret); on Windows also from Credential Manager of the account the hub runs under. For the Windows service, set them as system environment variables.</p>
+<table>
+  <tr><th style="width: 46%;">Secret</th><th>What for</th></tr>
+  <tr><td><code>LOONAR_SECRET_CLAUDE_API_KEY</code> or <code>LOONAR_SECRET_OPENAI_API_KEY</code></td><td>The AI model for the <b>Ask</b> tab</td></tr>
+  <tr><td><code>LOONAR_SECRET_JIRA_TOKEN</code></td><td>The team's Jira (<code>integrations</code>)</td></tr>
+  <tr><td><code>LOONAR_SECRET_CONFLUENCE_TOKEN</code></td><td>The team's Confluence (<code>integrations</code>)</td></tr>
+  <tr><td><code>LOONAR_SECRET_DB_PASSWORD</code></td><td>The password of a PostgreSQL model database</td></tr>
+</table>
+<h3>Accounts and sign-in</h3>
+<p>People sign in to the web view (<code>https://&lt;hub&gt;/</code>; <code>http://</code> only on the same computer) with a user name and a password. Compass and MCP clients use an API token.</p>
+<div class="note"><b>Default account.</b> A new hub (a <code>hub.json</code> without users) creates the account <code>admin</code> with the password <code>passw0rd</code> (with a zero). At the first sign-in the hub asks you to change the password and allows nothing else until then. Do it before the hub can be reached from other computers.</div>
+<ul>
+  <li>A password has at least 10 characters and may not be the default password or the user name. The hub stores passwords only as PBKDF2 hashes.</li>
+  <li>A sign-in lasts 12 hours; <b>Sign out</b> ends it at once.</li>
+  <li>After 20 wrong passwords or tokens from one address, that address is refused for 10 minutes.</li>
+  <li><b>Sign in with a token instead</b> on the sign-in page lets you sign in with an API token.</li>
+</ul>
+<p>The <b>Users</b> tab (admins only):</p>
+<ul>
+  <li><b>Add a user:</b> the name, the role and a first password, which the user must change at the first sign-in.</li>
+  <li><b>Role:</b> changes the role (viewer, architect or admin).</li>
+  <li><b>Reset password:</b> sets a new password, which the user must change at the next sign-in.</li>
+  <li><b>New API token:</b> a token for Compass (Settings → Team (Compass Hub)) and for MCP clients. It is shown only once, and the previous token of the user stops working.</li>
+  <li><b>Remove:</b> removes the user. The hub always keeps at least one admin, and you cannot remove yourself.</li>
+</ul>
+<p>Changing or removing a user ends their sign-ins. Every change of the users goes to the audit trail.</p>
+<h3>Configuration (hub.json)</h3>
 <pre>{"listen":"127.0.0.1:8730",
  "sources":[
   {"id":"shop-db","name":"Shop (PostgreSQL)","properties":"shop-db/app.properties"},
   {"id":"shop-file","name":"Shop (file)","properties":"shop-file/app.properties"}],
  "users":[
-  {"name":"anna","token":"&lt;at least 16 random characters&gt;","role":"admin"},
-  {"name":"bob","token":"...","role":"architect"},
-  {"name":"carol","token_sha256":"&lt;SHA-256 of the token&gt;","role":"viewer"}],
+  {"name":"anna","role":"admin","password_pbkdf2":"pbkdf2-sha256$210000$..."},
+  {"name":"bob","role":"architect","token_sha256":"&lt;SHA-256 of the token&gt;"}],
+ "integrations":{
+  "jira":{"url":"https://company.atlassian.net","user":"hub@company.com","project":"ARCH","issue_type":"Task"},
+  "confluence":{"url":"https://company.atlassian.net/wiki","user":"hub@company.com","space":"ARCH","parent":"65818"}},
  "policy":{"min_approval":"ask","ask_min_role":"viewer","ask_per_hour":20,
   "governance":{ ... governance.json ... }}}</pre>
 <ul>
+  <li><b>listen</b>: the address and port; <code>127.0.0.1:8730</code> by default, <code>0.0.0.0:8730</code> in Docker. Beyond a single computer, put the hub behind HTTPS (see “Security of the hub”).</li>
   <li><b>sources</b>: the team's models. <code>properties</code> is the <code>app.properties</code> of the given model (the same format as Compass's own settings file), relative to <code>hub.json</code>.</li>
-  <li><b>users</b>: users with a token (at least 16 random characters) and a role. Instead of <code>token</code> a user can have <code>token_sha256</code>, the SHA-256 hash of the token, so the token itself is not in the file. <code>LoonarCompass.exe --hub-token</code> prints a new random token and its hash. Names and tokens must be unique.</li>
+  <li><b>users</b>: you do not have to write them. Leave <code>users</code> out to get the default admin, and manage the users in the <b>Users</b> tab: the hub writes them back to <code>hub.json</code> with hashes only (<code>password_pbkdf2</code>, <code>token_sha256</code>). An entry with a plain <code>"token"</code> (at least 16 random characters) is still accepted and is turned into <code>token_sha256</code> when the hub saves the users. <code>compass-hub --hub-token</code> (or <code>LoonarCompass.exe --hub-token</code>) prints a new random token and its hash. Names and tokens must be unique.</li>
+  <li><b>integrations</b>: the team's Jira and Confluence (described below); the tokens come from the secrets of the hub.</li>
   <li><b>policy</b>: <code>min_approval</code> (ask, plan or auto), <code>ask_min_role</code> (who may use <b>Ask</b> in the web view; viewer by default), <code>ask_per_hour</code> (questions per user and hour; 20 by default) and <code>governance</code> in the <code>governance.json</code> format.</li>
 </ul>
 <table>
   <tr><th style="width: 18%;">Role</th><th>Permissions</th></tr>
   <tr><td>viewer</td><td>Reads: web view, REST, MCP</td></tr>
-  <tr><td>architect</td><td>Everything a viewer can, plus sending audit entries and editing team notes</td></tr>
-  <tr><td>admin</td><td>Everything an architect can, plus changing the policy (<code>PUT /api/policy</code>, saved into <code>hub.json</code>) and freeing a change set that stayed “being applied” after a Compass stopped: after checking the model, <b>Not applied – free it</b> or <b>It is in the model – mark applied</b></td></tr>
+  <tr><td>architect</td><td>Everything a viewer can, plus sending audit entries, editing team notes, deciding on the change sets of others, and creating Jira issues and Confluence pages from the web view</td></tr>
+  <tr><td>admin</td><td>Everything an architect can, plus managing users (<b>Users</b> tab), changing the policy (<code>PUT /api/policy</code>, saved into <code>hub.json</code>) and freeing a change set that stayed “being applied” after a Compass stopped: after checking the model, <b>Not applied – free it</b> or <b>It is in the model – mark applied</b></td></tr>
 </table>
 <p>Nobody, not even an admin, approves their own change set. A change set is applied in two steps: one Compass claims it and, after the save, reports the result, so it cannot be applied twice.</p>
-<p><b>Web view.</b> At <code>https://&lt;hub&gt;/</code> (<code>http://</code> only on the same computer) you sign in with the token. The view shows the package tree, search, element details with impact, the model check by the team rules, gaps, the audit trail, team notes and change sets. In the <b>Ask</b> tab the assistant answers questions about the model. It only reads the model: it has no access to files, Jira, Confluence or MCP servers and cannot propose or save anything; it answers one question at a time.</p>
-<p><b>Security of the hub.</b> The hub speaks plain HTTP. For access from other computers, put it behind an HTTPS reverse proxy (for example IIS or nginx) and give people the <code>https://</code> address. Protect <code>hub.json</code> with file permissions. Requests are limited in size and time. After 20 wrong tokens from one address, that address is refused for 10 minutes; a valid token still works. Internal errors are shown only as an id; the details are in <code>hub.log</code>. The web view keeps the token only for the browser session and has a <b>Sign out</b> button.</p>
-<p><b>The MCP server</b> (read-only) works as JSON-RPC over HTTP POST at <code>/mcp</code>, with the header <code>Authorization: Bearer &lt;token&gt;</code>. Tools: <code>list_sources</code>, <code>list_packages</code>, <code>search_elements</code>, <code>element_details</code>, <code>impact_analysis</code>, <code>model_lint</code>, <code>gap_analysis</code>.</p>
+<h3>Jira and Confluence from the hub</h3>
+<p>With <code>integrations</code> in <code>hub.json</code>, architects and admins get buttons in the web view. The hub works with its own service account: <code>user</code> (the e-mail for Cloud; empty for Data Center with a personal access token) and the tokens from the secrets <code>JIRA_TOKEN</code> and <code>CONFLUENCE_TOKEN</code>.</p>
+<ul>
+  <li><b>Create Jira issue</b> on an element (<b>Search</b> → element): an issue in the <code>project</code>, of the type <code>issue_type</code> (Task by default), with the details of the element in its description.</li>
+  <li><b>Create Jira issue for this change set</b> in a change set: one issue per change set, with its description and preview; the issue is linked in the change set.</li>
+  <li><b>Publish this package to Confluence</b> in the <b>Model check</b> of a package: a text page in the <code>space</code> (under the page <code>parent</code>, if given) with the elements, their descriptions and the relationships. It has no diagram pictures, because the hub has no EA. The next publication of the package replaces the page.</li>
+</ul>
+<p>Every such action goes to the audit trail. The assistant in <b>Ask</b> stays read-only: it cannot create issues or pages.</p>
+<h3>Web view</h3>
+<p>At <code>https://&lt;hub&gt;/</code> (<code>http://</code> only on the same computer) you sign in with your user name and password. The view shows the package tree, search, element details with impact, the model check by the team rules, gaps, the audit trail, team notes and change sets, and for admins the users. In the <b>Ask</b> tab the assistant answers questions about the model. It only reads the model: it has no access to files, Jira, Confluence or MCP servers and cannot propose or save anything; it answers one question at a time.</p>
+<h3>Security of the hub</h3>
+<p>The hub speaks plain HTTP. For access from other computers, put it behind an HTTPS reverse proxy (for example IIS or nginx) and give people the <code>https://</code> address. Change the password of the default account at once. Protect <code>hub.json</code> and the data folder with file permissions. Requests are limited in size and time. After 20 wrong passwords or tokens from one address, that address is refused for 10 minutes; a valid token still works. Internal errors are shown only as an id; the details are in <code>hub.log</code>. The web view keeps the sign-in only for the browser session and has a <b>Sign out</b> button.</p>
+<h3>MCP server</h3>
+<p>The MCP server (read-only) works as JSON-RPC over HTTP POST at <code>/mcp</code>, with the header <code>Authorization: Bearer &lt;token&gt;</code>. Tools: <code>list_sources</code>, <code>list_packages</code>, <code>search_elements</code>, <code>element_details</code>, <code>impact_analysis</code>, <code>model_lint</code>, <code>gap_analysis</code>.</p>
 
-<h2 id="s23">23. License, trademarks and contact</h2>
+<h2 id="s23" class="break">23. Check mode for CI pipelines</h2>
+<p>With <code>--check</code>, Loonar Compass checks the model without the window and without the AI model, for example in a CI pipeline after every change of the model or the code. The checks are done by the program, so the same model always gives the same result, and nothing is written to the model.</p>
+<pre>LoonarCompass.exe --check --model &lt;file.qea|app.properties&gt;
+  [--package &lt;id|name&gt;] [--rules governance.json] [--code &lt;folder&gt;]
+  [--requirements &lt;document&gt;] [--cmdb &lt;export.csv|json&gt;] [--report report.md]
+  [--junit junit.xml] [--fail-on error|warning|info|never] [--lang en|pl|de|fr]</pre>
+<table>
+  <tr><th style="width: 22%;">Option</th><th>Meaning</th></tr>
+  <tr><td><code>--model</code></td><td>An EA file .qea or .qeax, read directly and read-only (Enterprise Architect is not needed), or the <code>app.properties</code> of a Compass installation, for example of a PostgreSQL model. Without it: the settings of the Windows user who runs the command.</td></tr>
+  <tr><td><code>--package</code></td><td>The package to check (id or name), with its subpackages. Without it: all root packages of the model.</td></tr>
+  <tr><td><code>--rules</code></td><td>A <code>governance.json</code> with the team rules (chapter 7). Without it: the <code>governance.json</code> next to the given <code>app.properties</code> or the policy of its hub; for a model file, only the built-in rules.</td></tr>
+  <tr><td><code>--code</code></td><td>A source folder: the model is compared with the code (section 8.6); with <code>--requirements</code>, every requirement is also followed to the code and tests (chapter 7, “Requirements chain”).</td></tr>
+  <tr><td><code>--requirements</code></td><td>A requirements document: .docx, .md, .txt or .html (section 8.5).</td></tr>
+  <tr><td><code>--cmdb</code></td><td>A CMDB export, CSV or JSON (chapter 7, “CMDB and the model”).</td></tr>
+  <tr><td><code>--report</code></td><td>Also saves the Markdown report to this file.</td></tr>
+  <tr><td><code>--junit</code></td><td>Saves a JUnit XML file for the pipeline.</td></tr>
+  <tr><td><code>--fail-on</code></td><td>The lowest severity that fails the check: <code>error</code> (default), <code>warning</code>, <code>info</code> or <code>never</code>.</td></tr>
+  <tr><td><code>--lang</code></td><td>The language of the report: <code>en</code> (default), <code>pl</code>, <code>de</code> or <code>fr</code>.</td></tr>
+</table>
+<h3>What is checked</h3>
+<table>
+  <tr><th style="width: 34%;">Part</th><th style="width: 20%;">When</th><th>Severity</th></tr>
+  <tr><td>Model check: built-in checks, ArchiMate 3.2 relationships, team rules</td><td>always</td><td>as in the model check (chapter 7): error, warning or info</td></tr>
+  <tr><td>Model and code</td><td><code>--code</code></td><td>differences: warning</td></tr>
+  <tr><td>CMDB and model</td><td><code>--cmdb</code></td><td>differences: warning</td></tr>
+  <tr><td>Requirements</td><td><code>--requirements</code></td><td>a requirement not in the model, one with only candidates (no trace relationship) or one whose identifier matches but whose content differs: warning; with <code>--code</code>, a requirement without code or without tests: info</td></tr>
+</table>
+<h3>Result</h3>
+<ul>
+  <li><b>Report:</b> Markdown on the standard output. It starts with the result, PASSED or FAILED, and the number of groups of errors and warnings, followed by a section for each part.</li>
+  <li><b>JUnit:</b> a test suite for each part and a test case for each group of findings. Groups at or above <code>--fail-on</code> are failures, so the pipeline shows them as failed tests.</li>
+  <li><b>Exit code:</b> <code>0</code> passed; <code>1</code> findings at or above <code>--fail-on</code>; <code>2</code> wrong arguments, a model that cannot be read or a file that cannot be written (the cause goes to the error output).</li>
+</ul>
+<div class="note"><b>A window program in PowerShell.</b> <code>LoonarCompass.exe</code> is a window program, so PowerShell does not wait for it. Pipe its output, for example <code>… | Out-Host</code>: PowerShell then waits, shows the report and sets <code>$LASTEXITCODE</code>. The password of a PostgreSQL model comes from the environment variable <code>LOONAR_DB_PASSWORD</code> (a secret variable of the pipeline) and takes precedence over Credential Manager.</div>
+<h3>GitLab CI</h3>
+<p>A job on a Windows runner (PowerShell) with Loonar Compass installed for all users. The job runs the check and publishes <code>junit.xml</code> as the test report:</p>
+<pre>compass-check:
+  tags: [windows]
+  script:
+    - '&amp; "C:\Program Files\Loonar Compass\LoonarCompass.exe" --check --model model\shop.qea --rules governance.json --code src --junit junit.xml --report report.md | Out-Host'
+    - 'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }'
+  artifacts:
+    when: always
+    paths: [report.md]
+    reports:
+      junit: junit.xml</pre>
+<h3>GitHub Actions</h3>
+<p>A job on a self-hosted Windows runner with Loonar Compass installed for all users. The job runs the check and uploads <code>junit.xml</code> and the report as an artifact, which a JUnit report step of your choice can show as test results:</p>
+<pre>jobs:
+  compass-check:
+    runs-on: [self-hosted, windows]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Model check
+        shell: pwsh
+        run: |
+          &amp; "C:\Program Files\Loonar Compass\LoonarCompass.exe" --check --model model\shop.qea --rules governance.json --code src --junit junit.xml --report report.md | Out-Host
+          exit $LASTEXITCODE
+      - name: Publish the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-check
+          path: |
+            junit.xml
+            report.md</pre>
+<p>For a PostgreSQL model, give <code>--model</code> an <code>app.properties</code> without passwords and set <code>LOONAR_DB_PASSWORD</code>: in GitLab as a masked CI/CD variable, in GitHub from a secret (<code>env: LOONAR_DB_PASSWORD: ${{ secrets.EA_DB_PASSWORD }}</code>).</p>
+
+<h2 id="s24">24. License, trademarks and contact</h2>
 <p><b>License.</b> Loonar Compass is freeware: you may use it free of charge on any number of computers, also for professional and commercial purposes, without time or territorial limits, and pass on unmodified copies free of charge. Modifying the application is prohibited. The license also sets out rules on AI-generated output (you review it before you approve it or rely on it), on data and on open-source components. The Polish version of the license is binding; the English, German and French versions are translations. The full text is in the <b>About</b> view and in the installation folder: <code>LICENSE.txt</code> in the installation language and, for languages other than Polish, <code>LICENSE.pl.txt</code> with the binding Polish version.</p>
 <p><b>Privacy.</b> The application collects no data (no telemetry). How bug reports and newsletter sign-ups are processed is described in the <a href="https://loonar.eu/privacy/">privacy policy</a>; the owner's details are in the <a href="https://loonar.eu/legal/">legal notice</a>.</p>
 <p><b>Open-source components.</b> The application includes open-source libraries and fonts; each keeps its own license. The list and the license texts are in the <code>THIRD-PARTY-NOTICES.txt</code> file in the installation folder; in the <b>About</b> view, click <b>Show licenses of the components</b>.</p>
 <p><b>Support.</b> The application is free and will stay free. If you want to support its development, use the <b>Support the project</b> view or go to <a href="https://suppi.pl/loonar">suppi.pl/loonar</a>. The source code is at <a href="https://github.com/loonar-eu/loonar-compass">github.com/loonar-eu/loonar-compass</a>.</p>
 <p>Application owner: Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard.<br>Contact: mariusz@loonar.eu, <a href="https://loonar.eu">loonar.eu</a>. The most convenient way to report bugs is the <b>Report a bug</b> view.</p>
-<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.8.1. Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. OpenAI and GPT are trademarks of OpenAI. Atlassian, Confluence and Jira are trademarks of Atlassian. Microsoft, Windows, Word and Excel are trademarks of the Microsoft group of companies. PostgreSQL is a registered trademark of the PostgreSQL Community Association. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.</p>
+<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.8.2. Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. OpenAI and GPT are trademarks of OpenAI. Atlassian, Confluence and Jira are trademarks of Atlassian. Microsoft, Windows, Word, Excel, Azure DevOps and GitHub are trademarks of the Microsoft group of companies. GitLab is a trademark of GitLab Inc., ServiceNow of ServiceNow, Inc., and Docker of Docker, Inc. PostgreSQL is a registered trademark of the PostgreSQL Community Association. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.</p>
 
 </body>
 </html>

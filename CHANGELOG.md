@@ -2,6 +2,56 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
+## Wersja 0.8.2 (2026-10-23)
+
+Compass Hub jako osobny program (Windows, Linux, Docker) z kontami użytkowników, kontrola modelu w potokach CI, reguły ArchiMate, pełny łańcuch śledzenia, porównanie z CMDB i gotowe serwery MCP.
+
+### Compass Hub – osobny program
+
+- **Osobny `compass-hub`:** mały program bez okna i bez EA, dla Windows i Linuksa. Uruchomienie: `compass-hub hub.json`. Dotychczasowe `LoonarCompass.exe --hub` też działa.
+- **Usługa Windows:** `compass-hub --service-install C:\Hub\hub.json` (jako administrator) – hub startuje z systemem; `--service-uninstall` usuwa usługę.
+- **Docker na Linuksie:** obraz `compass-hub` (plik `hub/Dockerfile`), dane i `hub.json` w wolumenie `/data`, działa jako zwykły użytkownik.
+  - Przykład: `docker run -d -p 8730:8730 -v /srv/compass-hub:/data -e LOONAR_SECRET_CLAUDE_API_KEY=… compass-hub`.
+- **Sekrety huba:** ze zmiennych środowiska `LOONAR_SECRET_<NAZWA>` albo plików `LOONAR_SECRET_<NAZWA>_FILE` (np. `CLAUDE_API_KEY`, `JIRA_TOKEN`, `CONFLUENCE_TOKEN`, `DB_PASSWORD`).
+
+### Konta i logowanie w hubie
+
+- **Logowanie:** nowy ekran logowania nazwą użytkownika i hasłem; hasła tylko jako skróty PBKDF2, sesja 12 godzin. Logowanie tokenem nadal jest możliwe.
+- **Konto domyślne:** nowy hub bez użytkowników ma konto **admin / passw0rd** (z zerem). Przy pierwszym logowaniu trzeba zmienić hasło – wcześniej konto nie ma dostępu do niczego innego.
+- **Zakładka „Users” (admin):**
+  - dodanie użytkownika (z pierwszym hasłem do zmiany);
+  - zmiana roli i reset hasła;
+  - nowy token API dla Compassa i klientów MCP, pokazany raz;
+  - usunięcie użytkownika (zawsze zostaje co najmniej jeden admin).
+- **Blokada po błędach:** po 20 błędnych hasłach z jednego adresu hub odmawia na 10 minut.
+
+### Jira i Confluence z huba
+
+- **Konto techniczne:** administrator wpisuje w `hub.json` sekcję `"integrations"` (Jira: adres, projekt; Confluence: adres, przestrzeń), a tokeny podaje jako sekrety huba.
+- **Przyciski dla architektów w widoku webowym:**
+  - „Create Jira issue” przy elemencie i przy zestawie zmian;
+  - „Publish this package to Confluence” przy kontroli pakietu – strona tekstowa z elementami, opisami i relacjami, bez obrazków diagramów, bo hub nie ma EA.
+- **Dziennik i Ask:** każda akcja trafia do dziennika zmian. „Ask” nadal tylko czyta model.
+
+### Kontrola modelu w potokach CI
+
+- **Tryb CI:** `LoonarCompass.exe --check --model model.qea [--code src] [--requirements BRD.docx] [--cmdb cmdb.csv] [--report raport.md] [--junit junit.xml] [--fail-on error|warning]`.
+- **Wynik:** raport Markdown, plik JUnit dla GitLaba, GitHub Actions i Azure DevOps, kod wyjścia 0 (OK), 1 (ustalenia) albo 2 (błąd). Bez AI i bez EA.
+
+### Model, wymagania, kod i CMDB
+
+- **Reguły ArchiMate 3.2:** kontrola modelu sprawdza relacje elementów ArchiMate (np. access tylko do struktury pasywnej, influence tylko do motywacji). Wyłączenie: `"archimate": false` w governance.json.
+- **Łańcuch śledzenia:** `trace_requirements` z folderem kodu sprawdza drogę wymaganie → model → kod → test → zgłoszenie i pokazuje, gdzie się urywa.
+  - Przykład: „Porównaj wymagania z C:\Projekty\BRD.docx z modelem i kodem w C:\repo\sklep”.
+- **CMDB a model:** eksport CSV/JSON (np. z ServiceNow) albo dane pobrane przez serwer MCP porównane z komponentami modelu: czego brakuje w modelu, czego nie ma w CMDB, inny właściciel lub status.
+  - Przykład: „Porównaj eksport CMDB C:\Eksport\cmdb_ci_appl.csv z komponentami modelu”.
+
+### Serwery MCP
+
+- **Gotowe szablony:** Azure DevOps, GitHub, ServiceNow / CMDB, pliki lokalne i Compass Hub w karcie „Serwery MCP” – wybierasz z listy i uzupełniasz organizację lub adres.
+- **Token serwera MCP:** zapisywany z karty w Menedżerze poświadczeń (nazwy zaczynają się od `mcp_`).
+- **Programy Node.js:** `npx` w konfiguracji działa na Windows (uruchamiane jako `npx.cmd`).
+
 ## Wersja 0.8.1 (2026-10-23)
 
 Wydanie poprawek bezpieczeństwa po audycie całej aplikacji. Zalecane dla wszystkich, a szczególnie dla zespołów z Compass Hub. Kilka czynności pyta teraz o zgodę częściej niż wcześniej – to celowe.

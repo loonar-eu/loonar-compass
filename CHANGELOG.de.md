@@ -2,6 +2,56 @@
 
 Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen Loonar EA Assistant).
 
+## Version 0.8.2 (2026-10-23)
+
+Compass Hub als eigenes Programm (Windows, Linux, Docker) mit Benutzerkonten, die Modellprüfung in CI-Pipelines, ArchiMate-Regeln, die vollständige Rückverfolgbarkeitskette, der Vergleich mit einer CMDB und fertige MCP-Server.
+
+### Compass Hub als eigenes Programm
+
+- **Eigenständiges `compass-hub`:** ein kleines Programm ohne Fenster und ohne EA, für Windows und Linux. Start: `compass-hub hub.json`. `LoonarCompass.exe --hub` funktioniert weiterhin.
+- **Windows-Dienst:** `compass-hub --service-install C:\Hub\hub.json` (als Administrator): Der Hub startet mit Windows. `--service-uninstall` entfernt den Dienst.
+- **Docker unter Linux:** Image `compass-hub` (`hub/Dockerfile`), Daten und `hub.json` im Volume `/data`, läuft als normaler Benutzer.
+  - Beispiel: `docker run -d -p 8730:8730 -v /srv/compass-hub:/data -e LOONAR_SECRET_CLAUDE_API_KEY=… compass-hub`.
+- **Geheimnisse des Hubs:** aus Umgebungsvariablen `LOONAR_SECRET_<NAME>` oder Dateien `LOONAR_SECRET_<NAME>_FILE` (z. B. `CLAUDE_API_KEY`, `JIRA_TOKEN`, `CONFLUENCE_TOKEN`, `DB_PASSWORD`).
+
+### Konten und Anmeldung im Hub
+
+- **Anmeldung:** neuer Anmeldebildschirm mit Benutzername und Passwort. Passwörter werden nur als PBKDF2-Hashes gespeichert, eine Sitzung gilt 12 Stunden. Die Anmeldung mit Token bleibt möglich.
+- **Standardkonto:** Ein neuer Hub ohne Benutzer hat das Konto **admin / passw0rd** (mit Null). Bei der ersten Anmeldung muss das Passwort geändert werden; vorher erlaubt das Konto nichts anderes.
+- **Reiter „Users“ (Admin):**
+  - Benutzer anlegen, mit einem ersten Passwort, das der Benutzer ändern muss;
+  - Rolle ändern und Passwort zurücksetzen;
+  - neues API-Token für Compass und MCP-Clients erzeugen (wird einmal angezeigt);
+  - Benutzer entfernen; mindestens ein Admin bleibt.
+- **Sperre:** Nach 20 falschen Passwörtern von einer Adresse wird diese Adresse 10 Minuten abgewiesen.
+
+### Jira und Confluence aus dem Hub
+
+- **Dienstkonto:** Der Administrator trägt in `hub.json` den Abschnitt `"integrations"` ein (Jira: Adresse und Projekt; Confluence: Adresse und Bereich). Die Tokens werden als Geheimnisse des Hubs angegeben.
+- **Schaltflächen für Architekten in der Weboberfläche:**
+  - „Create Jira issue“ bei einem Element und bei einem Änderungssatz;
+  - „Publish this package to Confluence“ in der Modellprüfung eines Pakets. Die Seite enthält nur Text (Elemente mit Beschreibungen und Beziehungen), keine Diagrammbilder, denn der Hub hat kein EA.
+- **Protokoll:** Jede Aktion landet im Audit-Protokoll. „Ask“ liest das Modell weiterhin nur.
+
+### Modellprüfung in CI-Pipelines
+
+- **Prüfmodus:** `LoonarCompass.exe --check --model model.qea [--code src] [--requirements BRD.docx] [--cmdb cmdb.csv] [--report bericht.md] [--junit junit.xml] [--fail-on error|warning]`.
+- **Ergebnis:** ein Markdown-Bericht, eine JUnit-Datei für GitLab, GitHub Actions und Azure DevOps sowie der Exit-Code 0 (OK), 1 (Befunde) oder 2 (Fehler). Ohne KI und ohne EA.
+
+### Modell, Anforderungen, Code und CMDB
+
+- **ArchiMate-3.2-Regeln:** Die Modellprüfung prüft die Beziehungen von ArchiMate-Elementen (z. B. Access nur zu passiver Struktur, Influence nur zu Motivation). Abschalten mit `"archimate": false` in governance.json.
+- **Rückverfolgbarkeitskette:** `trace_requirements` mit einem Quellordner verfolgt jede Anforderung → Modell → Code → Test → Vorgang und zeigt, wo die Kette abreißt.
+  - Beispiel: „Vergleiche die Anforderungen aus C:\Projekte\BRD.docx mit dem Modell und dem Code in C:\repo\shop“.
+- **CMDB gegen Modell:** Ein CSV/JSON-Export (z. B. aus ServiceNow) oder Daten über einen MCP-Server werden mit den Komponenten des Modells verglichen. Der Bericht zeigt, was im Modell fehlt, was nicht in der CMDB steht und wo Verantwortlicher oder Status abweichen.
+  - Beispiel: „Vergleiche den CMDB-Export C:\Export\cmdb_ci_appl.csv mit den Komponenten des Modells“.
+
+### MCP-Server
+
+- **Fertige Server:** Azure DevOps, GitHub, ServiceNow / CMDB, lokale Dateien und Compass Hub auf der Karte „MCP-Server“. Aus der Liste wählen und dann Organisation oder Adresse ergänzen.
+- **Token eines MCP-Servers:** wird auf der Karte in der Anmeldeinformationsverwaltung gespeichert (Namen beginnen mit `mcp_`).
+- **Node.js-Programme:** `npx` in der Konfiguration funktioniert unter Windows (wird als `npx.cmd` gestartet).
+
 ## Version 0.8.1 (2026-10-23)
 
 Sicherheitsrelease nach einem Audit der gesamten Anwendung. Empfohlen für alle, besonders für Teams mit Compass Hub. Einige Aktionen fragen jetzt öfter nach Zustimmung als bisher – das ist beabsichtigt.

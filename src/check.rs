@@ -164,7 +164,7 @@ pub fn check(o: &Options, default_props: &Path) -> Result<(String, String, bool)
         checked.0 += r.packages;
         checked.1 += r.elements;
         checked.2 += r.connectors;
-        md.push(format!("Package: {name} (#{id})"));
+        md.push(crate::i18n::fmt("Package: {0} (#{1})", &[name.clone(), id.to_string()]));
         all.extend(r.findings);
     }
     let mut rules_seen: Vec<&'static str> = Vec::new();
@@ -233,7 +233,9 @@ pub fn check(o: &Options, default_props: &Path) -> Result<(String, String, bool)
             let link = chain.as_ref().and_then(|c| c.get(n));
             let model = r.traced.iter().map(|(id, name, _, _)| format!("{name} #{id}")).collect::<Vec<_>>().join(", ");
             let (severity, chain_text, details) = match (r.coverage, link) {
-                (crate::traceability::Coverage::Missing | crate::traceability::Coverage::Candidates, _) => ("warning", crate::i18n::tr("BROKEN: not in the model").to_string(), r.candidates.join(", ")),
+                (crate::traceability::Coverage::Missing, _) => ("warning", crate::i18n::tr("BROKEN: not in the model").to_string(), r.candidates.join(", ")),
+                // Elements that look like the requirement but no trace relation: the chain needs the relation.
+                (crate::traceability::Coverage::Candidates, _) => ("warning", crate::i18n::tr("BROKEN: no trace relation in the model, candidates only").to_string(), r.candidates.join(", ")),
                 (crate::traceability::Coverage::ContentDiffers, _) => ("warning", crate::i18n::tr("ID MATCHES, CONTENT DIFFERS").to_string(), model.clone()),
                 (_, Some(c)) => (
                     if c.status == crate::traceability::ChainStatus::Complete { "ok" } else { "info" },

@@ -105,6 +105,9 @@ pub fn scan(root: &Path) -> Result<CodeModel> {
             let Ok(text) = std::fs::read_to_string(&path) else { continue };
             model.files += 1;
             let rel = path.strip_prefix(root).unwrap_or(&path).display().to_string();
+            if lang != "sql" && lang != "api" && is_test_file(&rel) {
+                continue;
+            }
             match lang {
                 "sql" => scan_sql(&text, &mut model),
                 "api" => {
@@ -125,6 +128,19 @@ pub fn scan(root: &Path) -> Result<CodeModel> {
         }
     }
     Ok(model)
+}
+
+/// A test file (src/test/…, OrderTest.java, order.spec.ts, test_order.py…): its classes are not types of the model.
+fn is_test_file(rel: &str) -> bool {
+    let p = rel.replace('\\', "/").to_lowercase();
+    let file = p.rsplit('/').next().unwrap_or(&p);
+    let stem = file.split('.').next().unwrap_or(file);
+    p.starts_with("test/") || p.starts_with("tests/") || p.contains("/test/") || p.contains("/tests/") || p.contains("__tests__/")
+        || stem.ends_with("test") || stem.ends_with("tests") || stem.starts_with("test_") || file.contains(".spec.") || file.contains(".test.")
+}
+
+fn list_or_dash(items: Vec<&str>) -> String {
+    if items.is_empty() { "–".into() } else { items.join(", ") }
 }
 
 fn scan_types(text: &str, lang: &str, file: &str, model: &mut CodeModel) {
@@ -320,8 +336,8 @@ pub fn drift(cfg: &AppConfig, root: &Path, package: Option<i64>) -> Result<Drift
                 if !missing.is_empty() || !gone.is_empty() {
                     differences.push(crate::i18n::fmt("{0} (#{1}): in the code only: {2}; in the model only: {3}", &[
                         name.clone(), r[0].clone(),
-                        missing.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "),
-                        gone.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "),
+                        list_or_dash(missing.iter().map(|s| s.as_str()).collect()),
+                        list_or_dash(gone.iter().map(|s| s.as_str()).collect()),
                     ]));
                 }
             }

@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<title>Loonar Compass 0.8.1 - Guide de l'utilisateur</title>
+<title>Loonar Compass 0.8.2 - Guide de l'utilisateur</title>
 <style>
   @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
   body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1f1e1b; }
@@ -39,7 +39,7 @@
   <img src="img/logo.png" alt="Logo de Loonar Compass">
   <h1 style="margin-top: 10mm;">Loonar Compass</h1>
   <div class="sub">Guide de l'utilisateur</div>
-  <div class="sub" style="font-size: 11pt;">version 0.8.1 &middot; octobre 2026</div>
+  <div class="sub" style="font-size: 11pt;">version 0.8.2 &middot; octobre 2026</div>
   <div class="owner">
     Loonar Mariusz Głowacki<br>
     ul. Gombrowicza 12, 73-110 Stargard<br>
@@ -72,7 +72,8 @@
     <li><a href="#s20">Signalement de bugs et nouvelles versions</a></li>
     <li><a href="#s21">Mise à jour et désinstallation</a></li>
     <li><a href="#s22">Compass Hub (service d'équipe)</a></li>
-    <li><a href="#s23">Licence, marques et contact</a></li>
+    <li><a href="#s23">Mode de contrôle pour les pipelines CI</a></li>
+    <li><a href="#s24">Licence, marques et contact</a></li>
   </ol>
 </div>
 
@@ -90,7 +91,8 @@
 </ul>
 <p>L'application utilise via Internet un modèle de langage d'IA, avec votre propre clé API : par défaut Claude Haiku 5.5 (Anthropic) ; dans les paramètres, vous pouvez choisir un autre modèle Claude ou un modèle OpenAI (chapitre 5). Elle se connecte au modèle EA de deux façons : elle le lit directement (dans la base PostgreSQL ou dans le fichier .qea/.qeax) et elle y écrit par l'intermédiaire d'Enterprise Architect, avec le compte utilisateur du modèle indiqué dans les paramètres lorsque le modèle en possède un. Avec un fichier de modèle que vous avez ouvert dans EA, les modifications passent par votre fenêtre EA ; sinon, EA est lancé en arrière-plan.</p>
 <p>Loonar Compass fonctionne comme une fenêtre autonome, lancée depuis le menu Démarrer, ou comme une fenêtre ancrée dans Enterprise Architect lui-même, qui travaille sur le projet ouvert dans cette fenêtre EA (chapitre 10).</p>
-<p>L'interface et les réponses de l'assistant sont disponibles en quatre langues : polonais, anglais, allemand et français (chapitre 5). L'application est gratuite, y compris pour un usage commercial (chapitre 23).</p>
+<p>L'interface et les réponses de l'assistant sont disponibles en quatre langues : polonais, anglais, allemand et français (chapitre 5). L'application est gratuite, y compris pour un usage commercial (chapitre 24).</p>
+<p>Sans fenêtre, Compass contrôle aussi le modèle dans les pipelines CI (chapitre 23), et le programme distinct Compass Hub met les modèles de l'équipe à la disposition des personnes et des outils (chapitre 22).</p>
 
 <h2 id="s2" data-page="install">2. Configuration requise</h2>
 <div class="note">
@@ -111,12 +113,13 @@
   <tr><td>Internet</td><td>Connexion HTTPS à api.anthropic.com (ou à api.openai.com lorsque le fournisseur est OpenAI), directement ou via le proxy défini dans Windows (chapitre 18).</td></tr>
   <tr><td>Confluence (facultatif)</td><td>Confluence Cloud ou Data Center, uniquement pour la publication de pages par l'assistant : adresse Confluence, jeton et clé de l'espace (chapitre 13). Sans cela, les pages sont tout de même créées, et vous collez le code vous-même.</td></tr>
   <tr><td>Miro (facultatif)</td><td>Uniquement pour envoyer des diagrammes vers un tableau Miro : un jeton d'accès d'une application Miro (chapitre 12).</td></tr>
+  <tr><td>Node.js (facultatif)</td><td>Uniquement pour les serveurs MCP lancés avec <code>npx</code>, par exemple les serveurs prêts à l'emploi Azure DevOps et Files (chapitre 7).</td></tr>
   <tr><td>Logiciel de messagerie (facultatif)</td><td>Pour signaler des bugs et s'abonner aux informations sur les nouvelles versions : un logiciel de messagerie défini par défaut dans Windows, par exemple Outlook.</td></tr>
 </table>
 <div class="note"><b>Coûts.</b> L'application elle-même est gratuite. L'utilisation du modèle d'IA est facturée par le fournisseur choisi (Anthropic ou OpenAI) selon la consommation, sur le compte auquel appartient la clé API.</div>
 
 <h2 id="s3" data-page="install">3. Installation</h2>
-<p>Lancez le fichier <code>LoonarCompass-Setup-0.8.1.exe</code>. L'assistant d'installation vous guide à travers les étapes avec les boutons <b>Suivant</b> et <b>Précédent</b>. Des droits d'administrateur ne sont nécessaires que si vous installez l'application pour tous les utilisateurs de l'ordinateur.</p>
+<p>Lancez le fichier <code>LoonarCompass-Setup-0.8.2.exe</code>. L'assistant d'installation vous guide à travers les étapes avec les boutons <b>Suivant</b> et <b>Précédent</b>. Des droits d'administrateur ne sont nécessaires que si vous installez l'application pour tous les utilisateurs de l'ordinateur.</p>
 <div class="note"><b>Avertissement Windows SmartScreen.</b> Le programme d'installation n'est pas encore signé numériquement. Si Windows affiche « Windows a protégé votre ordinateur », cliquez sur <b>Informations complémentaires</b>, puis sur <b>Exécuter quand même</b>. Lorsque le contrôle intelligent des applications (Smart App Control) est activé, Windows bloque les applications non signées : attendez alors la version signée.</div>
 <figure class="small"><img src="img/en/installer-language.png" alt="Assistant d'installation : page de choix de la langue avec le polonais, l'anglais, l'allemand et le français"><figcaption>La première page de l'assistant d'installation : le choix de la langue</figcaption></figure>
 <ol>
@@ -161,7 +164,7 @@
   <tr><td><b>Nouveautés</b></td><td>La liste des fonctionnalités et des limitations connues de chaque version</td></tr>
   <tr><td><b>Signaler un bug</b></td><td>Formulaire de signalement de bug avec images (chapitre 20)</td></tr>
   <tr><td><b>Soutenir le projet</b> (icône de cœur, en bas de la barre, au-dessus de « À propos »)</td><td>Soutien volontaire au développement de l'application, liens vers GitHub et loonar.eu</td></tr>
-  <tr><td><b>À propos</b> (en bas de la barre)</td><td>Version, propriétaire de l'application, liens (politique de confidentialité, code source sur GitHub, loonar.eu), marques, licence et composants open source (chapitre 23)</td></tr>
+  <tr><td><b>À propos</b> (en bas de la barre)</td><td>Version, propriétaire de l'application, liens (politique de confidentialité, code source sur GitHub, loonar.eu), marques, licence et composants open source (chapitre 24)</td></tr>
 </table>
 <p>Un <b>« ! »</b> orange sur les icônes Paramètres, Mémoire de l'assistant et Modèles de documents signifie qu'après un changement de langue, la traduction n'est pas encore terminée (chapitre 5).</p>
 <p><b>Soutenir le projet.</b> Loonar Compass est gratuit, y compris pour un usage commercial, et le restera. S'il vous fait gagner du temps, vous pouvez soutenir son développement par une contribution volontaire : le bouton <b>Soutenir sur suppi.pl</b> ouvre <a href="https://suppi.pl/loonar">https://suppi.pl/loonar</a>. La contribution finance notamment un certificat de signature de code. Vous pouvez aussi aider en signalant des bugs et des idées, en recommandant l'application ou en donnant une étoile au projet sur GitHub ; la vue contient les liens vers le code source sur GitHub et vers loonar.eu.</p>
@@ -188,7 +191,7 @@
   <tr><td>Miro</td><td>Jeton d'accès d'une application Miro avec les autorisations boards:read et boards:write (chapitre 12)</td><td>Se connecte à Miro et compte les tableaux visibles avec le jeton</td></tr>
   <tr><td>Jira</td><td>Adresse Jira, e-mail (Cloud uniquement), jeton, clé de projet par défaut (chapitre 7). L'adresse doit commencer par <code>https://</code>.</td><td>« Enregistrer et tester la connexion Jira » se connecte à Jira et vérifie le projet</td></tr>
   <tr><td>Équipe (Compass Hub)</td><td>Adresse du hub, jeton, Ce modèle dans le hub (facultatif) (chapitre 22)</td><td>« Enregistrer et tester la connexion au hub » se connecte au hub et affiche votre compte, votre rôle et la politique de l'équipe</td></tr>
-  <tr><td>Serveurs MCP</td><td>Liste de vos propres serveurs MCP, enregistrée dans le fichier <code>mcp_servers.json</code> à côté des paramètres (chapitre 7)</td><td>« Enregistrer et tester les serveurs MCP » se connecte à chaque serveur et affiche le nombre de ses outils</td></tr>
+  <tr><td>Serveurs MCP</td><td>Liste de vos propres serveurs MCP, enregistrée dans le fichier <code>mcp_servers.json</code> à côté des paramètres, la liste <b>Ajouter un serveur prêt à l'emploi</b> et le champ <b>Jeton d'un serveur MCP</b> (chapitre 7)</td><td>« Enregistrer et tester les serveurs MCP » se connecte à chaque serveur et affiche le nombre de ses outils</td></tr>
   <tr><td>Agents d'événements (Compass dans EA)</td><td>Règles du fichier <code>event_agents.json</code> (chapitre 10)</td><td>« Enregistrer les agents d'événements » vérifie les règles et affiche le nombre d'agents</td></tr>
 </table>
 <p>Un champ de mot de passe ou de clé laissé vide conserve la valeur actuelle. La mention <b>enregistré</b> à côté d'un champ indique que la valeur est déjà mémorisée ; <b>ABSENT</b> signifie qu'elle manque encore.</p>
@@ -331,6 +334,7 @@
   <li>éléments orphelins (sans relations et sur aucun diagramme),</li>
   <li>noms en double dans un paquetage et relations en double,</li>
   <li>relations d'un élément avec lui-même et avec des éléments inexistants,</li>
+  <li>relations qu'ArchiMate 3.2 n'autorise pas (voir ci-dessous),</li>
   <li>paquetages vides et diagrammes vides.</li>
 </ul>
 <p>Chaque constat a une gravité : <b>erreur</b>, <b>avertissement</b> ou <b>information</b>. L'assistant n'apporte de corrections qu'avec votre accord.</p>
@@ -345,9 +349,40 @@
   <li><b>allowed_relations</b> : un type de relation figurant ici n'est autorisé qu'entre les extrémités indiquées ; les types de relation qui n'y figurent pas ne sont pas restreints.</li>
 </ul>
 <p>Dans <code>applies_to</code>, vous indiquez un type d'élément ou un «stéréotype» ; les jokers <code>*</code> et <code>?</code> fonctionnent.</p>
+<p><b>Relations ArchiMate 3.2.</b> Lorsqu'une relation et ses deux extrémités ont des stéréotypes ArchiMate (par exemple «ArchiMate_ApplicationComponent», «ArchiMate_DataObject»), le contrôle applique aussi les règles de relations d'ArchiMate 3.2, sans aucune configuration. Il ne signale que les violations certaines, comme erreurs ; les combinaisons qu'une relation dérivée peut rendre valides ne sont pas signalées. Par exemple :</p>
+<ul>
+  <li>une relation d'accès (access) doit aboutir à un élément de structure passive (objet métier, objet de données, artefact…) et partir d'un élément de comportement ou de structure active,</li>
+  <li>une relation d'influence doit aboutir à un élément de motivation,</li>
+  <li>les relations de déclenchement (triggering), de flux (flow) et de service (serving) ne relient pas d'éléments de structure passive ou de motivation,</li>
+  <li>une affectation (assignment) va d'une structure active vers un comportement (ou d'un nœud vers un artefact),</li>
+  <li>une spécialisation relie deux éléments du même type,</li>
+  <li>un élément de motivation ne réalise qu'un autre élément de motivation.</li>
+</ul>
+<p>Les jonctions (junction) et les regroupements (grouping) ne sont pas contrôlés. Le contrôle en continu de Compass dans EA (chapitre 10) applique les mêmes règles. Pour désactiver les règles ArchiMate, indiquez <code>"archimate": false</code> dans <code>governance.json</code>.</p>
+<div class="prompt">Vérifie dans le paquetage Paysage applicatif quelles relations ArchiMate 3.2 n'autorise pas.</div>
 <h3>Analyse des écarts existant / cible</h3>
 <p>L'assistant compare deux paquetages, par exemple l'état actuel et l'état cible, et indique ce qui est <b>nouveau</b>, ce qui est <b>à retirer</b> et ce qui a <b>changé</b> (stéréotype, description, relations). Vous pouvez enregistrer le résultat dans Excel.</p>
 <div class="prompt">Compare le paquetage « Boutique existant » avec le paquetage « Boutique cible » et enregistre les écarts dans Excel.</div>
+<h3>Chaîne des exigences : modèle, code, tests, tickets</h3>
+<p>Lorsque vous comparez des exigences au modèle (section 8.5) et indiquez aussi un dossier de code source, l'assistant (l'outil <code>trace_requirements</code>) suit chaque exigence plus loin : exigence → élément du modèle → code → test → clés de tickets. Il lit le dossier en lecture seule.</p>
+<ul>
+  <li><b>Code :</b> les fichiers qui déclarent un type nommé comme l'élément du modèle tracé, et les fichiers source qui citent l'identifiant de l'exigence.</li>
+  <li><b>Tests :</b> les fichiers de test (dans un dossier de tests ou nommés comme <code>OrderTest.java</code>, <code>order.spec.ts</code>, <code>test_order.py</code>) qui citent l'identifiant de l'exigence ou portent sur un type de ce code.</li>
+  <li><b>Tickets :</b> les clés telles que <code>ARCH-123</code> dans l'exigence et dans les éléments tracés (nom, alias, notes, tagged values).</li>
+</ul>
+<p>Chaque exigence reçoit un statut : <b>complète</b>, ou rompue : <b>absente du modèle</b>, <b>pas de code</b> ou <b>pas de tests</b>.</p>
+<div class="prompt">Suis les exigences de C:\Documents\BRD.docx à travers le modèle jusqu'au code et aux tests de C:\repo\shop : où la chaîne se rompt-elle ?</div>
+<h3>CMDB et modèle</h3>
+<p>L'assistant compare les éléments de configuration (CI) d'une CMDB au modèle (l'outil <code>cmdb_compare</code>). Il ne fait que lire : rien n'est écrit ni dans le modèle ni dans la CMDB.</p>
+<ul>
+  <li><b>Données :</b> un export CSV ou JSON, par exemple un export de liste de ServiceNow ou le JSON de sa Table API (<code>{"result": [...]}</code>), donné comme chemin ou pièce jointe, ou les données qu'un serveur MCP de la CMDB a renvoyées dans la conversation. Les colonnes telles que le nom (name), sys_id, la classe (class), le responsable (owned_by) et le statut (install_status) sont reconnues par leurs en-têtes.</li>
+  <li><b>Association :</b> par l'identifiant CMDB conservé dans une tagged value de l'élément (<code>sys_id</code> ou <code>CMDB id</code>), sinon par le nom.</li>
+  <li><b>Éléments :</b> par défaut les composants, nœuds, équipements, environnements d'exécution ainsi que les composants applicatifs, nœuds, logiciels système et services ArchiMate. Vous pouvez indiquer d'autres types ou stéréotypes et limiter la comparaison à un paquetage.</li>
+  <li><b>Rapport :</b> seulement dans la CMDB, seulement dans le modèle, et responsable (tagged value Owner) ou statut différent.</li>
+</ul>
+<div class="prompt">Compare l'export CMDB C:\Exports\cmdb_ci_appl.csv avec les composants du modèle.</div>
+<div class="prompt">Récupère les CI applicatifs dans ServiceNow et compare-les avec le modèle.</div>
+<p>La seconde demande nécessite un serveur MCP pour ServiceNow sur la carte <b>Serveurs MCP</b> (voir « Vos propres serveurs MCP » ci-dessous). Sur demande, l'assistant ajoute au modèle les éléments, responsables ou identifiants manquants (avec votre accord) ou enregistre le rapport dans Excel. Dans un pipeline, l'option <code>--cmdb</code> effectue la même comparaison (chapitre 23).</p>
 <h3>Tickets Jira</h3>
 <p>Une fois la carte <b>Jira</b> remplie (chapitre 5), l'assistant lit les tickets par clé ou par recherche JQL et les utilise comme contexte : il dessine des diagrammes d'après la description d'un ticket (story) ou vérifie que le modèle couvre ses exigences. <b>Toujours avec votre accord dans le panneau de validation</b>, il crée des tickets, ajoute des commentaires et des liens vers des éléments du modèle.</p>
 <table>
@@ -372,8 +407,19 @@
   <li>Chaque appel d'un outil demande votre accord, sauf si le serveur a <code>"trusted": true</code>. Ne l'indiquez que pour les serveurs auxquels vous faites confiance : il ne suffit pas que le serveur déclare lui-même qu'un outil ne fait que lire.</li>
   <li>Les clés et mots de passe propres à Compass (les clés des fournisseurs d'IA, les mots de passe et jetons de la base, d'EA, de Confluence, de Jira et de Miro) ne peuvent pas être utilisés dans <code>${secret:…}</code>. La seule exception est <code>${secret:hub_token}</code> dans les en-têtes du point MCP propre au hub d'équipe (l'adresse du hub des Paramètres avec le chemin <code>/mcp</code>), comme dans l'exemple ci-dessus. Enregistrez les jetons des autres serveurs sous leurs propres noms dans le Gestionnaire d'identification Windows.</li>
   <li>Un programme local (<code>command</code>) ne reçoit que les variables d'environnement Windows de base (PATH, TEMP, les dossiers du profil utilisateur, les paramètres de proxy…) et les variables listées dans son <code>"env"</code>.</li>
+  <li><code>"command": "npx"</code> fonctionne : Compass lance <code>npx.cmd</code> (de même pour npm, pnpm et yarn). Les serveurs lancés avec npx nécessitent Node.js sur l'ordinateur.</li>
   <li>Le bouton <b>Enregistrer et tester les serveurs MCP</b> se connecte à chaque serveur et affiche le nombre de ses outils.</li>
 </ul>
+<p><b>Serveurs prêts à l'emploi.</b> Sur la carte <b>Serveurs MCP</b>, choisissez un serveur dans <b>Ajouter un serveur prêt à l'emploi</b> et cliquez sur <b>Ajouter</b> : son entrée est ajoutée au texte de <code>mcp_servers.json</code>, où vous la complétez avant d'enregistrer la carte. Un nom déjà utilisé reçoit un numéro.</p>
+<table>
+  <tr><th style="width: 26%;">Serveur</th><th>Ce qu'il faut compléter</th></tr>
+  <tr><td>Azure DevOps</td><td>Un serveur local lancé avec <code>npx</code> : remplacez <code>YOUR-ORGANIZATION</code> par votre organisation. Vous vous connectez avec votre compte Microsoft.</td></tr>
+  <tr><td>GitHub</td><td>Le serveur distant <code>https://api.githubcopilot.com/mcp/</code> : enregistrez un jeton d'accès personnel GitHub (personal access token) sous <code>mcp_github</code>.</td></tr>
+  <tr><td>ServiceNow / CMDB</td><td>Remplacez <code>YOUR-SERVICENOW-MCP-SERVER</code> par l'adresse du serveur MCP approuvé dans votre entreprise et enregistrez son jeton sous <code>mcp_servicenow</code>.</td></tr>
+  <tr><td>Files (a local folder)</td><td>Un serveur local lancé avec <code>npx</code> qui lit un dossier : remplacez <code>C:/docs</code> par votre dossier.</td></tr>
+  <tr><td>Compass Hub</td><td>Proposé seulement lorsque l'adresse du hub est renseignée sur la carte <b>Équipe (Compass Hub)</b> : le serveur MCP du hub avec votre jeton du hub, marqué <code>"trusted": true</code>.</td></tr>
+</table>
+<p><b>Jeton d'un serveur MCP.</b> Saisissez un nom qui commence par <code>mcp_</code> (lettres, chiffres et <code>_</code>, par exemple <code>mcp_github</code>) et le jeton, puis cliquez sur <b>Enregistrer et tester les serveurs MCP</b>. Le jeton est enregistré dans le Gestionnaire d'identification Windows ; dans <code>mcp_servers.json</code>, vous l'utilisez sous la forme <code>${secret:mcp_github}</code>.</p>
 <h3>Scripts EA</h3>
 <p>L'assistant énumère les groupes de scripts et les scripts du modèle, lit un script, enregistre un script (JScript, VBScript ou JavaScript ; un groupe manquant est créé) et l'exécute. <b>L'enregistrement et l'exécution d'un script demandent votre accord à chaque fois</b>, y compris en mode <b>auto</b>, car un script peut tout modifier dans le modèle ; le panneau de validation affiche le code complet. Le script s'exécute dans la fenêtre EA ouverte ou, s'il n'y en a pas, dans la session EA en arrière-plan propre à Compass. <code>Repository</code> et <code>Session.Output</code> fonctionnent comme dans EA, et les inclusions <code>!INC Groupe.Script</code> sont résolues à partir du modèle. Si un autre modèle est ouvert dans EA, l'exécution s'arrête avec un message.</p>
 <div class="prompt">Liste les scripts du modèle, puis exécute le script « Rapport.Notes manquantes ».</div>
@@ -433,7 +479,7 @@
 <p><b>Astuce :</b> vous pouvez annuler plusieurs enregistrements à la fois (« Annule les trois dernières modifications ») ; demandez d'abord l'historique pour voir ce que l'annulation va couvrir.</p>
 
 <h3>8.4 Qualité du modèle et règles d'équipe</h3>
-<p>Le contrôle de qualité est exécuté par le programme, pas par le modèle d'IA, donc rien n'est deviné : noms par défaut et vides, éléments sans description, éléments orphelins, doublons, relations vers des éléments inexistants, paquetages et diagrammes vides, ainsi que les règles du fichier <code>governance.json</code> (ou de la politique d'équipe dans le hub). L'orthographe des notes est vérifiée avec le dictionnaire Windows de la langue de Compass.</p>
+<p>Le contrôle de qualité est exécuté par le programme, pas par le modèle d'IA, donc rien n'est deviné : noms par défaut et vides, éléments sans description, éléments orphelins, doublons, relations vers des éléments inexistants, relations non autorisées en ArchiMate 3.2, paquetages et diagrammes vides, ainsi que les règles du fichier <code>governance.json</code> (ou de la politique d'équipe dans le hub). L'orthographe des notes est vérifiée avec le dictionnaire Windows de la langue de Compass.</p>
 <div class="prompt">Vérifie la qualité du paquetage Shop domain et énumère les problèmes les plus importants.</div>
 <div class="prompt">Vérifie l'orthographe des notes dans tout le modèle.</div>
 <p>Exemple de fichier <code>governance.json</code> court (il se trouve à côté de <code>app.properties</code>) qui exige la tagged value Owner sur chaque classe :</p>
@@ -447,7 +493,7 @@
 <div class="prompt">Compare les exigences de la page Confluence 123456 avec le modèle et enregistre la matrice de traçabilité dans Excel.</div>
 <div class="prompt">Crée les relations de traçabilité pour les exigences couvertes.</div>
 <p><b>Ce que vous voyez :</b> pour un fichier qui n'est pas une pièce jointe de la conversation, d'abord la question de savoir si l'assistant peut le lire ; puis un résumé « Traçabilité : … exigences – couvertes …, seulement des candidats …, NON couvertes …, même identifiant mais contenu différent … » et la liste des exigences avec l'un des quatre statuts : <b>couverte</b>, <b>candidats</b>, <b>NON COUVERTE</b> ou <b>MÊME ID, CONTENU DIFFÉRENT</b>. Une liste distincte s'intitule « Éléments du modèle auxquels aucune exigence ne se réfère ». L'assistant signale aussi les exigences qui contredisent le modèle. La matrice Excel arrive sous forme de carte de fichier avec les boutons <b>Ouvrir</b> et <b>Enregistrer sous…</b>. Les relations de traçabilité (Realisation ou Dependency «trace») ne sont créées qu'après votre accord, dans le panneau de validation habituel.</p>
-<p><b>Astuce :</b> une page Confluence peut être lue une fois la carte <b>Confluence</b> des Paramètres remplie (chapitre 5). Le rapprochement est le plus fiable lorsque l'identifiant de l'exigence figure dans le nom, l'alias, la note ou la tagged value de l'élément ; sans lui, il ne reste que des candidats. Vous pouvez limiter le périmètre à un paquetage : « …avec le paquetage Shop domain ».</p>
+<p><b>Astuce :</b> une page Confluence peut être lue une fois la carte <b>Confluence</b> des Paramètres remplie (chapitre 5). Le rapprochement est le plus fiable lorsque l'identifiant de l'exigence figure dans le nom, l'alias, la note ou la tagged value de l'élément ; sans lui, il ne reste que des candidats. Vous pouvez limiter le périmètre à un paquetage : « …avec le paquetage Shop domain ». Ajoutez un dossier de code source pour suivre les exigences jusqu'au code, aux tests et aux tickets (chapitre 7, « Chaîne des exigences »).</p>
 
 <h3>8.6 Le modèle face au code</h3>
 <p>L'assistant lit un dossier de code (par exemple un clone local d'un dépôt) en lecture seule et le compare au modèle : classes, interfaces, énumérations et records avec leurs champs (Java, Kotlin, C#, TypeScript, Rust, Python), tables et colonnes issues du SQL (<code>CREATE TABLE</code>) et opérations d'API (<code>operationId</code> d'OpenAPI) par rapport aux classes, attributs, tables et opérations du modèle.</p>
@@ -496,11 +542,11 @@
 <div class="prompt">Propose à l'équipe une modification à relire : ajoute la classe Warehouse au paquetage Shop domain.</div>
 <div class="prompt">Montre les ensembles de modifications approuvés et applique CH-…</div>
 <p><b>Ce que vous voyez :</b> après la proposition, le message « Ensemble de modifications pour l'équipe : … » avec son numéro (CH-…) et, dans la vue web du hub, une nouvelle ligne dans l'onglet <b>Change sets</b>. À l'application : le panneau de validation habituel et la vérification après l'enregistrement ; le hub marque l'ensemble comme appliqué. Seul un ensemble approuvé qui concerne ce modèle peut être appliqué, et une seule fois : Compass le réserve d'abord dans le hub et signale le résultat après l'enregistrement.</p>
-<p><b>Vue web.</b> Les personnes sans Enterprise Architect s'y connectent avec un jeton (adresse <code>https://&lt;hub&gt;/</code> ; <code>http://</code> seulement sur le même ordinateur). Les onglets portent des noms anglais : <b>Ask</b> (questions sur le modèle), <b>Search</b> (recherche d'éléments), <b>Model check</b> (contrôle du modèle selon les règles de l'équipe), <b>Gaps</b> (écarts existant / cible), <b>Audit trail</b> (journal des modifications de l'équipe), <b>Team notes</b> (notes partagées) et <b>Change sets</b> (modifications proposées avec commentaires et décision). Dans l'onglet <b>Ask</b>, vous saisissez une question avec vos propres mots, par exemple « Quels systèmes utilisent la passerelle de paiement ? ». Là, l'assistant ne fait que lire le modèle : il n'a accès ni aux fichiers, ni à Jira, ni à Confluence, ni aux serveurs MCP, et ne peut rien proposer ni enregistrer. Il répond à une question à la fois (une question compte au plus 2000 caractères), et les questions sont consignées dans le journal du hub.</p>
+<p><b>Vue web.</b> Les personnes sans Enterprise Architect s'y connectent avec un nom d'utilisateur et un mot de passe fournis par l'administrateur du hub (adresse <code>https://&lt;hub&gt;/</code> ; <code>http://</code> seulement sur le même ordinateur). Les onglets portent des noms anglais : <b>Ask</b> (questions sur le modèle), <b>Search</b> (recherche d'éléments), <b>Model check</b> (contrôle du modèle selon les règles de l'équipe), <b>Gaps</b> (écarts existant / cible), <b>Audit trail</b> (journal des modifications de l'équipe), <b>Team notes</b> (notes partagées) et <b>Change sets</b> (modifications proposées avec commentaires et décision). Dans l'onglet <b>Ask</b>, vous saisissez une question avec vos propres mots, par exemple « Quels systèmes utilisent la passerelle de paiement ? ». Là, l'assistant ne fait que lire le modèle : il n'a accès ni aux fichiers, ni à Jira, ni à Confluence, ni aux serveurs MCP, et ne peut rien proposer ni enregistrer. Il répond à une question à la fois (une question compte au plus 2000 caractères), et les questions sont consignées dans le journal du hub.</p>
 <p><b>Astuce :</b> donnez à la proposition un titre qui permette au relecteur de comprendre le périmètre de la modification sans ouvrir les détails. Un ensemble de modifications appartient à un modèle : vous ne pouvez l'appliquer que dans un Compass relié au même modèle du hub.</p>
 
 <h3>8.13 Outils supplémentaires issus de serveurs MCP</h3>
-<p>Vos propres serveurs MCP donnent à l'assistant des outils supplémentaires : un système de tickets, un dépôt, une base de connaissances ou le serveur MCP du hub lui-même. Vous déclarez les serveurs dans le fichier <code>mcp_servers.json</code> (chapitre 7) et vous les vérifiez dans les Paramètres, sur la carte <b>Serveurs MCP</b>, avec le bouton <b>Enregistrer et tester les serveurs MCP</b>.</p>
+<p>Vos propres serveurs MCP donnent à l'assistant des outils supplémentaires : un système de tickets, un dépôt, une base de connaissances ou le serveur MCP du hub lui-même. Vous déclarez les serveurs dans le fichier <code>mcp_servers.json</code> (chapitre 7) ou en ajoutez un prêt à l'emploi (Azure DevOps, GitHub, ServiceNow / CMDB, Files, Compass Hub), et vous les vérifiez dans les Paramètres, sur la carte <b>Serveurs MCP</b>, avec le bouton <b>Enregistrer et tester les serveurs MCP</b>.</p>
 <div class="prompt">Via le serveur MCP hub, énumère les sources de modèles de l'équipe.</div>
 <p><b>Ce que vous voyez :</b> dans la carte des étapes, l'appel de l'outil du serveur, puis son résultat dans la réponse. Chaque appel d'un outil demande votre accord, sauf si le serveur porte <code>"trusted": true</code> ; ne l'indiquez que pour les serveurs auxquels vous faites confiance.</p>
 <p><b>Astuce :</b> nommez dans la demande le serveur de <code>mcp_servers.json</code> (« via le serveur MCP hub… ») pour que l'assistant sache lequel utiliser. Conservez les jetons sous leurs propres noms dans le Gestionnaire d'identification de Windows (<code>${secret:nom}</code>), pas dans le fichier ; les clés et mots de passe propres à Compass ne peuvent pas y être utilisés (chapitre 7).</p>
@@ -517,6 +563,29 @@
   "prompt":"Check that the new component has an owner and a description; suggest what to fill in."}]}</pre>
 <p><b>Ce que vous voyez :</b> dans System Output, une ligne telle que « 🤖 Component owner : … » avec les remarques de l'assistant. L'agent <b>ne fait que lire le modèle</b> : il n'a accès ni aux fichiers, ni à Jira, ni à Confluence, ni aux serveurs MCP, et ne peut rien proposer ni enregistrer. Un même agent réagit au même objet au plus une fois par minute. Un nouvel élément n'est vérifié qu'après sa première modification, car EA lui donne d'abord le nom Class1.</p>
 <p><b>Astuce :</b> rédigez des demandes d'agent courtes et concrètes et limitez-les avec <code>applies_to</code> (un type, un «stéréotype» ou <code>*</code>). Après avoir modifié le fichier, cliquez sur <b>Enregistrer les agents d'événements</b>.</p>
+
+<h3>8.15 Contrôler le modèle dans un pipeline CI</h3>
+<p>Le mode de contrôle exécute le contrôle du modèle, la comparaison avec le code et avec la CMDB, et la chaîne des exigences sans fenêtre et sans modèle d'IA, puis se termine par un code de sortie compris par un pipeline (chapitre 23).</p>
+<pre>LoonarCompass.exe --check --model model\shop.qea --rules governance.json --code src --requirements docs\exigences.md --junit junit.xml --fail-on error --lang fr | Out-Host</pre>
+<p><b>Ce que vous voyez :</b> un rapport Markdown sur la sortie standard, qui commence par le résultat, PASSED ou FAILED, suivi des sections du contrôle du modèle, du modèle et du code, et des exigences. Dans le pipeline, le fichier JUnit montre chaque groupe de constats comme un test, en échec lorsque sa gravité atteint ou dépasse <code>--fail-on</code>. Le code de sortie vaut 0 lorsque le contrôle est réussi, 1 en présence de tels constats et 2 pour des arguments erronés ou un modèle illisible.</p>
+<p><b>Astuce :</b> commencez par <code>--fail-on error</code> et gardez les avertissements dans le rapport ; passez à <code>warning</code> lorsque le modèle est propre. Gardez <code>governance.json</code> dans le dépôt et transmettez-le avec <code>--rules</code>, pour que le pipeline et les personnes appliquent les mêmes règles.</p>
+
+<h3>8.16 Comparer la CMDB et le modèle</h3>
+<p>L'assistant compare les éléments de configuration d'une CMDB (un export ou les données d'un serveur MCP) aux composants du modèle et montre ce qui manque de chaque côté et où le responsable ou le statut diffère (chapitre 7, « CMDB et modèle »).</p>
+<div class="prompt">Compare l'export CMDB C:\Exports\cmdb_ci_appl.csv avec les composants du modèle.</div>
+<div class="prompt">Récupère les CI applicatifs dans ServiceNow et compare-les avec le modèle.</div>
+<p><b>Ce que vous voyez :</b> pour un fichier qui n'est pas une pièce jointe de la conversation, d'abord la question de savoir si l'assistant peut le lire ; avec un serveur MCP pour ServiceNow, l'appel de son outil (avec une demande d'accord, sauf si le serveur est de confiance). Puis un résumé « CMDB ↔ modèle : … éléments de configuration, … éléments du modèle, associés … » et les sections <b>Dans la CMDB, absent du modèle</b>, <b>Dans le modèle, absent de la CMDB</b> et <b>Responsable ou statut différent</b>. Rien n'est enregistré sans votre accord.</p>
+<p><b>Astuce :</b> conservez l'identifiant CMDB (<code>sys_id</code>) dans une tagged value des éléments : les entrées restent associées même après un renommage. Limitez la comparaison à un paquetage ou indiquez les types d'éléments lorsque le modèle contient plus que la CMDB.</p>
+
+<h3>8.17 Tickets Jira et pages Confluence depuis le hub</h3>
+<p>Lorsque l'administrateur a configuré <code>integrations</code> dans <code>hub.json</code> (chapitre 22), les architectes et les administrateurs créent des tickets Jira et des pages Confluence directement depuis la vue web du hub, sans Compass et sans EA. Le hub utilise son propre compte de service.</p>
+<ul>
+  <li><b>Search</b> → cliquez sur un élément → <b>Create Jira issue</b> : saisissez le résumé ; le ticket reçoit les détails de l'élément.</li>
+  <li><b>Change sets</b> → ouvrez un ensemble de modifications → <b>Create Jira issue for this change set</b> : un ticket par ensemble de modifications.</li>
+  <li>Choisissez un paquetage dans l'arborescence → <b>Model check</b> → <b>Publish this package to Confluence</b> : saisissez le titre (vide : le nom du paquetage et du modèle).</li>
+</ul>
+<p><b>Ce que vous voyez :</b> « Created ARCH-… » avec le lien vers le ticket ; dans l'ensemble de modifications, une ligne « Jira: ARCH-… » ; pour Confluence, « Created: » ou « Updated: » avec un lien vers la page. Chaque action est consignée à votre nom dans l'onglet <b>Audit trail</b>.</p>
+<p><b>Astuce :</b> la page Confluence est un résumé textuel du paquetage (éléments avec leurs descriptions et relations, sans diagrammes) remplacé à chaque publication : modifiez le modèle, pas la page. Pour une page avec des diagrammes, publiez depuis Compass (chapitre 13).</p>
 
 <h3>Conseils pour de bonnes demandes</h3>
 <ul>
@@ -750,7 +819,7 @@
   <tr><th style="width: 36%;">Données</th><th>Emplacement</th></tr>
   <tr><td>Programme</td><td>Le dossier d'installation : <code>%LOCALAPPDATA%\Programs\Loonar Compass</code> (pour vous uniquement) ou <code>%ProgramFiles%\Loonar Compass</code> (pour tous les utilisateurs)</td></tr>
   <tr><td>Paramètres (<code>app.properties</code>, sans aucun secret), historique des conversations (<code>history</code>), pièces jointes et documents créés : Word, Excel, PNG, pages Confluence et leurs dossiers d'images <code>&lt;page&gt;_images</code> (<code>attachments</code>), mémoire de l'assistant (<code>memory</code>, index <code>MEMORY.md</code>), modèles de documents (<code>templates</code>), journal des modifications (<code>audit_log.jsonl</code>), pages Confluence publiées (<code>confluence_pages.json</code>)</td><td>Le dossier des données utilisateur : <code>%APPDATA%\Loonar Compass</code>. Chaque utilisateur Windows de l'ordinateur a le sien.</td></tr>
-  <tr><td>Clé API Claude, clé API OpenAI, mot de passe du compte EA, mot de passe de la base, jetons Confluence et Miro</td><td>Gestionnaire d'identification Windows, entrées « loonar-compass » (protégées par le système)</td></tr>
+  <tr><td>Clé API Claude, clé API OpenAI, mot de passe du compte EA, mot de passe de la base, jetons Confluence et Miro, jetons des serveurs MCP (<code>mcp_…</code>)</td><td>Gestionnaire d'identification Windows, entrées « loonar-compass » (protégées par le système)</td></tr>
 </table>
 <p>L'historique des conversations est enregistré sous forme de fichiers ordinaires dans votre profil Windows : il est protégé par votre compte Windows, mais l'application ne le chiffre pas.</p>
 <h3>Ce qui est envoyé au fournisseur du modèle d'IA</h3>
@@ -797,6 +866,9 @@
   <tr><td>Le bouton Loonar Compass manque dans le ruban Start d'EA ou est inactif</td><td>Relancez le programme d'installation en cochant « Ajouter Loonar Compass à Enterprise Architect », puis redémarrez EA. Le bouton n'est actif que lorsqu'un projet est ouvert (chapitre 10).</td></tr>
   <tr><td>Impossible de faire glisser des fichiers dans la fenêtre</td><td>L'application a été lancée en tant qu'administrateur. Fermez-la et lancez-la avec le raccourci habituel.</td></tr>
   <tr><td>Windows SmartScreen avertit au lancement du programme d'installation</td><td>Le programme d'installation n'est pas encore signé. Cliquez sur « Informations complémentaires », puis sur « Exécuter quand même ». Si le contrôle intelligent des applications (Smart App Control) est activé, les applications non signées sont bloquées : attendez la version signée.</td></tr>
+  <tr><td><code>LoonarCompass.exe --check</code> n'affiche rien dans PowerShell, ou <code>$LASTEXITCODE</code> est vide</td><td>Compass est un programme à fenêtre : PowerShell ne l'attend donc pas. Redirigez sa sortie : <code>… | Out-Host</code> (chapitre 23).</td></tr>
+  <tr><td>Un serveur MCP prêt à l'emploi lancé avec <code>npx</code> ne démarre pas</td><td>Installez Node.js (il fournit npx) et redémarrez Compass. Vérifiez l'organisation ou le dossier dans l'entrée du serveur.</td></tr>
+  <tr><td>Impossible de se connecter à la vue web du hub</td><td>Vérifiez le nom d'utilisateur et le mot de passe. Après 20 tentatives erronées depuis une même adresse, le hub la refuse pendant 10 minutes. Un administrateur peut définir un nouveau mot de passe dans l'onglet <b>Users</b> (chapitre 22).</td></tr>
   <tr><td>Message d'erreur inattendue, l'application se ferme</td><td>Les détails sont enregistrés dans le fichier <code>%TEMP%\loonar-compass-crash.log</code>. Signalez le problème (chapitre 20) en joignant ce fichier.</td></tr>
 </table>
 
@@ -826,49 +898,177 @@
 <p>Pour une installation destinée à tous les utilisateurs, seules vos propres données sont supprimées ; celles des autres utilisateurs restent dans leur profil.</p>
 
 <h2 id="s22" class="break">22. Compass Hub (service d'équipe)</h2>
-<p>Compass Hub est un service d'équipe facultatif, exécuté sur un ordinateur ou un serveur de l'équipe. Il fournit une politique commune (règles du contrôle du modèle et mode d'approbation minimal), un journal d'audit central des modifications de tous les postes, des notes partagées, une vue web des modèles pour les personnes sans Enterprise Architect et un serveur MCP (lecture seule) pour d'autres outils d'IA. Sans hub, Compass fonctionne seul, comme avant.</p>
+<p>Compass Hub est un service d'équipe facultatif, exécuté sur un ordinateur ou un serveur de l'équipe. Il fournit une politique commune (règles du contrôle du modèle et mode d'approbation minimal), un journal d'audit central des modifications de tous les postes, des notes partagées, des ensembles de modifications à relire, une vue web des modèles pour les personnes sans Enterprise Architect, des tickets Jira et des pages Confluence créés depuis la vue web, et un serveur MCP (lecture seule) pour d'autres outils d'IA. Sans hub, Compass fonctionne seul, comme avant.</p>
 <h3>Pour l'utilisateur</h3>
-<p>Vous recevez l'adresse du hub et votre jeton de l'administrateur. Saisissez-les dans la carte <b>« Équipe (Compass Hub) »</b> de la vue Paramètres : <b>Adresse du hub</b> (elle doit commencer par <code>https://</code> ; <code>http://</code> seulement sur cet ordinateur), <b>Jeton</b> et, facultativement, <b>Ce modèle dans le hub</b> (l'id de la source, c'est-à-dire le modèle du hub qui correspond au vôtre), puis cliquez sur <b>Enregistrer et tester la connexion au hub</b>. Le test affiche votre compte, votre rôle et la politique de l'équipe. Avec un hub :</p>
+<p>Vous recevez l'adresse du hub et votre jeton API de l'administrateur (onglet <b>Users</b> de la vue web). Saisissez-les dans la carte <b>« Équipe (Compass Hub) »</b> de la vue Paramètres : <b>Adresse du hub</b> (elle doit commencer par <code>https://</code> ; <code>http://</code> seulement sur cet ordinateur), <b>Jeton</b> et, facultativement, <b>Ce modèle dans le hub</b> (l'id de la source, c'est-à-dire le modèle du hub qui correspond au vôtre), puis cliquez sur <b>Enregistrer et tester la connexion au hub</b>. Le test affiche votre compte, votre rôle et la politique de l'équipe. Avec un hub :</p>
 <ul>
   <li>la politique d'équipe <code>min_approval</code> ne peut que durcir le mode de validation local (du plus souple : auto, plan, ask) ;</li>
   <li>les règles du contrôle du modèle du hub s'appliquent s'il n'y a pas de <code>governance.json</code> local (chapitre 7) ;</li>
   <li>chaque modification enregistrée va dans le journal d'audit de l'équipe ; l'envoi se fait en arrière-plan, donc un hub hors service n'arrête pas votre travail, et le dernier problème est affiché sur la carte.</li>
 </ul>
-<h3>Pour l'administrateur</h3>
-<p>Vous démarrez le hub avec <code>LoonarCompass.exe --hub C:\chemin\hub.json</code>. Le programme s'exécute sans fenêtre et écrit son journal dans <code>hub.log</code>, à côté de <code>hub.json</code>. Par défaut il écoute sur <code>127.0.0.1:8730</code> ; au-delà d'un seul ordinateur, placez-le derrière HTTPS (proxy inverse). Exemple de <code>hub.json</code> :</p>
+<h3>Installer le hub</h3>
+<p>Le hub est un programme à part entière, <code>compass-hub</code>, pour Windows et Linux. Il lit les modèles directement (une base PostgreSQL ou des fichiers .qea/.qeax) : le serveur n'a donc pas besoin d'Enterprise Architect. Téléchargements :</p>
+<ul>
+  <li><b>Windows :</b> <code>CompassHub-0.8.2-windows-x64.zip</code> avec <code>compass-hub.exe</code>, un exemple de <code>hub.json</code> et un README.</li>
+  <li><b>Docker :</b> l'image <code>ghcr.io/loonar-eu/compass-hub:0.8.2</code>, ou construisez-la vous-même dans le dossier racine du dépôt : <code>docker build -f hub/Dockerfile -t compass-hub .</code></li>
+</ul>
+<p><b>Dans une console</b> (Windows ou Linux). Le hub tourne jusqu'à la fermeture de la console :</p>
+<pre>compass-hub hub.json</pre>
+<p><b>Comme service Windows</b>, dans une console lancée en tant qu'administrateur. Le service « CompassHub » démarre aussitôt et avec Windows ; vous l'arrêtez dans Services ou avec <code>sc stop CompassHub</code>, et le supprimez avec <code>--service-uninstall</code> :</p>
+<pre>compass-hub --service-install C:\Hub\hub.json
+compass-hub --service-uninstall</pre>
+<p><b>Dans Docker.</b> Placez <code>hub.json</code> avec <code>"listen": "0.0.0.0:8730"</code> dans le dossier de données, que le conteneur voit comme <code>/data</code> :</p>
+<pre>docker run -d --name compass-hub -p 8730:8730 -v /srv/compass-hub:/data \
+  -e LOONAR_SECRET_CLAUDE_API_KEY=... ghcr.io/loonar-eu/compass-hub:0.8.2</pre>
+<ul>
+  <li>Le conteneur s'exécute sous l'utilisateur d'id 10001 : le dossier de données doit être accessible en écriture pour lui, car le hub y écrit <code>hub.json</code>, le journal d'audit, les notes, les ensembles de modifications et <code>hub.log</code>.</li>
+  <li>Modèles : des fichiers .qea/.qeax dans le dossier de données, avec les chemins vus depuis le conteneur (par exemple <code>model.file=/data/models/shop.qea</code> dans l'<code>app.properties</code> de la source), ou une base PostgreSQL.</li>
+</ul>
+<p><code>LoonarCompass.exe --hub C:\Hub\hub.json</code> fonctionne toujours : l'application de bureau exécute alors le hub sans fenêtre. Le hub écrit son journal dans <code>hub.log</code>, à côté de <code>hub.json</code>. <code>compass-hub --version</code> affiche la version.</p>
+<h3>Secrets du hub</h3>
+<p>Les clés, jetons et mots de passe ne figurent pas dans <code>hub.json</code>. <code>compass-hub</code> lit chacun d'eux dans la variable d'environnement <code>LOONAR_SECRET_&lt;NOM&gt;</code> ou dans le fichier indiqué par <code>LOONAR_SECRET_&lt;NOM&gt;_FILE</code> (par exemple un secret Docker) ; sous Windows aussi dans le Gestionnaire d'identification du compte sous lequel le hub s'exécute. Pour le service Windows, définissez-les comme variables d'environnement système.</p>
+<table>
+  <tr><th style="width: 46%;">Secret</th><th>Usage</th></tr>
+  <tr><td><code>LOONAR_SECRET_CLAUDE_API_KEY</code> ou <code>LOONAR_SECRET_OPENAI_API_KEY</code></td><td>Le modèle d'IA de l'onglet <b>Ask</b></td></tr>
+  <tr><td><code>LOONAR_SECRET_JIRA_TOKEN</code></td><td>Le Jira de l'équipe (<code>integrations</code>)</td></tr>
+  <tr><td><code>LOONAR_SECRET_CONFLUENCE_TOKEN</code></td><td>Le Confluence de l'équipe (<code>integrations</code>)</td></tr>
+  <tr><td><code>LOONAR_SECRET_DB_PASSWORD</code></td><td>Le mot de passe d'une base PostgreSQL de modèle</td></tr>
+</table>
+<h3>Comptes et connexion</h3>
+<p>Les personnes se connectent à la vue web (<code>https://&lt;hub&gt;/</code> ; <code>http://</code> seulement sur le même ordinateur) avec un nom d'utilisateur et un mot de passe. Compass et les clients MCP utilisent un jeton API.</p>
+<div class="note"><b>Compte par défaut.</b> Un nouveau hub (un <code>hub.json</code> sans utilisateurs) crée le compte <code>admin</code> avec le mot de passe <code>passw0rd</code> (avec un zéro). À la première connexion, le hub demande de changer le mot de passe et n'autorise rien d'autre d'ici là. Faites-le avant que le hub soit accessible depuis d'autres ordinateurs.</div>
+<ul>
+  <li>Un mot de passe compte au moins 10 caractères et ne peut être ni le mot de passe par défaut ni le nom d'utilisateur. Le hub ne conserve les mots de passe que sous forme d'empreintes PBKDF2.</li>
+  <li>Une connexion dure 12 heures ; <b>Sign out</b> y met fin immédiatement.</li>
+  <li>Après 20 mots de passe ou jetons erronés depuis une même adresse, cette adresse est refusée pendant 10 minutes.</li>
+  <li><b>Sign in with a token instead</b>, sur la page de connexion, permet de se connecter avec un jeton API.</li>
+</ul>
+<p>L'onglet <b>Users</b> (administrateurs seulement) :</p>
+<ul>
+  <li><b>Add a user</b> (ajouter un utilisateur) : le nom, le rôle et un premier mot de passe, que l'utilisateur doit changer à la première connexion.</li>
+  <li><b>Role</b> : change le rôle (viewer, architect ou admin).</li>
+  <li><b>Reset password</b> : définit un nouveau mot de passe, que l'utilisateur doit changer à la connexion suivante.</li>
+  <li><b>New API token</b> : un jeton pour Compass (Paramètres → Équipe (Compass Hub)) et pour les clients MCP. Il n'est affiché qu'une fois, et le jeton précédent de l'utilisateur cesse de fonctionner.</li>
+  <li><b>Remove</b> : supprime l'utilisateur. Le hub garde toujours au moins un administrateur, et vous ne pouvez pas vous supprimer vous-même.</li>
+</ul>
+<p>La modification ou la suppression d'un utilisateur met fin à ses connexions. Chaque modification des utilisateurs est consignée dans le journal d'audit.</p>
+<h3>Configuration (hub.json)</h3>
 <pre>{"listen":"127.0.0.1:8730",
  "sources":[
   {"id":"shop-db","name":"Shop (PostgreSQL)","properties":"shop-db/app.properties"},
   {"id":"shop-file","name":"Shop (file)","properties":"shop-file/app.properties"}],
  "users":[
-  {"name":"anna","token":"&lt;at least 16 random characters&gt;","role":"admin"},
-  {"name":"bob","token":"...","role":"architect"},
-  {"name":"carol","token_sha256":"&lt;SHA-256 of the token&gt;","role":"viewer"}],
+  {"name":"anna","role":"admin","password_pbkdf2":"pbkdf2-sha256$210000$..."},
+  {"name":"bob","role":"architect","token_sha256":"&lt;SHA-256 du jeton&gt;"}],
+ "integrations":{
+  "jira":{"url":"https://entreprise.atlassian.net","user":"hub@entreprise.fr","project":"ARCH","issue_type":"Task"},
+  "confluence":{"url":"https://entreprise.atlassian.net/wiki","user":"hub@entreprise.fr","space":"ARCH","parent":"65818"}},
  "policy":{"min_approval":"ask","ask_min_role":"viewer","ask_per_hour":20,
   "governance":{ ... governance.json ... }}}</pre>
 <ul>
+  <li><b>listen</b> : l'adresse et le port ; <code>127.0.0.1:8730</code> par défaut, <code>0.0.0.0:8730</code> dans Docker. Au-delà d'un seul ordinateur, placez le hub derrière HTTPS (voir « Sécurité du hub »).</li>
   <li><b>sources</b> : les modèles de l'équipe. <code>properties</code> est le fichier <code>app.properties</code> du modèle concerné (même format que le fichier de paramètres de Compass), relatif à <code>hub.json</code>.</li>
-  <li><b>users</b> : les utilisateurs avec un jeton (au moins 16 caractères aléatoires) et un rôle. Au lieu de <code>token</code>, un utilisateur peut avoir <code>token_sha256</code>, l'empreinte SHA-256 du jeton ; le jeton lui-même ne figure alors pas dans le fichier. <code>LoonarCompass.exe --hub-token</code> affiche un nouveau jeton aléatoire et son empreinte. Les noms et les jetons doivent être uniques.</li>
+  <li><b>users</b> : vous n'avez pas à les écrire. Omettez <code>users</code> pour obtenir l'administrateur par défaut, et gérez les utilisateurs dans l'onglet <b>Users</b> : le hub les réécrit dans <code>hub.json</code> uniquement sous forme d'empreintes (<code>password_pbkdf2</code>, <code>token_sha256</code>). Une entrée avec un <code>"token"</code> en clair (au moins 16 caractères aléatoires) est toujours acceptée et convertie en <code>token_sha256</code> lorsque le hub enregistre les utilisateurs. <code>compass-hub --hub-token</code> (ou <code>LoonarCompass.exe --hub-token</code>) affiche un nouveau jeton aléatoire et son empreinte. Les noms et les jetons doivent être uniques.</li>
+  <li><b>integrations</b> : le Jira et le Confluence de l'équipe (voir ci-dessous) ; les jetons proviennent des secrets du hub.</li>
   <li><b>policy</b> : <code>min_approval</code> (ask, plan ou auto), <code>ask_min_role</code> (qui peut utiliser <b>Ask</b> dans la vue web ; viewer par défaut), <code>ask_per_hour</code> (questions par utilisateur et par heure ; 20 par défaut) et <code>governance</code> au format de <code>governance.json</code>.</li>
 </ul>
 <table>
   <tr><th style="width: 18%;">Rôle</th><th>Droits</th></tr>
   <tr><td>viewer</td><td>Lecture : vue web, REST, MCP</td></tr>
-  <tr><td>architect</td><td>Comme viewer, plus l'envoi d'entrées d'audit et la modification des notes d'équipe</td></tr>
-  <tr><td>admin</td><td>Comme architect, plus la modification de la politique (<code>PUT /api/policy</code>, enregistrée dans <code>hub.json</code>) et la libération d'un ensemble de modifications resté « en cours d'application » après l'arrêt d'un Compass : après vérification du modèle, <b>Not applied – free it</b> (non appliqué, le libérer) ou <b>It is in the model – mark applied</b> (il est dans le modèle, le marquer comme appliqué)</td></tr>
+  <tr><td>architect</td><td>Comme viewer, plus l'envoi d'entrées d'audit, la modification des notes d'équipe, la décision sur les ensembles de modifications des autres et la création de tickets Jira et de pages Confluence depuis la vue web</td></tr>
+  <tr><td>admin</td><td>Comme architect, plus la gestion des utilisateurs (onglet <b>Users</b>), la modification de la politique (<code>PUT /api/policy</code>, enregistrée dans <code>hub.json</code>) et la libération d'un ensemble de modifications resté « en cours d'application » après l'arrêt d'un Compass : après vérification du modèle, <b>Not applied – free it</b> (non appliqué, le libérer) ou <b>It is in the model – mark applied</b> (il est dans le modèle, le marquer comme appliqué)</td></tr>
 </table>
 <p>Personne, pas même un admin, n'approuve son propre ensemble de modifications. Un ensemble est appliqué en deux étapes : un Compass le réserve puis, après l'enregistrement, signale le résultat ; il ne peut donc pas être appliqué deux fois.</p>
-<p><b>Vue web.</b> À l'adresse <code>https://&lt;hub&gt;/</code> (<code>http://</code> seulement sur le même ordinateur), vous vous connectez avec le jeton. Elle affiche l'arborescence des paquetages, la recherche, les détails d'un élément avec l'impact, le contrôle du modèle selon les règles de l'équipe, les écarts, le journal d'audit, les notes d'équipe et les ensembles de modifications. Dans l'onglet <b>Ask</b>, l'assistant répond aux questions sur le modèle. Il ne fait que lire le modèle : il n'a accès ni aux fichiers, ni à Jira, ni à Confluence, ni aux serveurs MCP, et ne peut rien proposer ni enregistrer ; il répond à une question à la fois.</p>
-<p><b>Sécurité du hub.</b> Le hub parle en HTTP simple. Pour un accès depuis d'autres ordinateurs, placez-le derrière un proxy inverse HTTPS (par exemple IIS ou nginx) et donnez aux utilisateurs l'adresse <code>https://</code>. Protégez <code>hub.json</code> par les droits d'accès aux fichiers. Les requêtes sont limitées en taille et en durée. Après 20 jetons erronés depuis une même adresse, cette adresse est refusée pendant 10 minutes ; un jeton valide continue de fonctionner. Les erreurs internes ne sont affichées que sous forme d'identifiant ; les détails sont dans <code>hub.log</code>. La vue web ne conserve le jeton que pendant la session du navigateur et propose un bouton <b>Sign out</b> (se déconnecter).</p>
-<p><b>Le serveur MCP</b> (lecture seule) fonctionne en JSON-RPC sur HTTP POST à l'adresse <code>/mcp</code>, avec l'en-tête <code>Authorization: Bearer &lt;jeton&gt;</code>. Outils : <code>list_sources</code>, <code>list_packages</code>, <code>search_elements</code>, <code>element_details</code>, <code>impact_analysis</code>, <code>model_lint</code>, <code>gap_analysis</code>.</p>
+<h3>Jira et Confluence depuis le hub</h3>
+<p>Avec <code>integrations</code> dans <code>hub.json</code>, les architectes et les administrateurs disposent de boutons dans la vue web. Le hub travaille avec son propre compte de service : <code>user</code> (l'e-mail pour Cloud ; vide pour Data Center avec un jeton d'accès personnel) et les jetons des secrets <code>JIRA_TOKEN</code> et <code>CONFLUENCE_TOKEN</code>.</p>
+<ul>
+  <li><b>Create Jira issue</b> sur un élément (<b>Search</b> → élément) : un ticket dans le projet <code>project</code>, du type <code>issue_type</code> (Task par défaut), avec les détails de l'élément dans sa description.</li>
+  <li><b>Create Jira issue for this change set</b> dans un ensemble de modifications : un ticket par ensemble, avec sa description et son aperçu ; le ticket est lié dans l'ensemble de modifications.</li>
+  <li><b>Publish this package to Confluence</b> dans le contrôle du modèle (<b>Model check</b>) d'un paquetage : une page de texte dans l'espace <code>space</code> (sous la page <code>parent</code>, si elle est indiquée) avec les éléments, leurs descriptions et les relations. Elle ne contient pas d'images de diagrammes, car le hub n'a pas d'EA. La publication suivante du paquetage remplace la page.</li>
+</ul>
+<p>Chacune de ces actions est consignée dans le journal d'audit. L'assistant de <b>Ask</b> reste en lecture seule : il ne peut créer ni tickets ni pages.</p>
+<h3>Vue web</h3>
+<p>À l'adresse <code>https://&lt;hub&gt;/</code> (<code>http://</code> seulement sur le même ordinateur), vous vous connectez avec votre nom d'utilisateur et votre mot de passe. Elle affiche l'arborescence des paquetages, la recherche, les détails d'un élément avec l'impact, le contrôle du modèle selon les règles de l'équipe, les écarts, le journal d'audit, les notes d'équipe et les ensembles de modifications, ainsi que les utilisateurs pour les administrateurs. Dans l'onglet <b>Ask</b>, l'assistant répond aux questions sur le modèle. Il ne fait que lire le modèle : il n'a accès ni aux fichiers, ni à Jira, ni à Confluence, ni aux serveurs MCP, et ne peut rien proposer ni enregistrer ; il répond à une question à la fois.</p>
+<h3>Sécurité du hub</h3>
+<p>Le hub parle en HTTP simple. Pour un accès depuis d'autres ordinateurs, placez-le derrière un proxy inverse HTTPS (par exemple IIS ou nginx) et donnez aux utilisateurs l'adresse <code>https://</code>. Changez immédiatement le mot de passe du compte par défaut. Protégez <code>hub.json</code> et le dossier de données par les droits d'accès aux fichiers. Les requêtes sont limitées en taille et en durée. Après 20 mots de passe ou jetons erronés depuis une même adresse, cette adresse est refusée pendant 10 minutes ; un jeton valide continue de fonctionner. Les erreurs internes ne sont affichées que sous forme d'identifiant ; les détails sont dans <code>hub.log</code>. La vue web ne conserve la connexion que pendant la session du navigateur et propose un bouton <b>Sign out</b> (se déconnecter).</p>
+<h3>Serveur MCP</h3>
+<p>Le serveur MCP (lecture seule) fonctionne en JSON-RPC sur HTTP POST à l'adresse <code>/mcp</code>, avec l'en-tête <code>Authorization: Bearer &lt;jeton&gt;</code>. Outils : <code>list_sources</code>, <code>list_packages</code>, <code>search_elements</code>, <code>element_details</code>, <code>impact_analysis</code>, <code>model_lint</code>, <code>gap_analysis</code>.</p>
 
-<h2 id="s23">23. Licence, marques et contact</h2>
+<h2 id="s23" class="break">23. Mode de contrôle pour les pipelines CI</h2>
+<p>Avec <code>--check</code>, Loonar Compass contrôle le modèle sans fenêtre et sans modèle d'IA, par exemple dans un pipeline CI après chaque modification du modèle ou du code. Les contrôles sont effectués par le programme : le même modèle donne donc toujours le même résultat, et rien n'est écrit dans le modèle.</p>
+<pre>LoonarCompass.exe --check --model &lt;fichier.qea|app.properties&gt;
+  [--package &lt;id|nom&gt;] [--rules governance.json] [--code &lt;dossier&gt;]
+  [--requirements &lt;document&gt;] [--cmdb &lt;export.csv|json&gt;] [--report rapport.md]
+  [--junit junit.xml] [--fail-on error|warning|info|never] [--lang en|pl|de|fr]</pre>
+<table>
+  <tr><th style="width: 22%;">Option</th><th>Signification</th></tr>
+  <tr><td><code>--model</code></td><td>Un fichier EA .qea ou .qeax, lu directement et en lecture seule (Enterprise Architect n'est pas nécessaire), ou le fichier <code>app.properties</code> d'une installation de Compass, par exemple pour un modèle PostgreSQL. Sans cette option : les paramètres de l'utilisateur Windows qui lance la commande.</td></tr>
+  <tr><td><code>--package</code></td><td>Le paquetage à contrôler (id ou nom), avec ses sous-paquetages. Sans cette option : tous les paquetages racines du modèle.</td></tr>
+  <tr><td><code>--rules</code></td><td>Un <code>governance.json</code> avec les règles de l'équipe (chapitre 7). Sans cette option : le <code>governance.json</code> situé à côté de l'<code>app.properties</code> indiqué ou la politique de son hub ; pour un fichier de modèle, seules les règles intégrées.</td></tr>
+  <tr><td><code>--code</code></td><td>Un dossier de code source : le modèle est comparé au code (section 8.6) ; avec <code>--requirements</code>, chaque exigence est aussi suivie jusqu'au code et aux tests (chapitre 7, « Chaîne des exigences »).</td></tr>
+  <tr><td><code>--requirements</code></td><td>Un document d'exigences : .docx, .md, .txt ou .html (section 8.5).</td></tr>
+  <tr><td><code>--cmdb</code></td><td>Un export de la CMDB, CSV ou JSON (chapitre 7, « CMDB et modèle »).</td></tr>
+  <tr><td><code>--report</code></td><td>Enregistre aussi le rapport Markdown dans ce fichier.</td></tr>
+  <tr><td><code>--junit</code></td><td>Enregistre un fichier JUnit XML pour le pipeline.</td></tr>
+  <tr><td><code>--fail-on</code></td><td>La gravité la plus basse qui fait échouer le contrôle : <code>error</code> (par défaut), <code>warning</code>, <code>info</code> ou <code>never</code>.</td></tr>
+  <tr><td><code>--lang</code></td><td>La langue du rapport : <code>en</code> (par défaut), <code>pl</code>, <code>de</code> ou <code>fr</code>.</td></tr>
+</table>
+<h3>Ce qui est contrôlé</h3>
+<table>
+  <tr><th style="width: 34%;">Partie</th><th style="width: 20%;">Quand</th><th>Gravité</th></tr>
+  <tr><td>Contrôle du modèle : contrôles intégrés, relations ArchiMate 3.2, règles de l'équipe</td><td>toujours</td><td>comme dans le contrôle du modèle (chapitre 7) : erreur, avertissement ou information</td></tr>
+  <tr><td>Modèle et code</td><td><code>--code</code></td><td>écarts : avertissement</td></tr>
+  <tr><td>CMDB et modèle</td><td><code>--cmdb</code></td><td>écarts : avertissement</td></tr>
+  <tr><td>Exigences</td><td><code>--requirements</code></td><td>une exigence absente du modèle, qui n'a que des candidats (sans relation de traçabilité) ou dont l'identifiant correspond mais le contenu diffère : avertissement ; avec <code>--code</code>, une exigence sans code ou sans tests : information</td></tr>
+</table>
+<h3>Résultat</h3>
+<ul>
+  <li><b>Rapport :</b> du Markdown sur la sortie standard. Il commence par le résultat, PASSED ou FAILED, et le nombre de groupes d'erreurs et d'avertissements, suivi d'une section pour chaque partie.</li>
+  <li><b>JUnit :</b> une suite de tests par partie et un cas de test par groupe de constats. Les groupes dont la gravité atteint ou dépasse <code>--fail-on</code> sont des échecs : le pipeline les affiche comme des tests en échec.</li>
+  <li><b>Code de sortie :</b> <code>0</code> réussi ; <code>1</code> constats à partir de <code>--fail-on</code> ; <code>2</code> arguments erronés, modèle illisible ou fichier impossible à écrire (la cause va sur la sortie d'erreur).</li>
+</ul>
+<div class="note"><b>Un programme à fenêtre dans PowerShell.</b> <code>LoonarCompass.exe</code> est un programme à fenêtre : PowerShell ne l'attend donc pas. Redirigez sa sortie, par exemple <code>… | Out-Host</code> : PowerShell attend alors, affiche le rapport et définit <code>$LASTEXITCODE</code>. Le mot de passe d'un modèle PostgreSQL provient de la variable d'environnement <code>LOONAR_DB_PASSWORD</code> (une variable secrète du pipeline) et a priorité sur le Gestionnaire d'identification.</div>
+<h3>GitLab CI</h3>
+<p>Un job sur un runner Windows (PowerShell) où Loonar Compass est installé pour tous les utilisateurs. Le job exécute le contrôle et publie <code>junit.xml</code> comme rapport de tests :</p>
+<pre>compass-check:
+  tags: [windows]
+  script:
+    - '&amp; "C:\Program Files\Loonar Compass\LoonarCompass.exe" --check --model model\shop.qea --rules governance.json --code src --junit junit.xml --report report.md | Out-Host'
+    - 'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }'
+  artifacts:
+    when: always
+    paths: [report.md]
+    reports:
+      junit: junit.xml</pre>
+<h3>GitHub Actions</h3>
+<p>Un job sur un runner Windows auto-hébergé où Loonar Compass est installé pour tous les utilisateurs. Le job exécute le contrôle et téléverse <code>junit.xml</code> et le rapport comme artefact, qu'une étape de rapport JUnit de votre choix peut afficher comme résultats de tests :</p>
+<pre>jobs:
+  compass-check:
+    runs-on: [self-hosted, windows]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Model check
+        shell: pwsh
+        run: |
+          &amp; "C:\Program Files\Loonar Compass\LoonarCompass.exe" --check --model model\shop.qea --rules governance.json --code src --junit junit.xml --report report.md | Out-Host
+          exit $LASTEXITCODE
+      - name: Publish the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-check
+          path: |
+            junit.xml
+            report.md</pre>
+<p>Pour un modèle PostgreSQL, indiquez à <code>--model</code> un <code>app.properties</code> sans mots de passe et définissez <code>LOONAR_DB_PASSWORD</code> : dans GitLab comme variable CI/CD masquée, dans GitHub à partir d'un secret (<code>env: LOONAR_DB_PASSWORD: ${{ secrets.EA_DB_PASSWORD }}</code>).</p>
+
+<h2 id="s24">24. Licence, marques et contact</h2>
 <p><b>Licence.</b> Loonar Compass est un logiciel gratuit (freeware) : l'utilisation est gratuite, y compris à titre professionnel et commercial, sans limite de durée ni de territoire ; la modification de l'application est interdite. La licence contient aussi des règles concernant les résultats de l'IA, les données et les composants open source. Le texte intégral se trouve dans la vue <b>À propos</b> et dans le fichier <code>LICENSE.txt</code> du dossier d'installation ; seule la version polonaise de la licence fait foi. La liste des fonctionnalités et des limitations connues de cette version se trouve dans la vue <b>Nouveautés</b>.</p>
 <p><b>Confidentialité et mentions légales.</b> Politique de confidentialité : <a href="https://loonar.eu/fr/privacy/">https://loonar.eu/fr/privacy/</a>. Mentions légales : <a href="https://loonar.eu/fr/legal/">https://loonar.eu/fr/legal/</a>.</p>
 <p><b>Composants open source.</b> L'application contient des bibliothèques et des polices open source ; chacune conserve sa propre licence. Leur liste se trouve dans le fichier <code>THIRD-PARTY-NOTICES.txt</code> du dossier d'installation ; dans la vue <b>À propos</b>, le bouton <b>Afficher les licences des composants</b> ouvre ce fichier.</p>
 <p><b>Soutien.</b> Si l'application vous est utile, vous pouvez soutenir son développement par une contribution volontaire : vue <b>Soutenir le projet</b> ou <a href="https://suppi.pl/loonar">https://suppi.pl/loonar</a>.</p>
 <p><b>Contact.</b> Propriétaire de l'application : Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard. E-mail : mariusz@loonar.eu, site : <a href="https://loonar.eu">https://loonar.eu</a>, code source : <a href="https://github.com/loonar-eu/loonar-compass">https://github.com/loonar-eu/loonar-compass</a>. Le plus simple pour signaler un bug est d'utiliser la vue <b>Signaler un bug</b>.</p>
-<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.8.1. Sparx Systems et Enterprise Architect sont des marques déposées de Sparx Systems Pty Ltd. Claude et Anthropic sont des marques d'Anthropic, PBC. OpenAI et GPT sont des marques d'OpenAI. Atlassian, Confluence et Jira sont des marques d'Atlassian. Microsoft, Windows, Word et Excel sont des marques du groupe Microsoft. PostgreSQL est une marque déposée de la PostgreSQL Community Association. Loonar Compass est un produit indépendant, sans lien avec ces sociétés, qui ne l'approuvent ni ne le parrainent.</p>
+<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.8.2. Sparx Systems et Enterprise Architect sont des marques déposées de Sparx Systems Pty Ltd. Claude et Anthropic sont des marques d'Anthropic, PBC. OpenAI et GPT sont des marques d'OpenAI. Atlassian, Confluence et Jira sont des marques d'Atlassian. Microsoft, Windows, Word, Excel, Azure DevOps et GitHub sont des marques du groupe Microsoft. GitLab est une marque de GitLab Inc., ServiceNow de ServiceNow, Inc. et Docker de Docker, Inc. PostgreSQL est une marque déposée de la PostgreSQL Community Association. Loonar Compass est un produit indépendant, sans lien avec ces sociétés, qui ne l'approuvent ni ne le parrainent.</p>
 
 </body>
 </html>

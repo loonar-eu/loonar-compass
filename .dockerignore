@@ -5,3 +5,5 @@
 !hub/Cargo.toml
 !hub/Cargo.lock
 !hub/src/
+!hub/THIRD-PARTY-NOTICES-linux.txt
+!LICENSE.en.txt
