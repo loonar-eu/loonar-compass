@@ -254,11 +254,14 @@ pub fn sql_query(sql: &str, limit: usize) -> Result<(Vec<String>, Vec<Vec<Option
     let ea_pid: u32 = ROT_NAME.get().and_then(|n| n.rsplit('.').next()).and_then(|p| p.parse().ok()).unwrap_or(0);
     let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let caught = std::sync::Arc::new(std::sync::Mutex::new(None::<String>));
+    // Only a box that appears while the query runs: a dialog the user already has open is left alone.
+    let pids: Vec<u32> = if ea_pid != 0 { vec![ea_pid] } else { ea_pids() };
+    let existing: std::collections::HashSet<isize> = pids.iter().flat_map(|p| close_error_box(*p, None)).filter_map(|(w, _)| (w != 0).then_some(w)).collect();
     let watcher = {
         let (done, caught) = (done.clone(), caught.clone());
         std::thread::spawn(move || {
             while !done.load(std::sync::atomic::Ordering::Relaxed) {
-                let found = if ea_pid != 0 { close_error_box(ea_pid) } else { ea_pids().into_iter().find_map(close_error_box) };
+                let found = pids.iter().find_map(|p| close_error_box(*p, Some(&existing)).into_iter().next().map(|(_, text)| text));
                 if let Some(text) = found {
                     *caught.lock().unwrap_or_else(|p| p.into_inner()) = Some(text);
                 }
@@ -275,8 +278,9 @@ pub fn sql_query(sql: &str, limit: usize) -> Result<(Vec<String>, Vec<Vec<Option
     Ok(parse_sql_xml(&xml?, limit))
 }
 
-/// Closes a message box of the given EA process that reports a database/SQL error; returns its text.
-fn close_error_box(ea_pid: u32) -> Option<String> {
+/// Message boxes of the given EA process. With `skip` (the boxes open before the query): closes the first new one that
+/// reports a database/SQL error and returns it; without: only lists the open boxes (window, text).
+fn close_error_box(ea_pid: u32, skip: Option<&std::collections::HashSet<isize>>) -> Vec<(isize, String)> {
     #[link(name = "user32")]
     extern "system" {
         fn EnumWindows(callback: extern "system" fn(isize, isize) -> i32, param: isize) -> i32;
@@ -323,21 +327,24 @@ fn close_error_box(ea_pid: u32) -> Option<String> {
         1
     }
     if ea_pid == 0 {
-        return None;
+        return Vec::new();
     }
     let mut search = Search { pid: ea_pid, found: Vec::new() };
     // SAFETY: the callback only uses the Search passed in, which outlives the call.
     unsafe { EnumWindows(top, &mut search as *mut Search as isize) };
-    for window in search.found {
+    let Some(skip) = skip else {
+        return search.found.into_iter().map(|w| (w, String::new())).collect();
+    };
+    for window in search.found.into_iter().filter(|w| !skip.contains(w)) {
         let mut text = String::new();
         unsafe { EnumChildWindows(window, child, &mut text as *mut String as isize) };
         if text.contains("SQL") || text.contains("Database API") || text.contains("XML") || text.contains("Error processing") {
-            // IDOK on the box's own OK button.
+            // IDOK on the box's own OK button (EA's error box has only this button).
             unsafe { PostMessageW(window, 0x0111, 1, 0) };
-            return Some(text);
+            return vec![(window, text)];
         }
     }
-    None
+    Vec::new()
 }
 
 /// EA's SQLQuery result: `<EADATA><Dataset_0><Data><Row><col>value</col>…</Row>…`. Columns in the order of the
@@ -514,7 +521,7 @@ pub fn file_open_in_window(cfg: &crate::config::AppConfig) -> bool {
 
 /// Process ids of the running EA instances (outside a tab of EA the window's process is not known in advance).
 fn ea_pids() -> Vec<u32> {
-    std::process::Command::new("tasklist")
+    std::process::Command::new(crate::config::system_program("tasklist.exe"))
         .args(["/FI", "IMAGENAME eq EA.exe", "/FO", "CSV", "/NH"])
         .creation_flags_hidden()
         .output()
@@ -529,7 +536,7 @@ pub fn file_or_db_open_in_window(cfg: &crate::config::AppConfig) -> bool {
 
 /// Whether any visible Enterprise Architect main window exists.
 fn ea_window_exists() -> bool {
-    std::process::Command::new("tasklist")
+    std::process::Command::new(crate::config::system_program("tasklist.exe"))
         .args(["/FI", "IMAGENAME eq EA.exe", "/NH"])
         .creation_flags_hidden()
         .output()
@@ -685,7 +692,7 @@ mod error_box_probe {
         let pid: u32 = std::env::var("LOONAR_TEST_EA_PID").unwrap().parse().unwrap();
         let mut text = None;
         for _ in 0..200 {
-            text = super::close_error_box(pid);
+            text = super::close_error_box(pid, Some(&std::collections::HashSet::new())).into_iter().next().map(|(_, t)| t);
             if text.is_some() {
                 break;
             }

@@ -19,11 +19,7 @@ pub struct Connection {
 
 /// The Jira address must use HTTPS (the token travels with every request); plain HTTP only for a server on this computer.
 pub fn check_base_url(url: &str) -> Result<()> {
-    let url = url.trim().to_ascii_lowercase();
-    let local = ["http://localhost", "http://127.0.0.1", "http://[::1]"]
-        .iter()
-        .any(|p| url.starts_with(p) && matches!(url.as_bytes().get(p.len()), None | Some(b'/') | Some(b':')));
-    if !url.starts_with("https://") && !local {
+    if crate::config::check_service_url(url).is_err() {
         bail!("{}", crate::i18n::tr("The Jira address must start with https://"));
     }
     Ok(())
@@ -99,7 +95,7 @@ impl Connection {
 
     fn client(&self) -> Result<reqwest::blocking::Client> {
         check_base_url(&self.base_url)?;
-        reqwest::blocking::Client::builder().timeout(Duration::from_secs(60)).build().context(crate::i18n::tr("HTTP client"))
+        reqwest::blocking::Client::builder().redirect(crate::config::same_origin_redirects()).timeout(Duration::from_secs(60)).build().context(crate::i18n::tr("HTTP client"))
     }
 
     fn url(&self, path: &str) -> String {

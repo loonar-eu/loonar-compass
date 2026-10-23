@@ -154,7 +154,7 @@ try {
 
     if (-not $SkipApp) {
         'Building the application (release)...'
-        Invoke-Cargo $root @('build', '--release')
+        Invoke-Cargo $root @('build', '--release', '--locked')
     }
     $app = Join-Path $root 'target\release\loonar-compass.exe'
     if (-not (Test-Path $app)) { throw "missing $app" }
@@ -184,7 +184,7 @@ try {
     }
 
     'Building the installer...'
-    Invoke-Cargo (Join-Path $root 'installer') @('build', '--release')
+    Invoke-Cargo (Join-Path $root 'installer') @('build', '--release', '--locked')
 
     $dist = Join-Path $root 'dist'
     New-Item -ItemType Directory -Force $dist | Out-Null

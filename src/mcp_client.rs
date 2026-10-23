@@ -50,6 +50,11 @@ fn expand(text: &str) -> Result<String> {
         let end = after.find('}').ok_or_else(|| anyhow!("{}", crate::i18n::fmt("unclosed ${…} in {0}", &[text.to_string()])))?;
         let inner = &after[..end];
         let value = if let Some(name) = inner.strip_prefix("secret:") {
+            // Compass's own keys and passwords never go to an MCP server.
+            let base = name.trim().split(':').next().unwrap_or("").to_ascii_lowercase();
+            if crate::config::secrets::ALL.iter().any(|s| s.eq_ignore_ascii_case(&base)) {
+                bail!("{}", crate::i18n::fmt("the secret {0} belongs to Compass and cannot be given to an MCP server; save the server's token under another name", &[name.trim().to_string()]));
+            }
             crate::config::secrets::get(name.trim()).with_context(|| crate::i18n::fmt("no secret {0} in Credential Manager", &[name.to_string()]))?
         } else if let Some(name) = inner.strip_prefix("env:") {
             std::env::var(name.trim()).with_context(|| crate::i18n::fmt("no environment variable {0}", &[name.to_string()]))?
@@ -138,6 +143,15 @@ impl Connection {
             for a in &config.args {
                 cmd.arg(expand(a)?);
             }
+            // The server gets the basic Windows environment and its own variables, not everything Compass has.
+            cmd.env_clear();
+            for name in ["SystemRoot", "SystemDrive", "windir", "ComSpec", "PATH", "PATHEXT", "TEMP", "TMP", "USERPROFILE", "USERNAME", "USERDOMAIN", "HOMEDRIVE", "HOMEPATH",
+                "APPDATA", "LOCALAPPDATA", "ProgramData", "ProgramFiles", "ProgramFiles(x86)", "CommonProgramFiles", "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE",
+                "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy", "NODE_EXTRA_CA_CERTS", "JAVA_HOME"] {
+                if let Some(value) = std::env::var_os(name) {
+                    cmd.env(name, value);
+                }
+            }
             for (k, v) in &config.env {
                 cmd.env(k, expand(v)?);
             }
@@ -162,7 +176,7 @@ impl Connection {
             Transport::Stdio { child, stdin, lines }
         } else {
             let headers = config.headers.iter().map(|(k, v)| Ok((k.clone(), expand(v)?))).collect::<Result<Vec<_>>>()?;
-            let client = reqwest::blocking::Client::builder().timeout(TIMEOUT).build()?;
+            let client = reqwest::blocking::Client::builder().timeout(TIMEOUT).redirect(crate::config::same_origin_redirects()).build()?;
             Transport::Http { client, url: config.url.clone().unwrap_or_default(), headers, session: None }
         };
         let mut conn = Connection { config: config.clone(), transport, next_id: 0, tools: Vec::new() };
@@ -355,10 +369,11 @@ fn split(base_dir: &Path, name: &str) -> Result<(ServerConfig, String)> {
 }
 
 /// Whether a call needs the user's consent: a server not marked trusted and a tool not declared read-only.
+/// Every call asks unless the user marked the server "trusted": the server's own claim that a tool only reads is not
+/// enough (a "read-only" tool can still send what it gets somewhere else).
 pub fn needs_consent(base_dir: &Path, name: &str) -> Result<(bool, String, String)> {
     let (server, tool) = split(base_dir, name)?;
-    let read_only = with_connection(&server, |c| Ok(c.tools.iter().any(|t| t["name"] == tool.as_str() && t["annotations"]["readOnlyHint"] == true)))?;
-    Ok((!server.trusted && !read_only, server.name, tool))
+    Ok((!server.trusted, server.name, tool))
 }
 
 /// Calls the tool; the text content of the result (images and other content are described in one line each).
@@ -460,7 +475,7 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
         assert_eq!(names, ["mcp__local__echo", "mcp__local__create_ticket"]);
         assert!(defs[0]["description"].as_str().unwrap().contains("read-only"));
         assert_eq!(call(&dir, "mcp__local__echo", &json!({ "text": "hello" })).unwrap(), "echo: hello");
-        assert!(!needs_consent(&dir, "mcp__local__echo").unwrap().0, "read-only tools do not ask");
+        assert!(needs_consent(&dir, "mcp__local__echo").unwrap().0, "a read-only tool of a server that is not trusted asks too");
         assert!(needs_consent(&dir, "mcp__local__create_ticket").unwrap().0, "other tools ask");
         assert_eq!(call(&dir, "mcp__local__create_ticket", &json!({ "title": "Fix model" })).unwrap(), "ticket T-1 created: Fix model");
         assert!(check(&dir).unwrap().contains("local: 2"));
@@ -498,7 +513,7 @@ mod hub_tests {
         let (defs, errors) = definitions(&dir);
         assert!(errors.is_empty(), "{errors:?}");
         assert_eq!(defs.len(), 7, "the hub's seven tools");
-        assert!(!needs_consent(&dir, "mcp__hub__search_elements").unwrap().0, "read-only hub tools do not ask");
+        assert!(needs_consent(&dir, "mcp__hub__search_elements").unwrap().0, "a server that is not trusted asks, even for read-only tools");
         let sources = call(&dir, "mcp__hub__list_sources", &json!({})).unwrap();
         assert!(sources.contains("shop-db") && sources.contains("shop-file"), "{sources}");
         for source in ["shop-db", "shop-file"] {

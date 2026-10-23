@@ -513,6 +513,17 @@ fn privacy_url() -> &'static str {
 }
 
 fn main() -> eframe::Result {
+    // DLLs loaded at run time (graphics drivers, WebView2) only from the program's folder and System32: never from the
+    // current folder (e.g. the folder of a model opened in EA) or from PATH.
+    {
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn SetDefaultDllDirectories(flags: u32) -> i32;
+        }
+        const LOAD_LIBRARY_SEARCH_DEFAULT_DIRS: u32 = 0x0000_1000;
+        // SAFETY: a plain Win32 call with a constant flag.
+        unsafe { SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS) };
+    }
     window::install_panic_hook(config::APP_NAME, "loonar-compass-crash.log");
     // System DPI awareness: in per-monitor mode the windowing library resizes the window on every move between
     // monitors with different scaling. LOONAR_DPI=per_monitor keeps the library's default (development only).
@@ -2908,7 +2919,7 @@ impl App {
         ui.add_space(12.0);
         settings_group(ui, crate::i18n::tr("MCP servers"), inner_width * 2.0 + 44.0, |ui| {
             ui.add(egui::Label::new(
-                egui::RichText::new(crate::i18n::tr("Your own MCP servers give the assistant extra tools (e.g. a ticket system, a repository, a company knowledge base, a Compass Hub). A local program: \"command\" and \"args\"; a server over HTTP: \"url\" and \"headers\". Tokens can come from Credential Manager or the environment: ${secret:name}, ${env:NAME}. A tool that is not read-only asks for your consent before each call, unless the server has \"trusted\": true."))
+                egui::RichText::new(crate::i18n::tr("Your own MCP servers give the assistant extra tools (e.g. a ticket system, a repository, a company knowledge base, a Compass Hub). A local program: \"command\" and \"args\"; a server over HTTP: \"url\" and \"headers\". Tokens can come from Credential Manager or the environment: ${secret:name}, ${env:NAME}. Every tool call asks for your consent, unless the server has \"trusted\": true (set it only for servers you trust). Compass's own keys and passwords cannot be used in ${secret:…}."))
                 .color(theme::MUTED),
             ).wrap());
             ui.add_space(6.0);
