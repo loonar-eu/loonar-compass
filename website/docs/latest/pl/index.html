@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https://loonar.goatcounter.com/count; connect-src https://loonar.goatcounter.com/count; style-src 'self'; script-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<title>Instrukcja użytkownika 0.8 – Loonar Compass</title>
-<meta name="description" content="Instrukcja użytkownika Loonar Compass 0.8, asystenta AI do Sparx Enterprise Architect.">
+<title>Instrukcja użytkownika 0.8.1 – Loonar Compass</title>
+<meta name="description" content="Instrukcja użytkownika Loonar Compass 0.8.1, asystenta AI do Sparx Enterprise Architect.">
 <link rel="canonical" href="https://loonar.eu/docs/latest/pl/">
 <link rel="alternate" hreflang="en" href="https://loonar.eu/docs/latest/en/">
 <link rel="alternate" hreflang="pl" href="https://loonar.eu/docs/latest/pl/">
@@ -17,7 +17,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Loonar Compass">
 <meta property="og:title" content="Instrukcja użytkownika – Loonar Compass">
-<meta property="og:description" content="Instrukcja użytkownika Loonar Compass 0.8, asystenta AI do Sparx Enterprise Architect.">
+<meta property="og:description" content="Instrukcja użytkownika Loonar Compass 0.8.1, asystenta AI do Sparx Enterprise Architect.">
 <meta property="og:url" content="https://loonar.eu/docs/latest/pl/">
 <meta property="og:image" content="https://loonar.eu/assets/img/og-image.png">
 <meta property="og:image:width" content="1200">
@@ -51,10 +51,10 @@
     <aside class="docs-side" aria-label="Dokumentacja">
       <p class="docs-kicker">Dokumentacja · Loonar Compass</p>
       <nav class="docs-tabs"><a href="index.html" aria-current="page">Instrukcja użytkownika</a><a href="install.html">Instalacja</a></nav>
-      <details class="docs-ver"><summary>Wersja: 0.8 (najnowsza)</summary><ul><li><a href="../../0.8/pl/" aria-current="page">0.8 (najnowsza)</a></li><li><a href="../../0.7/pl/">0.7</a></li><li><a href="../../0.6/pl/">0.6</a></li><li><a href="../../0.5/pl/">0.5</a></li><li><a href="../../0.4/pl/">0.4</a></li><li><a href="../../0.3/pl/">0.3</a></li></ul></details>
+      <details class="docs-ver"><summary>Wersja: 0.8.1 (najnowsza)</summary><ul><li><a href="../../0.8.1/pl/" aria-current="page">0.8.1 (najnowsza)</a></li><li><a href="../../0.7/pl/">0.7</a></li><li><a href="../../0.6/pl/">0.6</a></li><li><a href="../../0.5/pl/">0.5</a></li><li><a href="../../0.4/pl/">0.4</a></li><li><a href="../../0.3/pl/">0.3</a></li></ul></details>
       <p class="docs-toc-h">Na tej stronie</p>
       <ol class="docs-toc"><li><a href="#s1">1. Czym jest Loonar Compass</a></li><li class="docs-toc-other"><a href="install.html#s2">2. Wymagania <span aria-hidden="true">↗</span></a></li><li class="docs-toc-other"><a href="install.html#s3">3. Instalacja <span aria-hidden="true">↗</span></a></li><li><a href="#s4">4. Okno aplikacji i nawigacja</a></li><li><a href="#s5">5. Ustawienia i język</a></li><li><a href="#s6">6. Rozmowa z asystentem</a></li><li><a href="#s7">7. Praca z modelem Enterprise Architect</a></li><li><a href="#s8">8. Przykłady użycia</a></li><li><a href="#s9">9. Współpraca z otwartym oknem EA</a></li><li><a href="#s10">10. Compass w Enterprise Architect</a></li><li><a href="#s11">11. Edytor diagramów</a></li><li><a href="#s12">12. Wysyłanie diagramów do Miro</a></li><li><a href="#s13">13. Dokumenty: Word, Excel, obrazki PNG, Confluence</a></li><li><a href="#s14">14. Szablony dokumentów</a></li><li><a href="#s15">15. Pamięć asystenta</a></li><li><a href="#s16">16. Zatwierdzanie zmian i dziennik zmian</a></li><li><a href="#s17">17. Rozmowy: historia, wyszukiwanie, praca w tle</a></li><li><a href="#s18">18. Dane, bezpieczeństwo i prywatność</a></li><li><a href="#s19">19. Rozwiązywanie problemów</a></li><li><a href="#s20">20. Zgłaszanie błędów i nowe wydania</a></li><li class="docs-toc-other"><a href="install.html#s21">21. Aktualizacja i odinstalowanie <span aria-hidden="true">↗</span></a></li><li><a href="#s22">22. Compass Hub (usługa zespołowa)</a></li><li><a href="#s23">23. Licencja, znaki towarowe i kontakt</a></li></ol>
-      <p class="docs-pdf"><a href="../../0.8/pl/Instrukcja_uzytkownika.pdf" download>Pobierz jako PDF (cała instrukcja)</a></p>
+      <p class="docs-pdf"><a href="../../0.8.1/pl/Instrukcja_uzytkownika.pdf" download>Pobierz jako PDF (cała instrukcja)</a></p>
     </aside>
     <article class="docs-body">
       
@@ -286,17 +286,20 @@
 <h3>Sprawdzenie zapisu</h3>
 <p>Po każdym zapisie Compass czyta model jeszcze raz i porównuje go z prośbą: czy utworzone obiekty istnieją, czy nowe relacje mają wskazane końce, czy nowe elementy są we wskazanym pakiecie, czy zmienione nazwy, opisy, stereotypy i tagged values mają nowe wartości oraz czy usunięte obiekty zniknęły. Różnice trafiają do asystenta, który ma o nich powiedzieć, a nie napisać „gotowe”.</p>
 <p>Zapis jest <b>wszystko albo nic</b>: jeśli nie uda się w połowie, obiekty, które już powstały, są usuwane. Usunięcie elementu, który ma relacje, zawsze wymaga Twojej zgody (także w trybie <b>auto</b>), a lista tych relacji jest pokazana w panelu zgody.</p>
+<p><b>Zawsze z pytaniem i pełnymi danymi.</b> Zapis plików (eksport XMI, dokumenty z szablonów dokumentów EA) i import XMI zawsze wymagają Twojej zgody, także w trybie <b>auto</b>, a panel pokazuje pełną ścieżkę. Przyjmowane są tylko pełne ścieżki na dysku lokalnym: udziały sieciowe oraz foldery systemowe, programów i danych aplikacji są odrzucane. Identyfikator musi być liczbą. Zapis ustalenia w pamięci asystenta, zapis szablonu dokumentu oraz zapis i uruchomienie skryptu EA też zawsze wymagają zgody, a panel pokazuje cały tekst albo kod (teksty dłuższe niż 20 000 znaków są odrzucane); skrypt działa dokładnie tak, jak go pokazano, razem z dołączeniami <code>!INC</code>. Gdy asystent chce przeczytać plik, który nie jest załącznikiem rozmowy (dokument wymagań, folder z kodem), najpierw pyta.</p>
 <h3>Własne serwery MCP</h3>
 <p>Własne serwery MCP dają asystentowi dodatkowe narzędzia, na przykład system zgłoszeń, repozytorium albo firmową bazę wiedzy. Serwery wpisujesz w pliku <code>mcp_servers.json</code> obok pliku ustawień, a sprawdzasz w karcie <b>Serwery MCP</b>. Serwer może być programem lokalnym (<code>command</code> i <code>args</code>, komunikacja przez stdio) albo usługą HTTP (<code>url</code> i <code>headers</code>, Streamable HTTP):</p>
 <pre>{"servers":[{"name":"hub","url":"http://127.0.0.1:8730/mcp","headers":{"Authorization":"Bearer ${secret:hub_token}"}},
  {"name":"files","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem","C:/docs"]}]}</pre>
 <ul>
   <li><code>${secret:nazwa}</code> to wpis w Menedżerze poświadczeń Windows, a <code>${env:NAZWA}</code> to zmienna środowiska; dzięki temu tokeny nie leżą w pliku.</li>
-  <li>Narzędzie, które nie jest tylko do odczytu, pyta o Twoją zgodę przed każdym wywołaniem, chyba że serwer ma <code>"trusted": true</code>.</li>
+  <li>Każde wywołanie narzędzia pyta o Twoją zgodę, chyba że serwer ma <code>"trusted": true</code>. Ustawiaj to tylko dla serwerów, którym ufasz: to, że serwer sam deklaruje narzędzie jako tylko do odczytu, nie wystarcza.</li>
+  <li>Własnych kluczy i haseł Compassa (klucze dostawców AI, hasła i tokeny bazy, EA, Confluence, Jiry i Miro) nie można użyć w <code>${secret:…}</code>. Jedyny wyjątek to <code>${secret:hub_token}</code> w nagłówkach własnego punktu MCP huba zespołu (adres huba z Ustawień ze ścieżką <code>/mcp</code>), jak w przykładzie powyżej. Tokeny innych serwerów zapisz pod ich własnymi nazwami w Menedżerze poświadczeń Windows.</li>
+  <li>Program lokalny (<code>command</code>) dostaje tylko podstawowe zmienne środowiska Windows (PATH, TEMP, foldery profilu użytkownika, ustawienia proxy…) i zmienne wymienione w jego <code>"env"</code>.</li>
   <li>Przycisk <b>Zapisz i sprawdź serwery MCP</b> łączy się z każdym serwerem i pokazuje liczbę jego narzędzi.</li>
 </ul>
 <h3>Skrypty EA</h3>
-<p>Asystent pokazuje grupy skryptów i skrypty modelu, czyta skrypt, zapisuje skrypt (JScript, VBScript albo JavaScript; brakująca grupa powstaje sama) i go uruchamia. Zapis skryptu zatwierdzasz jak każdy zapis, a <b>uruchomienie skryptu wymaga zgody za każdym razem</b>, bo skrypt może zmienić w modelu wszystko. Skrypt działa w otwartym oknie EA albo, gdy go nie ma, w osobnej sesji EA działającej w tle. <code>Repository</code> i <code>Session.Output</code> działają jak w EA, a dołączenia <code>!INC Grupa.Skrypt</code> są rozwiązywane z modelu. Jeśli w EA jest otwarty inny model, uruchomienie kończy się komunikatem.</p>
+<p>Asystent pokazuje grupy skryptów i skrypty modelu, czyta skrypt, zapisuje skrypt (JScript, VBScript albo JavaScript; brakująca grupa powstaje sama) i go uruchamia. <b>Zapis i uruchomienie skryptu wymagają zgody za każdym razem</b>, także w trybie <b>auto</b>, bo skrypt może zmienić w modelu wszystko; panel zgody pokazuje cały kod. Skrypt działa w otwartym oknie EA albo, gdy go nie ma, w osobnej sesji EA działającej w tle. <code>Repository</code> i <code>Session.Output</code> działają jak w EA, a dołączenia <code>!INC Grupa.Skrypt</code> są rozwiązywane z modelu. Jeśli w EA jest otwarty inny model, uruchomienie kończy się komunikatem.</p>
 <div class="prompt">Pokaż skrypty w modelu, a potem uruchom skrypt „Raport.Brakujące opisy”.</div>
 <h3>Dalsze operacje na modelu</h3>
 <ul>
@@ -366,13 +369,13 @@
 <div class="prompt">Porównaj wymagania z dokumentu C:\Dokumenty\BRD.docx z modelem: co jest pokryte, a czego brakuje?</div>
 <div class="prompt">Porównaj wymagania ze strony Confluence 123456 z modelem i zapisz macierz śledzenia do Excela.</div>
 <div class="prompt">Utwórz relacje śledzenia dla pokrytych wymagań.</div>
-<p><b>Co zobaczysz:</b> podsumowanie „Śledzenie wymagań: … wymagań – pokryte …, tylko kandydaci …, NIEPOKRYTE …, zgodne ID przy innej treści …” i listę wymagań z jednym z czterech statusów: <b>pokryte</b>, <b>kandydaci</b>, <b>NIEPOKRYTE</b> albo <b>ZGODNE ID, INNA TREŚĆ</b>. Osobna lista to „Elementy modelu, do których nie odnosi się żadne wymaganie”. Asystent wskazuje też wymagania sprzeczne z modelem. Macierz w Excelu dostajesz jako kartę pliku z przyciskami <b>Otwórz</b> i <b>Zapisz jako…</b>. Relacje śledzenia (Realisation albo Dependency «trace») powstają dopiero po Twojej zgodzie, w zwykłym panelu zatwierdzania.</p>
+<p><b>Co zobaczysz:</b> przy pliku, który nie jest załącznikiem rozmowy, najpierw pytanie, czy asystent może go przeczytać; potem podsumowanie „Śledzenie wymagań: … wymagań – pokryte …, tylko kandydaci …, NIEPOKRYTE …, zgodne ID przy innej treści …” i listę wymagań z jednym z czterech statusów: <b>pokryte</b>, <b>kandydaci</b>, <b>NIEPOKRYTE</b> albo <b>ZGODNE ID, INNA TREŚĆ</b>. Osobna lista to „Elementy modelu, do których nie odnosi się żadne wymaganie”. Asystent wskazuje też wymagania sprzeczne z modelem. Macierz w Excelu dostajesz jako kartę pliku z przyciskami <b>Otwórz</b> i <b>Zapisz jako…</b>. Relacje śledzenia (Realisation albo Dependency «trace») powstają dopiero po Twojej zgodzie, w zwykłym panelu zatwierdzania.</p>
 <p><b>Wskazówka:</b> stronę Confluence można czytać po uzupełnieniu karty <b>Confluence</b> w Ustawieniach (rozdział 5). Dopasowanie jest najpewniejsze, gdy identyfikator wymagania wpisano w nazwę, alias, notatkę albo tagged value elementu; bez niego zostają tylko kandydaci. Zakres możesz zawęzić do pakietu: „…z pakietem Shop domain”.</p>
 
 <h3>8.6 Model a kod</h3>
 <p>Asystent czyta folder z kodem (na przykład lokalny klon repozytorium) tylko do odczytu i porównuje go z modelem: klasy, interfejsy, enumy i rekordy z polami (Java, Kotlin, C#, TypeScript, Rust, Python), tabele i kolumny z SQL (<code>CREATE TABLE</code>) oraz operacje API (<code>operationId</code> z OpenAPI) z klasami, atrybutami, tabelami i operacjami w modelu.</p>
 <div class="prompt">Porównaj model z kodem w folderze C:\repo\sklep – czego brakuje w modelu, a czego w kodzie?</div>
-<p><b>Co zobaczysz:</b> podsumowanie „Model ↔ kod: plików źródłowych …” i sekcje: <b>W kodzie, brak w modelu</b>, <b>W modelu, brak w kodzie</b>, <b>Różne pola (kod vs atrybuty modelu)</b>, <b>Tabele bazy danych</b> oraz <b>Operacje API (OpenAPI operationId) bez odpowiednika w modelu</b>. Okno zgody się nie pojawia, bo nic nie jest zapisywane: ani w kodzie, ani w modelu.</p>
+<p><b>Co zobaczysz:</b> najpierw pytanie, czy asystent może przeczytać folder, potem podsumowanie „Model ↔ kod: plików źródłowych …” i sekcje: <b>W kodzie, brak w modelu</b>, <b>W modelu, brak w kodzie</b>, <b>Różne pola (kod vs atrybuty modelu)</b>, <b>Tabele bazy danych</b> oraz <b>Operacje API (OpenAPI operationId) bez odpowiednika w modelu</b>. Zgoda na zapis nie jest potrzebna, bo nic nie jest zapisywane: ani w kodzie, ani w modelu.</p>
 <p><b>Wskazówka:</b> ogranicz porównanie do jednego pakietu („…z pakietem Shop domain”), jeśli folder zawiera wiele usług, i poproś o raport w Excelu. Uzupełnienie modelu o brakujące klasy to osobna prośba, która przejdzie przez zwykłe zatwierdzanie.</p>
 
 <h3>8.7 Wycena zmiany</h3>
@@ -383,12 +386,12 @@
 <p><b>Wskazówka:</b> to punkt wyjścia z modelu, a nie oferta: skoryguj godziny wiedzą zespołu. Normy godzinowe są w pliku <code>estimate.json</code> obok pliku ustawień; gdy go nie ma, działają normy domyślne.</p>
 
 <h3>8.8 Dokumenty i eksporty</h3>
-<p>Asystent przygotowuje dokumenty Word z treści modelu i diagramów (rozdział 13). Enterprise Architect generuje też raport z własnego szablonu dokumentów EA (DOCX, PDF albo RTF) i eksportuje pakiety do XMI. Raport i eksport XMI przechodzą przez zatwierdzanie jak zapis do modelu.</p>
+<p>Asystent przygotowuje dokumenty Word z treści modelu i diagramów (rozdział 13). Enterprise Architect generuje też raport z własnego szablonu dokumentów EA (DOCX, PDF albo RTF) i eksportuje pakiety do XMI. Raport i eksport XMI zawsze wymagają Twojej zgody, także w trybie <b>auto</b>.</p>
 <div class="prompt">Przygotuj dokument Word z opisem pakietu Shop domain z diagramem Domain model.</div>
 <div class="prompt">Wygeneruj raport z szablonu EA Model Report dla pakietu Shop domain do pliku C:\Raporty\sklep.docx.</div>
 <div class="prompt">Wyeksportuj pakiet Shop domain do pliku XMI C:\Eksport\shop.xml.</div>
-<p><b>Co zobaczysz:</b> dla dokumentu Word kartę pliku z przyciskami <b>Otwórz</b> i <b>Zapisz jako…</b>. Dla raportu i XMI panel zgody z opisem („dokumenty z szablonów EA”, „pakiety wyeksportowane do XMI”), a po zapisie komunikat „zapisano raport: …” albo „zapisano XMI: …” ze ścieżką; Compass sprawdza, czy plik powstał.</p>
-<p><b>Wskazówka:</b> raport musi mieć rozszerzenie <code>.docx</code>, <code>.pdf</code> albo <code>.rtf</code>, a plik XMI <code>.xml</code> albo <code>.xmi</code>. Szablon o podanej nazwie musi istnieć w EA; gdy go nie ma, EA nie utworzy raportu i asystent to zgłosi.</p>
+<p><b>Co zobaczysz:</b> dla dokumentu Word kartę pliku z przyciskami <b>Otwórz</b> i <b>Zapisz jako…</b>. Dla raportu i XMI panel zgody z opisem („dokumenty z szablonów EA”, „pakiety wyeksportowane do XMI”) i pełną ścieżką pliku, a po zapisie komunikat „zapisano raport: …” albo „zapisano XMI: …” ze ścieżką; Compass sprawdza, czy plik powstał.</p>
+<p><b>Wskazówka:</b> raport musi mieć rozszerzenie <code>.docx</code>, <code>.pdf</code> albo <code>.rtf</code>, a plik XMI <code>.xml</code> albo <code>.xmi</code>. Podaj pełną ścieżkę na dysku lokalnym: udziały sieciowe oraz foldery systemowe, programów i danych aplikacji są odrzucane. Szablon o podanej nazwie musi istnieć w EA; gdy go nie ma, EA nie utworzy raportu i asystent to zgłosi.</p>
 
 <h3>8.9 Diagramy</h3>
 <p>Poza rysowaniem nowych diagramów asystent poprawia istniejące: układa je automatycznie (w dół, w prawo, w górę albo w lewo, z podanym odstępem), dodaje tory (swimlanes) i tworzy dokumenty powiązane (linked documents) elementów z podanego tekstu.</p>
@@ -401,7 +404,7 @@
 <h3>8.10 Skrypty EA</h3>
 <p>Asystent pisze skrypty EA (JScript, VBScript albo JavaScript) i uruchamia je w modelu: wypisują dane, sprawdzają coś albo zmieniają wiele obiektów naraz. Brakująca grupa skryptów powstaje sama. Skrypt działa w otwartym oknie EA, a gdy go nie ma, w osobnej sesji EA w tle.</p>
 <div class="prompt">Utwórz i uruchom skrypt EA w JScript, który wypisze nazwy wszystkich pakietów modelu.</div>
-<p><b>Co zobaczysz:</b> najpierw panel zgody na zapis skryptu (grupa, nazwa, język, liczba linii), potem osobne pytanie o zgodę na uruchomienie: pojawia się za każdym razem, także w trybie <b>auto</b>, bo skrypt może zmienić w modelu wszystko. Wynik (to, co skrypt wypisał przez <code>Session.Output</code>) trafia na czat jako „Wynik skryptu …”. Jeśli w EA jest otwarty inny model, uruchomienie kończy się komunikatem.</p>
+<p><b>Co zobaczysz:</b> najpierw panel zgody na zapis skryptu (grupa, nazwa, język i cały kod), potem osobne pytanie o zgodę na uruchomienie: oba pojawiają się za każdym razem, także w trybie <b>auto</b>, bo skrypt może zmienić w modelu wszystko. Skrypt działa dokładnie tak, jak go pokazano, razem z dołączeniami <code>!INC</code>. Wynik (to, co skrypt wypisał przez <code>Session.Output</code>) trafia na czat jako „Wynik skryptu …”. Jeśli w EA jest otwarty inny model, uruchomienie kończy się komunikatem.</p>
 <p><b>Wskazówka:</b> zanim zatwierdzisz uruchomienie, przeczytaj kod skryptu w oknie zgody, zwłaszcza gdy skrypt ma coś zmieniać. Na początek pisz skrypty tylko do odczytu.</p>
 
 <h3>8.11 Jira i Confluence</h3>
@@ -412,18 +415,18 @@
 <p><b>Wskazówka:</b> podawaj klucz zgłoszenia i nazwę pakietu. Gdy nie wskażesz projektu, nowe zgłoszenie powstaje w projekcie domyślnym z karty Jira.</p>
 
 <h3>8.12 Praca zespołowa (Compass Hub)</h3>
-<p>Z hubem zespołu (rozdział 22; karta <b>Zespół (Compass Hub)</b> w Ustawieniach) zmianę w modelu możesz najpierw <b>zaproponować</b> zespołowi: asystent niczego nie zapisuje w modelu, tylko wysyła do huba zestaw zmian z opisem i podglądem „przed → po”. Zespół komentuje go w widoku webowym, a architekt albo administrator zatwierdza lub odrzuca. Autor nie może zatwierdzić własnego zestawu zmian. Zatwierdzony zestaw wprowadzasz w Compassie.</p>
+<p>Z hubem zespołu (rozdział 22; karta <b>Zespół (Compass Hub)</b> w Ustawieniach) zmianę w modelu możesz najpierw <b>zaproponować</b> zespołowi: asystent niczego nie zapisuje w modelu, tylko wysyła do huba zestaw zmian z opisem i podglądem „przed → po”. Zespół komentuje go w widoku webowym, a architekt albo administrator zatwierdza lub odrzuca. Nikt, nawet administrator, nie może zatwierdzić własnego zestawu zmian. Zatwierdzony zestaw wprowadzasz w Compassie.</p>
 <div class="prompt">Zaproponuj zespołowi zmianę do przeglądu: dodaj klasę Warehouse do pakietu Shop domain.</div>
 <div class="prompt">Pokaż zatwierdzone zestawy zmian i wprowadź CH-…</div>
-<p><b>Co zobaczysz:</b> po propozycji komunikat „Zestaw zmian dla zespołu: …” z numerem (CH-…), a w widoku webowym huba nowy wiersz w zakładce <b>Change sets</b>. Przy wprowadzaniu: zwykły panel zatwierdzania i sprawdzenie po zapisie; hub oznacza zestaw jako wprowadzony. Wprowadzić można tylko zestaw zatwierdzony i dotyczący tego modelu.</p>
-<p><b>Widok webowy.</b> Osoby bez Enterprise Architect logują się w nim tokenem (adres <code>http://&lt;hub&gt;/</code>). Zakładki mają angielskie nazwy: <b>Ask</b> (pytania do modelu), <b>Search</b> (wyszukiwanie elementów), <b>Model check</b> (kontrola modelu według reguł zespołu), <b>Gaps</b> (luki as-is / to-be), <b>Audit trail</b> (zespołowy dziennik zmian), <b>Team notes</b> (wspólne notatki) i <b>Change sets</b> (propozycje zmian z komentarzami i decyzją). W zakładce <b>Ask</b> wpisujesz pytanie własnymi słowami, na przykład „Które systemy korzystają z bramki płatności?”. Asystent tylko czyta model, odpowiada na jedno pytanie naraz (pytanie ma najwyżej 2000 znaków), a pytania trafiają do dziennika huba.</p>
+<p><b>Co zobaczysz:</b> po propozycji komunikat „Zestaw zmian dla zespołu: …” z numerem (CH-…), a w widoku webowym huba nowy wiersz w zakładce <b>Change sets</b>. Przy wprowadzaniu: zwykły panel zatwierdzania i sprawdzenie po zapisie; hub oznacza zestaw jako wprowadzony. Wprowadzić można tylko zestaw zatwierdzony i dotyczący tego modelu, i tylko raz: Compass najpierw rezerwuje go w hubie, a po zapisie zgłasza wynik.</p>
+<p><b>Widok webowy.</b> Osoby bez Enterprise Architect logują się w nim tokenem (adres <code>https://&lt;hub&gt;/</code>; <code>http://</code> tylko na tym samym komputerze). Zakładki mają angielskie nazwy: <b>Ask</b> (pytania do modelu), <b>Search</b> (wyszukiwanie elementów), <b>Model check</b> (kontrola modelu według reguł zespołu), <b>Gaps</b> (luki as-is / to-be), <b>Audit trail</b> (zespołowy dziennik zmian), <b>Team notes</b> (wspólne notatki) i <b>Change sets</b> (propozycje zmian z komentarzami i decyzją). W zakładce <b>Ask</b> wpisujesz pytanie własnymi słowami, na przykład „Które systemy korzystają z bramki płatności?”. Asystent w tym miejscu tylko czyta model: nie ma dostępu do plików, Jiry, Confluence ani serwerów MCP i nie może niczego zaproponować ani zapisać. Odpowiada na jedno pytanie naraz (pytanie ma najwyżej 2000 znaków), a pytania trafiają do dziennika huba.</p>
 <p><b>Wskazówka:</b> nadaj propozycji tytuł, z którego recenzent pozna zakres zmiany bez otwierania szczegółów. Zestaw zmian jest przypisany do modelu: wprowadzisz go tylko w Compassie połączonym z tym samym modelem huba.</p>
 
 <h3>8.13 Dodatkowe narzędzia z serwerów MCP</h3>
 <p>Własne serwery MCP dają asystentowi dodatkowe narzędzia: system zgłoszeń, repozytorium, bazę wiedzy albo serwer MCP samego huba. Serwery wpisujesz w pliku <code>mcp_servers.json</code> (rozdział 7) i sprawdzasz w Ustawieniach, w karcie <b>Serwery MCP</b>, przyciskiem <b>Zapisz i sprawdź serwery MCP</b>.</p>
 <div class="prompt">Przez serwer MCP hub wypisz źródła modeli zespołu.</div>
-<p><b>Co zobaczysz:</b> w karcie kroków wywołanie narzędzia serwera, a potem jego wynik w odpowiedzi. Narzędzie, które nie jest tylko do odczytu, pyta o Twoją zgodę przed każdym wywołaniem, chyba że serwer ma <code>"trusted": true</code>.</p>
-<p><b>Wskazówka:</b> w poleceniu podaj nazwę serwera z pliku <code>mcp_servers.json</code> („przez serwer MCP hub…”), żeby asystent wiedział, którego użyć. Tokeny trzymaj w Menedżerze poświadczeń Windows (<code>${secret:nazwa}</code>), nie w pliku.</p>
+<p><b>Co zobaczysz:</b> w karcie kroków wywołanie narzędzia serwera, a potem jego wynik w odpowiedzi. Każde wywołanie narzędzia pyta o Twoją zgodę, chyba że serwer ma <code>"trusted": true</code>; ustawiaj to tylko dla serwerów, którym ufasz.</p>
+<p><b>Wskazówka:</b> w poleceniu podaj nazwę serwera z pliku <code>mcp_servers.json</code> („przez serwer MCP hub…”), żeby asystent wiedział, którego użyć. Tokeny trzymaj w Menedżerze poświadczeń Windows pod ich własnymi nazwami (<code>${secret:nazwa}</code>), nie w pliku; własnych kluczy i haseł Compassa nie można tam użyć (rozdział 7).</p>
 
 <h3>8.14 Compass w Enterprise Architect</h3>
 <p>Gdy Compass jest zadokowany w EA (rozdział 10), pilnuje modelu w trakcie Twojej pracy i nie wymaga żadnego polecenia. Wyniki trafiają do zakładki <b>Loonar Compass</b> okna <b>System Output</b>:</p>
@@ -435,7 +438,7 @@
 <p>Przykładowa reguła, która po utworzeniu komponentu sprawdza właściciela i opis:</p>
 <pre>{"agents":[{"name":"Component owner","event":"element_created","applies_to":"Component",
   "prompt":"Check that the new component has an owner and a description; suggest what to fill in."}]}</pre>
-<p><b>Co zobaczysz:</b> w System Output linię w rodzaju „🤖 Component owner: …” z uwagami asystenta. Agent <b>sam nie zmienia modelu</b>, a ten sam agent reaguje na ten sam obiekt najwyżej raz na minutę. Nowy element jest sprawdzany dopiero po pierwszej edycji, bo EA nadaje mu najpierw nazwę Class1.</p>
+<p><b>Co zobaczysz:</b> w System Output linię w rodzaju „🤖 Component owner: …” z uwagami asystenta. Agent <b>tylko czyta model</b>: nie ma dostępu do plików, Jiry, Confluence ani serwerów MCP i nie może niczego zaproponować ani zapisać. Ten sam agent reaguje na ten sam obiekt najwyżej raz na minutę. Nowy element jest sprawdzany dopiero po pierwszej edycji, bo EA nadaje mu najpierw nazwę Class1.</p>
 <p><b>Wskazówka:</b> pisz krótkie, konkretne polecenia agentów i zawężaj je przez <code>applies_to</code> (typ, «stereotyp» albo <code>*</code>). Po zmianie pliku kliknij <b>Zapisz agentów zdarzeń</b>.</p>
 
 <h3>Wskazówki do dobrych poleceń</h3>
@@ -491,7 +494,7 @@
   "prompt":"Check that the new component has an owner and a description; suggest what to fill in."}]}</pre>
 <ul>
   <li>Zdarzenia (<code>event</code>): <code>element_created</code>, <code>element_changed</code>, <code>connector_created</code>, <code>diagram_created</code>. W <code>applies_to</code> podajesz typ elementu, «stereotyp» albo <code>*</code> (działają symbole <code>*</code> i <code>?</code>).</li>
-  <li>Agenci działają, gdy Compass jest otwarty w swojej zakładce w EA. Asystent czyta model i odpowiada w zakładce <b>Loonar Compass</b> okna System Output (linie zaczynają się od 🤖). <b>Sam nie zmienia modelu.</b></li>
+  <li>Agenci działają, gdy Compass jest otwarty w swojej zakładce w EA. Asystent czyta model i odpowiada w zakładce <b>Loonar Compass</b> okna System Output (linie zaczynają się od 🤖). <b>Tylko czyta model:</b> nie ma dostępu do plików, Jiry, Confluence ani serwerów MCP i nie może niczego zaproponować ani zapisać.</li>
   <li>Ten sam agent reaguje na ten sam obiekt najwyżej raz na minutę.</li>
   <li>Przycisk <b>Zapisz agentów zdarzeń</b> zapisuje reguły i podaje liczbę agentów.</li>
 </ul>
@@ -607,14 +610,14 @@
 <h3>Własne szablony</h3>
 <p>Szablony to pliki Markdown (<code>.md</code>) ze wskazówkami dla asystenta. Pierwszy wiersz w postaci <code>&gt; Szablon: opis</code> jest opisem widocznym na liście, a kolejne wiersze zaczynające się od <code>&gt;</code> to wskazówki dla asystenta. Możesz zmieniać istniejące szablony, dodawać własne pliki do folderu szablonów albo poprosić asystenta, żeby zrobił szablon z przykładowego dokumentu:</p>
 <div class="prompt">Zrób szablon z załączonego dokumentu: zachowaj układ sekcji i dopisz, co w każdej powinno się znaleźć.</div>
-<p>Nadpisanie istniejącego szablonu przez asystenta przechodzi przez zatwierdzanie tak jak zmiany w modelu (tryby <b>ask</b> i <b>plan</b>, rozdział 16).</p>
+<p>Zapis szablonu przez asystenta zawsze wymaga Twojej zgody, także w trybie <b>auto</b>, a panel zgody pokazuje cały tekst szablonu (rozdział 16).</p>
 <h2 id="s15">15. Pamięć asystenta</h2>
 <p>Asystent pamięta ustalenia między rozmowami: konwencje modelowania, Twoje preferencje i poprawki oraz fakty o projektach i modelu. Zna je w każdej nowej rozmowie. Ustalenie na ten sam temat aktualizuje, zamiast dublować, a nieaktualne usuwa. Haseł, kluczy ani innych sekretów nie zapamiętuje.</p>
 <p>Ustalenia asystent zapisuje sam, gdy uzna, że przydadzą się w kolejnych rozmowach, i mówi o tym jednym zdaniem. Możesz też poprosić o to wprost, zaczynając od „zapamiętaj…”:</p>
 <div class="prompt">Zapamiętaj: wymagania numerujemy FR01, FR02… i trzymamy w pakiecie „Wymagania”.</div>
 <div class="prompt">Zapamiętaj, że na diagramach BPMN zadania systemowe kolorujemy na zielono.</div>
 <p>Ustalenia są wspólne dla wszystkich modeli. Jeśli chcesz, żeby ustalenie dotyczyło tylko jednego modelu, powiedz to wprost, na przykład „zapamiętaj to tylko dla tego modelu”: wtedy asystent korzysta z niego wyłącznie w rozmowach z tym modelem, a widok „Pamięć asystenta” oznacza je znacznikiem „Tylko dla modelu …”.</p>
-<p>Zapis ustalenia w pamięci (i jego usunięcie przez asystenta) przechodzi przez zatwierdzanie tak jak zmiany w modelu: w trybach <b>ask</b> i <b>plan</b> panel zgody pokazuje nazwę i początek treści notatki (rozdział 16). Zapis ustalenia nie przerywa pracy asystenta nad bieżącym zadaniem. Ustalenia dotyczące modelu mogą być nieaktualne, dlatego przed zapisem do modelu asystent sprawdza je w bazie. Pełna treść pamięci trafia do modelu AI w każdym zapytaniu (rozdział 18).</p>
+<p>Zapis ustalenia w pamięci (i jego usunięcie przez asystenta) zawsze wymaga Twojej zgody, w każdym trybie, a panel zgody pokazuje nazwę i całą treść notatki (rozdział 16). Zapis ustalenia nie przerywa pracy asystenta nad bieżącym zadaniem. Ustalenia dotyczące modelu mogą być nieaktualne, dlatego przed zapisem do modelu asystent sprawdza je w bazie. Pełna treść pamięci trafia do modelu AI w każdym zapytaniu (rozdział 18).</p>
 <h3>Widok „Pamięć asystenta”</h3>
 <ul>
   <li>Lista ustaleń z datą.</li>
@@ -622,17 +625,18 @@
   <li><b>Otwórz folder pamięci</b> otwiera folder <code>memory</code> w Eksploratorze. Ustalenia są w nim plikami Markdown, a spis jest w pliku <code>MEMORY.md</code>.</li>
 </ul>
 <h2 id="s16">16. Zatwierdzanie zmian i dziennik zmian</h2>
-<p>Tryb ustawiasz w widoku <b>Ustawienia</b>, w karcie „Język i zatwierdzanie zmian”. Decyduje on, czy i kiedy aplikacja zapyta o zgodę przed zapisem do EA, do pamięci asystenta i przed nadpisaniem szablonu. Odczyt modelu i pokazywanie diagramów nigdy nie wymagają zgody. Bieżący tryb widać też w karcie wiadomości.</p>
+<p>Tryb ustawiasz w widoku <b>Ustawienia</b>, w karcie „Język i zatwierdzanie zmian”. Decyduje on, czy i kiedy aplikacja zapyta o zgodę przed zapisem do EA (zapis do pamięci asystenta i zapis szablonu zawsze wymagają zgody). Odczyt modelu i pokazywanie diagramów nigdy nie wymagają zgody. Bieżący tryb widać też w karcie wiadomości.</p>
 <table>
   <tr><th>Tryb</th><th>Kiedy pyta o zgodę</th><th>Dla kogo</th></tr>
   <tr><td><b>ask</b></td><td>Przed każdym zapisem</td><td>Praca na ważnym modelu; pełna kontrola</td></tr>
   <tr><td><b>plan</b></td><td>Raz, przed pierwszym zapisem w danej odpowiedzi asystenta; kolejne zapisy tej odpowiedzi idą bez pytania. Wyjątek: usuwanie obiektów, przenoszenie ich do innego pakietu i kopiowanie pakietów zawsze wymagają osobnej zgody.</td><td>Większe zadania, gdy pierwszy zapis pokazuje kierunek</td></tr>
-  <tr><td><b>auto</b></td><td>Nigdy (wyjątek: publikacja w Confluence)</td><td>Model testowy albo praca, którą łatwo cofnąć</td></tr>
+  <tr><td><b>auto</b></td><td>Tylko przy działaniach, które zawsze wymagają zgody (poniżej)</td><td>Model testowy albo praca, którą łatwo cofnąć</td></tr>
 </table>
 <p>Gdy potrzebna jest zgoda, nad kartą wiadomości pojawia się panel <b>„Asystent chce zapisać zmiany w modelu”</b> z opisem zmian i przyciskami <b>Zatwierdź</b> oraz <b>Odrzuć</b>. Opis podaje, ile pakietów, diagramów, elementów i połączeń powstanie albo się zmieni, nazwy nowych pakietów i diagramów, a przy usuwaniu, przenoszeniu i kopiowaniu także osobne wiersze z nazwami tych obiektów (USUNIĘCIE, PRZENIESIENIE, KOPIOWANIE). Ten sam panel pyta o zgodę na zapis ustalenia w pamięci, nadpisanie szablonu i publikację w Confluence. Odrzucony zapis niczego nie zmienia, a asystent dostaje informację o odrzuceniu i może zaproponować coś innego.</p>
 <figure><img src="../img/approval.png" alt="Panel zatwierdzania nad kartą wiadomości: opis zapisu do modelu EA z przyciskami Zatwierdź i Odrzuć"><figcaption>Panel zgody na zapis zmian w modelu</figcaption></figure>
 <p>Opis zmian w panelu zgody ma część <b>„Przed → po:”</b>: co powstaje (utworzone obiekty), co zmienia się z jakiej wartości na jaką (pole: stara → nowa wartość) i co jest usuwane. Dzięki temu widzisz skutek zapisu, zanim klikniesz <b>Zatwierdź</b>.</p>
 <p><b>Usuwanie elementu z relacjami.</b> Usunięcie elementu, który ma relacje, zawsze wymaga Twojej zgody, także w trybie <b>auto</b>. Panel zgody wymienia te relacje.</p>
+<p><b>Zawsze, w każdym trybie,</b> Compass pyta też przed: publikacją w Confluence, cofnięciem zapisów, utworzeniem zgłoszeń, komentarzy i linków w Jirze, zapisem plików (eksport XMI, dokumenty z szablonów EA) i importem XMI, zapisem ustalenia w pamięci albo szablonu dokumentu, zapisem lub uruchomieniem skryptu EA, wywołaniem narzędzia serwera MCP, który nie jest zaufany, oraz przeczytaniem pliku, który nie jest załącznikiem rozmowy (rozdział 7).</p>
 <h3>Dziennik zmian</h3>
 <p>Każdy zapis asystenta do modelu EA, także nieudany, trafia do dziennika zmian (plik <code>audit_log.jsonl</code> w folderze danych). Nie ma w nim zapisów odrzuconych przez Ciebie ani operacji, których aplikacja nie dopuściła do zapisu; dziennik nie obejmuje też pamięci, szablonów ani publikacji w Confluence.</p>
 <p>Widok <b>Dziennik zmian</b> (ikona „Dziennik zmian w modelu”) pokazuje 200 ostatnich zapisów, od najnowszych: wynik (OK albo BŁĄD), czas, konto EA i bazę, opis zmian oraz treść błędu. Przycisk <b>Eksportuj do Excela</b> zapisuje cały dziennik jako arkusz XLSX (kolumny: Czas, Wynik, Konto EA, Baza, Tryb, Zmiany, Utworzone, Błąd), na przykład do przeglądu zmian w zespole. Przycisk <b>Otwórz plik dziennika</b> otwiera plik dziennika w Notatniku.</p>
@@ -682,7 +686,7 @@
   <li>Bazę asystent czyta w sesji tylko do odczytu, a plik modelu otwiera tylko do odczytu: wyłącznie zapytaniami SELECT i WITH, z limitem czasu zapytania i bez funkcji serwera, które czytają pliki albo wpływają na inne sesje. Wszystkie zmiany idą przez Enterprise Architect, na koncie EA modelu (z karty Model albo z modelu rozmowy), więc obowiązują je uprawnienia i blokady tego konta. Compass w EA czyta i zapisuje model przez okno EA, w którym jest otwarty, na koncie, na którym zalogowałeś się w EA.</li>
   <li>Treść załączników, dokumentów, stron i modelu asystent traktuje jako dane, a nie jako polecenia: nie wykonuje znalezionych tam instrukcji i nie wysyła danych w miejsca, które ta treść wskazuje.</li>
   <li>W Confluence asystent działa z uprawnieniami tokena z karty „Confluence” i publikuje tylko po Twoim zatwierdzeniu.</li>
-  <li>Asystent nie ma dostępu do plików na dysku poza tymi, które sam mu załączysz, oraz poza swoimi folderami pamięci i szablonów. Obrazki rysowane przez asystenta nie mogą wczytać plików z dysku ani z sieci.</li>
+  <li>Asystent nie ma dostępu do plików na dysku poza tymi, które sam mu załączysz, oraz poza swoimi folderami pamięci i szablonów; każdy inny plik (dokument wymagań, folder z kodem) czyta dopiero po zapytaniu Cię o zgodę. Obrazki rysowane przez asystenta nie mogą wczytać plików z dysku ani z sieci.</li>
   <li>Login i hasło z ciągu połączenia otwartego okna EA nigdy nie trafiają do modelu językowego.</li>
 </ul>
 <h3>Połączenia i szyfrowanie</h3>
@@ -754,21 +758,23 @@
  "users":[
   {"name":"anna","token":"&lt;at least 16 random characters&gt;","role":"admin"},
   {"name":"bob","token":"...","role":"architect"},
-  {"name":"carol","token":"...","role":"viewer"}],
- "policy":{"min_approval":"ask",
+  {"name":"carol","token_sha256":"&lt;SHA-256 of the token&gt;","role":"viewer"}],
+ "policy":{"min_approval":"ask","ask_min_role":"viewer","ask_per_hour":20,
   "governance":{ ... governance.json ... }}}</pre>
 <ul>
   <li><b>sources</b>: modele zespołu. <code>properties</code> to plik <code>app.properties</code> danego modelu (w tym samym formacie co plik ustawień Compassa), ścieżka względem <code>hub.json</code>.</li>
-  <li><b>users</b>: użytkownicy z tokenem (co najmniej 16 losowych znaków) i rolą.</li>
-  <li><b>policy</b>: <code>min_approval</code> (ask, plan lub auto) i <code>governance</code> w formacie <code>governance.json</code>.</li>
+  <li><b>users</b>: użytkownicy z tokenem (co najmniej 16 losowych znaków) i rolą. Zamiast <code>token</code> użytkownik może mieć <code>token_sha256</code>, czyli skrót SHA-256 tokenu; wtedy samego tokenu nie ma w pliku. <code>LoonarCompass.exe --hub-token</code> wypisuje nowy losowy token i jego skrót. Nazwy i tokeny muszą być unikalne.</li>
+  <li><b>policy</b>: <code>min_approval</code> (ask, plan lub auto), <code>ask_min_role</code> (kto może korzystać z <b>Ask</b> w widoku webowym; domyślnie viewer), <code>ask_per_hour</code> (pytania na użytkownika i godzinę; domyślnie 20) i <code>governance</code> w formacie <code>governance.json</code>.</li>
 </ul>
 <table>
   <tr><th>Rola</th><th>Uprawnienia</th></tr>
   <tr><td>viewer</td><td>Odczyt: widok webowy, REST, MCP</td></tr>
   <tr><td>architect</td><td>To, co viewer, oraz wysyłanie wpisów do dziennika i edycja notatek zespołu</td></tr>
-  <tr><td>admin</td><td>To, co architect, oraz zmiana polityki (<code>PUT /api/policy</code>, zapisywana w <code>hub.json</code>)</td></tr>
+  <tr><td>admin</td><td>To, co architect, oraz zmiana polityki (<code>PUT /api/policy</code>, zapisywana w <code>hub.json</code>) i zwolnienie zestawu zmian, który został w stanie „wprowadzany”, bo Compass przestał działać: po sprawdzeniu modelu <b>Not applied – free it</b> (nie wprowadzono, zwolnij) albo <b>It is in the model – mark applied</b> (jest w modelu, oznacz jako wprowadzony)</td></tr>
 </table>
-<p><b>Widok webowy.</b> Pod adresem <code>http://&lt;hub&gt;/</code> logujesz się tokenem. Widok pokazuje drzewo pakietów, wyszukiwanie, szczegóły elementu z analizą wpływu, kontrolę modelu według reguł zespołu, luki, dziennik zmian i notatki zespołu.</p>
+<p>Nikt, nawet admin, nie zatwierdza własnego zestawu zmian. Zestaw zmian jest wprowadzany w dwóch krokach: jeden Compass go rezerwuje, a po zapisie zgłasza wynik, więc nie da się go wprowadzić dwa razy.</p>
+<p><b>Widok webowy.</b> Pod adresem <code>https://&lt;hub&gt;/</code> (<code>http://</code> tylko na tym samym komputerze) logujesz się tokenem. Widok pokazuje drzewo pakietów, wyszukiwanie, szczegóły elementu z analizą wpływu, kontrolę modelu według reguł zespołu, luki, dziennik zmian, notatki zespołu i zestawy zmian. W zakładce <b>Ask</b> asystent odpowiada na pytania o model. Tylko czyta model: nie ma dostępu do plików, Jiry, Confluence ani serwerów MCP i nie może niczego zaproponować ani zapisać; odpowiada na jedno pytanie naraz.</p>
+<p><b>Bezpieczeństwo huba.</b> Hub komunikuje się zwykłym HTTP. Do dostępu z innych komputerów postaw go za reverse proxy z HTTPS (na przykład IIS albo nginx) i podawaj ludziom adres <code>https://</code>. Chroń plik <code>hub.json</code> uprawnieniami do plików. Zapytania mają ograniczony rozmiar i czas. Po 20 błędnych tokenach z jednego adresu ten adres jest odrzucany przez 10 minut; poprawny token nadal działa. Błędy wewnętrzne są pokazywane tylko jako identyfikator, a szczegóły są w <code>hub.log</code>. Widok webowy trzyma token tylko na czas sesji przeglądarki i ma przycisk <b>Sign out</b> (wyloguj).</p>
 <p><b>Serwer MCP</b> (tylko odczyt) działa jako JSON-RPC przez HTTP POST pod adresem <code>/mcp</code>, z nagłówkiem <code>Authorization: Bearer &lt;token&gt;</code>. Narzędzia: <code>list_sources</code>, <code>list_packages</code>, <code>search_elements</code>, <code>element_details</code>, <code>impact_analysis</code>, <code>model_lint</code>, <code>gap_analysis</code>.</p>
 <h2 id="s23">23. Licencja, znaki towarowe i kontakt</h2>
 <p><b>Licencja.</b> Loonar Compass jest oprogramowaniem typu freeware. W skrócie:</p>
@@ -786,7 +792,7 @@
 <p><b>Znaki towarowe.</b> Sparx Systems i Enterprise Architect są zarejestrowanymi znakami towarowymi Sparx Systems Pty Ltd. Claude i Anthropic są znakami towarowymi Anthropic, PBC. OpenAI i GPT są znakami towarowymi OpenAI. Atlassian, Confluence i Jira są znakami towarowymi Atlassian. Microsoft, Windows, Word i Excel są znakami towarowymi grupy Microsoft. PostgreSQL jest zarejestrowanym znakiem towarowym PostgreSQL Community Association. Loonar Compass jest niezależnym produktem, niepowiązanym z tymi firmami, nieautoryzowanym ani niesponsorowanym przez nie.</p>
 <p><b>Właściciel i kontakt.</b> Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard.<br>E-mail: mariusz@loonar.eu, strona: <a href="https://loonar.eu">https://loonar.eu</a> (z pytaniami i odpowiedziami). Błędy najwygodniej zgłaszać przez widok <b>Zgłoś błąd</b> (rozdział 20). Problemy z bezpieczeństwem zgłaszaj prywatnie e-mailem na mariusz@loonar.eu, z tematem „Security: Loonar Compass”, a nie w publicznym zgłoszeniu na GitHubie.</p>
 <p><b>Wsparcie projektu.</b> Rozwój aplikacji możesz dobrowolnie wesprzeć na <a href="https://suppi.pl/loonar">https://suppi.pl/loonar</a> (widok <b>Wesprzyj projekt</b>, rozdział 4).</p>
-<p>Loonar Compass 0.8 &middot; © 2026 Loonar Mariusz Głowacki. Wszelkie prawa zastrzeżone.</p>
+<p>Loonar Compass 0.8.1 &middot; © 2026 Loonar Mariusz Głowacki. Wszelkie prawa zastrzeżone.</p>
     </article>
   </div>
 </main>

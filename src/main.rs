@@ -28,6 +28,7 @@ mod jira;
 mod hub;
 mod verify;
 mod mcp_client;
+mod net;
 mod scripts;
 mod agents;
 mod model_spell;
@@ -2916,7 +2917,7 @@ impl App {
         ui.add_space(12.0);
         settings_group(ui, crate::i18n::tr("MCP servers"), inner_width * 2.0 + 44.0, |ui| {
             ui.add(egui::Label::new(
-                egui::RichText::new(crate::i18n::tr("Your own MCP servers give the assistant extra tools (e.g. a ticket system, a repository, a company knowledge base, a Compass Hub). A local program: \"command\" and \"args\"; a server over HTTP: \"url\" and \"headers\". Tokens can come from Credential Manager or the environment: ${secret:name}, ${env:NAME}. Every tool call asks for your consent, unless the server has \"trusted\": true (set it only for servers you trust). Compass's own keys and passwords cannot be used in ${secret:…}."))
+                egui::RichText::new(crate::i18n::tr("Your own MCP servers give the assistant extra tools (e.g. a ticket system, a repository, a company knowledge base, a Compass Hub). A local program: \"command\" and \"args\"; a server over HTTP: \"url\" and \"headers\". Tokens can come from Credential Manager or the environment: ${secret:name}, ${env:NAME}. Every tool call asks for your consent, unless the server has \"trusted\": true (set it only for servers you trust). Compass's own keys and passwords cannot be used in ${secret:…} (except ${secret:hub_token} for the team hub's own /mcp address)."))
                 .color(theme::MUTED),
             ).wrap());
             ui.add_space(6.0);

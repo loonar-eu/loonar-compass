@@ -1013,7 +1013,7 @@ impl Client {
 
     fn call(&self, method: reqwest::Method, path: &str, body: Option<&Value>) -> Result<Value> {
         crate::jira::check_base_url(&self.url).map_err(|_| anyhow!("{}", crate::i18n::tr("The hub address must start with https:// (http:// only on this computer)")))?;
-        let client = reqwest::blocking::Client::builder().redirect(crate::config::same_origin_redirects()).timeout(Duration::from_secs(20)).build()?;
+        let client = reqwest::blocking::Client::builder().redirect(crate::net::same_origin_redirects()).timeout(Duration::from_secs(20)).build()?;
         let mut request = client.request(method, format!("{}{path}", self.url)).bearer_auth(&self.token);
         if let Some(body) = body {
             request = request.json(body);
@@ -1308,7 +1308,7 @@ mod ask_tests {
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
         let base = format!("http://{}", rx.recv().unwrap());
-        let http = reqwest::blocking::Client::builder().redirect(crate::config::same_origin_redirects()).timeout(Duration::from_secs(300)).build().unwrap();
+        let http = reqwest::blocking::Client::builder().redirect(crate::net::same_origin_redirects()).timeout(Duration::from_secs(300)).build().unwrap();
         for (source, sql) in [("db", LOONAR_DB_CLASSES), ("file", LOONAR_DB_CLASSES)] {
             let props = std::env::var(if source == "db" { "LOONAR_HUB_DB_PROPS" } else { "LOONAR_HUB_FILE_PROPS" }).unwrap();
             let classes = crate::tools::query_rows(&AppConfig::load(Path::new(&props)).unwrap(), sql).unwrap()[0][0].clone();

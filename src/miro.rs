@@ -432,7 +432,7 @@ impl Client {
         if token.is_empty() {
             bail!("{}", crate::i18n::tr("no Miro access token in the settings"));
         }
-        let http = reqwest::blocking::Client::builder().redirect(crate::config::same_origin_redirects())
+        let http = reqwest::blocking::Client::builder().redirect(crate::net::same_origin_redirects())
             .timeout(Duration::from_secs(60))
             .connect_timeout(Duration::from_secs(20))
             .build()

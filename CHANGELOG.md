@@ -2,6 +2,43 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
+## Wersja 0.8.1 (2026-10-23)
+
+Wydanie poprawek bezpieczeństwa po audycie całej aplikacji. Zalecane dla wszystkich, a szczególnie dla zespołów z Compass Hub. Kilka czynności pyta teraz o zgodę częściej niż wcześniej – to celowe.
+
+### Compass Hub
+
+- **Odporność:** źle zbudowane żądanie nie zatrzymuje już huba; żądania mają limity rozmiaru, liczby nagłówków i czasu, a token jest sprawdzany przed odczytem treści.
+- **Tokeny:** w hub.json zamiast "token" można podać "token_sha256" (skrót tokenu); `LoonarCompass.exe --hub-token` tworzy nowy losowy token i jego skrót. Nazwy i tokeny muszą być unikalne. Po 20 błędnych tokenach adres jest blokowany na 10 minut (poprawny token działa dalej).
+- **Zestawy zmian:** opis i podgląd, które widzi recenzent, hub liczy sam z operacji, a widok webowy pokazuje operacje. Nikt, także admin, nie zatwierdza własnego zestawu. Wprowadzenie ma dwa kroki (przejęcie przez jeden Compass, potem wynik), więc zestawu nie da się wprowadzić dwa razy. Admin może zwolnić zestaw, który utknął.
+- **Ask:** asystent w widoku webowym tylko czyta model (bez plików, Jira, Confluence i serwerów MCP), odpowiada na jedno pytanie naraz, z limitem czasu. Nowe ustawienia polityki: "ask_min_role" (kto może pytać) i "ask_per_hour" (domyślnie 20 pytań na osobę na godzinę).
+- **Widok webowy:** nagłówki Content-Security-Policy i ochrona przed osadzaniem w ramce. Token jest pamiętany tylko na czas sesji przeglądarki; jest przycisk „Sign out”. Błędy wewnętrzne są pokazywane jako identyfikator, a szczegóły trafiają do hub.log.
+- **Dziennik zmian:** przyjmuje tylko znane pola z czasem huba. Dane stanowisk widzi tylko admin.
+
+### Zgody i zapisy w modelu
+
+- **Pliki:** eksport XMI, dokumenty z szablonów EA i import XMI zawsze pytają o zgodę (także w trybie auto) i pokazują pełną ścieżkę. Dozwolone są tylko pełne ścieżki na dysku lokalnym, bez udziałów sieciowych i folderów systemowych.
+- **Usuwanie:** id podane jako tekst albo ułamek nie omija już pytania przy usuwaniu elementu z relacjami. Usunięcie pakietu zawsze pyta.
+- **Pamięć, szablony i skrypty:** zapis notatki w pamięci, zapis szablonu dokumentu oraz zapis i uruchomienie skryptu EA zawsze pytają, z całym tekstem lub kodem. Skrypt uruchamia się dokładnie w pokazanej postaci, razem z dołączeniami.
+- **Odczyt plików:** zanim asystent przeczyta plik spoza załączników rozmowy (dokument wymagań, folder z kodem), pyta o zgodę.
+- **Zapytania SQL:** asystent może tylko czytać – zapytania ze słowami zapisu (INSERT, UPDATE, DELETE, INTO…) i nietypowym cytowaniem są odrzucane, także przy odczycie przez okno EA.
+- **Agenci zdarzeń:** tylko czytają model. Nazwy obiektów trafiają do polecenia jako dane, nie jako instrukcje.
+- **Cofanie:** dziennik cofania jest sprawdzany przed wykonaniem, a zgoda pokazuje, co zostanie usunięte.
+
+### Serwery MCP i połączenia
+
+- **Zgoda MCP:** każde wywołanie narzędzia MCP pyta o zgodę, chyba że serwer ma "trusted": true. Sama deklaracja serwera „tylko odczyt” już nie wystarcza.
+- **Sekrety:** klucze i hasła samego Compassa nie mogą trafić do serwera MCP przez ${secret:…}. Wyjątek: ${secret:hub_token} dla punktu /mcp huba z ustawień. Program lokalny MCP dostaje tylko podstawowe zmienne środowiska oraz te z "env".
+- **Przekierowania i adresy:** przekierowania HTTP tylko w obrębie tego samego serwera (klucze API nie trafiają gdzie indziej). Adres http:// jest dozwolony tylko dla tego komputera, bez nazwy użytkownika i hasła w adresie.
+
+### Pozostałe
+
+- **Edytor diagramów:** nazwy z modelu są wyświetlane jako tekst (bez HTML), strona ma politykę CSP, a usuwać i zmieniać można tylko obiekty otwartego diagramu.
+- **Dodatek EA:** log nie zawiera connection stringu. Compass startuje we własnym folderze. Bibliotek DLL nie szuka się w bieżącym folderze.
+- **Okna błędów EA:** zamykane są tylko te, które pojawiły się w trakcie zapytania Compassa.
+- **SQLite 3.50.2:** poprawki znanych podatności; pliki modelu są otwierane w trybie defensywnym.
+- **Rekomendacja dla firm:** osobna rola PostgreSQL z minimalnymi uprawnieniami (SELECT, a dla zapisów przez EA także INSERT, UPDATE i DELETE na tabelach t_*; nigdy superuser) oraz szyfrowanie połączenia z weryfikacją certyfikatu.
+
 ## Wersja 0.8 (2026-10-23)
 
 Największe wydanie od początku. Compass pilnuje jakości modelu, sprawdza każdy zapis i pozwala go cofnąć, porównuje model z wymaganiami i z kodem, wycenia zmiany i działa w zespole. Przy każdej funkcji jest przykładowe polecenie: wpisz je w rozmowie tak, jak jest, albo własnymi słowami.

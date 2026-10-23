@@ -29,7 +29,7 @@ pub struct ClaudeClient {
 
 impl ClaudeClient {
     pub fn new(api_key: String, model: String, max_tokens: u32, workspace_id: String) -> Result<Self> {
-        let http = reqwest::blocking::Client::builder().redirect(crate::config::same_origin_redirects())
+        let http = reqwest::blocking::Client::builder().redirect(crate::net::same_origin_redirects())
             .timeout(Duration::from_secs(300))
             .connect_timeout(Duration::from_secs(20))
             .build()?;
