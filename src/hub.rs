@@ -674,13 +674,18 @@ in the language of the question, short. You can only read the model (db_query an
         ("POST", ["api", "changes"]) => {
             require(role, Role::Architect)?;
             let b = body()?;
-            let ops = b["ops"].as_array().filter(|o| !o.is_empty()).ok_or_else(|| deny(400, crate::i18n::tr("a change set needs operations")))?;
-            for (i, op) in ops.iter().enumerate() {
+            let given = b["ops"].as_array().filter(|o| !o.is_empty()).ok_or_else(|| deny(400, crate::i18n::tr("a change set needs operations")))?;
+            for (i, op) in given.iter().enumerate() {
                 let name = op["op"].as_str().unwrap_or("");
                 if !crate::ea::MODEL_OPS.contains(&name) {
                     return Err(deny(400, crate::i18n::fmt("operation {0} ('{1}') is not allowed. Allowed: {2}", &[(i + 1).to_string(), name.to_string(), crate::ea::MODEL_OPS.join(", ")])));
                 }
+                if matches!(name, "export_xmi" | "import_xmi" | "generate_report") {
+                    crate::tools::check_file_path(op["file"].as_str().unwrap_or("")).map_err(|e| deny(400, e.to_string()))?;
+                }
             }
+            let normalized = crate::tools::normalize_ops(given);
+            let ops = &normalized;
             let source = hub.source(b["source"].as_str().unwrap_or(""))?;
             // What the reviewers see is computed here from the operations, not taken from the author.
             let summary = crate::ea::describe(ops);
@@ -953,7 +958,7 @@ impl Client {
 
     fn call(&self, method: reqwest::Method, path: &str, body: Option<&Value>) -> Result<Value> {
         crate::jira::check_base_url(&self.url).map_err(|_| anyhow!("{}", crate::i18n::tr("The hub address must start with https:// (http:// only on this computer)")))?;
-        let client = reqwest::blocking::Client::builder().timeout(Duration::from_secs(20)).build()?;
+        let client = reqwest::blocking::Client::builder().redirect(crate::config::same_origin_redirects()).timeout(Duration::from_secs(20)).build()?;
         let mut request = client.request(method, format!("{}{path}", self.url)).bearer_auth(&self.token);
         if let Some(body) = body {
             request = request.json(body);
@@ -1174,6 +1179,50 @@ mod tests {
         assert_eq!(serde_json::from_str::<Value>(&failed).unwrap()["result"]["isError"], true);
         let (_, unknown) = rpc(json!({ "jsonrpc": "2.0", "id": 6, "method": "resources/list" }), viewer);
         assert!(unknown.contains("-32601"));
+
+        // Hardening: a malformed request does not stop the hub; headers and bodies are limited; security headers.
+        let raw = |bytes: &[u8]| {
+            let mut s = std::net::TcpStream::connect(base.trim_start_matches("http://")).unwrap();
+            s.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+            s.write_all(bytes).unwrap();
+            let mut out = String::new();
+            let _ = s.read_to_string(&mut out);
+            out
+        };
+        let _ = raw("GET /%1é HTTP/1.1\r\n\r\n".as_bytes());
+        let _ = raw("GET /api/x?q=%€ HTTP/1.1\r\n\r\n".as_bytes());
+        assert_eq!(get("/api/health", "").0, 200, "the hub is still running after malformed requests");
+        assert!(raw(format!("GET / HTTP/1.1\r\nX: {}\r\n\r\n", "a".repeat(20_000)).as_bytes()).starts_with("HTTP/1.1 431"));
+        assert!(raw(b"POST /api/audit HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n").starts_with("HTTP/1.1 501"));
+        let page = http.get(format!("{base}/")).send().unwrap();
+        assert!(page.headers()["content-security-policy"].to_str().unwrap().contains("frame-ancestors 'none'") && page.headers()["x-frame-options"] == "DENY");
+        assert!(!page.text().unwrap().contains("localStorage.setItem"), "the script is served apart, the token is kept for the session only");
+        assert_eq!(get("/app.js", "").0, 200);
+        // Change sets: what reviewers see is computed from the operations; nobody approves their own; apply needs a claim.
+        let created = http.post(format!("{base}/api/changes")).bearer_auth(architect)
+            .json(&json!({ "source": "shop-file", "title": "t", "summary": "harmless rename", "preview": "harmless", "ops": [{ "op": "delete", "element": "1" }] }))
+            .send().unwrap().json::<Value>().unwrap();
+        let id = created["id"].as_str().unwrap().to_string();
+        let change: Value = serde_json::from_str(&get(&format!("/api/changes/{id}"), viewer).1).unwrap();
+        assert!(change["summary"].as_str().unwrap() != "harmless rename" && change["ops"][0]["element"] == 1, "{change}");
+        assert_eq!(post(&format!("/api/changes/{id}/decision"), architect, json!({ "approve": true })), 403, "the author cannot approve");
+        assert_eq!(post(&format!("/api/changes/{id}/decision"), admin, json!({ "approve": true })), 200, "another user approves");
+        assert_eq!(post(&format!("/api/changes/{id}/applied"), architect, json!({ "ok": true })), 409, "applied only after a claim");
+        assert_eq!(post(&format!("/api/changes/{id}/claim"), architect, json!({})), 200);
+        assert_eq!(post(&format!("/api/changes/{id}/claim"), admin, json!({})), 409, "claimed once");
+        assert_eq!(post(&format!("/api/changes/{id}/applied"), admin, json!({ "ok": true })), 409, "only the claimer reports");
+        assert_eq!(post(&format!("/api/changes/{id}/applied"), architect, json!({ "ok": true })), 200);
+        assert_eq!(post("/api/changes", architect, json!({ "source": "shop-file", "ops": [{ "op": "export_xmi", "package": 1, "file": "\\\\server\\x.xml" }] })), 400, "network paths are refused");
+        // Audit: only known fields, the hub's own time; the workstation details only for the admin.
+        assert_eq!(post("/api/audit", architect, json!({ "time": "2000-01-01", "summary": "x", "database": "db@host", "anything": "else" })), 201);
+        let entries: Value = serde_json::from_str(&get("/api/audit?limit=5", viewer).1).unwrap();
+        let entry = entries.as_array().unwrap().iter().find(|e| e["summary"] == "x").unwrap().clone();
+        assert!(entry["time"] != "2000-01-01" && entry.get("anything").is_none() && entry.get("database").is_none(), "{entry}");
+        // Wrong tokens: after 20 the address waits.
+        for _ in 0..20 {
+            get("/api/me", "wrong-token-0123456789");
+        }
+        assert_eq!(get("/api/me", viewer).0, 429, "this address is refused for a while");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
@@ -1197,7 +1246,7 @@ mod ask_tests {
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
         let base = format!("http://{}", rx.recv().unwrap());
-        let http = reqwest::blocking::Client::builder().timeout(Duration::from_secs(300)).build().unwrap();
+        let http = reqwest::blocking::Client::builder().redirect(crate::config::same_origin_redirects()).timeout(Duration::from_secs(300)).build().unwrap();
         for (source, sql) in [("db", LOONAR_DB_CLASSES), ("file", LOONAR_DB_CLASSES)] {
             let props = std::env::var(if source == "db" { "LOONAR_HUB_DB_PROPS" } else { "LOONAR_HUB_FILE_PROPS" }).unwrap();
             let classes = crate::tools::query_rows(&AppConfig::load(Path::new(&props)).unwrap(), sql).unwrap()[0][0].clone();

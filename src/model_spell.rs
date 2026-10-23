@@ -210,7 +210,7 @@ pub fn set_ea_spelling(language: &str) -> String {
     let Some(files) = ea_lexicons(language, region) else {
         return crate::i18n::fmt("EA has no spelling dictionary for {0} (it comes with English only); Compass checks the texts itself in {0} (spell_check, and in the EA tab when an element changes).", &[language_name(language).to_string()]);
     };
-    let status = std::process::Command::new("reg")
+    let status = std::process::Command::new(crate::config::system_program("reg.exe"))
         .args(["add", r"HKCU\Software\Sparx Systems\EA64\SSCE", "/v", "MainLexFiles", "/t", "REG_SZ", "/d", &files, "/f"])
         .output();
     match status {

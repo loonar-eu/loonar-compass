@@ -270,11 +270,7 @@ pub struct Connection {
 /// The Confluence address must use HTTPS (the token travels with every request); plain HTTP is accepted only
 /// for a server on this computer.
 pub fn check_base_url(url: &str) -> Result<()> {
-    let url = url.trim().to_ascii_lowercase();
-    let local = ["http://localhost", "http://127.0.0.1", "http://[::1]"]
-        .iter()
-        .any(|p| url.starts_with(p) && matches!(url.as_bytes().get(p.len()), None | Some(b'/') | Some(b':')));
-    if !url.starts_with("https://") && !local {
+    if crate::config::check_service_url(url).is_err() {
         bail!("{}", crate::i18n::tr("The Confluence address must start with https://"));
     }
     Ok(())
@@ -306,7 +302,7 @@ pub struct ExistingPage {
 impl Connection {
     fn client(&self) -> Result<reqwest::blocking::Client> {
         check_base_url(&self.base_url)?;
-        reqwest::blocking::Client::builder().timeout(Duration::from_secs(60)).build().context(crate::i18n::tr("HTTP client"))
+        reqwest::blocking::Client::builder().redirect(crate::config::same_origin_redirects()).timeout(Duration::from_secs(60)).build().context(crate::i18n::tr("HTTP client"))
     }
 
     /// The page that publishing would update: the given id, or a page with the same title in the space.

@@ -586,10 +586,12 @@ pub fn to_ops(model: &Value, changes: &Value) -> Vec<Value> {
     if !hidden.is_empty() {
         ops.push(json!({ "op": "hide_connectors", "diagram": diagram, "connectors": hidden, "hidden": true }));
     }
-    for id in list("deleted_connectors") {
+    // Only objects of this diagram can be deleted from the editor.
+    let on_diagram = |key: &str, id: &Value| model[key].as_array().is_some_and(|list| list.iter().any(|o| o["id"].as_i64().is_some() && o["id"].as_i64() == id.as_i64()));
+    for id in list("deleted_connectors").into_iter().filter(|id| on_diagram("connectors", id)) {
         ops.push(json!({ "op": "delete", "connector": id }));
     }
-    for id in list("deleted") {
+    for id in list("deleted").into_iter().filter(|id| on_diagram("elements", id)) {
         ops.push(json!({ "op": "delete", "element": id }));
     }
     ops
@@ -628,6 +630,9 @@ pub fn run(model: &Value) -> Result<Option<Value>> {
         .context(crate::i18n::tr("opening the editor window"))?;
     let _webview = wry::WebViewBuilder::new()
         .with_html(page)
+        // The page never goes anywhere else and opens no windows (a label with a link or a script cannot either).
+        .with_navigation_handler(|url| url.starts_with("about:") || url.starts_with("data:"))
+        .with_new_window_req_handler(|_, _| wry::NewWindowResponse::Deny)
         .with_ipc_handler(move |request| {
             let _ = proxy.send_event(request.body().clone());
         })

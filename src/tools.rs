@@ -663,11 +663,22 @@ fn undo_change(input: &Value, ctx: &ToolContext) -> Result<String> {
         bail!("{}", crate::i18n::tr("there is nothing to undo in this model"));
     }
     let summary: Vec<String> = entries.iter().map(|e| format!("- {} {}", e["time"].as_str().unwrap_or("").get(..19).unwrap_or("").replace('T', " "), e["summary"].as_str().unwrap_or("").replace('\n', "; "))).collect();
-    ctx.approver.confirm_risky(&crate::i18n::fmt("Undo the latest saves of the assistant ({0}):\n{1}", &[entries.len().to_string(), summary.join("\n")]))?;
+    // The journal is a file: its operations are checked like the assistant's own, and the user sees what undoing does
+    // (what is deleted with its current name: colleagues may have added to it since).
+    let mut what = Vec::new();
+    for e in &entries {
+        let ops = normalize_ops(&e["reverse"].as_array().cloned().unwrap_or_default());
+        if let Some(bad) = ops.iter().find(|op| !ea::MODEL_OPS.contains(&op["op"].as_str().unwrap_or(""))) {
+            bail!("{}", crate::i18n::fmt("the undo journal contains an operation that is not allowed ({0}); nothing was undone", &[bad["op"].to_string()]));
+        }
+        what.extend(destructive_details(ctx.cfg, &ops));
+    }
+    let details = if what.is_empty() { String::new() } else { format!("\n\n{}", what.join("\n")) };
+    ctx.approver.confirm_risky(&format!("{}{details}", crate::i18n::fmt("Undo the latest saves of the assistant ({0}):\n{1}", &[entries.len().to_string(), summary.join("\n")])))?;
     let mut out = Vec::new();
     let mut undone = Vec::new();
     for e in &entries {
-        let ops: Vec<Value> = e["reverse"].as_array().cloned().unwrap_or_default();
+        let ops: Vec<Value> = normalize_ops(&e["reverse"].as_array().cloned().unwrap_or_default());
         let label = e["summary"].as_str().unwrap_or("").replace('\n', "; ");
         if !ops.is_empty() {
             match ea::run_batch(ctx.cfg, &ops, &BatchOptions::default()) {
@@ -716,6 +727,7 @@ fn propose_change(input: &Value, ctx: &ToolContext) -> Result<String> {
             bail!("{}", crate::i18n::fmt("operation {0} ('{1}') is not allowed. Allowed: {2}", &[(i + 1).to_string(), name.to_string(), ea::MODEL_OPS.join(", ")]));
         }
     }
+    let ops = &normalize_ops(ops);
     let client = hub_client(ctx.cfg)?;
     let title = input["title"].as_str().unwrap_or("Change").to_string();
     let id = client.propose(&json!({
@@ -1627,6 +1639,9 @@ pub fn open_model_file(path: &std::path::Path) -> Result<rusqlite::Connection> {
     // EA may be writing to the file at the same moment: wait for its write to finish instead of failing at once.
     conn.busy_timeout(Duration::from_secs(10))?;
     conn.execute_batch("PRAGMA query_only = ON")?;
+    // Defensive mode: no writable schema, no shadow-table tricks from a model file someone else made.
+    let _ = conn.set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true);
+    let _ = conn.set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_TRUSTED_SCHEMA, false);
     let started = std::time::Instant::now();
     conn.progress_handler(10_000, Some(move || started.elapsed() > FILE_QUERY_LIMIT));
     Ok(conn)

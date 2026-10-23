@@ -238,12 +238,15 @@ namespace LoonarCompass
             finder.Tick += (s, e) => Dock_();
         }
 
-        /// <summary>Path of LoonarCompass.exe: next to the add-in (installation), or LOONAR_COMPASS_EXE (development).</summary>
+        /// <summary>Path of LoonarCompass.exe: next to the add-in (installation); LOONAR_COMPASS_EXE only in a debug build
+        /// of the add-in (development): a released add-in never starts a program named by the environment.</summary>
         public static string Exe()
         {
+#if DEBUG
             string fromEnv = Environment.GetEnvironmentVariable("LOONAR_COMPASS_EXE");
             if (!string.IsNullOrEmpty(fromEnv) && File.Exists(fromEnv))
                 return fromEnv;
+#endif
             string dir = Path.GetDirectoryName(new Uri(Assembly.GetExecutingAssembly().CodeBase).LocalPath);
             string exe = Path.Combine(dir, "LoonarCompass.exe");
             if (!File.Exists(exe))
@@ -253,10 +256,11 @@ namespace LoonarCompass
 
         /// <summary>Arguments of Compass: the project (in a file: a database connection string has quotes and semicolons)
         /// and, for the tab, the name under which this EA's repository is in the Running Object Table.</summary>
-        public static string Arguments(string connection, string rotName)
+        public static string Arguments(string connection, string rotName, out string file)
         {
-            // The connection goes in a file: a database connection string has quotes and semicolons.
-            string file = Path.Combine(Path.GetTempPath(), "loonar-ea-model-" + Guid.NewGuid().ToString("N") + ".txt");
+            // The connection goes in a file: a database connection string has quotes and semicolons. Compass deletes
+            // the file as soon as it has read it; the add-in deletes it when Compass does not start.
+            file = Path.Combine(Path.GetTempPath(), "loonar-ea-model-" + Guid.NewGuid().ToString("N") + ".txt");
             File.WriteAllText(file, connection);
             return (rotName != null ? "--ea-tab --ea-rot " + rotName + " " : "") + "--ea-model \"" + file + "\"";
         }
@@ -325,9 +329,9 @@ namespace LoonarCompass
             catch
             {
             }
-            Log.Write("Start: " + (connection.Length > 80 ? connection.Substring(0, 80) : connection));
             // The file name, or the database part of a connection (never the password).
             project = connection.Contains(" --- ") ? connection.Substring(0, connection.IndexOf(" --- ")) : Path.GetFileName(connection);
+            Log.Write("Start: " + project);
             Stop("");
             note.Text = L10n.Get("Starting Loonar Compass…");
             // Compass must write through THIS EA window, not the first EA found in the system: the repository is
@@ -346,7 +350,19 @@ namespace LoonarCompass
             {
                 Log.Write("ROT registration failed: " + e.Message);
             }
-            process = Process.Start(new ProcessStartInfo(Exe(), Arguments(connection, rotName)) { UseShellExecute = false });
+            string exe = Exe();
+            string modelFile;
+            string arguments = Arguments(connection, rotName, out modelFile);
+            try
+            {
+                // Started in its own folder (not in EA's current folder, e.g. the folder of an opened model).
+                process = Process.Start(new ProcessStartInfo(exe, arguments) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(exe) });
+            }
+            catch
+            {
+                try { File.Delete(modelFile); } catch { }
+                throw;
+            }
             started = DateTime.Now;
             finder.Start();
         }

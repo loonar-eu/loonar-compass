@@ -111,7 +111,8 @@ graph.getLabel = (cell) => {
   const keyword = { Device: '«device»', ExecutionEnvironment: '«executionEnvironment»', Artifact: '«artifact»' }[m?.ea.type];
   if (m && cell.isVertex() && keyword) return `<div style="text-align:center"><div style="font-size:10px;font-weight:400;color:#55667A">${keyword}</div>${esc(cell.value)}</div>`;
   if (m && m.kind === 'element' && ['Class', 'Interface', 'Enumeration', 'DataType'].includes(m.ea.type)) return classLabel(cell, m.ea);
-  return m && cell.isVertex() ? esc(cell.value) : baseGetLabel(cell);
+  // Every other label is plain text (names come from the shared model: never markup).
+  return esc(m && cell.isVertex() ? cell.value : baseGetLabel(cell));
 };
 // Editing a label edits the name only (plain text, not the class compartments).
 graph.isHtmlLabel = () => true;
