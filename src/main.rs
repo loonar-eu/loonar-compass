@@ -5,6 +5,7 @@
 
 mod check;
 mod claude;
+mod cmdb;
 mod com;
 mod confluence;
 mod diagram_editor;
@@ -689,6 +690,11 @@ struct Form {
     hub_token: String,
     /// Content of mcp_servers.json, edited on the "MCP servers" card.
     mcp_json: String,
+    /// A ready-made server chosen on the card (index into mcp_client::templates).
+    mcp_template: usize,
+    /// A token for an MCP server, saved in Credential Manager under this name.
+    mcp_secret_name: String,
+    mcp_secret_value: String,
     /// Content of event_agents.json ("Event agents" card).
     agents_json: String,
     miro_token: String,
@@ -727,6 +733,9 @@ impl Form {
             hub_url: c.hub_url.clone(),
             hub_source: c.hub_source.clone(),
             mcp_json: std::fs::read_to_string(mcp_client::config_file(&c.base_dir)).unwrap_or_default(),
+            mcp_template: 0,
+            mcp_secret_name: String::new(),
+            mcp_secret_value: String::new(),
             agents_json: std::fs::read_to_string(agents::config_file(&c.base_dir)).unwrap_or_default(),
             ui_language: c.ui_language.clone(),
             ..Default::default()
@@ -2219,6 +2228,10 @@ impl App {
                 if !text.is_empty() {
                     mcp_client::parse(&text)?;
                 }
+                if !f.mcp_secret_name.trim().is_empty() && !f.mcp_secret_value.trim().is_empty() {
+                    mcp_client::save_secret(&f.mcp_secret_name, &f.mcp_secret_value)?;
+                    self.form.mcp_secret_value.clear();
+                }
                 let base = self.cfg.as_ref().map(|c| c.base_dir.clone()).context("settings")?;
                 std::fs::write(mcp_client::config_file(&base), text).context(crate::i18n::tr("could not save mcp_servers.json"))?;
                 mcp_client::shutdown();
@@ -2930,7 +2943,32 @@ impl App {
                 ui.label(egui::RichText::new(crate::i18n::tr("Example:")).small().color(theme::MUTED));
                 ui.label(egui::RichText::new("{\"servers\": [\n  {\"name\": \"hub\", \"url\": \"http://127.0.0.1:8730/mcp\", \"headers\": {\"Authorization\": \"Bearer ${secret:hub_token}\"}},\n  {\"name\": \"files\", \"command\": \"npx\", \"args\": [\"-y\", \"@modelcontextprotocol/server-filesystem\", \"C:/docs\"]}\n]}").small().monospace().color(theme::MUTED));
             }
+            // Ready-made servers: added to the text below, then completed (organization, address) and saved.
+            let templates = mcp_client::templates(&self.form.hub_url);
+            ui.horizontal(|ui| {
+                ui.label(crate::i18n::tr("Add a ready-made server:"));
+                let current = templates.get(self.form.mcp_template).map(|t| t.0).unwrap_or("");
+                egui::ComboBox::from_id_salt("mcp_template").selected_text(current).show_ui(ui, |ui| {
+                    for (i, (label, _)) in templates.iter().enumerate() {
+                        ui.selectable_value(&mut self.form.mcp_template, i, *label);
+                    }
+                });
+                if ui.button(crate::i18n::tr("Add")).clicked() {
+                    if let Some((_, server)) = templates.get(self.form.mcp_template) {
+                        match mcp_client::add_server(&self.form.mcp_json, server) {
+                            Ok(text) => self.form.mcp_json = text,
+                            Err(e) => self.group_status[GROUP_MCP] = GroupStatus::Failed(format!("{e:#}")),
+                        }
+                    }
+                }
+            });
+            ui.label(egui::RichText::new(crate::i18n::tr("Azure DevOps: put your organization in place of YOUR-ORGANIZATION (Node.js needed; you sign in with your Microsoft account). GitHub: a personal access token saved below as mcp_github. ServiceNow / CMDB: the address of the MCP server approved in your company and its token as mcp_servicenow.")).small().color(theme::MUTED));
             ui.add(egui::TextEdit::multiline(&mut self.form.mcp_json).code_editor().desired_rows(6).desired_width(f32::INFINITY));
+            ui.horizontal(|ui| {
+                ui.label(crate::i18n::tr("Token for an MCP server:"));
+                ui.add(egui::TextEdit::singleline(&mut self.form.mcp_secret_name).hint_text("mcp_github").desired_width(140.0));
+                ui.add(egui::TextEdit::singleline(&mut self.form.mcp_secret_value).password(true).hint_text(crate::i18n::tr("token")).desired_width(220.0));
+            });
             self.group_footer(ui, &ctx2, GROUP_MCP, crate::i18n::tr("Save and test MCP servers"));
         });
         ui.add_space(12.0);
@@ -3944,6 +3982,7 @@ fn tool_step(name: &str, input: &Value) -> String {
         "propose_change" => crate::i18n::fmt("Change set for the team: {0}", &[input["title"].as_str().unwrap_or("").to_string()]),
         "change_sets" => crate::i18n::fmt("Team change sets: {0} {1}", &[input["action"].as_str().unwrap_or("list").to_string(), input["id"].as_str().unwrap_or("").to_string()]),
         "code_drift" => crate::i18n::fmt("Model against the code in {0}", &[input["path"].as_str().unwrap_or("").to_string()]),
+        "cmdb_compare" => crate::i18n::tr("CMDB against the model").to_string(),
         "ea_script" => crate::i18n::fmt("EA script ({0}): {1}", &[input["action"].as_str().unwrap_or("list").to_string(), input["name"].as_str().unwrap_or("").to_string()]),
         "jira_issue" => crate::i18n::fmt("Reading the Jira issue {0}", &[input["key"].as_str().unwrap_or("").to_string()]),
         "jira_create_issue" => crate::i18n::fmt("Creating a Jira issue: {0}", &[input["summary"].as_str().unwrap_or("").to_string()]),

@@ -160,6 +160,7 @@ mod tests {
             include_str!("../installer/src/main.rs"),
             include_str!("check.rs"),
             include_str!("claude.rs"),
+            include_str!("cmdb.rs"),
             include_str!("com.rs"),
             include_str!("config.rs"),
             include_str!("confluence.rs"),

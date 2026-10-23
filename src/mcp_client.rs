@@ -76,6 +76,57 @@ fn expand_for(text: &str, team_hub: bool) -> Result<String> {
     Ok(out)
 }
 
+/// On Windows npx, npm, pnpm and yarn are .cmd files: "npx" in the configuration starts npx.cmd.
+fn windows_command(command: &str) -> String {
+    let lower = command.trim().to_ascii_lowercase();
+    if cfg!(windows) && matches!(lower.as_str(), "npx" | "npm" | "pnpm" | "yarn") {
+        format!("{}.cmd", command.trim())
+    } else {
+        command.to_string()
+    }
+}
+
+/// Ready-made servers for the "MCP servers" card: (label, server). `hub_url`: the hub of the settings (or empty).
+pub fn templates(hub_url: &str) -> Vec<(&'static str, Value)> {
+    let mut list = vec![
+        ("Azure DevOps", json!({ "name": "azure_devops", "command": "npx", "args": ["-y", "@azure-devops/mcp", "YOUR-ORGANIZATION"] })),
+        ("GitHub", json!({ "name": "github", "url": "https://api.githubcopilot.com/mcp/", "headers": { "Authorization": "Bearer ${secret:mcp_github}" } })),
+        ("ServiceNow / CMDB", json!({ "name": "servicenow", "url": "https://YOUR-SERVICENOW-MCP-SERVER/mcp", "headers": { "Authorization": "Bearer ${secret:mcp_servicenow}" } })),
+        ("Files (a local folder)", json!({ "name": "files", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "C:/docs"] })),
+    ];
+    let hub = hub_url.trim().trim_end_matches('/');
+    if !hub.is_empty() {
+        list.push(("Compass Hub", json!({ "name": "hub", "url": format!("{hub}/mcp"), "headers": { "Authorization": "Bearer ${secret:hub_token}" }, "trusted": true })));
+    }
+    list
+}
+
+/// Adds a server to the text of mcp_servers.json (an empty text starts a new file); a name already used gets a number.
+pub fn add_server(text: &str, server: &Value) -> Result<String> {
+    let mut value: Value = if text.trim().is_empty() { json!({ "servers": [] }) } else { serde_json::from_str(text).with_context(|| crate::i18n::tr("mcp_servers.json is not valid JSON"))? };
+    let list = value["servers"].as_array_mut().with_context(|| crate::i18n::tr("mcp_servers.json is not valid JSON"))?;
+    let mut server = server.clone();
+    let base = server["name"].as_str().unwrap_or("server").to_string();
+    let mut name = base.clone();
+    let mut n = 2;
+    while list.iter().any(|s| s["name"] == name.as_str()) {
+        name = format!("{base}_{n}");
+        n += 1;
+    }
+    server["name"] = json!(name);
+    list.push(server);
+    Ok(serde_json::to_string_pretty(&value)?)
+}
+
+/// A token of an MCP server saved in Credential Manager: names start with "mcp_" (Compass's own names are refused).
+pub fn save_secret(name: &str, value: &str) -> Result<()> {
+    let name = name.trim();
+    if !name.starts_with("mcp_") || name.len() < 5 || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        bail!("{}", crate::i18n::tr("the name of an MCP token starts with mcp_ and has only letters, digits and _ (e.g. mcp_github)"));
+    }
+    crate::config::secrets::set(name, value.trim())
+}
+
 fn safe_name(text: &str) -> String {
     text.chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' }).collect()
 }
@@ -158,7 +209,7 @@ impl Drop for Connection {
 impl Connection {
     fn open(config: &ServerConfig) -> Result<Self> {
         let transport = if let Some(command) = &config.command {
-            let mut cmd = Command::new(expand(command)?);
+            let mut cmd = Command::new(windows_command(&expand(command)?));
             for a in &config.args {
                 cmd.arg(expand(a)?);
             }
@@ -468,6 +519,22 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
   [Console]::Out.WriteLine($out); [Console]::Out.Flush()
 }
 "#;
+
+    #[test]
+    fn templates_and_adding() {
+        let tpl = templates("https://hub.example.com/");
+        assert_eq!(tpl.last().unwrap().1["url"], "https://hub.example.com/mcp");
+        let mut text = String::new();
+        for (_, server) in &tpl {
+            text = add_server(&text, server).unwrap();
+        }
+        text = add_server(&text, &tpl[0].1).unwrap();
+        let servers = parse(&text).unwrap();
+        assert_eq!(servers.len(), tpl.len() + 1);
+        assert!(servers.iter().any(|s| s.name == "azure_devops_2"), "a second copy gets a number");
+        assert_eq!(windows_command("npx"), if cfg!(windows) { "npx.cmd" } else { "npx" });
+        assert!(save_secret("claude_api_key", "x").is_err() && save_secret("mcp x", "x").is_err());
+    }
 
     #[test]
     fn parse_and_names() {

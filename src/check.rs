@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
 const USAGE: &str = "LoonarCompass.exe --check [--model <file.qea|file.qeax|app.properties>] [--package <id or name>] [--rules <governance.json>] \
-[--code <source folder>] [--requirements <file.docx|.md|.txt|.html>] [--report <report.md>] [--junit <junit.xml>] [--fail-on error|warning|info|never] [--lang en|pl|de|fr]";
+[--code <source folder>] [--requirements <file.docx|.md|.txt|.html>] [--cmdb <export.csv|.json>] [--report <report.md>] [--junit <junit.xml>] [--fail-on error|warning|info|never] [--lang en|pl|de|fr]";
 
 #[derive(Default, Debug)]
 pub struct Options {
@@ -21,6 +21,7 @@ pub struct Options {
     pub rules: Option<PathBuf>,
     pub code: Option<PathBuf>,
     pub requirements: Option<PathBuf>,
+    pub cmdb: Option<PathBuf>,
     pub report: Option<PathBuf>,
     pub junit: Option<PathBuf>,
     /// 0 error, 1 warning, 2 info, 3 never.
@@ -49,6 +50,7 @@ pub fn parse(args: &[String]) -> Result<Options> {
             "--rules" => o.rules = Some(value.into()),
             "--code" => o.code = Some(value.into()),
             "--requirements" => o.requirements = Some(value.into()),
+            "--cmdb" => o.cmdb = Some(value.into()),
             "--report" => o.report = Some(value.into()),
             "--junit" => o.junit = Some(value.into()),
             "--fail-on" => {
@@ -198,6 +200,23 @@ pub fn check(o: &Options, default_props: &Path) -> Result<(String, String, bool)
         }
     }
 
+    // CMDB ↔ model (an export of the CMDB: CSV or JSON).
+    if let Some(file) = &o.cmdb {
+        let text = std::fs::read_to_string(file).with_context(|| format!("cannot read {}", file.display()))?;
+        let package = o.package.as_ref().and_then(|_| packages(&cfg, o.package.as_deref()).ok()).and_then(|p| p.first().map(|p| p.0));
+        let c = crate::cmdb::compare(&cfg, &text, package, &[])?;
+        md.push(format!("\n## {}\n", crate::i18n::tr("CMDB and model")));
+        md.push(crate::i18n::fmt("{0} configuration items, {1} elements of the model, matched {2}.", &[c.cmdb_items.to_string(), c.model_items.to_string(), c.matched.to_string()]));
+        for (title, list) in c.sections() {
+            if list.is_empty() {
+                continue;
+            }
+            md.push(format!("\n### {title} — {}\n", list.len()));
+            md.extend(list.iter().take(300).map(|l| format!("- {l}")));
+            items.push(Item { suite: "CMDB and model", name: format!("{title} ({})", list.len()), severity: "warning", lines: list.clone() });
+        }
+    }
+
     // 3. Requirements: coverage in the model and, with a source folder, the chain to code, tests and issues.
     if let Some(doc) = &o.requirements {
         let text = crate::traceability::read_document(doc)?;
@@ -241,7 +260,7 @@ pub fn check(o: &Options, default_props: &Path) -> Result<(String, String, bool)
         if failed { "FAILED".to_string() } else { "PASSED".to_string() }, errors.to_string(), warnings.to_string(),
         ["error", "warning", "info", "never"][o.fail_on as usize].to_string(),
     ]));
-    Ok((md.join("\n") + "\n", junit(&items, o.fail_on, &["Model check", "Model and code", "Requirements"]), failed))
+    Ok((md.join("\n") + "\n", junit(&items, o.fail_on, &["Model check", "Model and code", "CMDB and model", "Requirements"]), failed))
 }
 
 /// The application is a window program: its output reaches a console only after attaching to the parent's one.

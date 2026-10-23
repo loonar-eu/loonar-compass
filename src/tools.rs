@@ -83,6 +83,7 @@ pub fn definitions() -> Value {
         items.push(crate::scripts::definition());
         items.push(crate::traceability::definition());
         items.push(crate::code_drift::definition());
+        items.push(crate::cmdb::definition());
         items.push(crate::undo::definition());
         items.push(crate::estimate::definition());
         items.push(json!({
@@ -576,6 +577,21 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "undo_change" => undo_change(input, ctx).map(Into::into),
         "estimate_change" => crate::estimate::estimate(ctx.cfg, &input["elements"].as_array().into_iter().flatten().filter_map(|v| v.as_i64()).collect::<Vec<_>>(), input["depth"].as_u64().unwrap_or(2) as usize).map(Into::into),
         "change_sets" => change_sets(input, ctx).map(Into::into),
+        "cmdb_compare" => {
+            let text = match input["file"].as_str().map(str::trim).filter(|f| !f.is_empty()) {
+                Some(file) => {
+                    let path = read_path(ctx, file, false)?;
+                    let meta = std::fs::metadata(&path).with_context(|| crate::i18n::fmt("cannot read {0}", &[path.display().to_string()]))?;
+                    if meta.len() > 20 * 1024 * 1024 {
+                        bail!("{}", crate::i18n::tr("the CMDB file is larger than 20 MB: export fewer columns or items"));
+                    }
+                    std::fs::read_to_string(&path).with_context(|| crate::i18n::fmt("cannot read {0}", &[path.display().to_string()]))?
+                }
+                None => input["text"].as_str().filter(|t| !t.trim().is_empty()).with_context(|| crate::i18n::tr("give 'file' or 'text' with the CMDB data"))?.to_string(),
+            };
+            let types: Vec<String> = input["types"].as_array().into_iter().flatten().filter_map(|v| v.as_str()).map(String::from).collect();
+            crate::cmdb::compare(ctx.cfg, &text, input["package"].as_i64(), &types).map(|c| crate::cmdb::report(&c).into())
+        }
         "code_drift" => {
             let path = read_path(ctx, input["path"].as_str().unwrap_or(""), true)?;
             crate::code_drift::compare(ctx.cfg, &path, input["package"].as_i64()).map(Into::into)
