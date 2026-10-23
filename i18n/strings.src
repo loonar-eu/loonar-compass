@@ -1431,3 +1431,14 @@ the CMDB file is larger than 20 MB: export fewer columns or items ‖ plik CMDB 
 give 'file' or 'text' with the CMDB data ‖ podaj 'file' albo 'text' z danymi CMDB ‖ geben Sie 'file' oder 'text' mit den CMDB-Daten an ‖ indiquez 'file' ou 'text' avec les données CMDB
 CMDB and model ‖ CMDB a model ‖ CMDB und Modell ‖ CMDB et modèle
 {0} configuration items, {1} elements of the model, matched {2}. ‖ Pozycje CMDB: {0}, elementy modelu: {1}, dopasowane: {2}. ‖ {0} Konfigurationselemente, {1} Modellelemente, zugeordnet {2}. ‖ {0} éléments de configuration, {1} éléments du modèle, associés {2}.
+the assistant did not answer in time ‖ asystent nie odpowiedział w wyznaczonym czasie ‖ der Assistent hat nicht rechtzeitig geantwortet ‖ l'assistant n'a pas répondu à temps
+Element of the model {0} (id {1}): ‖ Element modelu {0} (id {1}): ‖ Element des Modells {0} (ID {1}): ‖ Élément du modèle {0} (id {1}) :
+this change set already has a Jira issue ‖ ten zestaw zmian ma już zgłoszenie w Jirze ‖ dieser Änderungssatz hat bereits einen Jira-Vorgang ‖ ce lot de modifications a déjà un ticket Jira
+type a summary for the issue ‖ wpisz tytuł zgłoszenia ‖ geben Sie eine Zusammenfassung für den Vorgang ein ‖ saisissez un résumé pour le ticket
+Published from the model {0} by the team hub on {1}. Edit the model, not this page: the next publication replaces it. ‖ Opublikowane z modelu {0} przez hub zespołu {1}. Zmieniaj model, nie tę stronę: następna publikacja ją zastąpi. ‖ Aus dem Modell {0} vom Team-Hub am {1} veröffentlicht. Ändern Sie das Modell, nicht diese Seite: die nächste Veröffentlichung ersetzt sie. ‖ Publié depuis le modèle {0} par le hub d'équipe le {1}. Modifiez le modèle, pas cette page : la prochaine publication la remplace.
+Elements ‖ Elementy ‖ Elemente ‖ Éléments
+name ‖ nazwa ‖ Name ‖ nom
+description ‖ opis ‖ Beschreibung ‖ description
+the hub has no Jira: the administrator sets "integrations" in hub.json ‖ hub nie ma Jiry: administrator ustawia "integrations" w hub.json ‖ der Hub hat kein Jira: der Administrator setzt "integrations" in hub.json ‖ le hub n'a pas de Jira : l'administrateur règle "integrations" dans hub.json
+the hub has no Confluence: the administrator sets "integrations" in hub.json ‖ hub nie ma Confluence: administrator ustawia "integrations" w hub.json ‖ der Hub hat kein Confluence: der Administrator setzt "integrations" in hub.json ‖ le hub n'a pas de Confluence : l'administrateur règle "integrations" dans hub.json
+secret '{0}' is not set: give it as LOONAR_SECRET_{1} (or a file named in LOONAR_SECRET_{1}_FILE) ‖ sekret '{0}' nie jest ustawiony: podaj go jako LOONAR_SECRET_{1} (albo plik wskazany w LOONAR_SECRET_{1}_FILE) ‖ das Geheimnis '{0}' ist nicht gesetzt: geben Sie es als LOONAR_SECRET_{1} an (oder eine Datei in LOONAR_SECRET_{1}_FILE) ‖ le secret '{0}' n'est pas défini : donnez-le dans LOONAR_SECRET_{1} (ou un fichier indiqué par LOONAR_SECRET_{1}_FILE)

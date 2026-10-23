@@ -420,7 +420,34 @@ pub mod secrets {
     /// Every secret the application stores (removed together on uninstall).
     pub const ALL: [&str; 8] = [CLAUDE_API_KEY, OPENAI_API_KEY, EA_PASSWORD, DB_PASSWORD, CONFLUENCE_TOKEN, MIRO_TOKEN, JIRA_TOKEN, HUB_TOKEN];
 
+    /// Secrets from the environment instead of Credential Manager: the team hub as a service or in a container.
+    static FROM_ENVIRONMENT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+    pub fn use_environment() {
+        FROM_ENVIRONMENT.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// `LOONAR_SECRET_<NAME>` or the file named by `LOONAR_SECRET_<NAME>_FILE` (Docker secrets); NAME in capitals,
+    /// other characters as "_" (claude_api_key → LOONAR_SECRET_CLAUDE_API_KEY).
+    fn from_environment(name: &str) -> Option<String> {
+        let key: String = name.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_uppercase() } else { '_' }).collect();
+        if let Ok(value) = std::env::var(format!("LOONAR_SECRET_{key}")) {
+            return Some(value.trim().to_string()).filter(|v| !v.is_empty());
+        }
+        let file = std::env::var(format!("LOONAR_SECRET_{key}_FILE")).ok()?;
+        std::fs::read_to_string(file).ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty())
+    }
+
     pub fn get(name: &str) -> Result<String> {
+        if FROM_ENVIRONMENT.load(std::sync::atomic::Ordering::Relaxed) || cfg!(not(windows)) {
+            if let Some(value) = from_environment(name) {
+                return Ok(value);
+            }
+            if cfg!(not(windows)) {
+                let key: String = name.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_uppercase() } else { '_' }).collect();
+                anyhow::bail!("{}", crate::i18n::fmt("secret '{0}' is not set: give it as LOONAR_SECRET_{1} (or a file named in LOONAR_SECRET_{1}_FILE)", &[name.to_string(), key]));
+            }
+        }
         if let Ok(value) = keyring::Entry::new(SERVICE, name).and_then(|e| e.get_password()) {
             return Ok(value);
         }

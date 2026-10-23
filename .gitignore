@@ -36,3 +36,5 @@ desktop.ini
 __pycache__/
 editor/node_modules/
 /target2*
+/target2h/
+/hub/target/

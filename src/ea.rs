@@ -24,49 +24,7 @@ fn timeout() -> Duration {
     Duration::from_secs(secs)
 }
 
-/// Operations the model may request. `delete_package`, `export_diagram` and `ping` are for internal use only.
-pub const MODEL_OPS: &[&str] = &[
-    "create_package",
-    "create_diagram",
-    "create_element",
-    "create_connector",
-    "place",
-    "diagram_style",
-    "set_composite",
-    "update_element",
-    "update_connector",
-    "move",
-    "navigation_cell",
-    "delete",
-    "remove_from_diagram",
-    "set_color",
-    "set_bounds",
-    "set_line_style",
-    "route_connector",
-    "update_diagram",
-    "hide_connectors",
-    "create_attribute",
-    "create_legend",
-    "create_operation",
-    "update_attribute",
-    "delete_attribute",
-    "update_operation",
-    "delete_operation",
-    "clone_package",
-    "create_baseline",
-    "add_glossary_term",
-    "create_scenario",
-    "update_scenario",
-    "delete_scenario",
-    "layout_diagram",
-    "export_xmi",
-    "import_xmi",
-    "set_linked_document",
-    "set_swimlanes",
-    "reverse_connector",
-    "update_package",
-    "generate_report",
-];
+pub use crate::ops::{describe, MODEL_OPS};
 
 #[derive(Default)]
 pub struct BatchOptions {
@@ -338,71 +296,6 @@ fn kill_orphan_ea(since: chrono::DateTime<chrono::Local>) {
         .status();
 }
 
-/// Short description of the operations in the UI language: for the approval dialog, the step list, the change log and the model.
-pub fn describe(ops: &[Value]) -> String {
-    let mut count = std::collections::BTreeMap::new();
-    for op in ops {
-        *count.entry(op["op"].as_str().unwrap_or("?")).or_insert(0usize) += 1;
-    }
-    let label = |k: &str| match k {
-        "create_package" => crate::i18n::tr("new packages"),
-        "create_diagram" => crate::i18n::tr("new diagrams"),
-        "create_element" => crate::i18n::tr("new elements"),
-        "create_connector" => crate::i18n::tr("new connectors"),
-        "place" => crate::i18n::tr("elements placed on diagrams"),
-        "update_element" => crate::i18n::tr("changed elements"),
-        "update_connector" => crate::i18n::tr("changed relationships"),
-        "move" => crate::i18n::tr("objects moved to another package"),
-        "navigation_cell" => crate::i18n::tr("navigation cells (links to diagrams)"),
-        "delete" => crate::i18n::tr("objects DELETED from the model"),
-        "set_color" => crate::i18n::tr("changed colors on diagrams"),
-        "set_bounds" => crate::i18n::tr("changed position or size on diagrams"),
-        "set_line_style" => crate::i18n::tr("changed connector line styles on diagrams"),
-        "route_connector" => crate::i18n::tr("routed connector paths on diagrams"),
-        "update_diagram" => crate::i18n::tr("changed diagram names or notes"),
-        "hide_connectors" => crate::i18n::tr("connectors hidden or shown on diagrams"),
-        "create_attribute" => crate::i18n::tr("new attributes"),
-        "create_legend" => crate::i18n::tr("diagram legends"),
-        "create_operation" => crate::i18n::tr("new operations"),
-        "update_attribute" => crate::i18n::tr("changed attributes"),
-        "delete_attribute" => crate::i18n::tr("attributes DELETED"),
-        "update_operation" => crate::i18n::tr("changed operations"),
-        "delete_operation" => crate::i18n::tr("operations DELETED"),
-        "clone_package" => crate::i18n::tr("package copies (with all contents)"),
-        "create_baseline" => crate::i18n::tr("package baselines (saved versions)"),
-        "add_glossary_term" => crate::i18n::tr("terms in the project glossary"),
-        "create_scenario" | "update_scenario" => crate::i18n::tr("structured scenarios of elements"),
-        "delete_scenario" => crate::i18n::tr("structured scenarios DELETED"),
-        "remove_from_diagram" => crate::i18n::tr("elements removed from diagrams (they stay in the model)"),
-        "diagram_style" => crate::i18n::tr("diagram style settings"),
-        "layout_diagram" => crate::i18n::tr("diagrams laid out automatically"),
-        "export_xmi" => crate::i18n::tr("packages exported to XMI"),
-        "import_xmi" => crate::i18n::tr("XMI files IMPORTED into packages"),
-        "set_linked_document" => crate::i18n::tr("linked documents of elements"),
-        "set_swimlanes" => crate::i18n::tr("diagram swimlanes"),
-        "reverse_connector" => crate::i18n::tr("relationships reversed"),
-        "update_package" => crate::i18n::tr("changed packages"),
-        "generate_report" => crate::i18n::tr("documents from EA templates"),
-        "set_composite" => crate::i18n::tr("element-to-diagram links"),
-        other => other_static(other),
-    };
-    let mut lines: Vec<String> = count.iter().map(|(k, n)| crate::i18n::fmt("{0}: {1}@@count", &[label(k).to_string(), n.to_string()])).collect();
-
-    // Names of what is created at the top level: packages and diagrams (there are often dozens of elements).
-    for op in ops {
-        let name = op["name"].as_str().unwrap_or("");
-        match op["op"].as_str() {
-            Some("create_package") => lines.push(crate::i18n::fmt("package \"{0}\"", &[name.to_string()])),
-            Some("create_diagram") => lines.push(crate::i18n::fmt("diagram \"{0}\" ({1})", &[name.to_string(), op["type"].as_str().unwrap_or("?").to_string()])),
-            _ => {}
-        }
-    }
-    lines.join("\n")
-}
-
-fn other_static(_: &str) -> &'static str {
-    crate::i18n::tr("other operations")
-}
 
 #[cfg(test)]
 mod tests {

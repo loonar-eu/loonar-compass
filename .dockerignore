@@ -1,0 +1,7 @@
+# Only what the hub image needs: the shared sources, the translations and the hub package.
+*
+!src/
+!i18n/
+!hub/Cargo.toml
+!hub/Cargo.lock
+!hub/src/

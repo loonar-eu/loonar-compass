@@ -1,0 +1,43 @@
+[package]
+name = "compass-hub"
+version = "0.8.2"
+edition = "2021"
+description = "Compass Hub: the team service of Loonar Compass (team models, policy, audit trail, change sets, web view, MCP server)"
+publish = false
+
+# The hub shares its source files with the desktop application (../src, included with #[path]); it has no window,
+# needs no Enterprise Architect and builds on Windows and Linux.
+
+[[bin]]
+name = "compass-hub"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "multipart", "rustls-tls", "rustls-tls-native-roots"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+uuid = { version = "1", features = ["v4"] }
+postgres = "0.19"
+native-tls = "0.2"
+postgres-native-tls = "0.5"
+rusqlite = { version = "0.37", features = ["bundled", "hooks"] }
+sha2 = "0.10"
+base64 = "0.22"
+
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+windows-service = "0.7"
+
+[target.'cfg(not(windows))'.dependencies]
+keyring = { version = "3" }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+debug = false
+# A panic ends only the request that caused it, not the service.
+panic = "unwind"

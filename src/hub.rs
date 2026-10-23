@@ -91,6 +91,8 @@ pub struct Hub {
     ask_lock: Mutex<()>,
     /// Load → change → save of change sets one at a time.
     change_lock: Mutex<()>,
+    /// The team's Jira and Confluence ("integrations" in hub.json); tokens from the hub's secrets.
+    integrations: Value,
     /// Wrong tokens per address.
     failures: Mutex<HashMap<IpAddr, Vec<Instant>>>,
     /// Questions per user.
@@ -153,7 +155,7 @@ pub fn load(file: &Path) -> Result<(Hub, String)> {
     let listen = value["listen"].as_str().unwrap_or(DEFAULT_LISTEN).to_string();
     let hub = Hub {
         file: file.to_path_buf(), dir, sources, users, policy: Mutex::new(value["policy"].clone()), audit_lock: Mutex::new(()), ask_lock: Mutex::new(()),
-        change_lock: Mutex::new(()), failures: Mutex::new(HashMap::new()), asks: Mutex::new(HashMap::new()),
+        change_lock: Mutex::new(()), failures: Mutex::new(HashMap::new()), asks: Mutex::new(HashMap::new()), integrations: value["integrations"].clone(),
     };
     Ok((hub, listen))
 }
@@ -570,6 +572,53 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
     let body = || -> Result<Value, HttpError> { serde_json::from_slice(&request.body).map_err(|e| deny(400, format!("JSON: {e}"))) };
     match (request.method.as_str(), segments.as_slice()) {
         ("GET", ["api", "me"]) => Ok((200, json!({ "name": user, "role": role.name() }))),
+        ("GET", ["api", "integrations"]) => Ok((200, json!({
+            "jira": hub.integrations["jira"]["url"].as_str().is_some_and(|u| !u.trim().is_empty()),
+            "confluence": hub.integrations["confluence"]["url"].as_str().is_some_and(|u| !u.trim().is_empty()),
+        }))),
+        // Jira and Confluence of the team, as actions of an architect (never of the assistant): the hub's service account.
+        ("POST", ["api", "sources", id, "jira"]) => {
+            require(role, Role::Architect)?;
+            let source = hub.source(id)?;
+            let b = body()?;
+            let (summary, description) = issue_text(&b)?;
+            let mut text = description;
+            if let Some(element) = b["element"].as_i64() {
+                text.push_str(&format!("\n\n{}\n{}", crate::i18n::fmt("Element of the model {0} (id {1}):", &[source.name.clone(), element.to_string()]), element_details(&source.cfg, element).map_err(|e| deny(400, e.to_string()))?.chars().take(4000).collect::<String>()));
+            }
+            let (key, url) = hub.create_issue(&summary, &text)?;
+            let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": id, "summary": format!("Jira {key}: {summary}"), "ok": true }));
+            Ok((201, json!({ "key": key, "url": url })))
+        }
+        ("POST", ["api", "changes", id, "jira"]) => {
+            require(role, Role::Architect)?;
+            let b = body()?;
+            let (summary, description) = issue_text(&b)?;
+            let _guard = hub.change_lock.lock().unwrap_or_else(|p| p.into_inner());
+            let mut change = hub.change(id).ok_or_else(|| deny(404, crate::i18n::fmt("there is no change set {0}", &[id.to_string()])))?;
+            if change["jira"].is_object() {
+                return Err(deny(409, crate::i18n::tr("this change set already has a Jira issue")));
+            }
+            let text = format!("{description}\n\n{} {} ({})\n{}\n\n{}", id, change["title"].as_str().unwrap_or(""), change["status"].as_str().unwrap_or(""),
+                change["summary"].as_str().unwrap_or(""), change["preview"].as_str().unwrap_or("").chars().take(6000).collect::<String>());
+            let (key, url) = hub.create_issue(&summary, &text)?;
+            change["jira"] = json!({ "key": key, "url": url, "by": user });
+            hub.save_change(&change).map_err(|e| deny(500, e.to_string()))?;
+            let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": change["source"], "summary": format!("Jira {key} for {id}"), "ok": true }));
+            Ok((201, json!({ "key": key, "url": url })))
+        }
+        ("POST", ["api", "sources", id, "confluence"]) => {
+            require(role, Role::Architect)?;
+            let source = hub.source(id)?;
+            let b = body()?;
+            let package = b["package"].as_i64().ok_or_else(|| deny(400, crate::i18n::fmt("missing number '{0}'", &["package".to_string()])))?;
+            let (title, storage) = package_page(&source.cfg, &source.name, package)?;
+            let title = b["title"].as_str().map(str::trim).filter(|t| !t.is_empty()).map(|t| t.chars().take(200).collect::<String>()).unwrap_or(title);
+            let (connection, space, parent) = hub.confluence()?;
+            let (page_id, page_url, created) = connection.publish(&space, &title, parent.as_deref(), None, &storage, &[]).map_err(|e| deny(502, format!("Confluence: {e:#}")))?;
+            let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": id, "summary": format!("Confluence page {page_id}: {title}"), "ok": true }));
+            Ok((201, json!({ "title": title, "url": page_url, "created": created })))
+        }
         ("GET", ["api", "policy"]) => Ok((200, hub.policy.lock().unwrap().clone())),
         ("PUT", ["api", "policy"]) => {
             require(role, Role::Admin)?;
@@ -622,7 +671,7 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
                 "[A question from {user} through the team hub; read-only] {question}\n\nAnswer for a person who does not use Enterprise Architect: plain language, \
 in the language of the question, short. You can only read the model (db_query and the other reading tools); you cannot change it."
             );
-            let answer = crate::run_agent(&source.cfg, &prompt, ASK_TIMEOUT)?;
+            let answer = crate::agent_ro::run(&source.cfg, &prompt, ASK_TIMEOUT)?;
             let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": id, "summary": format!("question: {}", question.chars().take(200).collect::<String>()), "ok": true }));
             Ok((200, json!({ "answer": answer, "seconds": started.elapsed().as_secs() })))
         }
@@ -851,6 +900,103 @@ fn search(cfg: &AppConfig, q: &str) -> Result<String> {
     let mut out = vec![crate::i18n::tr("object_id | name | type | stereotype | package | description").to_string()];
     out.extend(rows.into_iter().map(|r| r.iter().map(|c| c.replace(['\r', '\n'], " ")).collect::<Vec<_>>().join(" | ")));
     Ok(out.join("\n"))
+}
+
+/// Summary and description of a new issue from the request (cut to Jira's limits).
+fn issue_text(b: &Value) -> Result<(String, String), HttpError> {
+    let summary: String = b["summary"].as_str().unwrap_or("").trim().chars().filter(|c| !c.is_control()).take(250).collect();
+    if summary.chars().count() < 3 {
+        return Err(deny(400, crate::i18n::tr("type a summary for the issue")));
+    }
+    let description: String = b["description"].as_str().unwrap_or("").chars().take(20_000).collect();
+    Ok((summary, description))
+}
+
+fn xml(text: &str) -> String {
+    text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+}
+
+/// A Confluence page (storage format) of a package with its subpackages: elements with their descriptions and the
+/// relationships between them. Text only: the hub has no EA to draw diagrams.
+fn package_page(cfg: &AppConfig, model: &str, package: i64) -> Result<(String, String), HttpError> {
+    let q = |sql: String| crate::tools::query_rows(cfg, &sql).map_err(|e| HttpError(500, format!("{e:#}")));
+    let root = q(format!("select name as c0, coalesce(notes,'') as c1 from t_package where package_id = {package}"))?
+        .into_iter()
+        .next()
+        .ok_or_else(|| deny(404, crate::i18n::fmt("there is no package with id {0}", &[package.to_string()])))?;
+    let ids: Vec<String> = q(format!(
+        "with recursive tree(package_id) as (select package_id as c0 from t_package where package_id = {package} \
+         union all select p.package_id as c0 from t_package p join tree t on p.parent_id = t.package_id) select package_id as c0 from tree"
+    ))?
+    .into_iter()
+    .map(|r| r[0].clone())
+    .collect();
+    let ids = ids.join(",");
+    let elements = q(format!(
+        "select o.object_id as c0, coalesce(o.name,'') as c1, o.object_type as c2, coalesce(o.stereotype,'') as c3, coalesce(o.note,'') as c4, p.name as c5 \
+         from t_object o join t_package p on p.package_id = o.package_id where o.package_id in ({ids}) and o.object_type not in ('Package','Note','Text','Boundary') \
+         order by p.name, o.name"
+    ))?;
+    let relations = q(format!(
+        "select c.connector_type as c0, coalesce(c.stereotype,'') as c1, coalesce(s.name,'') as c2, coalesce(t.name,'') as c3, coalesce(c.name,'') as c4 from t_connector c \
+         join t_object s on s.object_id = c.start_object_id join t_object t on t.object_id = c.end_object_id \
+         where s.package_id in ({ids}) and t.package_id in ({ids}) order by 3, 4"
+    ))?;
+    let mut page = String::new();
+    page.push_str(&format!("<p><em>{}</em></p>", xml(&crate::i18n::fmt("Published from the model {0} by the team hub on {1}. Edit the model, not this page: the next publication replaces it.", &[model.to_string(), chrono::Local::now().format("%Y-%m-%d %H:%M").to_string()]))));
+    if !root[1].trim().is_empty() {
+        page.push_str(&format!("<p>{}</p>", xml(root[1].trim())));
+    }
+    page.push_str(&format!("<h2>{}</h2><table><tbody><tr><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr>", xml(crate::i18n::tr("Elements")),
+        xml(crate::i18n::tr("name")), xml(crate::i18n::tr("type")), xml(crate::i18n::tr("package")), xml(crate::i18n::tr("description"))));
+    for e in elements.iter().take(1000) {
+        let kind = if e[3].is_empty() { e[2].clone() } else { format!("{} «{}»", e[2], e[3]) };
+        let note: String = e[4].chars().take(600).collect();
+        page.push_str(&format!("<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>", xml(&e[1]), xml(&kind), xml(&e[5]), xml(&note).replace('\n', "<br/>")));
+    }
+    page.push_str("</tbody></table>");
+    if !relations.is_empty() {
+        page.push_str(&format!("<h2>{}</h2><ul>", xml(crate::i18n::tr("Relationships"))));
+        for r in relations.iter().take(1000) {
+            let kind = if r[1].is_empty() { r[0].clone() } else { format!("{} «{}»", r[0], r[1]) };
+            page.push_str(&format!("<li>{} → {} ({}{})</li>", xml(&r[2]), xml(&r[3]), xml(&kind), if r[4].is_empty() { String::new() } else { format!(": {}", xml(&r[4])) }));
+        }
+        page.push_str("</ul>");
+    }
+    Ok((format!("{} – {}", root[0], model), page))
+}
+
+impl Hub {
+    /// The team's Jira from hub.json ("integrations": {"jira": {"url", "user", "project", "issue_type"}}); token: secret jira_token.
+    fn create_issue(&self, summary: &str, description: &str) -> Result<(String, String), HttpError> {
+        let j = &self.integrations["jira"];
+        let url = j["url"].as_str().unwrap_or("").trim().to_string();
+        let project = j["project"].as_str().unwrap_or("").trim().to_string();
+        if url.is_empty() || project.is_empty() {
+            return Err(deny(400, crate::i18n::tr("the hub has no Jira: the administrator sets \"integrations\" in hub.json")));
+        }
+        crate::jira::check_base_url(&url).map_err(|e| deny(500, e.to_string()))?;
+        let token = crate::config::secrets::get(crate::config::secrets::JIRA_TOKEN).map_err(|e| HttpError(500, format!("{e:#}")))?;
+        let connection = crate::jira::Connection { base_url: url, user: j["user"].as_str().unwrap_or("").trim().to_string(), token };
+        let labels = vec!["compass-hub".to_string()];
+        connection
+            .create_issue(&project, j["issue_type"].as_str().unwrap_or("Task"), summary, description, &labels, None)
+            .map_err(|e| deny(502, format!("Jira: {e:#}")))
+    }
+
+    /// The team's Confluence ("integrations": {"confluence": {"url", "user", "space", "parent"}}); token: secret confluence_token.
+    fn confluence(&self) -> Result<(crate::confluence::Connection, String, Option<String>), HttpError> {
+        let c = &self.integrations["confluence"];
+        let url = c["url"].as_str().unwrap_or("").trim().to_string();
+        let space = c["space"].as_str().unwrap_or("").trim().to_string();
+        if url.is_empty() || space.is_empty() {
+            return Err(deny(400, crate::i18n::tr("the hub has no Confluence: the administrator sets \"integrations\" in hub.json")));
+        }
+        crate::confluence::check_base_url(&url).map_err(|e| deny(500, e.to_string()))?;
+        let token = crate::config::secrets::get(crate::config::secrets::CONFLUENCE_TOKEN).map_err(|e| HttpError(500, format!("{e:#}")))?;
+        let parent = c["parent"].as_str().map(|p| p.trim().to_string()).filter(|p| !p.is_empty());
+        Ok((crate::confluence::Connection { base_url: url, user: c["user"].as_str().unwrap_or("").trim().to_string(), token }, space, parent))
+    }
 }
 
 fn element_details(cfg: &AppConfig, id: i64) -> Result<String> {
@@ -1117,6 +1263,92 @@ mod tests {
     /// The hub with two data sources (a PostgreSQL database and an EA project file, from LOONAR_HUB_DB_PROPS and
     /// LOONAR_HUB_FILE_PROPS): roles, policy, audit, notes, the web page, the REST API and MCP on both sources.
     /// Run with: `cargo test hub_two_sources -- --ignored --nocapture`.
+    /// Jira and Confluence as actions of an architect in the hub (imitations on localhost): a viewer cannot, an
+    /// architect creates an issue for an element and for a change set and publishes a package page.
+    /// `cargo test hub_integrations -- --ignored --nocapture` with LOONAR_HUB_FILE_PROPS.
+    #[test]
+    #[ignore = "requires a test model (LOONAR_HUB_FILE_PROPS)"]
+    fn hub_integrations() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        crate::config::secrets::use_environment();
+        std::env::set_var("LOONAR_SECRET_JIRA_TOKEN", "jira-test-token");
+        std::env::set_var("LOONAR_SECRET_CONFLUENCE_TOKEN", "confluence-test-token");
+        let jira = crate::jira::mock::start(false, "jira-test-token");
+        // Confluence imitation: no page yet, the created page gets id 777.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let confluence_url = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
+        let published: Arc<Mutex<Vec<String>>> = Default::default();
+        let log = published.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { continue };
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut first = String::new();
+                let _ = reader.read_line(&mut first);
+                let mut length = 0;
+                loop {
+                    let mut line = String::new();
+                    let _ = reader.read_line(&mut line);
+                    if line.trim_end().is_empty() {
+                        break;
+                    }
+                    if let Some(v) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                        length = v.trim().parse().unwrap_or(0);
+                    }
+                }
+                let mut body = vec![0u8; length];
+                let _ = reader.read_exact(&mut body);
+                let answer = if first.starts_with("POST") {
+                    log.lock().unwrap().push(String::from_utf8_lossy(&body).to_string());
+                    r#"{"id":"777","_links":{"webui":"/pages/777"}}"#
+                } else {
+                    r#"{"results":[]}"#
+                };
+                let _ = write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{answer}", answer.len());
+            }
+        });
+        let dir = std::env::temp_dir().join(format!("loonar-hub-int-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0",
+            "sources": [{ "id": "shop", "name": "Shop", "properties": std::env::var("LOONAR_HUB_FILE_PROPS").unwrap() }],
+            "users": [{ "name": "anna", "token": "architect-token-0123456789", "role": "architect" }, { "name": "olek", "token": "viewer-token-0123456789", "role": "viewer" }],
+            "integrations": { "jira": { "url": jira.url, "project": "ARCH" }, "confluence": { "url": confluence_url, "space": "ARCH" } } }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let base = format!("http://{}", rx.recv().unwrap());
+        let http = reqwest::blocking::Client::new();
+        let post = |path: &str, token: &str, body: Value| {
+            let r = http.post(format!("{base}{path}")).bearer_auth(token).json(&body).send().unwrap();
+            (r.status().as_u16(), r.json::<Value>().unwrap_or(Value::Null))
+        };
+        let (architect, viewer) = ("architect-token-0123456789", "viewer-token-0123456789");
+        let integrations: Value = http.get(format!("{base}/api/integrations")).bearer_auth(viewer).send().unwrap().json().unwrap();
+        assert_eq!(integrations, json!({ "jira": true, "confluence": true }));
+        let cfg = AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_HUB_FILE_PROPS").unwrap())).unwrap();
+        let element: i64 = crate::tools::query_rows(&cfg, "select min(object_id) as c0 from t_object where object_type = 'Class'").unwrap()[0][0].parse().unwrap();
+        let package: i64 = crate::tools::query_rows(&cfg, &format!("select package_id as c0 from t_object where object_id = {element}")).map(|r| r[0][0].parse().unwrap()).unwrap();
+        assert_eq!(post("/api/sources/shop/jira", viewer, json!({ "summary": "Check it", "element": element })).0, 403, "a viewer cannot");
+        let (status, issue) = post("/api/sources/shop/jira", architect, json!({ "summary": "Check the element", "element": element }));
+        assert_eq!(status, 201, "{issue}");
+        assert!(issue["key"].as_str().unwrap().starts_with("ARCH-"), "{issue}");
+        let sent = jira.requests.lock().unwrap().iter().find(|(m, p, _)| m == "POST" && p.contains("/issue")).cloned().unwrap();
+        assert!(sent.2.to_string().contains("compass-hub") && sent.2.to_string().contains("Element of the model Shop"), "{}", sent.2);
+        assert_eq!(post("/api/sources/shop/jira", architect, json!({ "summary": "x" })).0, 400, "a summary is needed");
+        let created: Value = http.post(format!("{base}/api/changes")).bearer_auth(architect).json(&json!({ "source": "shop", "title": "Rename", "ops": [{ "op": "update_element", "element": element, "name": "Renamed" }] })).send().unwrap().json().unwrap();
+        let id = created["id"].as_str().unwrap().to_string();
+        assert_eq!(post(&format!("/api/changes/{id}/jira"), architect, json!({ "summary": "Review the rename" })).0, 201);
+        assert_eq!(post(&format!("/api/changes/{id}/jira"), architect, json!({ "summary": "Again" })).0, 409, "one issue per change set");
+        let (status, page) = post("/api/sources/shop/confluence", architect, json!({ "package": package }));
+        assert_eq!(status, 201, "{page}");
+        assert!(page["url"].as_str().unwrap().ends_with("/pages/777") && page["created"] == true, "{page}");
+        let body = published.lock().unwrap().last().cloned().unwrap();
+        assert!(body.contains("<table>") && body.contains("Published from the model Shop"), "{body}");
+        let audit: Value = http.get(format!("{base}/api/audit?limit=10")).bearer_auth(viewer).send().unwrap().json().unwrap();
+        assert!(audit.as_array().unwrap().iter().filter(|e| e["summary"].as_str().is_some_and(|s| s.starts_with("Jira") || s.starts_with("Confluence"))).count() >= 3, "{audit}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     #[ignore = "requires two test models (LOONAR_HUB_DB_PROPS, LOONAR_HUB_FILE_PROPS)"]
     fn hub_two_sources() {

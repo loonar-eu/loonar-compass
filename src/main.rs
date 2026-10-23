@@ -30,6 +30,9 @@ mod jira;
 mod hub;
 mod verify;
 mod mcp_client;
+mod model_db;
+mod ops;
+mod agent_ro;
 mod net;
 mod scripts;
 mod agents;
@@ -85,17 +88,11 @@ fn system_prompt(cfg: &AppConfig) -> String {
         model = config::CLAUDE_MODEL,
         docs = docs_url(),
         memories = memory::prompt_section(&cfg.memory_dir, &cfg.model_label()),
-        MODEL_STORE = format!("{} The model of this conversation: {}.", if cfg.uses_file() { MODEL_IN_FILE } else { MODEL_IN_POSTGRES }, cfg.model_label()),
+        MODEL_STORE = format!("{} The model of this conversation: {}.", if cfg.uses_file() { model_db::MODEL_IN_FILE } else { model_db::MODEL_IN_POSTGRES }, cfg.model_label()),
         LANGUAGE_RULE = format!("Response language: {} (the language selected in the application). Answer in it unless the user writes to you in a different language; then answer in the user's language. Create documents, pages and images in the response language unless the user asks for a different one. This applies to everything you write, also short notes between tool calls.", i18n::current().english_name()),
         templates = templates::prompt_section(&cfg.templates_dir),
     )
 }
-
-/// Where the model is: the SQL dialect of db_query.
-const MODEL_IN_POSTGRES: &str = "The model is in a PostgreSQL database: write db_query queries in PostgreSQL SQL (ILIKE for case-insensitive search).";
-const MODEL_IN_FILE: &str = "The model is an Enterprise Architect project file (.qea/.qeax), which is a SQLite database: write db_query queries in SQLite SQL. \
-There is no ILIKE (LIKE already ignores the case of ASCII letters; for other letters compare lower(...)), no :: casts (use CAST(x AS type)), \
-booleans are 0/1, and functions such as string_agg are group_concat. The tables and columns are the same as in a database model.";
 
 /// Rules for preparing documentation (Word, Confluence, templates).
 const DOC_RULES: &str = "Documentation: when the user asks for a document or a page (feasibility study, BRD, change description, process description, specification), \
@@ -4004,33 +4001,9 @@ fn tool_step(name: &str, input: &Value) -> String {
 
 /// One answer of an event agent: a conversation of one message, reading tools only (a write is refused: nobody is
 /// there to approve it). Returns the assistant's text.
-/// Tools of an assistant nobody watches (event agents, questions in the hub): reading the model only. No files,
-/// no network services, no MCP servers, nothing that writes or proposes.
-const READ_ONLY_TOOLS: &[&str] = &["db_query", "impact_analysis", "model_lint", "gap_analysis", "operation_usage", "estimate_change", "spell_check"];
-
-/// The assistant without a user: reads the model with READ_ONLY_TOOLS, stops after `timeout`, every approval is refused.
+/// The assistant without a user (event agents, questions in the hub): reads the model only, stops after `timeout`.
 pub(crate) fn run_agent(cfg: &AppConfig, prompt: &str, timeout: std::time::Duration) -> anyhow::Result<String> {
-    let messages = vec![Message { role: "user".into(), text: prompt.into(), attachments: vec![], created: chrono::Utc::now().to_rfc3339() }];
-    let approver = tools::Approver::new(ApprovalMode::Ask, Box::new(|_| false));
-    let (_tx, inbox) = mpsc::channel();
-    let cancel = Arc::new(AtomicBool::new(false));
-    {
-        let cancel = cancel.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(timeout);
-            cancel.store(true, Ordering::Relaxed);
-        });
-    }
-    let answer = std::sync::Mutex::new(String::new());
-    let emit = |event: WorkerEvent| {
-        if let WorkerEvent::Text(text) = event {
-            let mut a = answer.lock().unwrap();
-            a.clear();
-            a.push_str(&text);
-        }
-    };
-    run_turn_with(cfg, &messages, &approver, &inbox, &cancel, &emit, Some(READ_ONLY_TOOLS))?;
-    Ok(answer.into_inner().unwrap_or_else(|p| p.into_inner()))
+    agent_ro::run(cfg, prompt, timeout)
 }
 
 /// Result of a tool in the step list. Tool results are written for the model in English; in English the start of

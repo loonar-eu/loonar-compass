@@ -35,15 +35,35 @@ tr.click { cursor:pointer; } tr.click:hover td { background:var(--bg); }
 pre { white-space:pre-wrap; font:13px/1.45 Consolas, monospace; margin:0; }
 .muted { color:var(--muted); } .error { color:var(--err); }
 h3 { font-size:14px; margin:16px 0 6px; }
+.login { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+.login .card { width:min(420px, 100%); background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:28px 28px 22px; box-shadow:0 8px 30px rgba(0,0,0,.08); }
+.login .mark { width:44px; height:44px; border-radius:10px; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:20px; margin-bottom:14px; }
+.login h1 { font-size:22px; margin:0 0 6px; }
+.login p { margin:0 0 16px; }
+.login input { width:100%; margin-bottom:12px; padding:9px 10px; }
+.login button { width:100%; padding:9px; }
+.small { font-size:12px; }
+.actions { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; }
+.notice { padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:var(--bg); margin:8px 0; }
 </style>
 </head>
 <body>
+<div class="login" id="loginview">
+  <div class="card">
+    <div class="mark">C</div>
+    <h1>Compass Hub</h1>
+    <p class="muted">The team's Enterprise Architect models: search, model check, change sets and questions about the model.</p>
+    <input id="token" type="password" placeholder="Your hub token" aria-label="Hub token" autocomplete="current-password">
+    <button id="login">Sign in</button>
+    <p class="error" id="loginerror"></p>
+    <p class="muted small">No token yet? Ask the administrator of the hub. The token is kept only until you close the browser.</p>
+  </div>
+</div>
+<div id="app" hidden>
 <header>
   <h1>Compass Hub</h1>
   <select id="source" aria-label="Model"></select>
   <span class="who" id="who"></span>
-  <input id="token" type="password" placeholder="Hub token" aria-label="Hub token" style="width:220px">
-  <button id="login">Sign in</button>
   <button class="ghost" id="logout">Sign out</button>
 </header>
 <main>
@@ -80,6 +100,7 @@ h3 { font-size:14px; margin:16px 0 6px; }
     <div id="view-changes" hidden><div id="changes"></div></div>
   </section>
 </main>
+</div>
 <script>
 const $ = id => document.getElementById(id);
 let token = '';
@@ -108,16 +129,36 @@ function table(text, onRow) {
   }
   return html + '</table>';
 }
+let integrations = {};
+const canWrite = () => me.role === 'architect' || me.role === 'admin';
+// A link from the hub's answer: only http(s) addresses become links.
+const link = (url, text) => /^https?:\/\//.test(url || '') ? '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' + esc(text || url) + '</a>' : esc(text || '');
 async function login() {
   token = $('token').value.trim() || token;
-  try { sessionStorage.setItem('hubToken', token); } catch (e) {}
+  $('loginerror').textContent = '';
   try {
     me = await api('/api/me');
+    try { sessionStorage.setItem('hubToken', token); } catch (e) {}
     $('who').textContent = me.name + ' · ' + me.role;
+    $('loginview').hidden = true;
+    $('app').hidden = false;
+    integrations = await api('/api/integrations').catch(() => ({}));
     const sources = await api('/api/sources');
     $('source').innerHTML = sources.map(s => '<option value="' + esc(s.id) + '">' + esc(s.name) + ' (' + esc(s.kind) + ')</option>').join('');
     await loadTree();
-  } catch (e) { $('who').innerHTML = '<span class="error">' + esc(e.message) + '</span>'; }
+  } catch (e) {
+    try { sessionStorage.removeItem('hubToken'); } catch (x) {}
+    $('app').hidden = true;
+    $('loginview').hidden = false;
+    $('loginerror').textContent = e.message;
+  }
+}
+// Actions with the team's Jira and Confluence (architects; the hub uses its own service account).
+async function jiraIssue(where, summary, extra) {
+  const text = prompt('Summary of the new Jira issue:', summary);
+  if (!text) return;
+  try { const v = await post(where, Object.assign({ summary: text }, extra || {})); alert('Created ' + v.key + (v.url ? '\n' + v.url : '')); return v; }
+  catch (e) { alert(e.message); }
 }
 async function loadTree() {
   const v = await api('/api/sources/' + source() + '/packages');
@@ -136,7 +177,17 @@ $('tree').onclick = async e => {
   if (!$('asis').value) $('asis').value = selectedPackage; else $('tobe').value = selectedPackage;
   show('lint');
   $('lint').innerHTML = '<p class="muted">Checking…</p>';
-  try { $('lint').innerHTML = table((await api('/api/sources/' + source() + '/lint/' + selectedPackage)).text); } catch (err) { $('lint').innerHTML = '<p class="error">' + esc(err.message) + '</p>'; }
+  try {
+    const report = table((await api('/api/sources/' + source() + '/lint/' + selectedPackage)).text);
+    $('lint').innerHTML = (canWrite() && integrations.confluence ? '<div class="actions"><button id="pconf">Publish this package to Confluence</button></div><div id="pconfout"></div>' : '') + report;
+    if ($('pconf')) $('pconf').onclick = async () => {
+      const title = prompt('Title of the Confluence page (empty: the package name):', '');
+      if (title === null) return;
+      $('pconfout').innerHTML = '<p class="muted">Publishing…</p>';
+      try { const v = await post('/api/sources/' + source() + '/confluence', { package: Number(selectedPackage), title }); $('pconfout').innerHTML = '<p class="notice">' + (v.created ? 'Created: ' : 'Updated: ') + link(v.url, v.title) + '</p>'; }
+      catch (e) { $('pconfout').innerHTML = '<p class="error">' + esc(e.message) + '</p>'; }
+    };
+  } catch (err) { $('lint').innerHTML = '<p class="error">' + esc(err.message) + '</p>'; }
 };
 async function search() {
   try { $('results').innerHTML = table((await api('/api/sources/' + source() + '/search?q=' + encodeURIComponent($('q').value))).text, true); }
@@ -146,8 +197,12 @@ $('results').onclick = async e => {
   const tr = e.target.closest('tr[data-id]'); if (!tr) return;
   const id = tr.dataset.id;
   const [details, impact] = await Promise.all([api('/api/sources/' + source() + '/elements/' + id), api('/api/sources/' + source() + '/impact/' + id + '?depth=3')]);
-  $('results').innerHTML = '<button class="ghost" id="back">← Results</button><h3>Element</h3><pre>' + esc(details.text) + '</pre><h3>Impact</h3>' + table(impact.text);
+  const name = (details.text.split('\n')[0] || '').split(' (')[0];
+  $('results').innerHTML = '<button class="ghost" id="back">← Results</button>' +
+    (canWrite() && integrations.jira ? '<div class="actions"><button id="ejira">Create Jira issue</button></div>' : '') +
+    '<h3>Element</h3><pre>' + esc(details.text) + '</pre><h3>Impact</h3>' + table(impact.text);
   $('back').onclick = search;
+  if ($('ejira')) $('ejira').onclick = () => jiraIssue('/api/sources/' + source() + '/jira', 'Model: ' + name, { element: Number(id) });
 };
 $('gapgo').onclick = async () => {
   try { $('gap').innerHTML = table((await api('/api/sources/' + source() + '/gap?as_is=' + encodeURIComponent($('asis').value) + '&to_be=' + encodeURIComponent($('tobe').value))).text); }
@@ -184,10 +239,13 @@ async function openChange(id) {
     '<pre>' + esc(c.summary || '') + '\n\n' + esc(c.preview || '') + '</pre>' +
     '<h3>Operations (what will be saved)</h3><pre>' + esc((c.ops || []).map(o => JSON.stringify(o)).join('\n')) + '</pre>' +
     '<h3>Comments</h3>' + ((c.comments || []).map(m => '<p><b>' + esc(m.user) + '</b> <span class="muted">' + esc((m.time || '').slice(0, 16).replace('T', ' ')) + '</span><br>' + esc(m.text) + '</p>').join('') || '<p class="muted">No comments.</p>') +
+    (c.jira ? '<p class="notice">Jira: ' + link(c.jira.url, c.jira.key) + '</p>' : '') +
+    (canWrite() && integrations.jira && !c.jira ? '<div class="actions"><button class="ghost" id="cjira">Create Jira issue for this change set</button></div>' : '') +
     '<div class="row"><input id="ctext" placeholder="Comment"><button id="csend">Comment</button></div>' +
     (canDecide ? '<div class="row"><button id="capprove">Approve</button><button class="ghost" id="creject">Reject</button></div>' : '') +
     (me.role === 'admin' && c.status === 'applying' ? '<p class="muted">Being applied by ' + esc(c.claimed_by) + ' since ' + esc((c.claimed || '').slice(0, 16).replace('T', ' ')) + '. If that Compass stopped, check the model, then:</p><div class="row"><button id="cfree">Not applied – free it</button><button class="ghost" id="cdone">It is in the model – mark applied</button></div>' : '');
   $('cback').onclick = loadChanges;
+  if ($('cjira')) $('cjira').onclick = async () => { if (await jiraIssue('/api/changes/' + id + '/jira', 'Change set: ' + c.title)) openChange(id); };
   $('csend').onclick = async () => { await post('/api/changes/' + id + '/comment', { text: $('ctext').value }); openChange(id); };
   if ($('cfree')) {
     $('cfree').onclick = async () => { try { await post('/api/changes/' + id + '/reset', { applied: false }); openChange(id); } catch (e) { alert(e.message); } };
@@ -214,6 +272,7 @@ function show(tab) {
 }
 $('tabs').onclick = e => { const b = e.target.closest('button'); if (b) show(b.dataset.tab); };
 $('login').onclick = login;
+$('token').onkeydown = e => { if (e.key === 'Enter') login(); };
 $('logout').onclick = () => { token = ''; try { sessionStorage.removeItem('hubToken'); localStorage.removeItem('hubToken'); } catch (e) {} location.reload(); };
 $('go').onclick = search;
 $('askgo').onclick = ask;
