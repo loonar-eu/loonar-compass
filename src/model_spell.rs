@@ -250,3 +250,17 @@ mod tests {
         assert!(pl.suggest("zamuwienie", 3).iter().any(|s| s == "zamówienie"));
     }
 }
+
+#[cfg(test)]
+mod model_tests {
+    /// Spelling of a real model's texts (LOONAR_TEST_PROPS) in Polish. `cargo test spell_model_texts -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a test model and the Polish Windows dictionary"]
+    fn spell_model_texts() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
+        crate::i18n::set(crate::i18n::Lang::Pl);
+        let out = super::check(&cfg, None, "pl").expect("spell check");
+        println!("{}", out.lines().take(25).collect::<Vec<_>>().join("\n"));
+        assert!(out.starts_with("Pisownia (polski, słownik pl-PL)"));
+    }
+}
