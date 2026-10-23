@@ -2953,6 +2953,7 @@ dependencies = [
  "reqwest",
  "resvg",
  "rfd",
+ "ring",
  "rusqlite",
  "rust_xlsxwriter",
  "serde",

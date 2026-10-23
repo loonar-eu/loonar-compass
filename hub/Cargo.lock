@@ -157,6 +157,7 @@ dependencies = [
  "postgres",
  "postgres-native-tls",
  "reqwest",
+ "ring",
  "rusqlite",
  "serde",
  "serde_json",

@@ -24,6 +24,7 @@ native-tls = "0.2"
 postgres-native-tls = "0.5"
 rusqlite = { version = "0.37", features = ["bundled", "hooks"] }
 sha2 = "0.10"
+ring = "0.17"
 base64 = "0.22"
 
 [target.'cfg(windows)'.dependencies]

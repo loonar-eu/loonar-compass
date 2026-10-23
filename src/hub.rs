@@ -5,7 +5,9 @@
 //! - shared notes (team decisions, conventions),
 //! - a web view for people without EA (search, element details, impact, model check, gaps, audit),
 //! - an MCP server (read-only) for other AI clients,
-//! - users with tokens and roles: viewer (reading), architect (+ audit, notes), admin (+ policy).
+//! - users with roles: viewer (reading), architect (+ audit, notes, change sets), admin (+ policy, users); people sign in
+//!   to the web view with a name and a password, Compass and MCP clients use a token. A hub without users gets the
+//!   default account admin / passw0rd, whose password must be changed at the first sign-in.
 //!
 //! Plain HTTP on a single port without extra libraries; put it behind HTTPS (reverse proxy) outside one computer.
 //!
@@ -84,8 +86,9 @@ pub struct Hub {
     file: PathBuf,
     dir: PathBuf,
     sources: Vec<Source>,
-    /// Name, SHA-256 of the token, role.
-    users: Vec<(String, [u8; 32], Role)>,
+    users: Mutex<Vec<User>>,
+    /// Signed-in sessions of the web view: SHA-256 of the session token → user and end of validity.
+    sessions: Mutex<HashMap<[u8; 32], (String, Instant)>>,
     policy: Mutex<Value>,
     audit_lock: Mutex<()>,
     ask_lock: Mutex<()>,
@@ -97,6 +100,55 @@ pub struct Hub {
     failures: Mutex<HashMap<IpAddr, Vec<Instant>>>,
     /// Questions per user.
     asks: Mutex<HashMap<String, Vec<Instant>>>,
+}
+
+/// A user of the hub.
+#[derive(Clone, Debug)]
+struct User {
+    name: String,
+    role: Role,
+    /// SHA-256 of the API token (Compass, MCP clients).
+    token: Option<[u8; 32]>,
+    /// "pbkdf2-sha256$<iterations>$<salt hex>$<hash hex>" (sign-in to the web view).
+    password: Option<String>,
+    /// The password was set by someone else (the default account, a reset): it must be changed before anything else.
+    must_change: bool,
+}
+
+const DEFAULT_ADMIN: &str = "admin";
+const DEFAULT_PASSWORD: &str = "passw0rd";
+const PASSWORD_ITERATIONS: u32 = 210_000;
+const SESSION_HOURS: u64 = 12;
+const MIN_PASSWORD: usize = 10;
+
+/// PBKDF2-SHA256 with a random salt.
+fn password_hash(password: &str) -> String {
+    use ring::rand::SecureRandom;
+    let mut salt = [0u8; 16];
+    let _ = ring::rand::SystemRandom::new().fill(&mut salt);
+    let mut out = [0u8; 32];
+    let iterations = std::num::NonZeroU32::new(PASSWORD_ITERATIONS).unwrap_or(std::num::NonZeroU32::MIN);
+    ring::pbkdf2::derive(ring::pbkdf2::PBKDF2_HMAC_SHA256, iterations, &salt, password.as_bytes(), &mut out);
+    format!("pbkdf2-sha256${PASSWORD_ITERATIONS}${}${}", hex(&salt), hex(&out))
+}
+
+fn unhex(text: &str) -> Option<Vec<u8>> {
+    (text.len() % 2 == 0 && text.bytes().all(|b| b.is_ascii_hexdigit())).then(|| (0..text.len()).step_by(2).filter_map(|i| u8::from_str_radix(&text[i..i + 2], 16).ok()).collect())
+}
+
+fn password_ok(stored: &str, password: &str) -> bool {
+    let parts: Vec<&str> = stored.split('$').collect();
+    let [kind, iterations, salt, hash] = parts.as_slice() else { return false };
+    let (Some(iterations), Some(salt), Some(hash)) = (iterations.parse::<u32>().ok().and_then(std::num::NonZeroU32::new), unhex(salt), unhex(hash)) else { return false };
+    *kind == "pbkdf2-sha256" && ring::pbkdf2::verify(ring::pbkdf2::PBKDF2_HMAC_SHA256, iterations, &salt, password.as_bytes(), &hash).is_ok()
+}
+
+/// A password someone chooses: long enough, not the default one, not the name.
+fn check_new_password(name: &str, password: &str) -> Result<(), HttpError> {
+    if password.chars().count() < MIN_PASSWORD || password == DEFAULT_PASSWORD || password.eq_ignore_ascii_case(name) {
+        return Err(deny(400, crate::i18n::fmt("the password needs at least {0} characters and may not be the default password or the user name", &[MIN_PASSWORD.to_string()])));
+    }
+    Ok(())
 }
 
 /// SHA-256 of a token (hub.json may keep only the hash: "token_sha256").
@@ -131,32 +183,46 @@ pub fn load(file: &Path) -> Result<(Hub, String)> {
         let cfg = AppConfig::load(&props).with_context(|| crate::i18n::fmt("hub source {0}", &[id.clone()]))?;
         sources.push(Source { name: s["name"].as_str().unwrap_or(&id).to_string(), id, cfg });
     }
-    let mut users: Vec<(String, [u8; 32], Role)> = Vec::new();
+    let mut users: Vec<User> = Vec::new();
     for u in value["users"].as_array().into_iter().flatten() {
         let name = u["name"].as_str().unwrap_or("").trim().to_string();
         if name.is_empty() {
             bail!("{}", crate::i18n::tr("a hub user needs a name"));
         }
-        let hash: [u8; 32] = match (u["token"].as_str(), u["token_sha256"].as_str()) {
-            (_, Some(h)) => {
-                let h = h.trim().to_ascii_lowercase();
-                let valid = h.len() == 64 && h.bytes().all(|b| b.is_ascii_hexdigit());
-                let bytes: Vec<u8> = if valid { (0..64).step_by(2).filter_map(|i| u8::from_str_radix(&h[i..i + 2], 16).ok()).collect() } else { Vec::new() };
-                bytes.try_into().map_err(|_| anyhow!("{}", crate::i18n::fmt("hub user {0}: token_sha256 must be 64 hexadecimal characters", &[name.clone()])))?
-            }
-            (Some(token), None) if token.len() >= 16 => token_hash(token),
-            _ => bail!("{}", crate::i18n::fmt("hub user {0}: the token must have at least 16 characters", &[name.clone()])),
+        let token: Option<[u8; 32]> = match (u["token"].as_str(), u["token_sha256"].as_str()) {
+            (_, Some(h)) => Some(
+                unhex(&h.trim().to_ascii_lowercase()).and_then(|b| b.try_into().ok())
+                    .ok_or_else(|| anyhow!("{}", crate::i18n::fmt("hub user {0}: token_sha256 must be 64 hexadecimal characters", &[name.clone()])))?,
+            ),
+            (Some(token), None) if token.len() >= 16 => Some(token_hash(token)),
+            (Some(_), None) => bail!("{}", crate::i18n::fmt("hub user {0}: the token must have at least 16 characters", &[name.clone()])),
+            (None, None) => None,
         };
-        if users.iter().any(|(n, h, _)| n.eq_ignore_ascii_case(&name) || *h == hash) {
+        let password = u["password_pbkdf2"].as_str().map(String::from);
+        if token.is_none() && password.is_none() {
+            bail!("{}", crate::i18n::fmt("hub user {0}: give a token or a password", &[name.clone()]));
+        }
+        if users.iter().any(|x| x.name.eq_ignore_ascii_case(&name) || (token.is_some() && x.token == token)) {
             bail!("{}", crate::i18n::fmt("hub user {0}: the name or the token is used twice", &[name]));
         }
-        users.push((name, hash, Role::parse(u["role"].as_str().unwrap_or("viewer"))));
+        users.push(User { name, role: Role::parse(u["role"].as_str().unwrap_or("viewer")), token, password, must_change: u["must_change"] == true });
+    }
+    // A new hub: the default account (its password must be changed at the first sign-in).
+    let default_account = users.is_empty();
+    if default_account {
+        users.push(User { name: DEFAULT_ADMIN.into(), role: Role::Admin, token: None, password: Some(password_hash(DEFAULT_PASSWORD)), must_change: true });
     }
     let listen = value["listen"].as_str().unwrap_or(DEFAULT_LISTEN).to_string();
     let hub = Hub {
-        file: file.to_path_buf(), dir, sources, users, policy: Mutex::new(value["policy"].clone()), audit_lock: Mutex::new(()), ask_lock: Mutex::new(()),
-        change_lock: Mutex::new(()), failures: Mutex::new(HashMap::new()), asks: Mutex::new(HashMap::new()), integrations: value["integrations"].clone(),
+        file: file.to_path_buf(), dir, sources, users: Mutex::new(users), sessions: Mutex::new(HashMap::new()), policy: Mutex::new(value["policy"].clone()),
+        audit_lock: Mutex::new(()), ask_lock: Mutex::new(()), change_lock: Mutex::new(()), failures: Mutex::new(HashMap::new()), asks: Mutex::new(HashMap::new()),
+        integrations: value["integrations"].clone(),
     };
+    if default_account {
+        hub.save_users()?;
+        log(&hub.dir, &format!("no users in hub.json: the default account {DEFAULT_ADMIN} / {DEFAULT_PASSWORD} was created; change its password at the first sign-in"));
+        eprintln!("Compass Hub: no users in hub.json – default account {DEFAULT_ADMIN} / {DEFAULT_PASSWORD} created; its password must be changed at the first sign-in.");
+    }
     Ok((hub, listen))
 }
 
@@ -413,9 +479,21 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
             _ => {}
         }
     }
+    // Signing in to the web view with a name and a password (counted like wrong tokens).
+    if head.method == "POST" && path == "/api/login" {
+        if head.length > 64 * 1024 {
+            return respond(&stream, 413, "application/json; charset=utf-8", br#"{"error":"request body too large"}"#);
+        }
+        let body = match read_body(&mut reader, head.length, started) {
+            Ok(body) => body,
+            Err(HttpError(status, message)) => return respond(&stream, status, "application/json; charset=utf-8", json!({ "error": message }).to_string().as_bytes()),
+        };
+        let (status, value) = hub.login(&body, peer);
+        return respond(&stream, status, "application/json; charset=utf-8", value.to_string().as_bytes());
+    }
     // Who is asking, before the body is read. A valid token always passes; an address that sent many wrong tokens
     // gets 429 for a while (a request without a token is not counted: browsers and probes send those).
-    let Some((user, role)) = hub.user(&head.token) else {
+    let Some((user, role, must_change)) = hub.user(&head.token) else {
         let mut locked = false;
         if let (Some(ip), false) = (peer, head.token.is_empty()) {
             let mut failures = hub.failures.lock().unwrap_or_else(|p| p.into_inner());
@@ -445,6 +523,10 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
         Err(HttpError(status, message)) => return respond(&stream, status, "application/json; charset=utf-8", json!({ "error": message }).to_string().as_bytes()),
     };
     let request = Request { method: head.method, path, query, token: head.token, body };
+    // An account with a password set by someone else (the default one, a reset) can only change it or sign out.
+    if must_change && !matches!((request.method.as_str(), request.path.as_str()), ("GET", "/api/me") | ("POST", "/api/password") | ("POST", "/api/logout")) {
+        return respond(&stream, 403, "application/json; charset=utf-8", json!({ "error": crate::i18n::tr("change your password first"), "must_change": true }).to_string().as_bytes());
+    }
     match route(hub, &request, user.to_string(), role) {
         Ok((status, value)) => respond(&stream, status, "application/json; charset=utf-8", value.to_string().as_bytes()),
         Err(HttpError(status, message)) => {
@@ -462,19 +544,81 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
 }
 
 impl Hub {
-    fn user(&self, token: &str) -> Option<(&str, Role)> {
+    /// The user of an API token or of a session of the web view: (name, role, must change the password).
+    fn user(&self, token: &str) -> Option<(String, Role, bool)> {
         if token.is_empty() {
             return None;
         }
-        // The hashes are compared in full for every user (no early exit).
         let hash = token_hash(token);
+        let users = self.users.lock().unwrap_or_else(|p| p.into_inner());
+        // The hashes are compared in full for every user (no early exit).
         let mut found = None;
-        for (name, h, role) in &self.users {
-            if h.iter().zip(hash.iter()).fold(0u8, |acc, (a, b)| acc | (a ^ b)) == 0 {
-                found = Some((name.as_str(), *role));
+        for u in users.iter() {
+            if let Some(h) = &u.token {
+                if h.iter().zip(hash.iter()).fold(0u8, |acc, (a, b)| acc | (a ^ b)) == 0 {
+                    found = Some((u.name.clone(), u.role, false));
+                }
             }
         }
-        found
+        if found.is_some() {
+            return found;
+        }
+        let mut sessions = self.sessions.lock().unwrap_or_else(|p| p.into_inner());
+        sessions.retain(|_, (_, until)| *until > Instant::now());
+        let (name, _) = sessions.get(&hash)?.clone();
+        users.iter().find(|u| u.name == name).map(|u| (u.name.clone(), u.role, u.must_change))
+    }
+
+    /// Sign-in with a name and a password: a session token for the web view.
+    fn login(&self, body: &[u8], peer: Option<IpAddr>) -> (u16, Value) {
+        let b: Value = serde_json::from_slice(body).unwrap_or(Value::Null);
+        let name = b["name"].as_str().unwrap_or("").trim().to_string();
+        let password = b["password"].as_str().unwrap_or("").to_string();
+        if let Some(ip) = peer {
+            let mut failures = self.failures.lock().unwrap_or_else(|p| p.into_inner());
+            let list = failures.entry(ip).or_default();
+            list.retain(|t| t.elapsed() < FAILURE_WINDOW);
+            if list.len() >= MAX_FAILURES {
+                return (429, json!({ "error": "too many wrong sign-ins, try again later" }));
+            }
+        }
+        let user = self.users.lock().unwrap_or_else(|p| p.into_inner()).iter().find(|u| u.name.eq_ignore_ascii_case(&name)).cloned();
+        let ok = user.as_ref().and_then(|u| u.password.as_deref()).is_some_and(|stored| password_ok(stored, &password));
+        let Some(user) = user.filter(|_| ok) else {
+            if let Some(ip) = peer {
+                let mut failures = self.failures.lock().unwrap_or_else(|p| p.into_inner());
+                failures.entry(ip).or_default().push(Instant::now());
+            }
+            log(&self.dir, &format!("failed sign-in as {name:?}"));
+            return (401, json!({ "error": crate::i18n::tr("wrong user name or password") }));
+        };
+        let session = format!("lcs_{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
+        self.sessions.lock().unwrap_or_else(|p| p.into_inner()).insert(token_hash(&session), (user.name.clone(), Instant::now() + Duration::from_secs(SESSION_HOURS * 3600)));
+        log(&self.dir, &format!("{} signed in", user.name));
+        (200, json!({ "token": session, "name": user.name, "role": user.role.name(), "must_change": user.must_change }))
+    }
+
+    /// Writes the users into hub.json (tokens and passwords only as hashes).
+    fn save_users(&self) -> Result<()> {
+        let users: Vec<Value> = self.users.lock().unwrap_or_else(|p| p.into_inner()).iter().map(|u| {
+            let mut v = json!({ "name": u.name, "role": u.role.name() });
+            if let Some(t) = &u.token {
+                v["token_sha256"] = json!(hex(t));
+            }
+            if let Some(p) = &u.password {
+                v["password_pbkdf2"] = json!(p);
+            }
+            if u.must_change {
+                v["must_change"] = json!(true);
+            }
+            v
+        }).collect();
+        let mut file: Value = serde_json::from_str(&std::fs::read_to_string(&self.file)?)?;
+        file["users"] = json!(users);
+        let temp = self.file.with_extension("json.tmp");
+        std::fs::write(&temp, serde_json::to_string_pretty(&file)?)?;
+        std::fs::rename(&temp, &self.file)?;
+        Ok(())
     }
 
     fn source(&self, id: &str) -> Result<&Source, HttpError> {
@@ -571,7 +715,113 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
     let segments: Vec<&str> = request.path.trim_matches('/').split('/').collect();
     let body = || -> Result<Value, HttpError> { serde_json::from_slice(&request.body).map_err(|e| deny(400, format!("JSON: {e}"))) };
     match (request.method.as_str(), segments.as_slice()) {
-        ("GET", ["api", "me"]) => Ok((200, json!({ "name": user, "role": role.name() }))),
+        ("GET", ["api", "me"]) => {
+            let must_change = hub.users.lock().unwrap_or_else(|p| p.into_inner()).iter().find(|u| u.name == user).is_some_and(|u| u.must_change);
+            Ok((200, json!({ "name": user, "role": role.name(), "must_change": must_change })))
+        }
+        ("POST", ["api", "logout"]) => {
+            hub.sessions.lock().unwrap_or_else(|p| p.into_inner()).remove(&token_hash(&request.token));
+            Ok((200, json!({ "ok": true })))
+        }
+        ("POST", ["api", "password"]) => {
+            let b = body()?;
+            let (old, new) = (b["old"].as_str().unwrap_or(""), b["new"].as_str().unwrap_or(""));
+            check_new_password(&user, new)?;
+            {
+                let mut users = hub.users.lock().unwrap_or_else(|p| p.into_inner());
+                let u = users.iter_mut().find(|u| u.name == user).ok_or_else(|| deny(404, "user"))?;
+                if !u.password.as_deref().is_some_and(|p| password_ok(p, old)) {
+                    return Err(deny(403, crate::i18n::tr("the current password is wrong")));
+                }
+                u.password = Some(password_hash(new));
+                u.must_change = false;
+            }
+            hub.save_users().map_err(|e| deny(500, format!("{e:#}")))?;
+            let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": "", "summary": "password changed", "ok": true }));
+            Ok((200, json!({ "ok": true })))
+        }
+        ("GET", ["api", "users"]) => {
+            require(role, Role::Admin)?;
+            let users = hub.users.lock().unwrap_or_else(|p| p.into_inner());
+            Ok((200, json!(users.iter().map(|u| json!({ "name": u.name, "role": u.role.name(), "password": u.password.is_some(), "token": u.token.is_some(), "must_change": u.must_change })).collect::<Vec<_>>())))
+        }
+        ("POST", ["api", "users"]) => {
+            require(role, Role::Admin)?;
+            let b = body()?;
+            let name = b["name"].as_str().unwrap_or("").trim().to_string();
+            if name.is_empty() || name.chars().count() > 60 || !name.chars().all(|c| c.is_alphanumeric() || matches!(c, '.' | '-' | '_' | '@')) {
+                return Err(deny(400, crate::i18n::tr("a user name: letters, digits and . - _ @")));
+            }
+            let password = b["password"].as_str().unwrap_or("");
+            check_new_password(&name, password)?;
+            {
+                let mut users = hub.users.lock().unwrap_or_else(|p| p.into_inner());
+                if users.iter().any(|u| u.name.eq_ignore_ascii_case(&name)) {
+                    return Err(deny(409, crate::i18n::fmt("hub user {0}: the name or the token is used twice", &[name.clone()])));
+                }
+                users.push(User { name: name.clone(), role: Role::parse(b["role"].as_str().unwrap_or("viewer")), token: None, password: Some(password_hash(password)), must_change: true });
+            }
+            hub.save_users().map_err(|e| deny(500, format!("{e:#}")))?;
+            let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": "", "summary": format!("user {name} added"), "ok": true }));
+            Ok((201, json!({ "ok": true })))
+        }
+        ("PUT", ["api", "users", name]) => {
+            require(role, Role::Admin)?;
+            let b = body()?;
+            {
+                let mut users = hub.users.lock().unwrap_or_else(|p| p.into_inner());
+                let admins = users.iter().filter(|u| u.role == Role::Admin).count();
+                let u = users.iter_mut().find(|u| u.name == *name).ok_or_else(|| deny(404, crate::i18n::fmt("there is no user {0}", &[name.to_string()])))?;
+                if let Some(r) = b["role"].as_str() {
+                    let new_role = Role::parse(r);
+                    if u.role == Role::Admin && new_role != Role::Admin && admins <= 1 {
+                        return Err(deny(400, crate::i18n::tr("the hub needs at least one admin")));
+                    }
+                    u.role = new_role;
+                }
+                if let Some(p) = b["password"].as_str() {
+                    check_new_password(name, p)?;
+                    u.password = Some(password_hash(p));
+                    u.must_change = true;
+                }
+            }
+            hub.sessions.lock().unwrap_or_else(|p| p.into_inner()).retain(|_, (n, _)| n != *name);
+            hub.save_users().map_err(|e| deny(500, format!("{e:#}")))?;
+            let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": "", "summary": format!("user {name} changed"), "ok": true }));
+            Ok((200, json!({ "ok": true })))
+        }
+        ("DELETE", ["api", "users", name]) => {
+            require(role, Role::Admin)?;
+            if *name == user {
+                return Err(deny(400, crate::i18n::tr("you cannot remove yourself")));
+            }
+            {
+                let mut users = hub.users.lock().unwrap_or_else(|p| p.into_inner());
+                let admins = users.iter().filter(|u| u.role == Role::Admin).count();
+                let target = users.iter().find(|u| u.name == *name).ok_or_else(|| deny(404, crate::i18n::fmt("there is no user {0}", &[name.to_string()])))?;
+                if target.role == Role::Admin && admins <= 1 {
+                    return Err(deny(400, crate::i18n::tr("the hub needs at least one admin")));
+                }
+                users.retain(|u| u.name != *name);
+            }
+            hub.sessions.lock().unwrap_or_else(|p| p.into_inner()).retain(|_, (n, _)| n != *name);
+            hub.save_users().map_err(|e| deny(500, format!("{e:#}")))?;
+            let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": "", "summary": format!("user {name} removed"), "ok": true }));
+            Ok((200, json!({ "ok": true })))
+        }
+        // A new API token of a user (for Compass and MCP clients): shown once, kept as a hash.
+        ("POST", ["api", "users", name, "token"]) => {
+            require(role, Role::Admin)?;
+            let (token, _) = new_token();
+            {
+                let mut users = hub.users.lock().unwrap_or_else(|p| p.into_inner());
+                let u = users.iter_mut().find(|u| u.name == *name).ok_or_else(|| deny(404, crate::i18n::fmt("there is no user {0}", &[name.to_string()])))?;
+                u.token = Some(token_hash(&token));
+            }
+            hub.save_users().map_err(|e| deny(500, format!("{e:#}")))?;
+            let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": "", "summary": format!("new API token for {name}"), "ok": true }));
+            Ok((201, json!({ "token": token })))
+        }
         ("GET", ["api", "integrations"]) => Ok((200, json!({
             "jira": hub.integrations["jira"]["url"].as_str().is_some_and(|u| !u.trim().is_empty()),
             "confluence": hub.integrations["confluence"]["url"].as_str().is_some_and(|u| !u.trim().is_empty()),
@@ -1263,6 +1513,65 @@ mod tests {
     /// The hub with two data sources (a PostgreSQL database and an EA project file, from LOONAR_HUB_DB_PROPS and
     /// LOONAR_HUB_FILE_PROPS): roles, policy, audit, notes, the web page, the REST API and MCP on both sources.
     /// Run with: `cargo test hub_two_sources -- --ignored --nocapture`.
+    /// A new hub gets the default account admin / passw0rd, which can do nothing until its password is changed; the
+    /// admin manages users and API tokens; wrong passwords are counted.
+    #[test]
+    fn hub_accounts() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        assert!(password_ok(&password_hash("Correct horse 1"), "Correct horse 1") && !password_ok(&password_hash("Correct horse 1"), "correct horse 1"));
+        let dir = std::env::temp_dir().join(format!("loonar-hub-accounts-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0", "sources": [] }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let saved: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("hub.json")).unwrap()).unwrap();
+        assert_eq!(saved["users"][0]["name"], "admin");
+        assert!(saved["users"][0]["password_pbkdf2"].as_str().unwrap().starts_with("pbkdf2-sha256$") && saved["users"][0]["must_change"] == true, "only the hash is saved");
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let base = format!("http://{}", rx.recv().unwrap());
+        let http = reqwest::blocking::Client::new();
+        let call = |method: reqwest::Method, path: &str, token: &str, body: Value| {
+            let r = http.request(method, format!("{base}{path}")).bearer_auth(token).json(&body).send().unwrap();
+            (r.status().as_u16(), r.json::<Value>().unwrap_or(Value::Null))
+        };
+        let login = |name: &str, password: &str| call(reqwest::Method::POST, "/api/login", "", json!({ "name": name, "password": password }));
+        assert_eq!(login("admin", "wrong").0, 401);
+        let (status, session) = login("admin", "passw0rd");
+        assert_eq!(status, 200, "{session}");
+        assert_eq!(session["must_change"], true);
+        let s = session["token"].as_str().unwrap().to_string();
+        assert_eq!(call(reqwest::Method::GET, "/api/sources", &s, Value::Null).0, 403, "nothing before the password is changed");
+        assert_eq!(call(reqwest::Method::GET, "/api/me", &s, Value::Null).1["must_change"], true);
+        assert_eq!(call(reqwest::Method::POST, "/api/password", &s, json!({ "old": "passw0rd", "new": "short" })).0, 400);
+        assert_eq!(call(reqwest::Method::POST, "/api/password", &s, json!({ "old": "passw0rd", "new": "passw0rd" })).0, 400, "not the default one");
+        assert_eq!(call(reqwest::Method::POST, "/api/password", &s, json!({ "old": "nope", "new": "Team hub 2026!" })).0, 403);
+        assert_eq!(call(reqwest::Method::POST, "/api/password", &s, json!({ "old": "passw0rd", "new": "Team hub 2026!" })).0, 200);
+        assert_eq!(call(reqwest::Method::GET, "/api/sources", &s, Value::Null).0, 200, "after the change the session works");
+        assert_eq!(login("admin", "passw0rd").0, 401, "the default password no longer works");
+        // Users: an architect with a first password and an API token.
+        assert_eq!(call(reqwest::Method::POST, "/api/users", &s, json!({ "name": "ola", "role": "architect", "password": "First pass 123" })).0, 201);
+        assert_eq!(call(reqwest::Method::POST, "/api/users", &s, json!({ "name": "OLA", "role": "viewer", "password": "First pass 123" })).0, 409);
+        let (_, token) = call(reqwest::Method::POST, "/api/users/ola/token", &s, Value::Null);
+        let api = token["token"].as_str().unwrap().to_string();
+        assert_eq!(call(reqwest::Method::GET, "/api/me", &api, Value::Null).1["name"], "ola", "the API token works");
+        let (_, ola) = login("ola", "First pass 123");
+        assert_eq!(ola["must_change"], true, "a password set by the admin must be changed");
+        assert_eq!(call(reqwest::Method::GET, "/api/users", &api, Value::Null).0, 403, "an architect does not manage users");
+        assert_eq!(call(reqwest::Method::DELETE, "/api/users/admin", &s, Value::Null).0, 400, "not oneself");
+        assert_eq!(call(reqwest::Method::PUT, "/api/users/admin", &s, json!({ "role": "viewer" })).0, 400, "the last admin stays");
+        let saved = std::fs::read_to_string(dir.join("hub.json")).unwrap();
+        assert!(!saved.contains("First pass 123") && !saved.contains(&api) && !saved.contains("Team hub 2026!"), "no password or token in hub.json");
+        assert_eq!(call(reqwest::Method::DELETE, "/api/users/ola", &s, Value::Null).0, 200);
+        assert_eq!(call(reqwest::Method::GET, "/api/me", &api, Value::Null).0, 401, "the token of a removed user stops working");
+        assert_eq!(call(reqwest::Method::POST, "/api/logout", &s, Value::Null).0, 200);
+        assert_eq!(call(reqwest::Method::GET, "/api/me", &s, Value::Null).0, 401, "signed out");
+        for _ in 0..20 {
+            login("admin", "guess");
+        }
+        assert_eq!(login("admin", "Team hub 2026!").0, 429, "too many wrong passwords from this address");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// Jira and Confluence as actions of an architect in the hub (imitations on localhost): a viewer cannot, an
     /// architect creates an issue for an element and for a change set and publishes a package page.
     /// `cargo test hub_integrations -- --ignored --nocapture` with LOONAR_HUB_FILE_PROPS.

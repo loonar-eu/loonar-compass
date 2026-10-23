@@ -8,6 +8,7 @@
 :root { --bg:#f6f7f9; --panel:#ffffff; --text:#1d2330; --muted:#5f6b7a; --line:#dde2e8; --accent:#2f6fde; --err:#c0392b; --warn:#b7791f; --info:#4a5568; }
 @media (prefers-color-scheme: dark) { :root { --bg:#14171c; --panel:#1d2128; --text:#e6e9ee; --muted:#9aa4b2; --line:#2e3440; --accent:#6ea0ff; --err:#ff7b6b; --warn:#f0b75a; --info:#b8c2d0; } }
 * { box-sizing:border-box; }
+[hidden] { display:none !important; }
 body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 "Segoe UI", system-ui, sans-serif; }
 header { display:flex; align-items:center; gap:16px; padding:12px 20px; background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap; }
 header h1 { font-size:17px; margin:0; font-weight:600; }
@@ -53,10 +54,26 @@ h3 { font-size:14px; margin:16px 0 6px; }
     <div class="mark">C</div>
     <h1>Compass Hub</h1>
     <p class="muted">The team's Enterprise Architect models: search, model check, change sets and questions about the model.</p>
-    <input id="token" type="password" placeholder="Your hub token" aria-label="Hub token" autocomplete="current-password">
+    <div id="byname">
+      <input id="lname" placeholder="User name" aria-label="User name" autocomplete="username">
+      <input id="lpass" type="password" placeholder="Password" aria-label="Password" autocomplete="current-password">
+    </div>
+    <div id="bytoken" hidden><input id="token" type="password" placeholder="Your hub token" aria-label="Hub token"></div>
     <button id="login">Sign in</button>
     <p class="error" id="loginerror"></p>
-    <p class="muted small">No token yet? Ask the administrator of the hub. The token is kept only until you close the browser.</p>
+    <p class="muted small"><a href="#" id="usetoken">Sign in with a token instead</a> · No account yet? Ask the administrator of the hub.</p>
+  </div>
+</div>
+<div class="login" id="changeview" hidden>
+  <div class="card">
+    <div class="mark">C</div>
+    <h1>Choose your password</h1>
+    <p class="muted">Your password was set by someone else (or it is the default one). Choose your own: at least 10 characters.</p>
+    <input id="cold" type="password" placeholder="Current password" aria-label="Current password" autocomplete="current-password">
+    <input id="cnew" type="password" placeholder="New password" aria-label="New password" autocomplete="new-password">
+    <input id="cnew2" type="password" placeholder="New password again" aria-label="New password again" autocomplete="new-password">
+    <button id="cpass">Change the password</button>
+    <p class="error" id="cerror"></p>
   </div>
 </div>
 <div id="app" hidden>
@@ -80,6 +97,7 @@ h3 { font-size:14px; margin:16px 0 6px; }
       <button data-tab="audit">Audit trail</button>
       <button data-tab="notes">Team notes</button>
       <button data-tab="changes">Change sets</button>
+      <button data-tab="users" id="userstab" hidden>Users</button>
     </div>
     <div id="view-ask">
       <p class="muted">Ask about the selected model in your own words, e.g. "Which systems use the payment gateway?" The assistant only reads the model.</p>
@@ -98,6 +116,7 @@ h3 { font-size:14px; margin:16px 0 6px; }
     <div id="view-audit" hidden><div id="audit"></div></div>
     <div id="view-notes" hidden><div id="notes"></div></div>
     <div id="view-changes" hidden><div id="changes"></div></div>
+    <div id="view-users" hidden><div id="users"></div></div>
   </section>
 </main>
 </div>
@@ -133,11 +152,78 @@ let integrations = {};
 const canWrite = () => me.role === 'architect' || me.role === 'admin';
 // A link from the hub's answer: only http(s) addresses become links.
 const link = (url, text) => /^https?:\/\//.test(url || '') ? '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' + esc(text || url) + '</a>' : esc(text || '');
+async function signIn() {
+  $('loginerror').textContent = '';
+  if (!$('bytoken').hidden) return login();
+  try {
+    const r = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: $('lname').value.trim(), password: $('lpass').value }) });
+    const v = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(v.error || r.status);
+    token = v.token;
+    $('lpass').value = '';
+    if (v.must_change) { showChange(); return; }
+    await login();
+  } catch (e) { $('loginerror').textContent = e.message; }
+}
+function showChange() {
+  $('loginview').hidden = true;
+  $('app').hidden = true;
+  $('changeview').hidden = false;
+}
+async function changePassword() {
+  $('cerror').textContent = '';
+  if ($('cnew').value !== $('cnew2').value) { $('cerror').textContent = 'The new passwords differ.'; return; }
+  try {
+    await post('/api/password', { old: $('cold').value, new: $('cnew').value });
+    ['cold', 'cnew', 'cnew2'].forEach(f => $(f).value = '');
+    $('changeview').hidden = true;
+    await login();
+  } catch (e) { $('cerror').textContent = e.message; }
+}
+async function loadUsers() {
+  const list = await api('/api/users');
+  $('users').innerHTML = '<div class="actions"><button id="uadd">Add a user</button></div><div id="uout"></div>' +
+    '<table><tr><th>User</th><th>Role</th><th>Sign-in</th><th></th></tr>' +
+    list.map(u => '<tr><td>' + esc(u.name) + '</td><td>' + esc(u.role) + '</td><td>' + (u.password ? 'password' : '') + (u.password && u.token ? ' + ' : '') + (u.token ? 'API token' : '') + (u.must_change ? ' <span class="muted">(must change)</span>' : '') +
+      '</td><td><button class="ghost" data-act="role" data-name="' + esc(u.name) + '">Role</button> <button class="ghost" data-act="reset" data-name="' + esc(u.name) + '">Reset password</button> <button class="ghost" data-act="token" data-name="' + esc(u.name) + '">New API token</button> <button class="ghost" data-act="del" data-name="' + esc(u.name) + '">Remove</button></td></tr>').join('') + '</table>' +
+    '<p class="muted small">An API token is for Compass (Settings → Team) and for MCP clients; it is shown once. A password set here must be changed at the next sign-in.</p>';
+  $('uadd').onclick = async () => {
+    const name = prompt('User name:'); if (!name) return;
+    const role = prompt('Role (viewer, architect or admin):', 'viewer'); if (!role) return;
+    const password = prompt('First password (at least 10 characters; the user changes it at the first sign-in):'); if (!password) return;
+    try { await post('/api/users', { name, role, password }); loadUsers(); } catch (e) { alert(e.message); }
+  };
+}
+async function send(method, path, body) {
+  const r = await fetch(path, { method, headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const v = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(v.error || r.status);
+  return v;
+}
+$('users').onclick = async e => {
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  const name = b.dataset.name;
+  try {
+    if (b.dataset.act === 'role') { const role = prompt('New role of ' + name + ' (viewer, architect or admin):'); if (role) await send('PUT', '/api/users/' + encodeURIComponent(name), { role }); }
+    if (b.dataset.act === 'reset') { const password = prompt('New password of ' + name + ' (changed by the user at the next sign-in):'); if (password) await send('PUT', '/api/users/' + encodeURIComponent(name), { password }); }
+    if (b.dataset.act === 'del') { if (confirm('Remove ' + name + '?')) await send('DELETE', '/api/users/' + encodeURIComponent(name)); }
+    if (b.dataset.act === 'token') {
+      if (!confirm('Create a new API token for ' + name + '? The old one stops working.')) return;
+      const v = await post('/api/users/' + encodeURIComponent(name) + '/token', {});
+      await loadUsers();
+      $('uout').innerHTML = '<p class="notice">API token of ' + esc(name) + ' (copy it now, it is not shown again):<br><code>' + esc(v.token) + '</code></p>';
+      return;
+    }
+    loadUsers();
+  } catch (x) { alert(x.message); }
+};
 async function login() {
-  token = $('token').value.trim() || token;
+  token = $('bytoken').hidden ? token : ($('token').value.trim() || token);
   $('loginerror').textContent = '';
   try {
     me = await api('/api/me');
+    if (me.must_change) { try { sessionStorage.setItem('hubToken', token); } catch (e) {} showChange(); return; }
+    $('userstab').hidden = me.role !== 'admin';
     try { sessionStorage.setItem('hubToken', token); } catch (e) {}
     $('who').textContent = me.name + ' · ' + me.role;
     $('loginview').hidden = true;
@@ -265,15 +351,20 @@ async function ask() {
 }
 function show(tab) {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-  ['ask', 'search', 'lint', 'gap', 'audit', 'notes', 'changes'].forEach(t => $('view-' + t).hidden = t !== tab);
+  ['ask', 'search', 'lint', 'gap', 'audit', 'notes', 'changes', 'users'].forEach(t => $('view-' + t).hidden = t !== tab);
+  if (tab === 'users') loadUsers().catch(e => $('users').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
   if (tab === 'changes') loadChanges().catch(e => $('changes').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
   if (tab === 'audit') loadAudit().catch(e => $('audit').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
   if (tab === 'notes') loadNotes().catch(e => $('notes').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
 }
 $('tabs').onclick = e => { const b = e.target.closest('button'); if (b) show(b.dataset.tab); };
-$('login').onclick = login;
-$('token').onkeydown = e => { if (e.key === 'Enter') login(); };
-$('logout').onclick = () => { token = ''; try { sessionStorage.removeItem('hubToken'); localStorage.removeItem('hubToken'); } catch (e) {} location.reload(); };
+$('login').onclick = signIn;
+$('token').onkeydown = e => { if (e.key === 'Enter') signIn(); };
+$('lpass').onkeydown = e => { if (e.key === 'Enter') signIn(); };
+$('usetoken').onclick = e => { e.preventDefault(); const t = $('bytoken').hidden; $('bytoken').hidden = !t; $('byname').hidden = t; $('usetoken').textContent = t ? 'Sign in with a name and a password' : 'Sign in with a token instead'; };
+$('cpass').onclick = changePassword;
+$('cnew2').onkeydown = e => { if (e.key === 'Enter') changePassword(); };
+$('logout').onclick = async () => { try { await post('/api/logout', {}); } catch (e) {} token = ''; try { sessionStorage.removeItem('hubToken'); localStorage.removeItem('hubToken'); } catch (e) {} location.reload(); };
 $('go').onclick = search;
 $('askgo').onclick = ask;
 $('question').onkeydown = e => { if (e.key === 'Enter') ask(); };
