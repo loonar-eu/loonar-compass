@@ -30,6 +30,7 @@ mod verify;
 mod mcp_client;
 mod scripts;
 mod agents;
+mod model_spell;
 mod templates;
 mod tools;
 mod window;
@@ -2260,7 +2261,9 @@ impl App {
         }
         let Some(cfg) = self.cfg.clone() else { return };
         if group == GROUP_APPROVAL {
-            self.group_status[group] = GroupStatus::Passed(crate::i18n::fmt("Saved. {0}", &[(approval_label(cfg.approval_mode.as_str())).to_string()]));
+            // EA's spell checker follows the language of Compass (when EA has a dictionary for it).
+            let spelling = model_spell::set_ea_spelling(i18n::current().code());
+            self.group_status[group] = GroupStatus::Passed(format!("{} {spelling}", crate::i18n::fmt("Saved. {0}", &[(approval_label(cfg.approval_mode.as_str())).to_string()])));
             return;
         }
         self.group_status[group] = GroupStatus::Working;
@@ -3904,6 +3907,7 @@ fn tool_step(name: &str, input: &Value) -> String {
         "publish_confluence" => crate::i18n::fmt("Publishing to Confluence: {0}", &[(input["title"].as_str().or(input["page"].as_str()).unwrap_or("")).to_string()]),
         "confluence_pages" => crate::i18n::tr("List of published Confluence pages").to_string(),
         "jira_search" => crate::i18n::fmt("Jira search: {0}", &[input["jql"].as_str().unwrap_or("").to_string()]),
+        "spell_check" => crate::i18n::tr("Spelling of the model's texts").to_string(),
         "ea_script" => crate::i18n::fmt("EA script ({0}): {1}", &[input["action"].as_str().unwrap_or("list").to_string(), input["name"].as_str().unwrap_or("").to_string()]),
         "jira_issue" => crate::i18n::fmt("Reading the Jira issue {0}", &[input["key"].as_str().unwrap_or("").to_string()]),
         "jira_create_issue" => crate::i18n::fmt("Creating a Jira issue: {0}", &[input["summary"].as_str().unwrap_or("").to_string()]),
@@ -4646,6 +4650,14 @@ impl eframe::App for App {
                             }
                             if kind != "element" && kind != "connector" {
                                 continue;
+                            }
+                            // Spelling of the changed element's notes in the language of Compass.
+                            if kind == "element" {
+                                for finding in model_spell::check_element(&cfg, id, i18n::current().code()) {
+                                    if reported.lock().unwrap().insert(format!("spell:{id}:{finding}")) {
+                                        ea_ui::output(&crate::i18n::fmt("✎ Spelling: {0}", &[finding]));
+                                    }
+                                }
                             }
                             match governance::check_object(&cfg, &kind, id) {
                                 Ok(findings) => {

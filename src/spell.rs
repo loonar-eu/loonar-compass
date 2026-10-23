@@ -58,6 +58,50 @@ impl SpellChecker {
         None
     }
 
+    /// Dictionary for a language of the application ("pl", "en", "de", "fr"): the regional variants Windows has.
+    pub fn for_language(code: &str) -> Option<Self> {
+        let tags: &[&str] = match code {
+            "pl" => &["pl-PL"],
+            "de" => &["de-DE", "de-AT", "de-CH"],
+            "fr" => &["fr-FR", "fr-CA", "fr-BE"],
+            _ => &["en-US", "en-GB"],
+        };
+        // SAFETY: standard COM calls; the results are checked.
+        unsafe {
+            let factory: ISpellCheckerFactory = CoCreateInstance(&SpellCheckerFactory, None, CLSCTX_INPROC_SERVER).ok()?;
+            for language in tags {
+                let tag = HSTRING::from(*language);
+                if factory.IsSupported(&tag).map(|b| b.as_bool()).unwrap_or(false) {
+                    if let Ok(checker) = factory.CreateSpellChecker(&tag) {
+                        return Some(Self { checker, language: language.to_string() });
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Suggested corrections of a word (at most `limit`).
+    pub fn suggest(&self, word: &str, limit: usize) -> Vec<String> {
+        let mut out = Vec::new();
+        // SAFETY: standard COM calls; every string from the enumerator is freed after reading.
+        unsafe {
+            let Ok(list) = self.checker.Suggest(&HSTRING::from(word)) else { return out };
+            while out.len() < limit {
+                let mut item = [windows::core::PWSTR::null()];
+                let mut fetched = 0u32;
+                if list.Next(&mut item, Some(&mut fetched)) != S_OK || fetched == 0 {
+                    break;
+                }
+                if let Ok(text) = item[0].to_string() {
+                    out.push(text);
+                }
+                windows::Win32::System::Com::CoTaskMemFree(Some(item[0].0 as *const _));
+            }
+        }
+        out
+    }
+
     /// Adds a word to the user's Windows dictionary of this language (it is then accepted in every application).
     pub fn add(&self, word: &str) -> bool {
         // SAFETY: standard COM call.

@@ -81,6 +81,16 @@ pub fn definitions() -> Value {
     let mut list = definitions_core();
     if let Some(items) = list.as_array_mut() {
         items.push(crate::scripts::definition());
+        items.push(json!({
+            "name": "spell_check",
+            "description": "Spelling of the model's texts in the language of the conversation (the language of Compass), with the Windows dictionary: \
+notes of elements and diagrams, scenario steps and the project glossary (EA's own spell checker has only English dictionaries). Names of elements \
+and glossary terms count as known words. Returns the possible mistakes with suggestions; correct them only after the user agrees (ea_write: update_element notes, update_scenario).",
+            "input_schema": {
+                "type": "object",
+                "properties": { "package": { "type": "integer", "description": "Optionally only this package with subpackages (package_id); without it the whole model." } }
+            }
+        }));
     }
     list
 }
@@ -531,6 +541,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "impact_analysis" => impact_analysis(input, ctx.cfg).map(Into::into),
         "model_lint" => crate::governance::lint(input, ctx.cfg).map(Into::into),
         "ea_script" => ea_script(input, ctx).map(Into::into),
+        "spell_check" => crate::model_spell::check(ctx.cfg, input["package"].as_i64(), crate::i18n::current().code()).map(Into::into),
         "jira_search" => jira(ctx.cfg)?.search(input["jql"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["jql".to_string()]))?, input["max"].as_u64().unwrap_or(30) as usize).map(Into::into),
         "jira_issue" => jira(ctx.cfg)?.issue(input["key"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["key".to_string()]))?.trim()).map(Into::into),
         "jira_create_issue" => jira_create_issue(input, ctx).map(Into::into),
