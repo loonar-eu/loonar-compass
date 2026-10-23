@@ -770,6 +770,12 @@ impl Job<'_> {
                 if !op["message_sort"].is_null() {
                     connector.set("TransitionEvent", s(&text_field(op, "message_sort")))?;
                 }
+                // Aggregation: Weak = shared aggregation, Strong = composition.
+                if !op["subtype"].is_null() {
+                    connector.set("Subtype", s(&text_field(op, "subtype")))?;
+                } else if text_field(op, "type").eq_ignore_ascii_case("Aggregation") {
+                    connector.set("Subtype", s("Weak"))?;
+                }
                 connector.update(&crate::i18n::fmt("connector '{0}'", &[title.clone()]))?;
                 self.set_reply(&connector, &op["is_return"])?;
                 self.set_tags(&connector, &op["tags"])?;

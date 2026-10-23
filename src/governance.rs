@@ -22,7 +22,19 @@ const DEFAULT_NAMES: &[&str] = &[
     "class", "activity", "action", "component", "package", "usecase", "use case", "requirement", "actor", "interface",
     "providedinterface", "requiredinterface", "node", "object", "state", "decision", "element", "port", "part", "task",
     "gateway", "event", "process", "artifact", "device", "signal", "lane", "pool", "screen", "table", "entity", "new element",
+    "new class", "new activity", "startevent", "endevent", "intermediateevent", "start event", "end event",
+    // Names that EA and users give in Polish.
+    "nowa klasa", "nowe zadanie", "nowy element", "nowy pakiet", "nowa aktywność", "nowy aktor", "nowy przypadek użycia", "nowy komponent", "zadanie", "zdarzenie",
 ];
+
+/// Types whose empty name is normal (pseudo-states, gateways, frames): only a default name given by EA is reported.
+const UNNAMED_OK: &[&str] = &[
+    "Note", "Text", "Boundary", "Port", "ActionPin", "ActivityParameter", "ExpansionNode", "Decision", "MergeNode", "Synchronization",
+    "StateNode", "InitialNode", "ActivityFinal", "FlowFinal", "InteractionFragment", "Sequence", "Object", "ActivityPartition", "Partition", "Swimlane",
+];
+
+/// Element types a control or object flow may not start or end at.
+const NOT_FLOW_NODES: &[&str] = &["Actor", "Class", "Component", "Interface", "Package", "Requirement", "UseCase", "Node", "DataType", "Enumeration"];
 
 /// One rule finding: which rule, object id, kind of object, name, package and what is wrong.
 #[derive(Clone)]
@@ -126,10 +138,11 @@ pub fn lint(input: &Value, cfg: &AppConfig) -> Result<String> {
         let (id, name, otype, stereo, note, pkg) = (&e[0], &e[1], &e[2], &e[3], &e[4], &e[5]);
         let base = |rule, detail: String| Finding { rule, id: id.clone(), kind: "element", name: name.clone(), package: pkg.clone(), detail };
         let shown = if stereo.is_empty() { otype.clone() } else { format!("{otype} «{stereo}»") };
+        // Default names given by EA count everywhere (also BPMN events); an empty name only where a name is expected.
+        if (!name.trim().is_empty() && is_default_name(name) && !matches!(otype.as_str(), "Note" | "Text" | "Boundary")) || (name.trim().is_empty() && !UNNAMED_OK.contains(&otype.as_str())) {
+            findings.push(base("default_name", crate::i18n::fmt("default or empty name ({0})", &[shown.clone()])));
+        }
         if !is_decoration(otype) {
-            if is_default_name(name) {
-                findings.push(base("default_name", crate::i18n::fmt("default or empty name ({0})", &[shown.clone()])));
-            }
             if note.trim().is_empty() {
                 findings.push(base("missing_notes", crate::i18n::fmt("no description ({0})", &[shown.clone()])));
             }
@@ -202,6 +215,9 @@ pub fn lint(input: &Value, cfg: &AppConfig) -> Result<String> {
         }
         if c[3] == c[4] && !matches!(c[1].as_str(), "StateFlow" | "Sequence" | "Transition" | "SelfMessage") {
             findings.push(base("self_relation", crate::i18n::fmt("{0} from the element to itself", &[kind.clone()])));
+        }
+        if let Some(problem) = uml_problem(&c[1], &c[6], &c[9]) {
+            findings.push(base("invalid_relation", problem));
         }
         *seen.entry((c[1].clone(), c[2].clone(), c[3].clone(), c[4].clone())).or_default() += 1;
         if checked_types.contains(&c[1].to_lowercase()) || checked_types.contains(&c[2].to_lowercase()) {
@@ -295,6 +311,18 @@ fn report(package: i64, packages: usize, elements: usize, connectors: usize, fin
         out.push(crate::i18n::tr("No findings: the package meets all checked rules.").to_string());
     }
     out.join("\n")
+}
+
+/// UML/BPMN sanity of a relationship by the types of its ends (without rules of the organization).
+fn uml_problem(connector_type: &str, source_type: &str, target_type: &str) -> Option<String> {
+    let flow = matches!(connector_type, "ControlFlow" | "ObjectFlow");
+    if flow && (NOT_FLOW_NODES.contains(&source_type) || NOT_FLOW_NODES.contains(&target_type)) {
+        return Some(crate::i18n::fmt("{0} between {1} and {2}: a flow connects activities, events and gateways", &[connector_type.to_string(), source_type.to_string(), target_type.to_string()]));
+    }
+    if connector_type == "Generalization" && source_type != target_type && !(matches!(source_type, "Class" | "Interface") && matches!(target_type, "Class" | "Interface")) {
+        return Some(crate::i18n::fmt("{0} between {1} and {2}: a generalization connects elements of the same kind", &[connector_type.to_string(), source_type.to_string(), target_type.to_string()]));
+    }
+    None
 }
 
 /// Gap analysis: compares two packages (with subpackages) by element name and type.
@@ -496,6 +524,9 @@ pub fn check_object_with(cfg: &AppConfig, kind: &str, id: i64, rules: &Value) ->
             ))?.into_iter().next() else { return Ok(out) };
             let kind = if c[1].is_empty() { c[0].clone() } else { format!("{} «{}»", c[0], c[1]) };
             let label = format!("{} → {}", c[4], c[7]);
+            if let Some(problem) = uml_problem(&c[0], &c[5], &c[8]) {
+                out.push(crate::i18n::fmt("\"{0}\": {1}", &[label.clone(), problem]));
+            }
             if c[2] == c[3] && !matches!(c[0].as_str(), "StateFlow" | "Sequence" | "Transition" | "SelfMessage") {
                 out.push(crate::i18n::fmt("\"{0}\": {1}", &[label.clone(), crate::i18n::fmt("{0} from the element to itself", &[kind.clone()])]));
             }

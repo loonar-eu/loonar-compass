@@ -127,6 +127,8 @@ picture has it. After ea_show_diagram, first check every connection against the 
 neighbours, direction and bends of every line) and fix the differences before you present it (at most two rounds of corrections; then present the diagram and name what still differs); do not tidy or 'improve' the layout \
 unless the user asked for it. \
 Before writing, check with db_query what is already in the model (packages, ids) to pick the right place and not duplicate names. \
+When you insert a step between two connected elements (a flow A → B becomes A → new → B), delete the existing direct connector A → B in the same write. \
+After a write, describe only the changes the write result confirms; never say something was changed, removed or reverted unless your write did it. \
 Read the model with understanding: before you answer a question about a diagram or package, fetch its elements, types and connections \
 and describe what they represent, not the raw rows. \
 Say that something has been saved only when the tool returned a confirmation; report a tool error plainly. \
@@ -5761,6 +5763,66 @@ mod tests {
         assert!(jira_answer.contains("PaymentGateway"), "the story is linked to the payment gateway");
         assert!(has(&create_steps, "Creating a Jira issue"), "an issue was created");
         assert_eq!(posted, 1, "exactly one issue sent to Jira");
+    }
+
+    /// Head-to-head benchmark: the scenarios from LOONAR_BENCH (JSON: id, prompt, sql checks) in one conversation, as a
+    /// user would type them, with every change approved; after each turn the checks run on the model. The answers,
+    /// times, steps and check values go to LOONAR_BENCH_OUT. Model from LOONAR_BENCH_PROVIDER / LOONAR_BENCH_MODEL.
+    /// Run with: `cargo test bench_scenarios -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "requires an API key, EA and a test model"]
+    fn bench_scenarios() {
+        i18n::set(i18n::Lang::Pl);
+        let mut cfg = AppConfig::load(Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("settings");
+        cfg.ai_provider = std::env::var("LOONAR_BENCH_PROVIDER").unwrap_or_else(|_| "openai".into());
+        let model = std::env::var("LOONAR_BENCH_MODEL").unwrap_or_else(|_| "gpt-5.1".into());
+        if cfg.ai_provider == "openai" { cfg.openai_model = model; } else { cfg.claude_model = model; }
+        cfg.openai_url = String::new();
+        cfg.claude_effort = String::new();
+        cfg.hub_url = String::new();
+        let scenarios: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(std::env::var("LOONAR_BENCH").expect("LOONAR_BENCH")).unwrap()).unwrap();
+        let out_path = std::env::var("LOONAR_BENCH_OUT").expect("LOONAR_BENCH_OUT");
+        let only: Vec<String> = std::env::var("LOONAR_BENCH_ONLY").map(|v| v.split(',').map(String::from).collect()).unwrap_or_default();
+        let mut history: Vec<Message> = Vec::new();
+        let mut results = serde_json::Map::new();
+        for s in &scenarios {
+            let id = s["id"].as_str().unwrap().to_string();
+            if !only.is_empty() && !only.contains(&id) {
+                continue;
+            }
+            history.push(Message { role: "user".into(), text: s["prompt"].as_str().unwrap().into(), attachments: vec![], created: chrono::Utc::now().to_rfc3339() });
+            let approvals = std::sync::Arc::new(std::sync::Mutex::new(0usize));
+            let counter = approvals.clone();
+            let approver = tools::Approver::new(ApprovalMode::Auto, Box::new(move |_| { *counter.lock().unwrap() += 1; true }));
+            let (_tx, inbox) = mpsc::channel();
+            let cancel = AtomicBool::new(false);
+            let steps = std::sync::Mutex::new(Vec::<String>::new());
+            let answer = std::sync::Mutex::new(String::new());
+            let images = std::sync::Mutex::new(Vec::<String>::new());
+            let emit = |event: WorkerEvent| match event {
+                WorkerEvent::Text(text) => { let mut a = answer.lock().unwrap(); if !a.is_empty() { a.push('\n'); } a.push_str(&text); }
+                WorkerEvent::Images(list) => images.lock().unwrap().extend(list),
+                WorkerEvent::StepStart(step) => steps.lock().unwrap().push(step),
+                WorkerEvent::StepEnd { ok, detail } => steps.lock().unwrap().push(format!("  {} {}", if ok { "ok" } else { "FAILED" }, detail.chars().take(160).collect::<String>())),
+                _ => {}
+            };
+            let started = std::time::Instant::now();
+            let result = run_turn(&cfg, &history, &approver, &inbox, &cancel, &emit);
+            let seconds = started.elapsed().as_secs();
+            let answer = answer.into_inner().unwrap();
+            history.push(Message { role: "assistant".into(), text: answer.clone(), attachments: vec![], created: chrono::Utc::now().to_rfc3339() });
+            let checks: Vec<Value> = s["sql"].as_array().into_iter().flatten().map(|c| {
+                let got = tools::query_rows(&cfg, c["sql"].as_str().unwrap()).map(|r| r.first().and_then(|r| r.first()).cloned().unwrap_or_default()).unwrap_or_else(|e| format!("error: {e:#}"));
+                json!({ "label": c["label"], "got": got })
+            }).collect();
+            println!("{id}: {seconds} s, steps {}, approvals {}, checks {checks:?}", steps.lock().unwrap().len(), approvals.lock().unwrap());
+            results.insert(id, json!({
+                "seconds": seconds, "error": result.err().map(|e| format!("{e:#}")), "answer": answer,
+                "steps": steps.into_inner().unwrap(), "approvals": *approvals.lock().unwrap(), "images": images.into_inner().unwrap(), "checks": checks
+            }));
+            std::fs::write(&out_path, serde_json::to_string_pretty(&Value::Object(results.clone())).unwrap()).unwrap();
+        }
+        ea::shutdown();
     }
 
     /// Settings tests (the same ones the "Save and test" buttons run) on the saved configuration.
