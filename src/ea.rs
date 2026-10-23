@@ -707,6 +707,46 @@ mod tests {
         assert_eq!(after[0], vec!["8".to_string(), sub.to_string()]);
     }
 
+    /// Verification after a write: a real write passes, a change that did not happen (the false "done" seen in the
+    /// head-to-head test) is caught, and deleting an element with relationships lists them for the confirmation.
+    /// Run with: `cargo test ea_verify -- --ignored --nocapture` (LOONAR_TEST_PROPS = another model).
+    #[test]
+    #[ignore = "requires EA, a license and the model database from app.properties"]
+    fn ea_verify() {
+        let cfg = test_config();
+        let _ea = CloseEa;
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).expect(sql);
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id limit 1")[0][0].parse().unwrap();
+        let name = format!("ZZ_test_mostu_verify_{}", chrono::Local::now().format("%H%M%S"));
+        let ops = vec![
+            json!({"op":"create_package","key":"pkg","parent":root,"name":name}),
+            json!({"op":"create_element","key":"a","package":"#pkg","name":"Customer","type":"Class","stereotype":"entity","tags":{"Owner":"Team A"}}),
+            json!({"op":"create_element","key":"b","package":"#pkg","name":"Order","type":"Class"}),
+            json!({"op":"create_connector","key":"c","source":"#b","target":"#a","type":"Aggregation"}),
+        ];
+        let created = run_batch(&cfg, &ops, &BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("creation");
+        let real = crate::verify::verify(&cfg, &ops, &created);
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).expect(key)["id"].as_i64().unwrap();
+        let (pkg, a, b) = (id_of("pkg"), id_of("a"), id_of("b"));
+        let update = vec![json!({"op":"update_element","element":a,"clear_stereotype":true,"tags":{"Owner":null}})];
+        let done = run_batch(&cfg, &update, &BatchOptions::default()).expect("update");
+        let updated = crate::verify::verify(&cfg, &update, &done);
+        // Claims nothing was written: these changes are not in the model.
+        let claimed = vec![
+            json!({"op":"update_element","element":b,"stereotype":"entity","name":"Purchase","tags":{"Owner":"Team B"}}),
+            json!({"op":"delete","element":a}),
+        ];
+        let fake = crate::verify::verify(&cfg, &claimed, &json!({"created": []}));
+        let related = crate::verify::relations_of_deleted(&cfg, &[json!({"op":"delete","element":a})]);
+        run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &BatchOptions::default()).expect("cleanup");
+        shutdown();
+        println!("real: {} ok {:?}\nupdated: {} ok {:?}\nfake: {} ok {:?}\nrelated: {related:?}", real.passed, real.problems, updated.passed, updated.problems, fake.passed, fake.problems);
+        assert!(real.problems.is_empty() && real.passed >= 6, "a real write verifies");
+        assert!(updated.problems.is_empty() && updated.passed >= 2, "clearing a stereotype and a tag verifies");
+        assert_eq!(fake.problems.len(), 4, "name, stereotype, tag and a delete that did not happen are all caught");
+        assert!(related.len() == 1 && related[0].contains("Aggregation"), "relationships of a deleted element are listed");
+    }
+
     /// Governance on a real model: seeded defects are found by the linter, the organization's rules work, the gap analysis
     /// sees new / retired / changed elements and the write preview shows before → after. Run on a database and on a file copy:
     /// `cargo test ea_governance -- --ignored --nocapture` (LOONAR_TEST_PROPS = another model).

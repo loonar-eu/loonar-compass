@@ -52,6 +52,15 @@ impl Approver {
         Ok(())
     }
 
+    /// Consent regardless of the mode (also in auto) for a risky change of the model (deleting elements with relationships).
+    fn confirm_risky(&self, summary: &str) -> Result<()> {
+        if !(self.ask)(summary.to_string()) {
+            bail!("{}", crate::i18n::tr("the user rejected this change; nothing was saved"));
+        }
+        self.approved_in_turn.set(true);
+        Ok(())
+    }
+
     /// Consent regardless of the mode (also in auto): for actions that send content outside the application and the model.
     fn confirm_always(&self, summary: &str) -> Result<()> {
         if !(self.ask)(summary.to_string()) {
@@ -1042,7 +1051,11 @@ fn ea_write(input: &Value, ctx: &ToolContext) -> Result<String> {
     check_unchanged(ctx.cfg, &input["expect_unchanged"])?;
     let summary = crate::i18n::fmt("Saving to the EA model:\n{0}\n\nBefore → after:\n{1}", &[ea::describe(ops), crate::governance::preview(ctx.cfg, ops)]);
     let destructive = destructive_details(ctx.cfg, ops);
-    if destructive.is_empty() {
+    // Deleting an element that has relationships always asks (also in auto), with the relationships listed.
+    let related = crate::verify::relations_of_deleted(ctx.cfg, ops);
+    if !related.is_empty() {
+        ctx.approver.confirm_risky(&format!("{summary}\n\n{}\n\n{}", destructive.join("\n"), related.join("\n")))?;
+    } else if destructive.is_empty() {
         ctx.approver.confirm(&summary)?;
     } else {
         ctx.approver.confirm_destructive(&format!("{summary}\n\n{}", destructive.join("\n")))?;
@@ -1053,7 +1066,23 @@ fn ea_write(input: &Value, ctx: &ToolContext) -> Result<String> {
     if let Ok(done) = &result {
         refresh_user_ea(ctx.cfg, ops, done);
     }
-    Ok(format_created(&result?))
+    let done = result?;
+    let mut text = format_created(&done);
+    if !related.is_empty() {
+        text.push_str(&format!("\nDeleted together with relationships (tell the user): {}\n", related.join(" | ")));
+    }
+    // The model is read again: only what is really there may be reported as done.
+    let check = crate::verify::verify(ctx.cfg, ops, &done);
+    if check.problems.is_empty() {
+        text.push_str(&format!("\nVerified in the model after the write: {} checks passed.\n", check.passed));
+    } else {
+        text.push_str(&format!(
+            "\nVERIFICATION FAILED - the model does not contain what this write asked for ({} checks passed, {} failed):\n- {}\n\
+Tell the user exactly which of these changes did not happen; do not say they were done. You may try to fix them with another write.\n",
+            check.passed, check.problems.len(), check.problems.join("\n- ")
+        ));
+    }
+    Ok(text)
 }
 
 /// After a write, refreshes the changed diagrams and packages in the user's EA window (in the background, without waiting; does nothing without an EA window).

@@ -26,6 +26,7 @@ mod openai;
 mod governance;
 mod jira;
 mod hub;
+mod verify;
 mod templates;
 mod tools;
 mod window;

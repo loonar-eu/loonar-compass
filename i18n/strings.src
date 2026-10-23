@@ -1189,3 +1189,22 @@ empty = OpenAI; Azure, Ollama, LM Studio: base address …/v1 ‖ puste = OpenAI
 ⚠ Model check: {0} ‖ ⚠ Kontrola modelu: {0} ‖ ⚠ Modellprüfung: {0} ‖ ⚠ Contrôle du modèle : {0}
 {0} between {1} and {2}: a flow connects activities, events and gateways ‖ {0} między {1} a {2}: przepływ łączy aktywności, zdarzenia i bramki ‖ {0} zwischen {1} und {2}: ein Fluss verbindet Aktivitäten, Ereignisse und Gateways ‖ {0} entre {1} et {2} : un flux relie des activités, des événements et des passerelles
 {0} between {1} and {2}: a generalization connects elements of the same kind ‖ {0} między {1} a {2}: generalizacja łączy elementy tego samego rodzaju ‖ {0} zwischen {1} und {2}: eine Generalisierung verbindet Elemente derselben Art ‖ {0} entre {1} et {2} : une généralisation relie des éléments de même nature
+"{0}" (id {1}) has {2} relationships that will be deleted with it: {3} ‖ "{0}" (id {1}) ma relacje ({2}), które zostaną usunięte razem z nim: {3} ‖ "{0}" (ID {1}) hat {2} Beziehungen, die mit gelöscht werden: {3} ‖ "{0}" (id {1}) a {2} relations qui seront supprimées avec lui : {3}
+connector of type {0} instead of {1} ‖ połączenie typu {0} zamiast {1} ‖ Verbindung vom Typ {0} statt {1} ‖ connecteur de type {0} au lieu de {1}
+connector {0} is not in the model ‖ połączenia {0} nie ma w modelu ‖ Verbindung {0} ist nicht im Modell ‖ le connecteur {0} n'est pas dans le modèle
+connector {0}: name "{1}" instead of "{2}" ‖ połączenie {0}: nazwa "{1}" zamiast "{2}" ‖ Verbindung {0}: Name "{1}" statt "{2}" ‖ connecteur {0} : nom "{1}" au lieu de "{2}"
+connector {0}: the stereotype "{1}" is still there ‖ połączenie {0}: stereotyp "{1}" nadal jest ‖ Verbindung {0}: der Stereotyp "{1}" ist noch da ‖ connecteur {0} : le stéréotype "{1}" est toujours là
+diagram "{0}" is not in the model ‖ diagramu "{0}" nie ma w modelu ‖ Diagramm "{0}" ist nicht im Modell ‖ le diagramme "{0}" n'est pas dans le modèle
+element "{0}" is not in the model ‖ elementu "{0}" nie ma w modelu ‖ Element "{0}" ist nicht im Modell ‖ l'élément "{0}" n'est pas dans le modèle
+element "{0}": stereotype "{1}" instead of "{2}" ‖ element "{0}": stereotyp "{1}" zamiast "{2}" ‖ Element "{0}": Stereotyp "{1}" statt "{2}" ‖ élément "{0}" : stéréotype "{1}" au lieu de "{2}"
+element {0} is in package {1} instead of {2} ‖ element {0} jest w pakiecie {1} zamiast {2} ‖ Element {0} ist im Paket {1} statt {2} ‖ l'élément {0} est dans le paquetage {1} au lieu de {2}
+element {0} is not in the model ‖ elementu {0} nie ma w modelu ‖ Element {0} ist nicht im Modell ‖ l'élément {0} n'est pas dans le modèle
+element {0} is not on diagram {1} ‖ elementu {0} nie ma na diagramie {1} ‖ Element {0} ist nicht im Diagramm {1} ‖ l'élément {0} n'est pas sur le diagramme {1}
+package "{0}" is not in the model ‖ pakietu "{0}" nie ma w modelu ‖ Paket "{0}" ist nicht im Modell ‖ le paquetage "{0}" n'est pas dans le modèle
+{0} {1} is still in the model ‖ {0} {1} nadal jest w modelu ‖ {0} {1} ist noch im Modell ‖ {0} {1} est toujours dans le modèle
+{0}: stereotype "{1}" instead of "{2}" ‖ {0}: stereotyp "{1}" zamiast "{2}" ‖ {0}: Stereotyp "{1}" statt "{2}" ‖ {0} : stéréotype "{1}" au lieu de "{2}"
+{0}: tagged value {1} = "{2}" instead of "{3}" ‖ {0}: tagged value {1} = "{2}" zamiast "{3}" ‖ {0}: Tagged Value {1} = "{2}" statt "{3}" ‖ {0} : tagged value {1} = "{2}" au lieu de "{3}"
+{0}: tagged value {1} is missing ‖ {0}: brak tagged value {1} ‖ {0}: Tagged Value {1} fehlt ‖ {0} : tagged value {1} manquante
+{0}: tagged value {1} is still there ‖ {0}: tagged value {1} nadal jest ‖ {0}: Tagged Value {1} ist noch da ‖ {0} : tagged value {1} toujours présente
+{0}: the stereotype "{1}" is still there ‖ {0}: stereotyp "{1}" nadal jest ‖ {0}: der Stereotyp "{1}" ist noch da ‖ {0} : le stéréotype "{1}" est toujours là
+{0}: {1} is "{2}" instead of "{3}" ‖ {0}: {1} to "{2}" zamiast "{3}" ‖ {0}: {1} ist "{2}" statt "{3}" ‖ {0} : {1} vaut "{2}" au lieu de "{3}"
