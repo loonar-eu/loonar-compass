@@ -63,6 +63,9 @@ pub const MODEL_OPS: &[&str] = &[
     "import_xmi",
     "set_linked_document",
     "set_swimlanes",
+    "reverse_connector",
+    "update_package",
+    "generate_report",
 ];
 
 #[derive(Default)]
@@ -376,6 +379,9 @@ pub fn describe(ops: &[Value]) -> String {
         "import_xmi" => crate::i18n::tr("XMI files IMPORTED into packages"),
         "set_linked_document" => crate::i18n::tr("linked documents of elements"),
         "set_swimlanes" => crate::i18n::tr("diagram swimlanes"),
+        "reverse_connector" => crate::i18n::tr("relationships reversed"),
+        "update_package" => crate::i18n::tr("changed packages"),
+        "generate_report" => crate::i18n::tr("documents from EA templates"),
         "set_composite" => crate::i18n::tr("element-to-diagram links"),
         other => other_static(other),
     };
@@ -854,6 +860,45 @@ mod tests {
             let out = ran.expect("run");
             assert!(out.contains(&format!("classes: {classes}")) && out.contains("v2"), "{out}");
         }
+    }
+
+    /// Reversing a relationship, editing a package and a report from an EA template.
+    /// Run with: `cargo test ea_reverse_package_report -- --ignored --nocapture` (LOONAR_TEST_PROPS = another model).
+    #[test]
+    #[ignore = "requires EA, a license and the model database from app.properties"]
+    fn ea_reverse_package_report() {
+        let cfg = test_config();
+        let _ea = CloseEa;
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).expect(sql);
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id limit 1")[0][0].parse().unwrap();
+        let name = format!("ZZ_test_mostu_rep_{}", chrono::Local::now().format("%H%M%S"));
+        let created = run_batch(&cfg, &[
+            json!({"op":"create_package","key":"pkg","parent":root,"name":name}),
+            json!({"op":"create_element","key":"a","package":"#pkg","name":"Order","type":"Class","notes":"An order."}),
+            json!({"op":"create_element","key":"b","package":"#pkg","name":"Invoice","type":"Class","notes":"An invoice."}),
+            json!({"op":"create_connector","key":"c","source":"#a","target":"#b","type":"Dependency"}),
+        ], &BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("creation");
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).expect(key)["id"].as_i64().unwrap();
+        let (pkg, a, c) = (id_of("pkg"), id_of("a"), id_of("c"));
+        let report = std::env::temp_dir().join(format!("loonar-report-{}.docx", std::process::id()));
+        let done = run_batch(&cfg, &[
+            json!({"op":"reverse_connector","connector":c}),
+            json!({"op":"update_package","package":pkg,"notes":"Billing area","version":"2.0","status":"Approved"}),
+            json!({"op":"generate_report","package":pkg,"file":report.to_string_lossy()}),
+        ], &BatchOptions::default());
+        let ends = q(&format!("select start_object_id, end_object_id from t_connector where connector_id = {c}"));
+        let package = q(&format!("select coalesce(notes,''), coalesce(version,'') from t_package where package_id = {pkg}"));
+        let status = q(&format!("select coalesce(status,'') from t_object where pdata1 = '{pkg}' and object_type = 'Package'"));
+        let size = std::fs::metadata(&report).map(|m| m.len()).unwrap_or(0);
+        let _ = std::fs::remove_file(&report);
+        run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &BatchOptions::default()).expect("cleanup");
+        shutdown();
+        println!("ops: {done:?}\nends: {ends:?} (Order = {a})\npackage: {package:?} status {status:?}\nreport bytes: {size}");
+        done.expect("ops");
+        assert_eq!(ends[0][1], a.to_string(), "the relationship now ends at Order");
+        assert_eq!(package[0], vec!["Billing area".to_string(), "2.0".to_string()]);
+        assert_eq!(status[0][0], "Approved");
+        assert!(size > 5000, "a DOCX report was written");
     }
 
     /// Governance on a real model: seeded defects are found by the linter, the organization's rules work, the gap analysis

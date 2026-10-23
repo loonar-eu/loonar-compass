@@ -1275,3 +1275,9 @@ event agent {0}: the prompt is empty ‖ agent zdarzeń {0}: polecenie (prompt) 
 event_agents.json is not valid JSON ‖ event_agents.json nie jest poprawnym JSON ‖ event_agents.json ist kein gültiges JSON ‖ event_agents.json n'est pas un JSON valide
 🤖 {0}: error - {1} ‖ 🤖 {0}: błąd - {1} ‖ 🤖 {0}: Fehler - {1} ‖ 🤖 {0} : erreur - {1}
 🤖 {0}: {1}… ‖ 🤖 {0}: {1}… ‖ 🤖 {0}: {1}… ‖ 🤖 {0} : {1}…
+relationships reversed ‖ odwrócone relacje ‖ umgekehrte Beziehungen ‖ relations inversées
+changed packages ‖ zmienione pakiety ‖ geänderte Pakete ‖ paquetages modifiés
+documents from EA templates ‖ dokumenty z szablonów EA ‖ Dokumente aus EA-Vorlagen ‖ documents à partir de modèles EA
+the report file must end with .docx, .pdf or .rtf ‖ plik raportu musi kończyć się na .docx, .pdf lub .rtf ‖ die Berichtsdatei muss auf .docx, .pdf oder .rtf enden ‖ le fichier du rapport doit se terminer par .docx, .pdf ou .rtf
+EA did not create the report (template "{0}" may not exist) ‖ EA nie utworzył raportu (szablon "{0}" może nie istnieć) ‖ EA hat den Bericht nicht erstellt (die Vorlage "{0}" existiert vielleicht nicht) ‖ EA n'a pas créé le rapport (le modèle "{0}" n'existe peut-être pas)
+Report saved: {0} ‖ zapisano raport: {0} ‖ Bericht gespeichert: {0} ‖ Rapport enregistré : {0}

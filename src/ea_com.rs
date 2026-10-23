@@ -818,6 +818,53 @@ impl Job<'_> {
                     self.repo.call("Execute", &[s(statement.as_str().unwrap_or(""))])?;
                 }
             }
+            "reverse_connector" => {
+                let id = int_field(op, "connector")?;
+                let connector = self.repo.call("GetConnectorByID", &[i(id)]).ok().and_then(|v| v.object())
+                    .ok_or_else(|| anyhow!("{}", crate::i18n::fmt("There is no connector with id {0}.", &[id.to_string()])))?;
+                let (client, supplier) = (connector.int("ClientID")?, connector.int("SupplierID")?);
+                connector.set("ClientID", i(supplier))?;
+                connector.set("SupplierID", i(client))?;
+                connector.update(&crate::i18n::fmt("connector id={0}", &[id.to_string()]))?;
+            }
+            "update_package" => {
+                let package = self.package(&op["package"])?;
+                for (field, property) in [("name", "Name"), ("notes", "Notes"), ("version", "Version")] {
+                    if !op[field].is_null() {
+                        package.set(property, s(&text_field(op, field)))?;
+                    }
+                }
+                package.update(crate::i18n::tr("package"))?;
+                // Status and stereotype belong to the package's element.
+                if !op["status"].is_null() || !op["stereotype"].is_null() {
+                    let element = package.obj("Element")?;
+                    if !op["status"].is_null() {
+                        element.set("Status", s(&text_field(op, "status")))?;
+                    }
+                    if !op["stereotype"].is_null() {
+                        element.set("StereotypeEx", s(&text_field(op, "stereotype")))?;
+                    }
+                    element.update(crate::i18n::tr("package"))?;
+                }
+            }
+            "generate_report" => {
+                // A document from an EA document template (Publish → Report Builder), e.g. "Model Report".
+                let package = self.package(&op["package"])?;
+                let file = text_field(op, "file");
+                let lower = file.to_lowercase();
+                if !(lower.ends_with(".docx") || lower.ends_with(".pdf") || lower.ends_with(".rtf")) {
+                    bail!("{}", crate::i18n::tr("the report file must end with .docx, .pdf or .rtf"));
+                }
+                let template = op["template"].as_str().unwrap_or("Model Report").to_string();
+                let project = self.repo.call("GetProjectInterface", &[])?.object().ok_or_else(|| anyhow!("Project interface"))?;
+                let _ = std::fs::remove_file(&file);
+                project.call("RunReport", &[s(&package.text("PackageGUID")?), s(&template), s(&file)])?;
+                let size = std::fs::metadata(&file).map(|m| m.len()).unwrap_or(0);
+                if size == 0 {
+                    bail!("{}", crate::i18n::fmt("EA did not create the report (template \"{0}\" may not exist)", &[template]));
+                }
+                self.warnings.push(crate::i18n::fmt("Report saved: {0}", &[file.clone()]));
+            }
             "layout_diagram" => {
                 // EA's own automatic layout (Layout → Diagram Layout → Digraph) with a direction and spacing.
                 let diagram = self.diagram(&op["diagram"])?;
