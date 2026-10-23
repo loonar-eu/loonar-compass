@@ -428,7 +428,7 @@ EA did not respond within {0} s and the operation was stopped. The most common c
 the EA thread ended without a response ‖ wątek EA zakończył się bez odpowiedzi ‖ der EA-Thread endete ohne Antwort ‖ le thread EA s'est terminé sans réponse
 unknown error ‖ nieznany błąd ‖ unbekannter Fehler ‖ erreur inconnue
 operation {0} ({1}) failed: {2} ‖ operacja nr {0} ({1}) nie powiodła się: {2} ‖ Operation Nr. {0} ({1}) ist fehlgeschlagen: {2} ‖ l'opération n° {0} ({1}) a échoué : {2}
-The changes were rolled back (the package was deleted); nothing was left in the model. ‖ Zmiany zostały wycofane (pakiet usunięto), w modelu nic nie zostało. ‖ Die Änderungen wurden zurückgenommen (das Paket wurde gelöscht); im Modell ist nichts zurückgeblieben. ‖ Les modifications ont été annulées (le paquetage a été supprimé) ; rien n'est resté dans le modèle.
+The changes were rolled back; nothing was left in the model. ‖ Zmiany zostały wycofane, w modelu nic nie zostało. ‖ Die Änderungen wurden zurückgenommen; im Modell ist nichts zurückgeblieben. ‖ Les modifications ont été annulées ; rien n'est resté dans le modèle.
 {0} objects created before the error remain in the model. ‖ W modelu zostało {0} obiektów utworzonych przed błędem. ‖ Im Modell verbleiben {0} Objekte, die vor dem Fehler erstellt wurden. ‖ {0} objets créés avant l'erreur restent dans le modèle.
 new packages ‖ nowe pakiety ‖ neue Pakete ‖ nouveaux paquetages
 new diagrams ‖ nowe diagramy ‖ neue Diagramme ‖ nouveaux diagrammes
@@ -1289,3 +1289,4 @@ Spelling ({0}, dictionary {1}): {2} texts, {3} words checked, {4} possible mista
 Spelling of the model's texts ‖ Pisownia tekstów modelu ‖ Rechtschreibung der Modelltexte ‖ Orthographe des textes du modèle
 Windows has no spelling dictionary for {0}: add the language in Windows Settings → Time & language → Language ‖ Windows nie ma słownika pisowni dla języka {0}: dodaj język w Ustawieniach Windows → Czas i język → Język ‖ Windows hat kein Rechtschreibwörterbuch für {0}: fügen Sie die Sprache in den Windows-Einstellungen → Zeit und Sprache → Sprache hinzu ‖ Windows n'a pas de dictionnaire orthographique pour {0} : ajoutez la langue dans Paramètres Windows → Heure et langue → Langue
 ✎ Spelling: {0} ‖ ✎ Pisownia: {0} ‖ ✎ Rechtschreibung: {0} ‖ ✎ Orthographe : {0}
+another model is open in Enterprise Architect: open this model there (or close EA) and run the script again ‖ w Enterprise Architect jest otwarty inny model: otwórz tam ten model (albo zamknij EA) i uruchom skrypt ponownie ‖ in Enterprise Architect ist ein anderes Modell geöffnet: öffnen Sie dort dieses Modell (oder schließen Sie EA) und starten Sie das Skript erneut ‖ un autre modèle est ouvert dans Enterprise Architect : ouvrez-y ce modèle (ou fermez EA) et relancez le script

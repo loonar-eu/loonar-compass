@@ -163,9 +163,25 @@ fn xml_text(text: &str) -> String {
     text.replace("]]>", "]]]]><![CDATA[>")
 }
 
-/// Runs the script in Windows Script Host attached to the open EA window; returns what it printed.
+/// Runs the script in Windows Script Host attached to the open EA window, or without one in the application's own
+/// EA session in the background; returns what it printed.
 pub fn run(cfg: &AppConfig, name: &str) -> Result<String> {
     let script = find(cfg, name)?;
+    let background = !crate::ea_ui::file_or_db_open_in_window(cfg);
+    if background {
+        // The background session registers as EA.App as well: the script attaches to it.
+        crate::ea::run_batch(cfg, &[serde_json::json!({ "op": "ping" })], &crate::ea::BatchOptions::default())?;
+    }
+    let result = run_attached(cfg, &script);
+    if background && cfg.uses_file() {
+        // The script may have changed the file: closing the session writes it to disk.
+        crate::ea::shutdown();
+    }
+    result
+}
+
+fn run_attached(cfg: &AppConfig, script: &Script) -> Result<String> {
+    let script = Script { guid: script.guid.clone(), name: script.name.clone(), language: script.language.clone(), group: script.group.clone(), code: script.code.clone() };
     let language = match script.language.as_str() {
         "VBScript" => "VBScript",
         // EA's JavaScript (SpiderMonkey) scripts run as JScript: most use only ES3/ES5 features.
@@ -199,6 +215,10 @@ If Err.Number <> 0 Then
 End If
 On Error GoTo 0
 Set Repository = EAApp.Repository
+If InStr(1, Repository.ConnectionString, "{{model}}", vbTextCompare) = 0 Then
+  WScript.StdErr.WriteLine "OTHER_MODEL " & Repository.ConnectionString
+  WScript.Quit 4
+End If
 ]]></script>
 <script language="{language}"><![CDATA[
 {}
@@ -210,7 +230,13 @@ Set Repository = EAApp.Repository
     let file = std::env::temp_dir().join(format!("loonar-script-{id}.wsf"));
     // Session.Output goes to a Unicode file (the console output of cscript cannot carry every character).
     let out_file = std::env::temp_dir().join(format!("loonar-script-{id}.out"));
-    let job = job.replace("{out}", &out_file.to_string_lossy());
+    // The model the script must run on: the file name or the database name of the settings.
+    let model = if cfg.uses_file() {
+        cfg.model_file.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
+    } else {
+        cfg.db_name.clone()
+    };
+    let job = job.replace("{out}", &out_file.to_string_lossy()).replace("{model}", &model.replace('"', ""));
     std::fs::write(&file, job).context("script file")?;
     let mut cmd = std::process::Command::new("cscript.exe");
     cmd.arg("//nologo").arg(&file).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
@@ -242,6 +268,9 @@ Set Repository = EAApp.Repository
     // cscript reports script errors on its console output, in the OEM code page.
     let out = printed.unwrap_or_default();
     let err = format!("{}{}", oem_text(&output.stderr), if status.success() { String::new() } else { oem_text(&output.stdout) });
+    if err.contains("OTHER_MODEL") {
+        bail!("{}", crate::i18n::tr("another model is open in Enterprise Architect: open this model there (or close EA) and run the script again"));
+    }
     if err.contains("NO_EA_WINDOW") {
         bail!("{}", crate::i18n::tr("a script runs in the open EA window: open this model in Enterprise Architect first"));
     }

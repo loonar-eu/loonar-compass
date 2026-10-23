@@ -522,6 +522,11 @@ fn ea_pids() -> Vec<u32> {
         .unwrap_or_default()
 }
 
+/// Whether the model of the settings (file or database) is open in a visible EA window.
+pub fn file_or_db_open_in_window(cfg: &crate::config::AppConfig) -> bool {
+    ROT_NAME.get().is_some() || (ea_window_exists() && has_model_open(&Target::of(cfg)))
+}
+
 /// Whether any visible Enterprise Architect main window exists.
 fn ea_window_exists() -> bool {
     std::process::Command::new("tasklist")

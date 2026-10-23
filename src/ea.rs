@@ -268,8 +268,9 @@ pub fn run_batch(cfg: &AppConfig, ops: &[Value], options: &BatchOptions) -> Resu
         guard.take();
     }
     // An EA project file is written to disk only when EA closes it: the background session ends after each write,
-    // so the next read of the file (and the next write) sees the changes.
-    if cfg.uses_file() {
+    // so the next read of the file (and the next write) sees the changes. A job of pings only (opening the session,
+    // e.g. for a script run) keeps it open.
+    if cfg.uses_file() && !ops.iter().all(|op| op["op"] == "ping") {
         drop(guard);
         shutdown();
     }
@@ -288,7 +289,7 @@ fn check_result(ops: &[Value], result: Value) -> Result<Value> {
         };
         if result["rolled_back"] == true {
             msg.push(' ');
-            msg.push_str(crate::i18n::tr("The changes were rolled back (the package was deleted); nothing was left in the model."));
+            msg.push_str(crate::i18n::tr("The changes were rolled back; nothing was left in the model."));
         } else if left > 0 {
             msg.push(' ');
             msg.push_str(&crate::i18n::fmt("{0} objects created before the error remain in the model.", &[left.to_string()]));
@@ -899,6 +900,35 @@ mod tests {
         assert_eq!(package[0], vec!["Billing area".to_string(), "2.0".to_string()]);
         assert_eq!(status[0][0], "Approved");
         assert!(size > 5000, "a DOCX report was written");
+    }
+
+    /// A write that fails halfway leaves nothing behind (all or nothing), and an XMI export to a path with "/" works.
+    /// Run with: `cargo test ea_atomic_write -- --ignored --nocapture` (LOONAR_TEST_PROPS = another model).
+    #[test]
+    #[ignore = "requires EA, a license and the model database from app.properties"]
+    fn ea_atomic_write() {
+        let cfg = test_config();
+        let _ea = CloseEa;
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).expect(sql);
+        let package: i64 = q("select package_id from t_package where parent_id <> 0 order by package_id limit 1")[0][0].parse().unwrap();
+        let name = format!("ZZ_atomic_{}", chrono::Local::now().format("%H%M%S"));
+        let failed = run_batch(&cfg, &[
+            json!({"op":"create_element","key":"a","package":package,"name":name,"type":"Activity"}),
+            json!({"op":"create_element","key":"b","package":package,"name":format!("{name}_2"),"type":"Activity"}),
+            json!({"op":"create_connector","source":"#a","target":"#b","type":"ControlFlow"}),
+            json!({"op":"place","diagram":999999,"element":"#a","left":10,"top":10,"width":100,"height":50}),
+        ], &BatchOptions::default());
+        let left = q(&format!("select count(*) from t_object where name like '{name}%'"));
+        let file = std::env::temp_dir().join(format!("loonar-xmi-{}/sub/model.xml", std::process::id())).to_string_lossy().replace('\\', "/");
+        let exported = run_batch(&cfg, &[json!({"op":"export_xmi","package":package,"file":file})], &BatchOptions::default());
+        let size = std::fs::metadata(file.replace('/', "\\")).map(|m| m.len()).unwrap_or(0);
+        shutdown();
+        println!("failed write: {:?}\nleft in the model: {left:?}\nexport: {exported:?} bytes {size}", failed.as_ref().map(|_| "ok").map_err(|e| e.to_string()));
+        let message = failed.expect_err("the write must fail").to_string();
+        assert!(message.contains("rolled back") || message.contains("wycofane") || message.contains("nothing was left") || message.contains("nic nie"), "{message}");
+        assert_eq!(left[0][0], "0", "nothing of the failed write is left");
+        exported.expect("export");
+        assert!(size > 1000, "XMI written to a path given with /");
     }
 
     /// Governance on a real model: seeded defects are found by the linter, the organization's rules work, the gap analysis

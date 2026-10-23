@@ -158,6 +158,35 @@ pub fn run_request(repo: &Disp, user: &str, ops: &[Value], rollback_key: Option<
                     }
                     Err(e) => job.warnings.push(crate::i18n::fmt("Could not roll back the changes: {0}", &[e.to_string()])),
                 }
+            } else if !job.created.is_empty() {
+                // All or nothing: the objects this job created before the error are deleted again (newest first),
+                // so a repeated attempt does not leave duplicates behind.
+                let created: Vec<Value> = job.created.iter().rev().cloned().collect();
+                let mut left = Vec::new();
+                for object in created {
+                    let field = match object["kind"].as_str().unwrap_or("") {
+                        "package" => "package",
+                        "element" => "element",
+                        "diagram" => "diagram",
+                        "connector" => "connector",
+                        _ => continue,
+                    };
+                    let id = object["id"].as_i64().unwrap_or(0);
+                    // An object already deleted together with its owner (an element with its connectors) counts as removed.
+                    if let Err(e) = job.op(&json!({ "op": "delete", field: id })) {
+                        let text = e.to_string().to_lowercase();
+                        if !(text.contains("no ") || text.contains("nie ma") || text.contains("there is")) {
+                            left.push(object.clone());
+                        }
+                    }
+                }
+                if left.is_empty() {
+                    result["rolled_back"] = json!(true);
+                    job.created.clear();
+                } else {
+                    job.warnings.push(crate::i18n::fmt("Could not roll back the changes: {0}", &[format!("{} objects", left.len())]));
+                    job.created = left;
+                }
             }
         }
     }
@@ -850,7 +879,10 @@ impl Job<'_> {
             "generate_report" => {
                 // A document from an EA document template (Publish → Report Builder), e.g. "Model Report".
                 let package = self.package(&op["package"])?;
-                let file = text_field(op, "file");
+                let file = text_field(op, "file").replace('/', "\\");
+                if let Some(dir) = std::path::Path::new(&file).parent() {
+                    let _ = std::fs::create_dir_all(dir);
+                }
                 let lower = file.to_lowercase();
                 if !(lower.ends_with(".docx") || lower.ends_with(".pdf") || lower.ends_with(".rtf")) {
                     bail!("{}", crate::i18n::tr("the report file must end with .docx, .pdf or .rtf"));
@@ -887,7 +919,11 @@ impl Job<'_> {
             }
             "export_xmi" => {
                 let package = self.package(&op["package"])?;
-                let file = text_field(op, "file");
+                // EA wants a Windows path to an existing folder (with "/" it opens an invisible error box and waits).
+                let file = text_field(op, "file").replace('/', "\\");
+                if let Some(dir) = std::path::Path::new(&file).parent() {
+                    let _ = std::fs::create_dir_all(dir);
+                }
                 if !file.to_lowercase().ends_with(".xml") && !file.to_lowercase().ends_with(".xmi") {
                     bail!("{}", crate::i18n::tr("the XMI file name must end with .xml or .xmi"));
                 }
@@ -901,7 +937,7 @@ impl Job<'_> {
             }
             "import_xmi" => {
                 let package = self.package(&op["package"])?;
-                let file = text_field(op, "file");
+                let file = text_field(op, "file").replace('/', "\\");
                 if !std::path::Path::new(&file).is_file() {
                     bail!("{}", crate::i18n::fmt("file {0} does not exist", &[file.clone()]));
                 }
