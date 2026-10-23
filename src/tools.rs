@@ -82,6 +82,7 @@ pub fn definitions() -> Value {
     if let Some(items) = list.as_array_mut() {
         items.push(crate::scripts::definition());
         items.push(crate::traceability::definition());
+        items.push(crate::code_drift::definition());
         items.push(json!({
             "name": "spell_check",
             "description": "Spelling of the model's texts in the language of the conversation (the language of Compass), with the Windows dictionary: \
@@ -543,6 +544,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "model_lint" => crate::governance::lint(input, ctx.cfg).map(Into::into),
         "ea_script" => ea_script(input, ctx).map(Into::into),
         "trace_requirements" => trace_requirements(input, ctx).map(Into::into),
+        "code_drift" => crate::code_drift::compare(ctx.cfg, std::path::Path::new(input["path"].as_str().unwrap_or("").trim()), input["package"].as_i64()).map(Into::into),
         "spell_check" => crate::model_spell::check(ctx.cfg, input["package"].as_i64(), crate::i18n::current().code()).map(Into::into),
         "jira_search" => jira(ctx.cfg)?.search(input["jql"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["jql".to_string()]))?, input["max"].as_u64().unwrap_or(30) as usize).map(Into::into),
         "jira_issue" => jira(ctx.cfg)?.issue(input["key"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["key".to_string()]))?.trim()).map(Into::into),

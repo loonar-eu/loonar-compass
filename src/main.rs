@@ -32,6 +32,7 @@ mod scripts;
 mod agents;
 mod model_spell;
 mod traceability;
+mod code_drift;
 mod templates;
 mod tools;
 mod window;
@@ -3910,6 +3911,7 @@ fn tool_step(name: &str, input: &Value) -> String {
         "jira_search" => crate::i18n::fmt("Jira search: {0}", &[input["jql"].as_str().unwrap_or("").to_string()]),
         "spell_check" => crate::i18n::tr("Spelling of the model's texts").to_string(),
         "trace_requirements" => crate::i18n::tr("Requirements of the document against the model").to_string(),
+        "code_drift" => crate::i18n::fmt("Model against the code in {0}", &[input["path"].as_str().unwrap_or("").to_string()]),
         "ea_script" => crate::i18n::fmt("EA script ({0}): {1}", &[input["action"].as_str().unwrap_or("list").to_string(), input["name"].as_str().unwrap_or("").to_string()]),
         "jira_issue" => crate::i18n::fmt("Reading the Jira issue {0}", &[input["key"].as_str().unwrap_or("").to_string()]),
         "jira_create_issue" => crate::i18n::fmt("Creating a Jira issue: {0}", &[input["summary"].as_str().unwrap_or("").to_string()]),
