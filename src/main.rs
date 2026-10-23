@@ -28,6 +28,7 @@ mod jira;
 mod hub;
 mod verify;
 mod mcp_client;
+mod scripts;
 mod templates;
 mod tools;
 mod window;
@@ -3871,6 +3872,7 @@ fn tool_step(name: &str, input: &Value) -> String {
         "publish_confluence" => crate::i18n::fmt("Publishing to Confluence: {0}", &[(input["title"].as_str().or(input["page"].as_str()).unwrap_or("")).to_string()]),
         "confluence_pages" => crate::i18n::tr("List of published Confluence pages").to_string(),
         "jira_search" => crate::i18n::fmt("Jira search: {0}", &[input["jql"].as_str().unwrap_or("").to_string()]),
+        "ea_script" => crate::i18n::fmt("EA script ({0}): {1}", &[input["action"].as_str().unwrap_or("list").to_string(), input["name"].as_str().unwrap_or("").to_string()]),
         "jira_issue" => crate::i18n::fmt("Reading the Jira issue {0}", &[input["key"].as_str().unwrap_or("").to_string()]),
         "jira_create_issue" => crate::i18n::fmt("Creating a Jira issue: {0}", &[input["summary"].as_str().unwrap_or("").to_string()]),
         "jira_comment" => crate::i18n::fmt("Updating the Jira issue {0}", &[input["key"].as_str().unwrap_or("").to_string()]),

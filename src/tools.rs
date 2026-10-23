@@ -78,6 +78,14 @@ pub struct ToolContext<'a> {
 
 /// Tool definitions in the Messages API format.
 pub fn definitions() -> Value {
+    let mut list = definitions_core();
+    if let Some(items) = list.as_array_mut() {
+        items.push(crate::scripts::definition());
+    }
+    list
+}
+
+fn definitions_core() -> Value {
     json!([
         {
             "name": "db_query",
@@ -109,6 +117,11 @@ update_connector {connector, name?, stereotype?, clear_stereotype?, direction?, 
 move {package, element | diagram | child_package} (moves an existing element, diagram or package into the package given in package; connectors and positions on diagrams are kept, so never recreate objects just to change their package); \
 delete {element | diagram | connector | package} (permanently deletes an object from the model; an element takes its connectors and diagram occurrences with it, a package all of its contents; delete only what the user asked for or what you created by mistake yourself, and tell the user what you deleted; take the connector id from t_connector.connector_id); \
 remove_from_diagram {diagram, element} (removes the element from the diagram, the element stays in the model); \
+layout_diagram {diagram, direction?, spacing?} (EA's automatic layout of the whole diagram, like Layout → Diagram Layout: direction down (default), right, up or left; spacing in pixels, default 40; use it after creating a diagram with many elements or when the user asks to tidy a diagram; then check the result with ea_show_diagram); \
+export_xmi {package, file} (exports the package with its contents and diagrams to an XMI file; file = a full path ending .xml or .xmi, by default in the attachments folder); \
+import_xmi {package, file, keep_guids?} (imports an XMI file into the package; GUIDs are replaced unless keep_guids is true, so an import never overwrites existing objects; only on the user's request); \
+set_linked_document {element, text} (the element's linked document (Ctrl+Alt+D in EA), from plain text, one paragraph per line; replaces an existing one); \
+set_swimlanes {diagram, lanes: [{title, width?, color?}], orientation?} (diagram swimlanes (Diagram → Swimlanes), replaces existing ones; orientation vertical (default) or horizontal); \
 set_composite {element, diagram} (links the element to an existing diagram as its composite diagram (in EA: New Child Diagram → Composite → Select Composite Diagram): when the element is double-clicked, EA opens that diagram instead of the properties; this is how you link a BPMN subprocess to the subprocess diagram, also when the diagram is in an ordinary package; in the database the linked element has t_object.ntype = 8 and the diagram id in the pdata1 column); \
 create_attribute {element, name, type?, visibility?, notes?, default?, stereotype?} (a class attribute, visibility: Public|Private|Protected|Package); create_operation {element, name, return_type?, visibility?, notes?, stereotype?, parameters?: [{name, type}]} (a class operation with parameters); update_attribute {attribute, name?, type?, visibility?, notes?, default?, static?} and delete_attribute {attribute} (attribute = t_attribute.id); update_operation {operation, name?, return_type?, visibility?, notes?, static?} and delete_operation {operation} (operation = t_operation.operationid); clone_package {package, name?, key?} (a copy of the package with all its contents next to the original, e.g. a variant to experiment with); update_scenario {element, scenario, name?, type?, notes?, steps?} (changes an existing structured scenario found by its name or GUID; steps, when given, replace all steps); delete_scenario {element, scenario}; create_scenario {element, name, type?, notes?, steps: [{text, actor?, uses?, results?}]} (a STRUCTURED SCENARIO of an element, e.g. a use case: the Scenarios tab of the element, with numbered steps; ALWAYS use this, never notes, when the user asks for scenarios, flows or structured scenarios; type: Basic Path (default), Alternate or Exception; actor = true for a step done by the actor, false for the system; in the database t_objectscenarios, steps in its xmlcontent); add_glossary_term {term, type?, meaning, forms?: [..]} (a term in the EA PROJECT GLOSSARY, the list EA highlights in notes and documents with its meaning - not a model element; t_glossary holds the terms; EA highlights only the exact written form, so for a Polish term ALWAYS pass in forms every inflected form of it: singular and plural in all seven cases from the nominative to the vocative, for a multi-word term the whole phrase inflected; type: the one the user names, otherwise Slownik (the type appears in EA once used); ask the user for the meaning if they did not give it); create_baseline {package, version, notes?} (saves a version of the package in the model; ALWAYS make a baseline before deleting from or substantially restructuring an existing package that you did not create in this conversation, and tell the user they can restore it in EA: package in the browser → Manage Baselines → Compare/Restore; baselines are in t_document with doctype = 'Baseline'); \
 update_diagram {diagram, name?, notes?, stereotype?} (changes the name, notes or stereotype of an existing diagram); hide_connectors {diagram, connectors, hidden?} (hides the given connectors on this one diagram only, a list of ids from t_connector.connector_id; hidden=false shows them again; the connectors stay in the model and on other diagrams, so this is how you declutter a dense diagram instead of deleting relationships; in the database: t_diagramlinks.hidden); \
@@ -514,6 +527,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         }
         "impact_analysis" => impact_analysis(input, ctx.cfg).map(Into::into),
         "model_lint" => crate::governance::lint(input, ctx.cfg).map(Into::into),
+        "ea_script" => ea_script(input, ctx).map(Into::into),
         "jira_search" => jira(ctx.cfg)?.search(input["jql"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["jql".to_string()]))?, input["max"].as_u64().unwrap_or(30) as usize).map(Into::into),
         "jira_issue" => jira(ctx.cfg)?.issue(input["key"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["key".to_string()]))?.trim()).map(Into::into),
         "jira_create_issue" => jira_create_issue(input, ctx).map(Into::into),
@@ -591,6 +605,42 @@ pub fn page_images_dir(attachments_dir: &std::path::Path, stored_page: &str) -> 
 }
 
 /// Confluence page: source (.confluence.md), page code for the source editor (.confluence.xml) and images in a folder next to them.
+/// EA scripts: list, read, save (approved like a write) and run (approved every time).
+fn ea_script(input: &Value, ctx: &ToolContext) -> Result<String> {
+    let name = input["name"].as_str().unwrap_or("").to_string();
+    match input["action"].as_str().unwrap_or("list") {
+        "list" => crate::scripts::list(ctx.cfg),
+        "read" => {
+            let s = crate::scripts::find(ctx.cfg, &name)?;
+            Ok(format!("{}.{} ({})\n{}", s.group, s.name, s.language, s.code))
+        }
+        "save" => {
+            let group = input["group"].as_str().filter(|g| !g.trim().is_empty()).unwrap_or("Compass").to_string();
+            let language = input["language"].as_str().unwrap_or("JScript").to_string();
+            let code = input["code"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["code".to_string()]))?.to_string();
+            let (statements, updated) = crate::scripts::save_statements(ctx.cfg, &group, &name, &language, &code)?;
+            let preview: String = code.lines().take(25).collect::<Vec<_>>().join("\n");
+            ctx.approver.confirm(&crate::i18n::fmt("Save the EA script {0}.{1} ({2}, {3} lines){4}:\n{5}", &[
+                group.clone(), name.clone(), language.clone(), code.lines().count().to_string(),
+                if updated { crate::i18n::tr(" - REPLACES the existing script").to_string() } else { String::new() }, preview,
+            ]))?;
+            ea::run_batch(ctx.cfg, &[json!({ "op": "execute_sql", "statements": statements })], &BatchOptions::default())?;
+            let saved = crate::scripts::find(ctx.cfg, &format!("{group}.{name}"))?;
+            if saved.code.replace("\r\n", "\n").trim() != code.replace("\r\n", "\n").trim() {
+                bail!("{}", crate::i18n::tr("the script was not saved correctly (the model has different code)"));
+            }
+            Ok(format!("Saved and verified the EA script {group}.{name} ({language}, {} lines){}.", code.lines().count(), if updated { ", replacing the previous version" } else { "" }))
+        }
+        "run" => {
+            let s = crate::scripts::find(ctx.cfg, &name)?;
+            let preview: String = s.code.lines().take(25).collect::<Vec<_>>().join("\n");
+            ctx.approver.confirm_always(&crate::i18n::fmt("Run the EA script {0}.{1} ({2}) in the open EA window? A script can change anything in the model.\n{3}", &[s.group.clone(), s.name.clone(), s.language.clone(), preview]))?;
+            crate::scripts::run(ctx.cfg, &name)
+        }
+        other => bail!("{}", crate::i18n::fmt("unknown ea_script action: {0}", &[other.to_string()])),
+    }
+}
+
 /// Connection to Jira from the settings.
 fn jira(cfg: &AppConfig) -> Result<crate::jira::Connection> {
     if cfg.jira_url.trim().is_empty() {
@@ -1274,6 +1324,12 @@ fn select(cfg: &AppConfig, sql: &str, limit: usize) -> Result<Selected> {
     let mut out = Selected { columns: Vec::new(), rows: Vec::new(), truncated: false };
     // Compass in a window of EA: a database model is read through EA's own connection (no settings needed).
     if !cfg.uses_file() && crate::ea_ui::reads_through_ea() {
+        let (columns, rows, truncated) = crate::ea_ui::sql_query(sql, limit)?;
+        return Ok(Selected { columns, rows, truncated });
+    }
+    // An EA file open in an EA window: EA writes it to disk only when it closes the file, so the current model is
+    // read through that window (the file on disk may not have the latest changes yet).
+    if cfg.uses_file() && crate::ea_ui::file_open_in_window(cfg) {
         let (columns, rows, truncated) = crate::ea_ui::sql_query(sql, limit)?;
         return Ok(Selected { columns, rows, truncated });
     }

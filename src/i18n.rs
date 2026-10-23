@@ -178,6 +178,7 @@ mod tests {
             include_str!("report.rs"),
             include_str!("templates.rs"),
             include_str!("tools.rs"),
+            include_str!("scripts.rs"),
             include_str!("mcp_client.rs"),
             include_str!("verify.rs"),
             include_str!("window.rs"),

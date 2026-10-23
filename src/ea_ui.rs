@@ -163,8 +163,92 @@ pub fn reads_through_ea() -> bool {
 }
 
 /// A read-only query run by the EA window of this Compass tab (Repository.SQLQuery): column names and rows.
+/// EA returns query results as XML with the column names as element names: an expression column without an alias
+/// (count(*), coalesce(…)) is not a valid name and EA fails ("invalid XML character"). Expressions of the outer
+/// select list get aliases (expr1, expr2…); plain columns and existing aliases stay as they are.
+pub fn alias_expressions(sql: &str) -> String {
+    let lower = sql.to_ascii_lowercase();
+    let bytes = lower.as_bytes();
+    // The outer SELECT: the first "select" at depth 0 that is not inside a WITH clause's parentheses.
+    let mut depth = 0i32;
+    let mut start = None;
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            b'\'' => {
+                i += 1;
+                while i < bytes.len() && bytes[i] != b'\'' {
+                    i += 1;
+                }
+            }
+            _ if depth == 0 && lower[i..].starts_with("select") && (i == 0 || !bytes[i - 1].is_ascii_alphanumeric()) => {
+                start = Some(i + 6);
+                break;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    let Some(list_start) = start else { return sql.to_string() };
+    // The end of the select list: " from " at depth 0 (or the end of the text).
+    let mut depth = 0i32;
+    let mut j = list_start;
+    let mut end = bytes.len();
+    let mut items: Vec<(usize, usize)> = Vec::new();
+    let mut item_start = list_start;
+    while j < bytes.len() {
+        match bytes[j] {
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            b'\'' => {
+                j += 1;
+                while j < bytes.len() && bytes[j] != b'\'' {
+                    j += 1;
+                }
+            }
+            b',' if depth == 0 => {
+                items.push((item_start, j));
+                item_start = j + 1;
+            }
+            c if depth == 0 && c.is_ascii_whitespace() && lower[j..].trim_start().starts_with("from") && lower[j..].trim_start()[4..].starts_with(|ch: char| ch.is_whitespace()) => {
+                end = j;
+                break;
+            }
+            _ => {}
+        }
+        j += 1;
+    }
+    items.push((item_start, end));
+    let mut out = String::from(&sql[..list_start]);
+    for (n, (a, b)) in items.iter().enumerate() {
+        let item = &sql[*a..*b];
+        let core = item.trim();
+        let lower_core = core.to_ascii_lowercase();
+        let distinct = lower_core.starts_with("distinct ");
+        let has_alias = {
+            let words: Vec<&str> = lower_core.split_whitespace().collect();
+            words.len() >= 3 && words[words.len() - 2] == "as"
+        };
+        let expression = core.contains('(') || core.contains('\'') || core.contains('|') || core.contains('+') || lower_core.starts_with("case ");
+        if n > 0 {
+            out.push(',');
+        }
+        if expression && !has_alias && !distinct && core != "*" {
+            let lead = &item[..item.len() - item.trim_start().len()];
+            let trail = &item[item.trim_end().len()..];
+            out.push_str(&format!("{lead}{core} as expr{}{trail}", n + 1));
+        } else {
+            out.push_str(item);
+        }
+    }
+    out.push_str(&sql[end..]);
+    out
+}
+
 pub fn sql_query(sql: &str, limit: usize) -> Result<(Vec<String>, Vec<Vec<Option<String>>>, bool)> {
-    let sql = sql.to_string();
+    let sql = alias_expressions(sql);
     // EA shows a wrong query's error in a message box and waits for a click (SuppressEADialogs does not stop it):
     // while the query runs, such a box of this EA is closed here and its text goes back as the error.
     let ea_pid: u32 = ROT_NAME.get().and_then(|n| n.rsplit('.').next()).and_then(|p| p.parse().ok()).unwrap_or(0);
@@ -174,7 +258,8 @@ pub fn sql_query(sql: &str, limit: usize) -> Result<(Vec<String>, Vec<Vec<Option
         let (done, caught) = (done.clone(), caught.clone());
         std::thread::spawn(move || {
             while !done.load(std::sync::atomic::Ordering::Relaxed) {
-                if let Some(text) = close_error_box(ea_pid) {
+                let found = if ea_pid != 0 { close_error_box(ea_pid) } else { ea_pids().into_iter().find_map(close_error_box) };
+                if let Some(text) = found {
                     *caught.lock().unwrap_or_else(|p| p.into_inner()) = Some(text);
                 }
                 std::thread::sleep(Duration::from_millis(150));
@@ -246,7 +331,7 @@ fn close_error_box(ea_pid: u32) -> Option<String> {
     for window in search.found {
         let mut text = String::new();
         unsafe { EnumChildWindows(window, child, &mut text as *mut String as isize) };
-        if text.contains("SQL") || text.contains("Database API") {
+        if text.contains("SQL") || text.contains("Database API") || text.contains("XML") || text.contains("Error processing") {
             // IDOK on the box's own OK button.
             unsafe { PostMessageW(window, 0x0111, 1, 0) };
             return Some(text);
@@ -288,7 +373,17 @@ fn parse_sql_xml(xml: &str, limit: usize) -> (Vec<String>, Vec<Vec<Option<String
             truncated = true;
             break;
         }
-        rows.push(columns.iter().map(|c| cells.iter().find(|(name, _)| name.eq_ignore_ascii_case(c)).and_then(|(_, v)| v.clone())).collect());
+        // Repeated column names (e.g. o.name and p.name) are matched by their order of occurrence.
+        rows.push(
+            columns
+                .iter()
+                .enumerate()
+                .map(|(index, c)| {
+                    let nth = columns[..index].iter().filter(|p| p.eq_ignore_ascii_case(c)).count();
+                    cells.iter().filter(|(name, _)| name.eq_ignore_ascii_case(c)).nth(nth).and_then(|(_, v)| v.clone())
+                })
+                .collect(),
+        );
     }
     (columns, rows, truncated)
 }
@@ -403,6 +498,51 @@ fn same_model(repo: &Disp, target: &Target) -> Result<()> {
 }
 
 /// Whether the user's EA window has this model open (answers within a few seconds; no window = false).
+/// Whether the model file of the settings is open in an EA window (cached for 3 s: it is asked before every read).
+pub fn file_open_in_window(cfg: &crate::config::AppConfig) -> bool {
+    static CACHE: std::sync::Mutex<Option<(std::time::Instant, PathBuf, bool)>> = std::sync::Mutex::new(None);
+    if let Some((when, file, open)) = CACHE.lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
+        if *file == cfg.model_file && when.elapsed() < Duration::from_secs(3) {
+            return *open;
+        }
+    }
+    // Without any EA window there is nothing to ask (and no COM call to wait for).
+    let open = ea_window_exists() && has_model_open(&Target::of(cfg));
+    *CACHE.lock().unwrap_or_else(|p| p.into_inner()) = Some((std::time::Instant::now(), cfg.model_file.clone(), open));
+    open
+}
+
+/// Process ids of the running EA instances (outside a tab of EA the window's process is not known in advance).
+fn ea_pids() -> Vec<u32> {
+    std::process::Command::new("tasklist")
+        .args(["/FI", "IMAGENAME eq EA.exe", "/FO", "CSV", "/NH"])
+        .creation_flags_hidden()
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).lines().filter_map(|l| l.split("\",\"").nth(1).and_then(|p| p.trim_matches('"').parse().ok())).collect())
+        .unwrap_or_default()
+}
+
+/// Whether any visible Enterprise Architect main window exists.
+fn ea_window_exists() -> bool {
+    std::process::Command::new("tasklist")
+        .args(["/FI", "IMAGENAME eq EA.exe", "/NH"])
+        .creation_flags_hidden()
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_ascii_lowercase().contains("ea.exe"))
+        .unwrap_or(false)
+}
+
+trait HiddenCommand {
+    fn creation_flags_hidden(&mut self) -> &mut Self;
+}
+
+impl HiddenCommand for std::process::Command {
+    fn creation_flags_hidden(&mut self) -> &mut Self {
+        use std::os::windows::process::CommandExt;
+        self.creation_flags(0x0800_0000)
+    }
+}
+
 pub fn has_model_open(target: &Target) -> bool {
     let target = target.clone();
     with_running_ea(Duration::from_secs(5), move |repo| same_model(repo, &target)).is_ok()
@@ -548,5 +688,20 @@ mod error_box_probe {
         }
         println!("caught: {text:?}");
         assert!(text.is_some());
+    }
+}
+
+#[cfg(test)]
+mod alias_tests {
+    use super::alias_expressions;
+
+    #[test]
+    fn expressions_get_aliases() {
+        assert_eq!(alias_expressions("select count(*) from t_object"), "select count(*) as expr1 from t_object");
+        assert_eq!(alias_expressions("SELECT o.name, coalesce(o.note,'') FROM t_object o"), "SELECT o.name, coalesce(o.note,'') as expr2 FROM t_object o");
+        assert_eq!(alias_expressions("select count(*) as n from t"), "select count(*) as n from t");
+        assert_eq!(alias_expressions("select a from t where x in (select count(*) from u)"), "select a from t where x in (select count(*) from u)");
+        assert_eq!(alias_expressions("select 'a, from b' from t"), "select 'a, from b' as expr1 from t");
+        assert_eq!(alias_expressions("select * from t"), "select * from t");
     }
 }

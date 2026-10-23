@@ -58,6 +58,11 @@ pub const MODEL_OPS: &[&str] = &[
     "create_scenario",
     "update_scenario",
     "delete_scenario",
+    "layout_diagram",
+    "export_xmi",
+    "import_xmi",
+    "set_linked_document",
+    "set_swimlanes",
 ];
 
 #[derive(Default)]
@@ -366,6 +371,11 @@ pub fn describe(ops: &[Value]) -> String {
         "delete_scenario" => crate::i18n::tr("structured scenarios DELETED"),
         "remove_from_diagram" => crate::i18n::tr("elements removed from diagrams (they stay in the model)"),
         "diagram_style" => crate::i18n::tr("diagram style settings"),
+        "layout_diagram" => crate::i18n::tr("diagrams laid out automatically"),
+        "export_xmi" => crate::i18n::tr("packages exported to XMI"),
+        "import_xmi" => crate::i18n::tr("XMI files IMPORTED into packages"),
+        "set_linked_document" => crate::i18n::tr("linked documents of elements"),
+        "set_swimlanes" => crate::i18n::tr("diagram swimlanes"),
         "set_composite" => crate::i18n::tr("element-to-diagram links"),
         other => other_static(other),
     };
@@ -745,6 +755,105 @@ mod tests {
         assert!(updated.problems.is_empty() && updated.passed >= 2, "clearing a stereotype and a tag verifies");
         assert_eq!(fake.problems.len(), 4, "name, stereotype, tag and a delete that did not happen are all caught");
         assert!(related.len() == 1 && related[0].contains("Aggregation"), "relationships of a deleted element are listed");
+    }
+
+    /// New EA operations: automatic layout (overlapping elements are spread out), swimlanes, a linked document, XMI
+    /// export and import. Run with: `cargo test ea_layout_xmi_lanes -- --ignored --nocapture` (LOONAR_TEST_PROPS = another model).
+    #[test]
+    #[ignore = "requires EA, a license and the model database from app.properties"]
+    fn ea_layout_xmi_lanes() {
+        let cfg = test_config();
+        let _ea = CloseEa;
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).expect(sql);
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id limit 1")[0][0].parse().unwrap();
+        let name = format!("ZZ_test_mostu_ops_{}", chrono::Local::now().format("%H%M%S"));
+        let mut ops = vec![
+            json!({"op":"create_package","key":"pkg","parent":root,"name":name}),
+            json!({"op":"create_package","key":"copy","parent":root,"name":format!("{name}_import")}),
+            json!({"op":"create_diagram","key":"dia","package":"#pkg","name":"Flow","type":"Activity"}),
+        ];
+        for (i, step) in ["Receive", "Check", "Approve", "Pack", "Ship", "Close"].iter().enumerate() {
+            ops.push(json!({"op":"create_element","key":format!("e{i}"),"package":"#pkg","name":step,"type":"Activity"}));
+            ops.push(json!({"op":"place","diagram":"#dia","element":format!("#e{i}"),"left":100,"top":100,"width":110,"height":60}));
+            if i > 0 {
+                ops.push(json!({"op":"create_connector","source":format!("#e{}", i - 1),"target":format!("#e{i}"),"type":"ControlFlow"}));
+            }
+        }
+        let created = run_batch(&cfg, &ops, &BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("creation");
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).expect(key)["id"].as_i64().unwrap();
+        let (pkg, copy, dia, first) = (id_of("pkg"), id_of("copy"), id_of("dia"), id_of("e0"));
+        let xmi = std::env::temp_dir().join(format!("loonar-test-{}.xml", std::process::id()));
+        let more = vec![
+            json!({"op":"layout_diagram","diagram":dia,"direction":"right"}),
+            json!({"op":"set_swimlanes","diagram":dia,"lanes":[{"title":"Sales","width":300},{"title":"Warehouse","width":300}]}),
+            json!({"op":"set_linked_document","element":first,"text":"Przyjęcie zamówienia\nKrok 1: weryfikacja"}),
+            json!({"op":"export_xmi","package":pkg,"file":xmi.to_string_lossy()}),
+        ];
+        let done = run_batch(&cfg, &more, &BatchOptions::default());
+        let positions = q(&format!("select rectleft, recttop, rectright, rectbottom from t_diagramobjects where diagram_id = {dia}"));
+        let lanes = q(&format!("select coalesce(swimlanes,'') from t_diagram where diagram_id = {dia}"));
+        let guid = q(&format!("select ea_guid from t_object where object_id = {first}"))[0][0].clone();
+        let docs = q(&format!("select count(*) from t_document where elementid = '{guid}'"));
+        let xmi_text = std::fs::read_to_string(&xmi).unwrap_or_default();
+        let imported = if xmi_text.is_empty() { Err(anyhow::anyhow!("no XMI")) } else {
+            run_batch(&cfg, &[json!({"op":"import_xmi","package":copy,"file":xmi.to_string_lossy()})], &BatchOptions::default())
+        };
+        let copied = q(&format!("with recursive t(id) as (select {copy} union all select p.package_id from t_package p join t on p.parent_id = t.id) select count(*) from t_object where package_id in (select id from t) and object_type = 'Activity'"));
+        run_batch(&cfg, &[json!({"op":"delete","package":pkg}), json!({"op":"delete","package":copy})], &BatchOptions::default()).expect("cleanup");
+        shutdown();
+        let _ = std::fs::remove_file(&xmi);
+        println!("ops: {done:?}\npositions: {positions:?}\nlanes: {:?}\nlinked docs: {docs:?}\nxmi bytes {} has Approve {}\nimport: {imported:?}\nactivities in the imported package: {copied:?}",
+            lanes[0][0].chars().take(200).collect::<String>(), xmi_text.len(), xmi_text.contains("Approve"));
+        done.expect("layout, lanes, linked document, export");
+        let boxes: Vec<(i64, i64, i64, i64)> = positions.iter().map(|r| (r[0].parse().unwrap(), r[1].parse::<i64>().unwrap().abs(), r[2].parse().unwrap(), r[3].parse::<i64>().unwrap().abs())).collect();
+        let overlaps = boxes.iter().enumerate().any(|(i, a)| boxes.iter().skip(i + 1).any(|b| a.0 < b.2 && b.0 < a.2 && a.1.min(a.3) < b.1.max(b.3) && b.1.min(b.3) < a.1.max(a.3)));
+        assert!(!overlaps, "after the layout no two elements overlap: {boxes:?}");
+        assert!(lanes[0][0].contains("SW1=300") && lanes[0][0].contains("SW2=300"), "two swimlanes saved (their titles are kept by EA outside this column)");
+        assert_eq!(docs[0][0], "1", "linked document saved");
+        assert!(xmi_text.contains("Approve"), "XMI written");
+        imported.expect("import");
+        assert_eq!(copied[0][0], "6", "the imported package has the six activities");
+    }
+
+    /// EA scripts: saving (a new group, a library and a script that includes it), listing, reading, replacing and,
+    /// with an EA window open on the same model (LOONAR_TEST_RUN_SCRIPT=1), running with Repository and Session.Output.
+    /// Run with: `cargo test ea_scripts -- --ignored --nocapture` (LOONAR_TEST_PROPS = another model).
+    #[test]
+    #[ignore = "requires EA, a license and the model database from app.properties"]
+    fn ea_scripts() {
+        let cfg = test_config();
+        let _ea = CloseEa;
+        let group = format!("ZZ_test_{}", chrono::Local::now().format("%H%M%S"));
+        let library = "function countOf(type) { return Repository.GetElementSet(\"select object_id from t_object where object_type = '\" + type + \"'\", 2).Count; }";
+        let main = format!("!INC {group}.Lib\nSession.Output(\"classes: \" + countOf(\"Class\"));\nSession.Output(\"model: \" + Repository.Models.GetAt(0).Name);");
+        for (name, code) in [("Lib", library.to_string()), ("Count", main.clone())] {
+            let (statements, _) = crate::scripts::save_statements(&cfg, &group, name, "JScript", &code).unwrap();
+            run_batch(&cfg, &[json!({"op":"execute_sql","statements":statements})], &BatchOptions::default()).expect("save");
+        }
+        let listed = crate::scripts::list(&cfg).unwrap();
+        let read = crate::scripts::find(&cfg, &format!("{group}.Count")).unwrap();
+        let resolved = crate::scripts::resolve_includes(&cfg, &read).unwrap();
+        // Replacing keeps one script.
+        let (statements, updated) = crate::scripts::save_statements(&cfg, &group, "Count", "JScript", &format!("{main}\nSession.Output(\"v2\");")).unwrap();
+        run_batch(&cfg, &[json!({"op":"execute_sql","statements":statements})], &BatchOptions::default()).expect("replace");
+        let count_rows = crate::tools::query_rows(&cfg, &format!("select count(*) from t_script where notes like '%Name=_Count_%' and scriptauthor = (select scriptname from t_script where script = '{group}')")).unwrap();
+        let ran = if std::env::var("LOONAR_TEST_RUN_SCRIPT").is_ok() { Some(crate::scripts::run(&cfg, &format!("{group}.Count"))) } else { None };
+        let classes = crate::tools::query_rows(&cfg, "select count(*) from t_object where object_type = 'Class'").unwrap()[0][0].clone();
+        // Cleanup: the scripts and the group.
+        run_batch(&cfg, &[json!({"op":"execute_sql","statements":[
+            format!("delete from t_script where scriptauthor = (select scriptname from t_script where script = '{group}' and scriptcategory = '{}')", crate::scripts::GROUP_CATEGORY),
+            format!("delete from t_script where script = '{group}' and scriptcategory = '{}'", crate::scripts::GROUP_CATEGORY),
+        ]})], &BatchOptions::default()).expect("cleanup");
+        shutdown();
+        println!("{listed}\nresolved:\n{resolved}\nreplace: updated={updated} rows={count_rows:?}\nrun: {ran:?} (classes in the model: {classes})");
+        assert!(listed.contains(&format!("{group} | Count | JScript")) && listed.contains(&format!("{group} | Lib | JScript")));
+        assert_eq!(read.code.replace("\r\n", "\n"), main);
+        assert!(resolved.contains("function countOf") && !resolved.contains("!INC"), "the include is resolved");
+        assert!(updated && count_rows[0][0] == "1", "replacing keeps one script");
+        if let Some(ran) = ran {
+            let out = ran.expect("run");
+            assert!(out.contains(&format!("classes: {classes}")) && out.contains("v2"), "{out}");
+        }
     }
 
     /// Governance on a real model: seeded defects are found by the linter, the organization's rules work, the gap analysis

@@ -1237,3 +1237,31 @@ unclosed ${…} in {0} ‖ niezamknięte ${…} w {0} ‖ nicht geschlossenes ${
 unknown placeholder {0} (use secret: or env:) ‖ nieznany zapis {0} (użyj secret: lub env:) ‖ unbekannter Platzhalter {0} (secret: oder env: verwenden) ‖ espace réservé inconnu {0} (utilisez secret: ou env:)
 unknown MCP tool {0} ‖ nieznane narzędzie MCP {0} ‖ unbekanntes MCP-Werkzeug {0} ‖ outil MCP inconnu {0}
 {0}: {1} tools ‖ {0}: narzędzia: {1} ‖ {0}: {1} Werkzeuge ‖ {0} : {1} outils
+ - REPLACES the existing script ‖  - ZASTĘPUJE istniejący skrypt ‖  - ERSETZT das vorhandene Skript ‖  - REMPLACE le script existant
+EA could not lay out the diagram ‖ EA nie mógł ułożyć diagramu ‖ EA konnte das Diagramm nicht anordnen ‖ EA n'a pas pu disposer le diagramme
+EA did not accept the linked document ‖ EA nie przyjął dokumentu powiązanego ‖ EA hat das verknüpfte Dokument nicht übernommen ‖ EA n'a pas accepté le document lié
+EA did not add the swimlane ‖ EA nie dodał toru (swimlane) ‖ EA hat die Swimlane nicht hinzugefügt ‖ EA n'a pas ajouté le couloir
+EA did not write the XMI file: {0} ‖ EA nie zapisał pliku XMI: {0} ‖ EA hat die XMI-Datei nicht geschrieben: {0} ‖ EA n'a pas écrit le fichier XMI : {0}
+EA script ({0}): {1} ‖ Skrypt EA ({0}): {1} ‖ EA-Skript ({0}): {1} ‖ Script EA ({0}) : {1}
+Output of the script {0}:\n{1} ‖ Wynik skryptu {0}:\n{1} ‖ Ausgabe des Skripts {0}:\n{1} ‖ Sortie du script {0} :\n{1}
+Run the EA script {0}.{1} ({2}) in the open EA window? A script can change anything in the model.\n{3} ‖ Uruchomić skrypt EA {0}.{1} ({2}) w otwartym oknie EA? Skrypt może zmienić w modelu wszystko.\n{3} ‖ Das EA-Skript {0}.{1} ({2}) im geöffneten EA-Fenster ausführen? Ein Skript kann alles im Modell ändern.\n{3} ‖ Exécuter le script EA {0}.{1} ({2}) dans la fenêtre EA ouverte ? Un script peut tout modifier dans le modèle.\n{3}
+Save the EA script {0}.{1} ({2}, {3} lines){4}:\n{5} ‖ Zapisać skrypt EA {0}.{1} ({2}, linie: {3}){4}:\n{5} ‖ Das EA-Skript {0}.{1} ({2}, {3} Zeilen) speichern{4}:\n{5} ‖ Enregistrer le script EA {0}.{1} ({2}, {3} lignes){4} :\n{5}
+Script groups: {0}; scripts: {1}. ‖ Grupy skryptów: {0}; skrypty: {1}. ‖ Skriptgruppen: {0}; Skripte: {1}. ‖ Groupes de scripts : {0} ; scripts : {1}.
+The script {0} ran without output. ‖ Skrypt {0} wykonał się bez wyniku. ‖ Das Skript {0} lief ohne Ausgabe. ‖ Le script {0} s'est exécuté sans sortie.
+XMI files IMPORTED into packages ‖ pliki XMI ZAIMPORTOWANE do pakietów ‖ XMI-Dateien in Pakete IMPORTIERT ‖ fichiers XMI IMPORTÉS dans des paquetages
+XMI imported into the package: {0} ‖ XMI zaimportowano do pakietu: {0} ‖ XMI in das Paket importiert: {0} ‖ XMI importé dans le paquetage : {0}
+XMI saved: {0} ‖ zapisano XMI: {0} ‖ XMI gespeichert: {0} ‖ XMI enregistré : {0}
+a script name must not be empty or contain quotes or < ‖ nazwa skryptu nie może być pusta ani zawierać cudzysłowów i < ‖ ein Skriptname darf nicht leer sein und keine Anführungszeichen oder < enthalten ‖ un nom de script ne doit pas être vide ni contenir de guillemets ou <
+a script runs in the open EA window: open this model in Enterprise Architect first ‖ skrypt działa w otwartym oknie EA: najpierw otwórz ten model w Enterprise Architect ‖ ein Skript läuft im geöffneten EA-Fenster: öffnen Sie dieses Modell zuerst in Enterprise Architect ‖ un script s'exécute dans la fenêtre EA ouverte : ouvrez d'abord ce modèle dans Enterprise Architect
+diagram swimlanes ‖ tory (swimlanes) diagramu ‖ Swimlanes des Diagramms ‖ couloirs du diagramme
+diagrams laid out automatically ‖ diagramy ułożone automatycznie ‖ automatisch angeordnete Diagramme ‖ diagrammes disposés automatiquement
+linked document ‖ dokument powiązany ‖ verknüpftes Dokument ‖ document lié
+linked documents of elements ‖ dokumenty powiązane elementów ‖ verknüpfte Dokumente von Elementen ‖ documents liés des éléments
+packages exported to XMI ‖ pakiety wyeksportowane do XMI ‖ nach XMI exportierte Pakete ‖ paquetages exportés en XMI
+several scripts are called {0}: give Group.Name ‖ kilka skryptów nazywa się {0}: podaj Grupa.Nazwa ‖ mehrere Skripte heißen {0}: Gruppe.Name angeben ‖ plusieurs scripts s'appellent {0} : indiquez Groupe.Nom
+the XMI file name must end with .xml or .xmi ‖ nazwa pliku XMI musi kończyć się na .xml lub .xmi ‖ der XMI-Dateiname muss auf .xml oder .xmi enden ‖ le nom du fichier XMI doit se terminer par .xml ou .xmi
+the script was not saved correctly (the model has different code) ‖ skrypt nie zapisał się poprawnie (w modelu jest inny kod) ‖ das Skript wurde nicht korrekt gespeichert (das Modell enthält anderen Code) ‖ le script n'a pas été enregistré correctement (le modèle contient un autre code)
+the script {0} did not finish within {1} s and was stopped ‖ skrypt {0} nie zakończył się w {1} s i został zatrzymany ‖ das Skript {0} wurde nicht innerhalb von {1} s fertig und wurde gestoppt ‖ le script {0} ne s'est pas terminé en {1} s et a été arrêté
+the script {0} failed: {1}{2} ‖ skrypt {0} zakończył się błędem: {1}{2} ‖ das Skript {0} ist fehlgeschlagen: {1}{2} ‖ le script {0} a échoué : {1}{2}
+there is no script {0} in the model ‖ w modelu nie ma skryptu {0} ‖ im Modell gibt es kein Skript {0} ‖ il n'y a pas de script {0} dans le modèle
+unknown ea_script action: {0} ‖ nieznana akcja ea_script: {0} ‖ unbekannte ea_script-Aktion: {0} ‖ action ea_script inconnue : {0}

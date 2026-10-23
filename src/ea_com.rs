@@ -812,6 +812,91 @@ impl Job<'_> {
                 diagram.set("StyleEx", s(joined.trim_start_matches(';')))?;
                 diagram.update(crate::i18n::tr("diagram style"))?;
             }
+            "execute_sql" => {
+                // Internal (EA scripts): statements on EA's own connection. Not in MODEL_OPS, so the model cannot send it.
+                for statement in op["statements"].as_array().into_iter().flatten() {
+                    self.repo.call("Execute", &[s(statement.as_str().unwrap_or(""))])?;
+                }
+            }
+            "layout_diagram" => {
+                // EA's own automatic layout (Layout → Diagram Layout → Digraph) with a direction and spacing.
+                let diagram = self.diagram(&op["diagram"])?;
+                let direction: i32 = match text_field(op, "direction").to_lowercase().as_str() {
+                    "up" => 0x0001_0000,
+                    "left" => 0x0004_0000,
+                    "right" => 0x0008_0000,
+                    _ => 0x0002_0000,
+                };
+                // Greedy cycle removal, layering by optimal link length, DFS-out initialization, aggressive crossing reduction.
+                let style = direction | 0x8000_0000u32 as i32 | 0x1000_0000 | 0x0400_0000 | 0x0200_0000;
+                let spacing = int_of(&op["spacing"]).unwrap_or(40);
+                let project = self.repo.call("GetProjectInterface", &[])?.object().ok_or_else(|| anyhow!("Project interface"))?;
+                let guid = diagram.text("DiagramGUID")?;
+                let done = project.call("LayoutDiagramEx", &[s(&guid), i(style), i(4), i(spacing), i(spacing), b(true)])?.bool();
+                if !done {
+                    bail!("{}", crate::i18n::tr("EA could not lay out the diagram"));
+                }
+                self.repo.call("ReloadDiagram", &[i(diagram.int("DiagramID")?)]).ok();
+            }
+            "export_xmi" => {
+                let package = self.package(&op["package"])?;
+                let file = text_field(op, "file");
+                if !file.to_lowercase().ends_with(".xml") && !file.to_lowercase().ends_with(".xmi") {
+                    bail!("{}", crate::i18n::tr("the XMI file name must end with .xml or .xmi"));
+                }
+                let project = self.repo.call("GetProjectInterface", &[])?.object().ok_or_else(|| anyhow!("Project interface"))?;
+                // xmiEADefault = 0 (UML 2.x with EA extensions), diagrams included, formatted XML, no DTD.
+                let message = project.call("ExportPackageXMI", &[s(&package.text("PackageGUID")?), i(0), i(1), i(-1), i(1), i(0), s(&file)])?.text();
+                if !std::path::Path::new(&file).is_file() {
+                    bail!("{}", crate::i18n::fmt("EA did not write the XMI file: {0}", &[message]));
+                }
+                self.warnings.push(crate::i18n::fmt("XMI saved: {0}", &[file.clone()]));
+            }
+            "import_xmi" => {
+                let package = self.package(&op["package"])?;
+                let file = text_field(op, "file");
+                if !std::path::Path::new(&file).is_file() {
+                    bail!("{}", crate::i18n::fmt("file {0} does not exist", &[file.clone()]));
+                }
+                let project = self.repo.call("GetProjectInterface", &[])?.object().ok_or_else(|| anyhow!("Project interface"))?;
+                let strip = if op["keep_guids"] == true { 0 } else { 1 };
+                let message = project.call("ImportPackageXMI", &[s(&package.text("PackageGUID")?), s(&file), i(1), i(strip)])?.text();
+                self.warnings.push(crate::i18n::fmt("XMI imported into the package: {0}", &[message]));
+                package.call("Packages", &[]).ok();
+                self.repo.call("RefreshModelView", &[i(package.int("PackageID")?)]).ok();
+            }
+            "set_linked_document" => {
+                let element = self.element(&op["element"])?;
+                let text = text_field(op, "text");
+                let file = std::env::temp_dir().join(format!("loonar-linked-{}.rtf", std::process::id()));
+                std::fs::write(&file, rtf(&text)).map_err(|e| anyhow!("RTF: {e}"))?;
+                let ok = element.call("LoadLinkedDocument", &[s(&file.to_string_lossy())])?.bool();
+                let _ = std::fs::remove_file(&file);
+                if !ok {
+                    bail!("{}", crate::i18n::tr("EA did not accept the linked document"));
+                }
+                element.update(crate::i18n::tr("linked document"))?;
+            }
+            "set_swimlanes" => {
+                let diagram = self.diagram(&op["diagram"])?;
+                let def = diagram.obj("SwimlaneDef")?;
+                if !op["orientation"].is_null() {
+                    def.set("Orientation", i(if text_field(op, "orientation").eq_ignore_ascii_case("horizontal") { 1 } else { 0 }))?;
+                }
+                let lanes = def.obj("Swimlanes")?;
+                lanes.call("DeleteAll", &[])?;
+                for lane in op["lanes"].as_array().into_iter().flatten() {
+                    let title = lane["title"].as_str().unwrap_or("");
+                    let width = lane["width"].as_i64().unwrap_or(250) as i32;
+                    let added = lanes.call("Add", &[s(title), i(width)])?.object().ok_or_else(|| anyhow!("{}", crate::i18n::tr("EA did not add the swimlane")))?;
+                    added.set("Title", s(title))?;
+                    added.set("Width", i(width))?;
+                    if lane["color"].as_str().is_some() {
+                        added.set("BackColor", i(color(&lane["color"])?))?;
+                    }
+                }
+                diagram.update(crate::i18n::tr("diagram swimlanes"))?;
+            }
             "set_composite" => {
                 let element = self.element(&op["element"])?;
                 let diagram = self.diagram(&op["diagram"])?;
@@ -1574,4 +1659,32 @@ mod tests {
         assert!(is_session_lost("The RPC server is unavailable. (0x800706BA)"));
         assert!(!is_session_lost("There is no package with id 5."));
     }
+}
+
+
+/// Plain text as a minimal RTF document (EA keeps linked documents as RTF): paragraphs per line, Unicode escaped.
+fn rtf(text: &str) -> String {
+    let mut out = String::from("{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Calibri;}}\\fs22 ");
+    for (index, line) in text.lines().enumerate() {
+        if index > 0 {
+            out.push_str("\\par ");
+        }
+        for c in line.chars() {
+            match c {
+                '\\' | '{' | '}' => {
+                    out.push('\\');
+                    out.push(c);
+                }
+                c if (c as u32) < 128 => out.push(c),
+                c => {
+                    let mut buf = [0u16; 2];
+                    for unit in c.encode_utf16(&mut buf) {
+                        out.push_str(&format!("\\u{}?", *unit as i16));
+                    }
+                }
+            }
+        }
+    }
+    out.push('}');
+    out
 }
