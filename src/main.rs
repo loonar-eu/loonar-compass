@@ -4597,6 +4597,10 @@ fn run_turn_with(
             if let Some(list) = tools.as_array_mut() {
                 list.push(ask_user_definition());
                 list.push(task_list_definition());
+                // Calculations and analysis in Anthropic's sandbox: only when switched on, only with Claude.
+                if cfg.code_execution && !cfg.uses_openai() {
+                    list.push(json!({ "type": "code_execution_20260521", "name": "code_execution" }));
+                }
             }
             // Tools of the user's own MCP servers (a server that does not start is reported once and left out).
             let (mcp_tools, mcp_errors) = mcp_client::definitions(&cfg.base_dir);
@@ -4654,6 +4658,18 @@ fn run_turn_with(
             emit(WorkerEvent::Text(text));
         }
 
+        // Code that ran in the sandbox: what it printed, as a step.
+        for block in resp["content"].as_array().into_iter().flatten().filter(|b| b["type"].as_str().is_some_and(|t| t.ends_with("code_execution_tool_result"))) {
+            let result = &block["content"];
+            let output = [result["stdout"].as_str().unwrap_or(""), result["stderr"].as_str().unwrap_or("")].join("\n");
+            emit(WorkerEvent::StepStart(crate::i18n::tr("Code in the sandbox").into()));
+            emit(WorkerEvent::StepEnd { ok: result["return_code"].as_i64().unwrap_or(0) == 0, detail: shorten(output.trim(), 600) });
+        }
+        // A long server tool (code execution) pauses the answer: it goes on with the same content.
+        if resp["stop_reason"] == "pause_turn" {
+            msgs.push(json!({ "role": "assistant", "content": content.clone() }));
+            continue;
+        }
         if resp["stop_reason"] != "tool_use" {
             // The model has finished. If the user added something in the meantime, the turn continues with that message.
             let queued = drain_inbox(inbox, &cfg.attachments_dir, emit)?;
@@ -5936,6 +5952,14 @@ impl eframe::App for App {
                                 cfg.show_thinking = !on;
                                 let _ = config::save_properties(&self.props_path, &[("claude.show_thinking", (!on).to_string())]);
                             }
+                            // Code execution in Anthropic's sandbox (calculations, data analysis): off unless switched on.
+                            let on = cfg.code_execution;
+                            let label = egui::RichText::new("🧮").color(if on { theme::NAV } else { theme::HINT });
+                            let tip = if on { crate::i18n::tr("The assistant may run code in Anthropic's sandbox for calculations (click to switch off)") } else { crate::i18n::tr("Let the assistant run code in Anthropic's sandbox for calculations and data analysis (the data it passes there goes to Anthropic, like the conversation)") };
+                            if ui.add(egui::Button::new(label).selected(on).frame(false)).on_hover_text(tip).clicked() {
+                                cfg.code_execution = !on;
+                                let _ = config::save_properties(&self.props_path, &[("claude.code_execution", (!on).to_string())]);
+                            }
                         }
                         if !ea::in_ea_tab() {
                             ui.add(egui::Label::new(
@@ -7001,6 +7025,28 @@ mod tests {
         println!("{files:?}");
         assert!(files.iter().any(|f| f.ends_with(".pptx")), "a presentation");
         assert!(files.iter().any(|f| f.ends_with(".pdf")), "a PDF made with Office");
+    }
+
+    /// A calculation in the sandbox with the real AI: `LOONAR_TEST_PROPS=… cargo test code_in_sandbox -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires an API key and a test model"]
+    fn code_in_sandbox() {
+        i18n::set(i18n::Lang::En);
+        let mut cfg = AppConfig::load(Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).unwrap();
+        cfg.code_execution = true;
+        let approver = tools::Approver::new(config::ApprovalMode::Ask, Box::new(|_| false));
+        let (_tx, inbox) = mpsc::channel();
+        let seen = std::sync::Mutex::new(Vec::<String>::new());
+        let messages = vec![Message { role: "user".into(), text: "Use code execution (Python) to compute the 30th Fibonacci number and the SHA-256 of the text 'Order'. Do not read the model.".into(), attachments: vec![], created: chrono::Utc::now().to_rfc3339() }];
+        run_turn(&cfg, &messages, &approver, &inbox, &AtomicBool::new(false), &|e| match e {
+            WorkerEvent::StepEnd { detail, .. } => seen.lock().unwrap().push(detail),
+            WorkerEvent::Text(t) => seen.lock().unwrap().push(t),
+            _ => {}
+        })
+        .unwrap();
+        let all = seen.into_inner().unwrap().join("\n");
+        println!("{all}");
+        assert!(all.contains("832040"), "the 30th Fibonacci number");
     }
 
     #[test]

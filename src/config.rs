@@ -164,6 +164,9 @@ pub struct AppConfig {
     pub ai_oauth_token_url: String,
     pub ai_oauth_client_id: String,
     pub ai_oauth_scope: String,
+    /// Code execution in Anthropic's sandbox for calculations and data analysis (`claude.code_execution`, off by
+    /// default): the data the assistant passes there goes to Anthropic like the rest of the conversation.
+    pub code_execution: bool,
     /// Show a summary of the model's reasoning in the steps of an answer (`claude.show_thinking`).
     pub show_thinking: bool,
     /// Model provider: "anthropic" (Claude) or "openai".
@@ -332,6 +335,7 @@ impl AppConfig {
             claude_model: get_or("claude.model", CLAUDE_MODEL),
             claude_effort: get_or("claude.effort", ""),
             show_thinking: get_or("claude.show_thinking", "false") == "true",
+            code_execution: get_or("claude.code_execution", "false") == "true",
             claude_url: get_or("claude.url", ""),
             ai_oauth_token_url: get_or("ai.oauth.token_url", ""),
             ai_oauth_client_id: get_or("ai.oauth.client_id", ""),
