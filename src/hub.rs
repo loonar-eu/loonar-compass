@@ -1805,6 +1805,30 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// Team event agents from the hub policy reach Compass: `LOONAR_HUB_FILE_PROPS=… cargo test hub_team_agents -- --ignored`
+    #[test]
+    #[ignore = "requires a test model"]
+    fn hub_team_agents() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        crate::config::secrets::use_environment();
+        std::env::set_var("LOONAR_SECRET_HUB_TOKEN", "admin-token-team-agents-0123");
+        let dir = std::env::temp_dir().join(format!("loonar-hub-agents-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:18732",
+            "sources": [{ "id": "shop", "name": "Shop", "properties": std::env::var("LOONAR_HUB_FILE_PROPS").unwrap() }],
+            "users": [{ "name": "admin", "token": "admin-token-team-agents-0123", "role": "admin" }],
+            "policy": { "event_agents": [{ "name": "Keep requirements", "event": "element_deleting", "mode": "guard", "applies_to": "Requirement", "prompt": "Block approved requirements." }] } }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        std::thread::spawn(move || serve(hub, &listen, |_| {}));
+        std::thread::sleep(Duration::from_millis(300));
+        let props = dir.join("app.properties");
+        std::fs::write(&props, format!("{}\nhub.url=http://127.0.0.1:18732\n", std::fs::read_to_string(std::env::var("LOONAR_HUB_FILE_PROPS").unwrap()).unwrap())).unwrap();
+        let cfg = crate::config::AppConfig::load(&props).unwrap();
+        let agents = crate::agents::load_all(&cfg);
+        assert!(agents.iter().any(|a| a.name == "Keep requirements (team)" && a.is_guard()), "{agents:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     #[ignore = "requires two test models (LOONAR_HUB_DB_PROPS, LOONAR_HUB_FILE_PROPS)"]
     fn hub_two_sources() {

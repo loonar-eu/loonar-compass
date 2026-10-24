@@ -4286,7 +4286,7 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
             Ok(crate::i18n::fmt("Saved. Connected to Miro: boards available: {0}.", &[boards.to_string()]))
         }
         GROUP_AGENTS => {
-            let n = agents::load(&cfg.base_dir).len();
+            let n = agents::load_all(&cfg).len();
             Ok(crate::i18n::fmt("Saved. Event agents: {0}. They work while Compass is open in a tab of EA.", &[n.to_string()]))
         }
         GROUP_MCP => {
@@ -4459,12 +4459,12 @@ fn start_guards(cfg: &AppConfig) {
     STARTED.call_once(move || {
         std::thread::spawn(move || {
             let Some(rot) = ea_ui::rot_name() else { return };
-            let mut agents = agents::load(&cfg.base_dir);
+            let mut agents = agents::load_all(&cfg);
             let mut loaded = std::time::Instant::now();
             agents::publish_guarded_events(rot, &agents);
             loop {
                 if loaded.elapsed() > std::time::Duration::from_secs(5) {
-                    agents = agents::load(&cfg.base_dir);
+                    agents = agents::load_all(&cfg);
                     agents::publish_guarded_events(rot, &agents);
                     loaded = std::time::Instant::now();
                 }
@@ -5256,7 +5256,7 @@ impl eframe::App for App {
                     let reported = self.live_reported.clone();
                     let agent_runs = self.agent_runs.clone();
                     std::thread::spawn(move || {
-                        let agents = agents::load(&cfg.base_dir);
+                        let agents = agents::load_all(&cfg);
                         for (kind, id) in events {
                             // Event agents (AI): advice in System Output; the same agent and object at most once a minute.
                             if !agents.is_empty() {

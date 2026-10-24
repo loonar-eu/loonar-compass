@@ -100,6 +100,7 @@ h3 { font-size:14px; margin:16px 0 6px; }
       <button data-tab="notes">Team notes</button>
       <button data-tab="changes">Change sets</button>
       <button data-tab="users" id="userstab" hidden>Users</button>
+      <button data-tab="policy" id="policytab" hidden>Team policy</button>
     </div>
     <div id="view-ask">
       <p class="muted">Ask about the selected model in your own words, e.g. "Which systems use the payment gateway?" The assistant only reads the model.</p>
@@ -119,6 +120,12 @@ h3 { font-size:14px; margin:16px 0 6px; }
     <div id="view-notes" hidden><div id="notes"></div></div>
     <div id="view-changes" hidden><div id="changes"></div></div>
     <div id="view-users" hidden><div id="users"></div></div>
+    <div id="view-policy" hidden>
+      <p class="muted">The team's rules for every Compass connected to this hub, as JSON: <b>min_approval</b> (plan, ask, auto), <b>governance</b> (model check rules),
+      <b>event_agents</b> (agents that run in everybody's Compass in EA, the same format as event_agents.json; "mode": "guard" stops deletions), <b>ask_min_role</b>, <b>ask_per_hour</b>.</p>
+      <textarea id="policytext" rows="22" spellcheck="false" style="width:100%;font-family:Consolas,monospace;font-size:12px"></textarea>
+      <div class="row"><button id="policysave">Save the policy</button><span id="policystatus" class="muted"></span></div>
+    </div>
   </section>
 </main>
 </div>
@@ -231,6 +238,7 @@ async function login() {
     me = await api('/api/me');
     if (me.must_change) { try { sessionStorage.setItem('hubToken', token); } catch (e) {} showChange(); return; }
     $('userstab').hidden = me.role !== 'admin';
+    $('policytab').hidden = me.role !== 'admin';
     try { sessionStorage.setItem('hubToken', token); } catch (e) {}
     $('who').textContent = me.name + ' · ' + me.role;
     $('loginview').hidden = true;
@@ -359,11 +367,22 @@ async function ask() {
 function show(tab) {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   ['ask', 'search', 'lint', 'gap', 'audit', 'notes', 'changes', 'users'].forEach(t => $('view-' + t).hidden = t !== tab);
+  if (tab === 'policy') api('/api/policy').then(p => { $('policytext').value = JSON.stringify(p, null, 2); $('policystatus').textContent = ''; }).catch(e => $('policystatus').textContent = e.message);
   if (tab === 'users') loadUsers().catch(e => $('users').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
   if (tab === 'changes') loadChanges().catch(e => $('changes').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
   if (tab === 'audit') loadAudit().catch(e => $('audit').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
   if (tab === 'notes') loadNotes().catch(e => $('notes').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
 }
+$('policysave').onclick = async () => {
+  let value;
+  try { value = JSON.parse($('policytext').value); } catch (e) { $('policystatus').textContent = 'Not valid JSON: ' + e.message; return; }
+  try {
+    const r = await fetch('/api/policy', { method: 'PUT', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
+    const v = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(v.error || r.status);
+    $('policystatus').textContent = 'Saved. Compass picks it up within 5 minutes.';
+  } catch (e) { $('policystatus').textContent = e.message; }
+};
 $('tabs').onclick = e => { const b = e.target.closest('button'); if (b) show(b.dataset.tab); };
 $('login').onclick = signIn;
 $('token').onkeydown = e => { if (e.key === 'Enter') signIn(); };

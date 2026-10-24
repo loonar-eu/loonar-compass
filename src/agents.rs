@@ -94,6 +94,23 @@ pub fn load(base_dir: &Path) -> Vec<Agent> {
     std::fs::read_to_string(config_file(base_dir)).ok().and_then(|t| parse(&t).ok()).unwrap_or_default()
 }
 
+/// The agents of this computer and the team's agents from the hub policy ("event_agents", the same format as the
+/// "agents" list of event_agents.json); the team's ones are marked "(team)". An invalid team list is left out.
+pub fn load_all(cfg: &crate::config::AppConfig) -> Vec<Agent> {
+    let mut list = load(&cfg.base_dir);
+    if let Some(policy) = crate::hub::team_policy(cfg) {
+        if policy["event_agents"].is_array() {
+            if let Ok(team) = parse(&serde_json::json!({ "agents": policy["event_agents"].clone() }).to_string()) {
+                list.extend(team.into_iter().map(|mut a| {
+                    a.name = format!("{} (team)", a.name);
+                    a
+                }));
+            }
+        }
+    }
+    list
+}
+
 /// The event name of an add-in event line: the names of version 0.8 ("element", "connector", "new_element",
 /// "new_diagram") and the event names themselves.
 pub fn event_of(kind: &str) -> &'static str {
