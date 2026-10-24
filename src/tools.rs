@@ -88,6 +88,7 @@ pub fn definitions() -> Value {
         items.push(crate::code_drift::definition());
         items.push(crate::cmdb::definition());
         items.push(crate::mdg::definition());
+        items.push(crate::documents::definition());
         items.push(crate::mdg::version_control_definition());
         items.push(crate::ea_api::definition());
         items.push(crate::undo::definition());
@@ -507,6 +508,17 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "estimate_change" => crate::estimate::estimate(ctx.cfg, &input["elements"].as_array().into_iter().flatten().filter_map(|v| v.as_i64()).collect::<Vec<_>>(), input["depth"].as_u64().unwrap_or(2) as usize).map(Into::into),
         "change_sets" => change_sets(input, ctx).map(Into::into),
         "mdg_technologies" => crate::mdg::run(input, ctx.cfg).map(Into::into),
+        "read_document" => {
+            let path = read_path(ctx, input["file"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["file".to_string()]))?, false)?;
+            let size = std::fs::metadata(&path).with_context(|| crate::i18n::fmt("cannot read {0}", &[path.display().to_string()]))?.len();
+            if size > 60 * 1024 * 1024 {
+                bail!("{}", crate::i18n::tr("the document is larger than 60 MB"));
+            }
+            let bytes = std::fs::read(&path).with_context(|| crate::i18n::fmt("cannot read {0}", &[path.display().to_string()]))?;
+            let text = crate::documents::text_of(&path.display().to_string(), &bytes)?;
+            Ok(format!("{} ({} characters):
+{}", path.display(), text.chars().count(), crate::documents::limited(text)).into())
+        }
         "version_control_status" => crate::mdg::version_control_status(input, ctx.cfg).map(Into::into),
         "ea_api" => crate::ea_api::run(input, ctx.cfg).map(Into::into),
         "cmdb_compare" => {

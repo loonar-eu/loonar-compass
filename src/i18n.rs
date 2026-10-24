@@ -160,6 +160,7 @@ mod tests {
             include_str!("../installer/src/main.rs"),
             include_str!("check.rs"),
             include_str!("mdg.rs"),
+            include_str!("documents.rs"),
             include_str!("ea_api.rs"),
             include_str!("claude.rs"),
             include_str!("model_db.rs"),

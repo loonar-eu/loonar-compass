@@ -132,6 +132,7 @@ pub fn read_document(path: &Path) -> Result<String> {
     match ext.as_str() {
         "docx" => docx_text(path),
         "html" | "htm" => Ok(html_text(&std::fs::read_to_string(path).with_context(|| crate::i18n::fmt("cannot read {0}", &[path.display().to_string()]))?)),
+        "pdf" | "pptx" | "xlsx" | "vsdx" => crate::documents::text_of(&path.display().to_string(), &std::fs::read(path).with_context(|| crate::i18n::fmt("cannot read {0}", &[path.display().to_string()]))?),
         _ => std::fs::read_to_string(path).with_context(|| crate::i18n::fmt("cannot read {0}", &[path.display().to_string()])),
     }
 }

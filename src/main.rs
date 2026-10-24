@@ -6,6 +6,7 @@
 mod check;
 mod claude;
 mod cmdb;
+mod documents;
 mod ea_api;
 mod mdg;
 mod com;
@@ -4379,6 +4380,12 @@ fn file_blocks(name: &str, bytes: &[u8], unpack: bool, blocks: &mut Vec<Value>) 
         }
         "docx" => match docx_text(bytes) {
             Ok(body) => blocks.push(text_block(&format!("[Attachment: {name}]\n{body}"))),
+            Err(e) => blocks.push(text_block(&format!("[Attachment: {name} - could not be read: {e:#}]"))),
+        },
+        // PowerPoint, Visio and Excel: their text (slides with notes, pages with shapes and connections, sheets).
+        "pptx" | "pptm" | "vsdx" | "vsdm" | "xlsx" | "xlsm" => match documents::text_of(name, bytes) {
+            Ok(body) => blocks.push(text_block(&format!("[Attachment: {name}]
+{}", documents::limited(body)))),
             Err(e) => blocks.push(text_block(&format!("[Attachment: {name} - could not be read: {e:#}]"))),
         },
         "zip" if unpack => zip_blocks(name, bytes, blocks),
