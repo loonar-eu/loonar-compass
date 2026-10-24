@@ -6,6 +6,8 @@
 mod check;
 mod claude;
 mod cmdb;
+mod ea_api;
+mod mdg;
 mod com;
 mod confluence;
 mod diagram_editor;

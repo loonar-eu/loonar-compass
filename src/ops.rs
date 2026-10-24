@@ -46,6 +46,7 @@ pub const MODEL_OPS: &[&str] = &[
     "reverse_connector",
     "update_package",
     "generate_report",
+    "version_control",
 ];
 
 /// Short description of the operations in the UI language: for the approval dialog, the step list, the change log and the model.
@@ -93,6 +94,7 @@ pub fn describe(ops: &[Value]) -> String {
         "reverse_connector" => crate::i18n::tr("relationships reversed"),
         "update_package" => crate::i18n::tr("changed packages"),
         "generate_report" => crate::i18n::tr("documents from EA templates"),
+        "version_control" => crate::i18n::tr("version control of packages (check in / check out / get latest)"),
         "set_composite" => crate::i18n::tr("element-to-diagram links"),
         other => other_static(other),
     };

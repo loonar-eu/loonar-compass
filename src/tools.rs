@@ -87,6 +87,9 @@ pub fn definitions() -> Value {
         items.push(crate::traceability::definition());
         items.push(crate::code_drift::definition());
         items.push(crate::cmdb::definition());
+        items.push(crate::mdg::definition());
+        items.push(crate::mdg::version_control_definition());
+        items.push(crate::ea_api::definition());
         items.push(crate::undo::definition());
         items.push(crate::estimate::definition());
         items.push(json!({
@@ -144,6 +147,7 @@ delete {element | diagram | connector | package} (permanently deletes an object 
 remove_from_diagram {diagram, element} (removes the element from the diagram, the element stays in the model); \
 reverse_connector {connector} (swaps the source and the target of a relationship); \
 update_package {package, name?, notes?, version?, status?, stereotype?}; \
+version_control {package, action, comment?} (version control of a package that is already under version control in EA: action check_out, check_in, get_latest (replaces the package with the version from version control), put_latest (checks in and keeps it checked out) or resync (reads the version control status of the package again); comment for check_out, check_in and put_latest; always asked; call version_control_status first); \
 generate_report {package, file, template?} (a document from an EA document template, like Publish → Report Builder: file = a full path ending .docx, .pdf or .rtf, by default in the attachments folder; template = the name of an EA template, default \"Model Report\"; use it when the user wants EA's own report format or a company template; for documents you write yourself use create_document); \
 layout_diagram {diagram, direction?, spacing?} (EA's automatic layout of the whole diagram, like Layout → Diagram Layout: direction down (default), right, up or left; spacing in pixels, default 40; use it after creating a diagram with many elements or when the user asks to tidy a diagram; then check the result with ea_show_diagram); \
 export_xmi {package, file} (exports the package with its contents and diagrams to an XMI file; file = a full path ending .xml or .xmi, by default in the attachments folder); \
@@ -502,6 +506,9 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "undo_change" => undo_change(input, ctx).map(Into::into),
         "estimate_change" => crate::estimate::estimate(ctx.cfg, &input["elements"].as_array().into_iter().flatten().filter_map(|v| v.as_i64()).collect::<Vec<_>>(), input["depth"].as_u64().unwrap_or(2) as usize).map(Into::into),
         "change_sets" => change_sets(input, ctx).map(Into::into),
+        "mdg_technologies" => crate::mdg::run(input, ctx.cfg).map(Into::into),
+        "version_control_status" => crate::mdg::version_control_status(input, ctx.cfg).map(Into::into),
+        "ea_api" => crate::ea_api::run(input, ctx.cfg).map(Into::into),
         "cmdb_compare" => {
             let text = match input["file"].as_str().map(str::trim).filter(|f| !f.is_empty()) {
                 Some(file) => {
@@ -1095,6 +1102,11 @@ fn destructive_details(cfg: &AppConfig, ops: &[Value]) -> Vec<String> {
             }
             "delete_attribute" | "delete_operation" | "delete_scenario" => {
                 lines.push(crate::i18n::fmt("DELETE {0} of element {1}", &[kind.trim_start_matches("delete_").to_string(), op["element"].as_i64().map(|id| name_of("t_object", "object_id", id)).unwrap_or_else(|| op["element"].to_string())]));
+                continue;
+            }
+            "version_control" => {
+                let package = op["package"].as_i64().map(|id| name_of("t_package", "package_id", id)).unwrap_or_else(|| op["package"].to_string());
+                lines.push(crate::i18n::fmt("VERSION CONTROL: {0} of package {1}", &[op["action"].as_str().unwrap_or("?").replace('_', " ").to_uppercase(), package]));
                 continue;
             }
             "set_swimlanes" | "set_linked_document" | "update_scenario" => {

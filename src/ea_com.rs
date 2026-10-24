@@ -876,6 +876,31 @@ impl Job<'_> {
                     element.update(crate::i18n::tr("package"))?;
                 }
             }
+            "version_control" => {
+                // A package already under version control in EA (Package → Version Control): check in, check out,
+                // get latest, put latest or resync its status. EA uses the version control configuration of the package.
+                let package = self.package(&op["package"])?;
+                let name = package.text("Name").unwrap_or_default();
+                let controlled = package.get("IsVersionControlled").map(|v| v.bool()).or_else(|_| package.get("IsControlled").map(|v| v.bool())).unwrap_or(false);
+                if !controlled {
+                    bail!("{}", crate::i18n::fmt("package {0} is not under version control: in EA add it first (Package → Version Control → Add Package to Version Control)", &[name]));
+                }
+                let comment = op["comment"].as_str().map(str::trim).filter(|c| !c.is_empty()).unwrap_or("Loonar Compass").to_string();
+                let action = op["action"].as_str().unwrap_or("");
+                let done = match action {
+                    "check_out" => package.call("VersionControlCheckout", &[s(&comment)])?,
+                    "check_in" => package.call("VersionControlCheckin", &[s(&comment)])?,
+                    "get_latest" => package.call("VersionControlGetLatest", &[b(true)])?,
+                    "put_latest" => package.call("VersionControlPutLatest", &[s(&comment)])?,
+                    "resync" => package.call("VersionControlResynchPkgStatus", &[b(false)])?,
+                    other => bail!("{}", crate::i18n::fmt("unknown version control action {0}: use check_out, check_in, get_latest, put_latest or resync", &[other.to_string()])),
+                };
+                if done.kind_code() == 11 && !done.bool() {
+                    let error = self.repo.call("GetLastError", &[]).map(|v| v.text()).unwrap_or_default();
+                    bail!("{}", crate::i18n::fmt("EA could not do {0} for package {1}: {2}", &[action.to_string(), name, error]));
+                }
+                self.warnings.push(crate::i18n::fmt("Version control: {0} – package {1}", &[action.replace('_', " "), name]));
+            }
             "generate_report" => {
                 // A document from an EA document template (Publish → Report Builder), e.g. "Model Report".
                 let package = self.package(&op["package"])?;
