@@ -448,6 +448,20 @@ fn respond(mut stream: &TcpStream, status: u16, content_type: &str, body: &[u8])
     Ok(())
 }
 
+/// A file to download (a report).
+fn respond_file(mut stream: &TcpStream, content_type: &str, name: &str, body: &[u8]) -> Result<()> {
+    let safe: String = name.chars().map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '_' }).collect();
+    write!(
+        stream,
+        "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nContent-Disposition: attachment; filename=\"{safe}\"\r\nCache-Control: no-store\r\n\
+         X-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'none'\r\nConnection: close\r\n\r\n",
+        body.len()
+    )?;
+    stream.write_all(body)?;
+    stream.flush()?;
+    Ok(())
+}
+
 /// A redirect (the company sign-in): to the provider, or back to the page.
 fn redirect(mut stream: &TcpStream, location: &str) -> Result<()> {
     write!(
@@ -608,6 +622,25 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
     // An account with a password set by someone else (the default one, a reset) can only change it or sign out.
     if must_change && !matches!((request.method.as_str(), request.path.as_str()), ("GET", "/api/me") | ("POST", "/api/password") | ("POST", "/api/logout")) {
         return respond(&stream, 403, "application/json; charset=utf-8", json!({ "error": crate::i18n::tr("change your password first"), "must_change": true }).to_string().as_bytes());
+    }
+    // A Word or Excel report of a package: a file, not JSON.
+    if request.method == "GET" {
+        let parts: Vec<&str> = request.path.trim_matches('/').split('/').collect();
+        if let ["api", "sources", id, "report"] = parts.as_slice() {
+            let result = (|| -> Result<(Vec<u8>, &'static str, String), HttpError> {
+                let source = hub.source(id)?;
+                let package: i64 = request.query.get("package").and_then(|p| p.parse().ok()).ok_or_else(|| deny(400, crate::i18n::tr("give the package (package_id)")))?;
+                let format = request.query.get("format").map(String::as_str).unwrap_or("docx");
+                package_report(&source.cfg, &source.name, package, format)
+            })();
+            return match result {
+                Ok((bytes, content_type, name)) => {
+                    let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": id, "summary": crate::i18n::fmt("report {0} downloaded", &[name.clone()]), "ok": true }));
+                    respond_file(&stream, content_type, &name, &bytes)
+                }
+                Err(HttpError(status, message)) => respond(&stream, status, "application/json; charset=utf-8", json!({ "error": message }).to_string().as_bytes()),
+            };
+        }
     }
     match route(hub, &request, user.to_string(), role) {
         Ok((status, value)) => respond(&stream, status, "application/json; charset=utf-8", value.to_string().as_bytes()),
@@ -1253,6 +1286,67 @@ fn xml(text: &str) -> String {
 
 /// A Confluence page (storage format) of a package with its subpackages: elements with their descriptions and the
 /// relationships between them. Text only: the hub has no EA to draw diagrams.
+/// A report of a package with its subpackages: Word (description, elements table, relationships) or Excel
+/// (sheets Elements and Relationships). The hub has no EA, so there are no diagram pictures.
+fn package_report(cfg: &AppConfig, model: &str, package: i64, format: &str) -> Result<(Vec<u8>, &'static str, String), HttpError> {
+    let q = |sql: String| crate::tools::query_rows(cfg, &sql).map_err(|e| HttpError(500, format!("{e:#}")));
+    let root = q(format!("select name as c0, coalesce(notes,'') as c1 from t_package where package_id = {package}"))?
+        .into_iter()
+        .next()
+        .ok_or_else(|| deny(404, crate::i18n::fmt("there is no package with id {0}", &[package.to_string()])))?;
+    let ids: Vec<String> = q(format!(
+        "with recursive tree(package_id) as (select package_id as c0 from t_package where package_id = {package} \
+         union all select p.package_id as c0 from t_package p join tree t on p.parent_id = t.package_id) select package_id as c0 from tree"
+    ))?
+    .into_iter()
+    .map(|r| r[0].clone())
+    .collect();
+    let ids = ids.join(",");
+    let elements = q(format!(
+        "select coalesce(o.name,'') as c0, o.object_type as c1, coalesce(o.stereotype,'') as c2, coalesce(o.status,'') as c3, p.name as c4, coalesce(o.note,'') as c5 \
+         from t_object o join t_package p on p.package_id = o.package_id where o.package_id in ({ids}) and o.object_type not in ('Package','Note','Text','Boundary') order by p.name, o.name"
+    ))?;
+    let relations = q(format!(
+        "select coalesce(s.name,'') as c0, c.connector_type as c1, coalesce(c.stereotype,'') as c2, coalesce(t.name,'') as c3, coalesce(c.name,'') as c4 from t_connector c \
+         join t_object s on s.object_id = c.start_object_id join t_object t on t.object_id = c.end_object_id where s.package_id in ({ids}) and t.package_id in ({ids}) order by 1, 4"
+    ))?;
+    let base: String = root[0].chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect();
+    let date = chrono::Local::now().format("%Y-%m-%d").to_string();
+    if format == "xlsx" {
+        let sheet = |name: &str, columns: &[&'static str], rows: &[Vec<String>]| crate::xlsx::Sheet {
+            name: name.to_string(),
+            columns: columns.iter().map(|c| crate::i18n::tr(c).to_string()).collect(),
+            rows: rows.iter().map(|r| r.iter().map(|v| json!(v)).collect()).collect(),
+        };
+        let bytes = crate::xlsx::build(&[
+            sheet(crate::i18n::tr("Elements"), &["name", "type", "stereotype", "status", "package", "description"], &elements),
+            sheet(crate::i18n::tr("Relationships"), &["source", "type", "stereotype", "target", "name"], &relations),
+        ])
+        .map_err(|e| HttpError(500, format!("{e:#}")))?;
+        return Ok((bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", format!("{base}_{date}.xlsx")));
+    }
+    let cell = |t: &str| t.replace('|', "/").replace(['\r', '\n'], " ");
+    let mut md = String::new();
+    md.push_str(&format!("*{}*\n\n", crate::i18n::fmt("Report of the model {0} from the team hub, {1}.", &[model.to_string(), date.clone()])));
+    if !root[1].trim().is_empty() {
+        md.push_str(&format!("{}\n\n", root[1].trim()));
+    }
+    md.push_str(&format!("## {} ({})\n\n| {} | {} | {} | {} |\n|---|---|---|---|\n", crate::i18n::tr("Elements"), elements.len(), crate::i18n::tr("name"), crate::i18n::tr("type"), crate::i18n::tr("package"), crate::i18n::tr("description")));
+    for e in elements.iter().take(2000) {
+        let kind = if e[2].is_empty() { e[1].clone() } else { format!("{} «{}»", e[1], e[2]) };
+        md.push_str(&format!("| {} | {} | {} | {} |\n", cell(&e[0]), cell(&kind), cell(&e[4]), cell(&e[5].chars().take(500).collect::<String>())));
+    }
+    if !relations.is_empty() {
+        md.push_str(&format!("\n## {} ({})\n\n", crate::i18n::tr("Relationships"), relations.len()));
+        for r in relations.iter().take(2000) {
+            let kind = if r[2].is_empty() { r[1].clone() } else { format!("{} «{}»", r[1], r[2]) };
+            md.push_str(&format!("- {} → {} ({kind}){}\n", r[0], r[3], if r[4].is_empty() { String::new() } else { format!(": {}", r[4]) }));
+        }
+    }
+    let bytes = crate::docx::build(&root[0], &md, |_, _| anyhow::bail!("no pictures in hub reports")).map_err(|e| HttpError(500, format!("{e:#}")))?;
+    Ok((bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", format!("{base}_{date}.docx")))
+}
+
 fn package_page(cfg: &AppConfig, model: &str, package: i64) -> Result<(String, String), HttpError> {
     let q = |sql: String| crate::tools::query_rows(cfg, &sql).map_err(|e| HttpError(500, format!("{e:#}")));
     let root = q(format!("select name as c0, coalesce(notes,'') as c1 from t_package where package_id = {package}"))?
@@ -1826,6 +1920,40 @@ mod tests {
         let cfg = crate::config::AppConfig::load(&props).unwrap();
         let agents = crate::agents::load_all(&cfg);
         assert!(agents.iter().any(|a| a.name == "Keep requirements (team)" && a.is_guard()), "{agents:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Word and Excel reports of a package from the hub: `LOONAR_HUB_FILE_PROPS=… cargo test hub_reports -- --ignored`
+    #[test]
+    #[ignore = "requires a test model"]
+    fn hub_reports() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        let dir = std::env::temp_dir().join(format!("loonar-hub-reports-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:18733",
+            "sources": [{ "id": "shop", "name": "Shop", "properties": std::env::var("LOONAR_HUB_FILE_PROPS").unwrap() }],
+            "users": [{ "name": "olek", "token": "viewer-token-reports-0123", "role": "viewer" }] }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let cfg = hub.sources[0].cfg.clone();
+        std::thread::spawn(move || serve(hub, &listen, |_| {}));
+        std::thread::sleep(Duration::from_millis(300));
+        let package = crate::tools::query_rows(&cfg, "select package_id from t_package where name = 'Shop domain'").unwrap()[0][0].clone();
+        let http = reqwest::blocking::Client::new();
+        for (format, kind) in [("docx", "wordprocessingml"), ("xlsx", "spreadsheetml")] {
+            let r = http.get(format!("http://127.0.0.1:18733/api/sources/shop/report?package={package}&format={format}")).bearer_auth("viewer-token-reports-0123").send().unwrap();
+            assert_eq!(r.status(), 200);
+            assert!(r.headers()["content-type"].to_str().unwrap().contains(kind));
+            assert!(r.headers()["content-disposition"].to_str().unwrap().contains(&format!(".{format}")));
+            let bytes = r.bytes().unwrap();
+            assert!(bytes.starts_with(b"PK") && bytes.len() > 2000, "{format}: {} bytes", bytes.len());
+            if format == "docx" {
+                let text = crate::documents::text_of("r.docx", &bytes).unwrap();
+                assert!(text.contains("Order") && text.contains("Relationships"), "{text}");
+            }
+        }
+        let missing = http.get("http://127.0.0.1:18733/api/sources/shop/report?package=999999").bearer_auth("viewer-token-reports-0123").send().unwrap();
+        assert_eq!(missing.status(), 404);
+        assert_eq!(http.get(format!("http://127.0.0.1:18733/api/sources/shop/report?package={package}")).send().unwrap().status(), 401, "only signed-in users");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

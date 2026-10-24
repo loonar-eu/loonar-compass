@@ -111,7 +111,9 @@ h3 { font-size:14px; margin:16px 0 6px; }
       <div class="row"><input id="q" placeholder="Element name (at least 2 characters)"><button id="go">Search</button></div>
       <div id="results"></div>
     </div>
-    <div id="view-lint" hidden><p class="muted">Pick a package on the left: it is checked with all subpackages by the team rules.</p><div id="lint"></div></div>
+    <div id="view-lint" hidden><p class="muted">Pick a package on the left: it is checked with all subpackages by the team rules.</p>
+      <div class="row"><button id="repdocx" class="ghost">Word report of the package</button><button id="repxlsx" class="ghost">Excel report of the package</button></div>
+      <div id="lint"></div></div>
     <div id="view-gap" hidden>
       <div class="row"><input id="asis" placeholder="as-is package id"><input id="tobe" placeholder="to-be package id"><button id="gapgo">Compare</button></div>
       <div id="gap"></div>
@@ -383,6 +385,18 @@ $('policysave').onclick = async () => {
     $('policystatus').textContent = 'Saved. Compass picks it up within 5 minutes.';
   } catch (e) { $('policystatus').textContent = e.message; }
 };
+async function downloadReport(format) {
+  if (!selectedPackage) { alert('Pick a package on the left first.'); return; }
+  const r = await fetch('/api/sources/' + encodeURIComponent(source()) + '/report?package=' + encodeURIComponent(selectedPackage) + '&format=' + format, { headers: { Authorization: 'Bearer ' + token } });
+  if (!r.ok) { const v = await r.json().catch(() => ({})); alert(v.error || r.status); return; }
+  const name = (r.headers.get('Content-Disposition') || '').split('filename="')[1]?.replace('"', '') || ('report.' + format);
+  const url = URL.createObjectURL(await r.blob());
+  const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+$('repdocx').onclick = () => downloadReport('docx');
+$('repxlsx').onclick = () => downloadReport('xlsx');
 $('tabs').onclick = e => { const b = e.target.closest('button'); if (b) show(b.dataset.tab); };
 $('login').onclick = signIn;
 $('token').onkeydown = e => { if (e.key === 'Enter') signIn(); };

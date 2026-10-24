@@ -21,6 +21,9 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "serd
 uuid = { version = "1", features = ["v4"] }
 postgres = "0.19"
 odbc-api = "8"
+docx-rs = "0.4"
+rust_xlsxwriter = "0.80"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 native-tls = "0.2"
 postgres-native-tls = "0.5"
 rusqlite = { version = "0.37", features = ["bundled", "hooks"] }

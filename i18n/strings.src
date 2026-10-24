@@ -1524,3 +1524,6 @@ cannot start {0} ‖ nie można uruchomić {0} ‖ {0} kann nicht gestartet werd
 making the PDF with Microsoft PowerPoint ‖ tworzenie PDF w Microsoft PowerPoint ‖ PDF mit Microsoft PowerPoint erstellen ‖ création du PDF avec Microsoft PowerPoint
 making the PDF with Microsoft Word ‖ tworzenie PDF w Microsoft Word ‖ PDF mit Microsoft Word erstellen ‖ création du PDF avec Microsoft Word
 {0} is not installed on this computer ‖ {0} nie jest zainstalowany na tym komputerze ‖ {0} ist auf diesem Computer nicht installiert ‖ {0} n’est pas installé sur cet ordinateur
+Report of the model {0} from the team hub, {1}. ‖ Raport modelu {0} z huba zespołu, {1}. ‖ Bericht des Modells {0} aus dem Team-Hub, {1}. ‖ Rapport du modèle {0} depuis le hub d’équipe, {1}.
+give the package (package_id) ‖ podaj pakiet (package_id) ‖ geben Sie das Paket an (package_id) ‖ indiquez le paquetage (package_id)
+report {0} downloaded ‖ pobrano raport {0} ‖ Bericht {0} heruntergeladen ‖ rapport {0} téléchargé

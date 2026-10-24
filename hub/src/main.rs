@@ -25,6 +25,10 @@ mod jira;
 mod model_db;
 #[path = "../../src/net.rs"]
 mod net;
+#[path = "../../src/docx.rs"]
+mod docx;
+#[path = "../../src/xlsx.rs"]
+mod xlsx;
 #[path = "../../src/oidc.rs"]
 mod oidc;
 #[path = "../../src/openai.rs"]
