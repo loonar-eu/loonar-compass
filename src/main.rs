@@ -92,7 +92,7 @@ fn system_prompt(cfg: &AppConfig) -> String {
         model = config::CLAUDE_MODEL,
         docs = docs_url(),
         memories = memory::prompt_section(&cfg.memory_dir, &cfg.model_label()),
-        MODEL_STORE = format!("{} The model of this conversation: {}.", if cfg.uses_file() { model_db::MODEL_IN_FILE } else { model_db::MODEL_IN_POSTGRES }, cfg.model_label()),
+        MODEL_STORE = format!("{} The model of this conversation: {}.", model_db::dialect(cfg), cfg.model_label()),
         LANGUAGE_RULE = format!("Response language: {} (the language selected in the application). Answer in it unless the user writes to you in a different language; then answer in the user's language. Create documents, pages and images in the response language unless the user asks for a different one. This applies to everything you write, also short notes between tool calls.", i18n::current().english_name()),
         templates = templates::prompt_section(&cfg.templates_dir),
     )
@@ -1720,6 +1720,9 @@ impl App {
                     ui.add_space(4.0);
                     ui.horizontal_wrapped(|ui| {
                         ui.radio_value(&mut editor.source, "postgres".to_string(), crate::i18n::tr("PostgreSQL database"));
+                        ui.radio_value(&mut editor.source, "sqlserver".to_string(), "SQL Server");
+                        ui.radio_value(&mut editor.source, "mysql".to_string(), "MySQL");
+                        ui.radio_value(&mut editor.source, "oracle".to_string(), "Oracle");
                         if ui.radio_value(&mut editor.source, "file".to_string(), crate::i18n::tr("EA file (.qea, .qeax)")).clicked() {
                             // A file has an EA account only when it has security enabled: the account of a database does
                             // not carry over (it would ask for a password the file does not need).
@@ -2270,7 +2273,7 @@ impl App {
                 }
             }
             GROUP_DB => {
-                updates.push(("model.source", "postgres".to_string()));
+                updates.push(("model.source", config::ModelSource::parse(&f.model_source).map(|s| s.as_str()).unwrap_or("postgres").to_string()));
                 let port: u16 = f.db_port.trim().parse().context(crate::i18n::tr("Database port: enter a number"))?;
                 if f.db_name.trim().is_empty() || f.db_user.trim().is_empty() {
                     bail!("{}", crate::i18n::fmt("Database name and database user are required", &[]));
@@ -2888,10 +2891,21 @@ impl App {
                 settings_group(ui, crate::i18n::tr("Model"), inner_width, |ui| {
                     ui.horizontal_wrapped(|ui| {
                         // A result of the other source's test would read as this one's.
+                        let before = self.form.model_source.clone();
                         if ui.radio_value(&mut self.form.model_source, "postgres".to_string(), crate::i18n::tr("PostgreSQL database")).changed()
+                            | ui.radio_value(&mut self.form.model_source, "sqlserver".to_string(), "SQL Server").changed()
+                            | ui.radio_value(&mut self.form.model_source, "mysql".to_string(), "MySQL").changed()
+                            | ui.radio_value(&mut self.form.model_source, "oracle".to_string(), "Oracle").changed()
                             | ui.radio_value(&mut self.form.model_source, "file".to_string(), crate::i18n::tr("EA file (.qea, .qeax)")).changed()
                         {
                             self.group_status[GROUP_DB] = GroupStatus::Idle;
+                            // The usual port of the new kind of server, unless the port was changed by hand.
+                            let old = config::ModelSource::parse(&before).map(|s| s.default_port()).unwrap_or(5432);
+                            if let Ok(new) = config::ModelSource::parse(&self.form.model_source) {
+                                if self.form.db_port.trim() == old.to_string() && new != config::ModelSource::File {
+                                    self.form.db_port = new.default_port().to_string();
+                                }
+                            }
                         }
                     });
                     ui.add_space(4.0);
@@ -3799,6 +3813,7 @@ impl ConnEditor {
             port,
             user: self.user.trim().to_string(),
             sslmode: config::SslMode::parse(&self.sslmode)?.as_str().to_string(),
+            engine: config::ModelSource::parse(&self.source).map(|s| s.as_str()).unwrap_or("postgres").to_string(),
             ea_user,
             locks: self.model_security && self.locks,
         })
@@ -3840,6 +3855,13 @@ fn check_model(cfg: &AppConfig) -> anyhow::Result<String> {
         let row = rows.first().context(crate::i18n::tr("the file returned no result"))?;
         return Ok(crate::i18n::fmt("Opened the model file {0}: {1} packages, {2} elements, {3} diagrams.", &[cfg.model_label(), row[0].to_string(), row[1].to_string(), row[2].to_string()]));
     }
+    if cfg.model_source.is_odbc() {
+        let from_dual = if cfg.model_source == config::ModelSource::Oracle { " from dual" } else { "" };
+        let rows = tools::query_rows(cfg, &format!("select (select count(*) from t_package), (select count(*) from t_object), (select count(*) from t_diagram){from_dual}"))
+            .context(crate::i18n::tr("this does not look like an EA model database, or the connection does not work"))?;
+        let row = rows.first().context(crate::i18n::tr("the database returned no result"))?;
+        return Ok(crate::i18n::fmt("Connected to database {0}: {1} packages, {2} elements, {3} diagrams.", &[cfg.db_name.clone(), row[0].to_string(), row[1].to_string(), row[2].to_string()]));
+    }
     let rows = tools::query_rows(
         cfg,
         "select (select count(*) from t_package), (select count(*) from t_object), (select count(*) from t_diagram), \
@@ -3863,9 +3885,16 @@ fn database_of_connection(connection: &str) -> Option<ModelChoice> {
     let field = |key: &str| connection.split(';').find_map(|part| part.trim().strip_prefix(key).map(str::to_string));
     let src = field("SRC=")?;
     let (server, name) = src.split_once('@')?;
+    // EA's DBType: 0 MySQL, 1 SQL Server, 3 Oracle, 4 PostgreSQL.
+    let engine = match connection.split(';').find_map(|part| part.trim().strip_prefix("DBType=").or_else(|| part.split("DBType=").nth(1))).map(str::trim) {
+        Some("0") => config::ModelSource::MySql,
+        Some("1") => config::ModelSource::SqlServer,
+        Some("3") => config::ModelSource::Oracle,
+        _ => config::ModelSource::Postgres,
+    };
     let (host, port) = match server.split_once(',').or_else(|| server.split_once(':')) {
-        Some((h, p)) => (h.to_string(), p.trim().parse().unwrap_or(5432)),
-        None => (server.to_string(), 5432),
+        Some((h, p)) => (h.to_string(), p.trim().parse().unwrap_or(engine.default_port())),
+        None => (server.to_string(), engine.default_port()),
     };
     Some(ModelChoice::Database {
         name: name.trim().to_string(),
@@ -3873,6 +3902,7 @@ fn database_of_connection(connection: &str) -> Option<ModelChoice> {
         port,
         user: field("UID=").unwrap_or_default(),
         sslmode: "prefer".into(),
+        engine: engine.as_str().to_string(),
         ea_user: String::new(),
         locks: true,
     })

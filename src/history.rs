@@ -36,6 +36,9 @@ pub enum ModelChoice {
         user: String,
         #[serde(default)]
         sslmode: String,
+        /// postgres (also when empty: conversations from before 0.9), sqlserver, mysql or oracle.
+        #[serde(default)]
+        engine: String,
         #[serde(default)]
         ea_user: String,
         /// The model requires a user lock to edit ("Require User Lock to Edit").
@@ -60,6 +63,7 @@ impl ModelChoice {
                 port: cfg.db_port,
                 user: cfg.db_user.clone(),
                 sslmode: cfg.db_sslmode.as_str().to_string(),
+                engine: cfg.model_source.as_str().to_string(),
                 ea_user: cfg.ea_user.clone(),
                 locks: cfg.ea_locks,
             }
@@ -141,9 +145,9 @@ impl ModelChoice {
                 cfg.model_source = crate::config::ModelSource::File;
                 cfg.model_file = file;
             }
-            Self::Database { name, host, port, user, sslmode, locks, .. } => {
+            Self::Database { name, host, port, user, sslmode, locks, engine, .. } => {
                 cfg.ea_locks = *locks;
-                cfg.model_source = crate::config::ModelSource::Postgres;
+                cfg.model_source = crate::config::ModelSource::parse(engine).ok().filter(|k| *k != crate::config::ModelSource::File).unwrap_or(crate::config::ModelSource::Postgres);
                 cfg.db_name = name.clone();
                 cfg.db_host = host.clone();
                 cfg.db_port = *port;
@@ -311,7 +315,7 @@ mod tests {
         let same = default.apply(&base).unwrap();
         assert_eq!((same.db_name.as_str(), same.db_password.as_str(), same.ea_password_key.as_str()), ("ea", "secret", crate::config::secrets::EA_PASSWORD));
 
-        let other = ModelChoice::Database { name: "ea2".into(), host: "srv".into(), port: 5432, user: "reader".into(), sslmode: "require".into(), ea_user: "claude".into(), locks: false };
+        let other = ModelChoice::Database { name: "ea2".into(), host: "srv".into(), port: 5432, user: "reader".into(), engine: String::new(), sslmode: "require".into(), ea_user: "claude".into(), locks: false };
         assert!(!other.uses_settings_database(&base));
         let cfg = other.apply(&base).unwrap();
         assert_eq!(cfg.db_name, "ea2");

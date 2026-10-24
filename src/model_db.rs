@@ -16,6 +16,217 @@ pub const MODEL_IN_FILE: &str = "The model is an Enterprise Architect project fi
 There is no ILIKE (LIKE already ignores the case of ASCII letters; for other letters compare lower(...)), no :: casts (use CAST(x AS type)), \
 booleans are 0/1, and functions such as string_agg are group_concat. The tables and columns are the same as in a database model.";
 
+pub const MODEL_IN_SQLSERVER: &str = "The model is in a Microsoft SQL Server database: write db_query queries in T-SQL (SELECT TOP n instead of LIMIT, + or CONCAT for joining text, \
+LIKE ignores the letter case with the usual collations, no ILIKE, no :: casts). The tables and columns are the same as in any EA repository.";
+pub const MODEL_IN_MYSQL: &str = "The model is in a MySQL database: write db_query queries in MySQL SQL (LIMIT n, CONCAT() for joining text, LIKE ignores the letter case, no ILIKE, \
+no :: casts, GROUP_CONCAT instead of string_agg). The tables and columns are the same as in any EA repository.";
+pub const MODEL_IN_ORACLE: &str = "The model is in an Oracle database: write db_query queries in Oracle SQL (FETCH FIRST n ROWS ONLY instead of LIMIT, || for joining text, \
+LIKE is case-sensitive so compare UPPER(...), no ILIKE, LISTAGG instead of string_agg, no AS before table aliases). The tables and columns are the same as in any EA repository.";
+
+/// The SQL dialect note for the assistant.
+pub fn dialect(cfg: &AppConfig) -> &'static str {
+    match cfg.model_source {
+        crate::config::ModelSource::File => MODEL_IN_FILE,
+        crate::config::ModelSource::Postgres => MODEL_IN_POSTGRES,
+        crate::config::ModelSource::SqlServer => MODEL_IN_SQLSERVER,
+        crate::config::ModelSource::MySql => MODEL_IN_MYSQL,
+        crate::config::ModelSource::Oracle => MODEL_IN_ORACLE,
+    }
+}
+
+/// A value inside an ODBC connection string: in braces, a closing brace doubled.
+fn odbc_value(value: &str) -> String {
+    format!("{{{}}}", value.replace('}', "}}"))
+}
+
+/// The installed ODBC driver for the database: the newest known one.
+fn odbc_driver(source: crate::config::ModelSource) -> Result<String> {
+    let env = odbc_api::environment().context("ODBC")?;
+    let installed: Vec<String> = env.drivers().map(|list| list.into_iter().map(|d| d.description).collect()).unwrap_or_default();
+    let wanted: &[&str] = match source {
+        crate::config::ModelSource::SqlServer => &["ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server", "ODBC Driver 13 for SQL Server", "SQL Server Native Client 11.0", "SQL Server"],
+        crate::config::ModelSource::MySql => &["MySQL ODBC 9", "MySQL ODBC 8", "MariaDB ODBC"],
+        _ => &["Oracle in"],
+    };
+    for w in wanted {
+        if let Some(d) = installed.iter().find(|d| d.as_str() == *w).or_else(|| installed.iter().find(|d| d.starts_with(w) && (source != crate::config::ModelSource::MySql || d.contains("Unicode")))).or_else(|| installed.iter().find(|d| d.starts_with(w))) {
+            return Ok(d.clone());
+        }
+    }
+    bail!("{}", crate::i18n::fmt("no ODBC driver for {0} is installed on this computer (installed: {1}); install the database vendor's ODBC driver (64-bit) or give the full connection string in db.odbc", &[source.as_str().to_string(), installed.join(", ")]))
+}
+
+/// The ODBC connection string of a SQL Server, MySQL or Oracle model: `db.odbc` or built from the settings;
+/// the password is always added from the secret.
+pub fn odbc_connection_string(cfg: &AppConfig) -> Result<String> {
+    use crate::config::{ModelSource, SslMode};
+    let password = odbc_value(&cfg.db_password);
+    if !cfg.db_odbc.trim().is_empty() {
+        let base = cfg.db_odbc.trim().trim_end_matches(';');
+        return Ok(if cfg.db_password.is_empty() { format!("{base};") } else { format!("{base};PWD={password};") });
+    }
+    let driver = odbc_driver(cfg.model_source)?;
+    let user = odbc_value(&cfg.db_user);
+    Ok(match cfg.model_source {
+        ModelSource::SqlServer => {
+            let modern = driver.starts_with("ODBC Driver");
+            let tls = match (cfg.db_sslmode, modern) {
+                (SslMode::VerifyFull, _) => "Encrypt=yes;TrustServerCertificate=no;",
+                (SslMode::Require, _) => "Encrypt=yes;TrustServerCertificate=yes;",
+                (_, true) => "Encrypt=optional;",
+                (_, false) => "",
+            };
+            format!("Driver={{{driver}}};Server={},{};Database={};UID={user};PWD={password};{tls}APP=Loonar Compass;", cfg.db_host, cfg.db_port, odbc_value(&cfg.db_name))
+        }
+        ModelSource::MySql => format!("Driver={{{driver}}};Server={};Port={};Database={};User={user};Password={password};", cfg.db_host, cfg.db_port, odbc_value(&cfg.db_name)),
+        _ => format!("Driver={{{driver}}};DBQ={}:{}/{};UID={user};PWD={password};", cfg.db_host, cfg.db_port, cfg.db_name),
+    })
+}
+
+/// Positions of a word outside string literals and at parenthesis depth 0 (case-insensitive, whole word).
+fn top_level_words(sql: &str, word: &str) -> Vec<usize> {
+    let lower = sql.to_ascii_lowercase();
+    let bytes = lower.as_bytes();
+    let (mut depth, mut quoted, mut out) = (0i32, false, Vec::new());
+    let mut i = 0;
+    while i < bytes.len() {
+        let c = bytes[i];
+        if c == b'\'' {
+            quoted = !quoted;
+        } else if !quoted {
+            match c {
+                b'(' => depth += 1,
+                b')' => depth -= 1,
+                _ if depth == 0 && lower[i..].starts_with(word) => {
+                    let before = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
+                    let after = bytes.get(i + word.len()).is_none_or(|b| !(b.is_ascii_alphanumeric() || *b == b'_'));
+                    if before && after {
+                        out.push(i);
+                    }
+                }
+                _ => {}
+            }
+        }
+        i += 1;
+    }
+    out
+}
+
+/// Replaces a text outside string literals (case-insensitive).
+fn replace_outside_literals(sql: &str, from: &str, to: &str) -> String {
+    let mut out = String::with_capacity(sql.len());
+    let lower = sql.to_ascii_lowercase();
+    let from_lower = from.to_ascii_lowercase();
+    let mut quoted = false;
+    let mut i = 0;
+    while i < sql.len() {
+        let c = sql.as_bytes()[i];
+        if c == b'\'' {
+            quoted = !quoted;
+        }
+        if !quoted && lower[i..].starts_with(&from_lower) {
+            out.push_str(to);
+            i += from.len();
+            continue;
+        }
+        let ch = sql[i..].chars().next().unwrap();
+        out.push(ch);
+        i += ch.len_utf8();
+    }
+    out
+}
+
+/// The queries of the assistant and of Compass are written in the PostgreSQL / SQLite way; for SQL Server, MySQL and
+/// Oracle the common differences are translated: WITH RECURSIVE, a LIMIT at the end, || for joining text, ILIKE,
+/// CAST AS VARCHAR on MySQL and a SELECT without FROM on Oracle.
+pub fn portable_sql(source: crate::config::ModelSource, sql: &str) -> String {
+    use crate::config::ModelSource;
+    let mut q = sql.trim().trim_end_matches(';').trim().to_string();
+    if !source.is_odbc() {
+        return q;
+    }
+    q = replace_outside_literals(&q, " ilike ", " like ");
+    if source != ModelSource::MySql {
+        q = replace_outside_literals(&q, "with recursive ", "with ");
+    }
+    // A LIMIT n at the very end of the query (at depth 0).
+    let mut limit: Option<String> = None;
+    if let Some(&at) = top_level_words(&q, "limit").last() {
+        let number = q[at + 5..].trim();
+        if !number.is_empty() && number.chars().all(|c| c.is_ascii_digit()) {
+            limit = Some(number.to_string());
+            q = q[..at].trim_end().to_string();
+        }
+    }
+    match source {
+        ModelSource::SqlServer => {
+            q = replace_outside_literals(&q, "||", "+");
+            if let Some(n) = limit {
+                // TOP goes after the last top-level SELECT (after a WITH part), after DISTINCT if there is one.
+                if let Some(&at) = top_level_words(&q, "select").last() {
+                    let mut insert = at + "select".len();
+                    if q[insert..].trim_start().to_ascii_lowercase().starts_with("distinct") {
+                        insert = insert + q[insert..].to_ascii_lowercase().find("distinct").unwrap_or(0) + "distinct".len();
+                    }
+                    q.insert_str(insert, &format!(" top {n}"));
+                }
+            }
+        }
+        ModelSource::Oracle => {
+            if let Some(n) = limit {
+                q.push_str(&format!(" fetch first {n} rows only"));
+            }
+            if top_level_words(&q, "from").is_empty() {
+                q.push_str(" from dual");
+            }
+        }
+        _ => {
+            q = replace_outside_literals(&q, " as varchar(", " as char(");
+            if let Some(n) = limit {
+                q.push_str(&format!(" limit {n}"));
+            }
+        }
+    }
+    q
+}
+
+/// A read-only query through ODBC: autocommit off and a rollback at the end, so nothing the query might do stays.
+fn odbc_select(cfg: &AppConfig, sql: &str, limit: usize) -> Result<Selected> {
+    use odbc_api::{buffers::TextRowSet, ConnectionOptions, Cursor, ResultSetMetadata};
+    let env = odbc_api::environment().context("ODBC")?;
+    let conn = env
+        .connect_with_connection_string(&odbc_connection_string(cfg)?, ConnectionOptions { login_timeout_sec: Some(10), ..Default::default() })
+        .map_err(|e| anyhow::anyhow!("{}", e.to_string().replace(&cfg.db_password, "***")))
+        .context(crate::i18n::tr("connecting to the model database"))?;
+    conn.set_autocommit(false)?;
+    if cfg.model_source == crate::config::ModelSource::MySql {
+        // || joins text and "…" quotes names, as in PostgreSQL.
+        let _ = conn.execute("SET SESSION sql_mode = CONCAT(@@sql_mode, ',PIPES_AS_CONCAT,ANSI_QUOTES')", ());
+    }
+    let sql = portable_sql(cfg.model_source, sql);
+    let sql = sql.as_str();
+    let mut out = Selected { columns: Vec::new(), rows: Vec::new(), truncated: false };
+    let result = (|| -> Result<()> {
+        if let Some(mut cursor) = conn.execute(sql, ()).context(crate::i18n::tr("running the query"))? {
+            out.columns = cursor.column_names()?.collect::<std::result::Result<Vec<_>, _>>()?;
+            let mut buffers = TextRowSet::for_cursor(500, &mut cursor, Some(65_536))?;
+            let mut rows = cursor.bind_buffer(&mut buffers)?;
+            'fetch: while let Some(batch) = rows.fetch()? {
+                for r in 0..batch.num_rows() {
+                    if out.rows.len() == limit {
+                        out.truncated = true;
+                        break 'fetch;
+                    }
+                    out.rows.push((0..batch.num_cols()).map(|c| batch.at(c, r).map(|b| String::from_utf8_lossy(b).into_owned())).collect());
+                }
+            }
+        }
+        Ok(())
+    })();
+    let _ = conn.rollback();
+    result.map(|_| out)
+}
+
 /// Connection to the model database, encrypted with TLS according to `db.sslmode`:
 /// `prefer` (default: TLS when the server offers it), `require` (TLS or no connection) and `verify-full`
 /// (TLS with the server certificate checked against the Windows certificate store, including the host name).
@@ -191,6 +402,9 @@ fn select(cfg: &AppConfig, sql: &str, limit: usize) -> Result<Selected> {
             return Err(anyhow::Error::new(e).context(crate::i18n::tr("running the query")));
         }
         return Ok(out);
+    }
+    if cfg.model_source.is_odbc() {
+        return odbc_select(cfg, sql, limit);
     }
     let mut client = connect(cfg)?;
     for msg in client.simple_query(sql).context(crate::i18n::tr("running the query"))? {
@@ -495,3 +709,60 @@ Describe the result to the user clearly (what is affected and why), and on reque
     ]);
     list.as_array().cloned().unwrap_or_default()
 }
+
+#[cfg(test)]
+mod odbc_tests {
+    use serde_json::json;
+
+    #[test]
+    fn sql_is_made_portable() {
+        use crate::config::ModelSource::*;
+        assert_eq!(super::portable_sql(SqlServer, "select name from t_object where name ilike 'a%' limit 5;"), "select top 5 name from t_object where name like 'a%'");
+        assert_eq!(super::portable_sql(SqlServer, "with recursive tree(id) as (select 1 limit 1) select distinct id from tree limit 10"), "with tree(id) as (select 1 limit 1) select distinct top 10 id from tree");
+        assert_eq!(super::portable_sql(SqlServer, "select a || 'x || y' || b from t"), "select a + 'x || y' + b from t");
+        assert_eq!(super::portable_sql(Oracle, "select count(*) limit 3"), "select count(*) fetch first 3 rows only from dual");
+        assert_eq!(super::portable_sql(MySql, "select cast(x as varchar(10)) from t limit 2"), "select cast(x as char(10)) from t limit 2");
+        assert_eq!(super::portable_sql(Postgres, "select 1 limit 2;"), "select 1 limit 2");
+    }
+
+    /// The read tools on a SQL Server repository (the test model copied into a SQL Server container):
+    /// `LOONAR_TEST_MSSQL="127.0.0.1;14330;ea_lab;compass;<password>" cargo test sqlserver_repository -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a SQL Server with an EA repository"]
+    fn sqlserver_repository() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        let spec = std::env::var("LOONAR_TEST_MSSQL").unwrap();
+        let parts: Vec<&str> = spec.split(';').collect();
+        let props = std::env::temp_dir().join(format!("loonar-mssql-{}.properties", std::process::id()));
+        std::fs::write(&props, format!("model.source=sqlserver\ndb.host={}\ndb.port={}\ndb.name={}\ndb.user={}\n", parts[0], parts[1], parts[2], parts[3])).unwrap();
+        let mut cfg = crate::config::AppConfig::load(&props).unwrap();
+        cfg.db_password = parts[4].to_string();
+        println!("connection: {}", super::odbc_connection_string(&cfg).unwrap().replace(parts[4], "***"));
+        let rows = super::query_rows(&cfg, "select count(*) from t_object").unwrap();
+        assert_eq!(rows[0][0], "29");
+        println!("{}", super::db_query("SELECT TOP 3 name, object_type FROM t_object ORDER BY name", &cfg).unwrap());
+        let mut failures = Vec::new();
+        let package = super::query_rows(&cfg, "select package_id from t_package where name = 'Shop domain'").unwrap()[0][0].parse::<i64>().unwrap();
+        let element = super::query_rows(&cfg, "select object_id from t_object where name = 'Order'").unwrap()[0][0].parse::<i64>().unwrap();
+        let checks: Vec<(&str, anyhow::Result<String>)> = vec![
+            ("model_lint", crate::governance::lint(&json!({ "package": package }), &cfg)),
+            ("impact_analysis", super::impact_analysis(&json!({ "element": element }), &cfg)),
+            ("operation_usage", super::operation_usage(&json!({ "element": element }), &cfg)),
+            ("estimate", crate::estimate::estimate(&cfg, &[element], 2)),
+            ("mdg", crate::mdg::run(&json!({}), &cfg)),
+            ("version_control_status", crate::mdg::version_control_status(&json!({}), &cfg)),
+            ("agents describe", crate::agents::describe(&cfg, "element_deleting", element).map(|d| d.0).ok_or_else(|| anyhow::anyhow!("no description"))),
+        ];
+        for (name, result) in checks {
+            match result {
+                Ok(text) => println!("OK {name}: {}", text.lines().next().unwrap_or("")),
+                Err(e) => {
+                    println!("FAILED {name}: {e:#}");
+                    failures.push(name);
+                }
+            }
+        }
+        assert!(failures.is_empty(), "failed on SQL Server: {failures:?}");
+    }
+}
+

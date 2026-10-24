@@ -442,6 +442,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "atoi"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f28d99ec8bfea296261ca1af174f24225171fea9664ba9003cbebee704810528"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3035,6 +3044,7 @@ dependencies = [
  "image",
  "keyring",
  "native-tls",
+ "odbc-api",
  "pdf-extract",
  "postgres",
  "postgres-native-tls",
@@ -3801,6 +3811,26 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-foundation 0.3.2",
 ]
+
+[[package]]
+name = "odbc-api"
+version = "8.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc59611ab2d583ad4e419d5bfb72849bda357a91cf7b379ff95d86658865a0de"
+dependencies = [
+ "atoi",
+ "log",
+ "odbc-sys",
+ "thiserror 1.0.69",
+ "widestring",
+ "winit",
+]
+
+[[package]]
+name = "odbc-sys"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c219b6a4cd9eb167239d921d7348132cdff2eca05abbf1094e7f7ec9b8936b6"
 
 [[package]]
 name = "once_cell"

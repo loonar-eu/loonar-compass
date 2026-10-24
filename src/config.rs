@@ -56,21 +56,31 @@ impl ApprovalMode {
     }
 }
 
-/// Where the EA model is (`model.source`): a PostgreSQL database or an EA project file.
+/// Where the EA model is (`model.source`): a database repository (PostgreSQL directly; SQL Server, MySQL and Oracle
+/// through their ODBC drivers) or an EA project file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelSource {
     /// A model database on a PostgreSQL server (`db.*` settings).
     Postgres,
     /// An EA project file `.qea` or `.qeax` (a SQLite database), path in `model.file`.
     File,
+    /// A repository on Microsoft SQL Server (ODBC Driver 18/17 for SQL Server or Windows' own "SQL Server" driver).
+    SqlServer,
+    /// A repository on MySQL or MariaDB (MySQL Connector/ODBC).
+    MySql,
+    /// A repository on Oracle (Oracle's ODBC driver, `db.name` = the service name).
+    Oracle,
 }
 
 impl ModelSource {
     pub fn parse(s: &str) -> Result<Self> {
         match s.trim().to_ascii_lowercase().as_str() {
-            "" | "postgres" => Ok(Self::Postgres),
+            "" | "postgres" | "postgresql" => Ok(Self::Postgres),
             "file" => Ok(Self::File),
-            other => anyhow::bail!("{}", crate::i18n::fmt("unknown model source '{0}' (postgres, file)", &[other.to_string()])),
+            "sqlserver" | "mssql" => Ok(Self::SqlServer),
+            "mysql" | "mariadb" => Ok(Self::MySql),
+            "oracle" => Ok(Self::Oracle),
+            other => anyhow::bail!("{}", crate::i18n::fmt("unknown model source '{0}' (postgres, sqlserver, mysql, oracle, file)", &[other.to_string()])),
         }
     }
 
@@ -78,6 +88,24 @@ impl ModelSource {
         match self {
             Self::Postgres => "postgres",
             Self::File => "file",
+            Self::SqlServer => "sqlserver",
+            Self::MySql => "mysql",
+            Self::Oracle => "oracle",
+        }
+    }
+
+    /// The model is read through an ODBC driver.
+    pub fn is_odbc(&self) -> bool {
+        matches!(self, Self::SqlServer | Self::MySql | Self::Oracle)
+    }
+
+    /// The usual port of the database server.
+    pub fn default_port(&self) -> u16 {
+        match self {
+            Self::SqlServer => 1433,
+            Self::MySql => 3306,
+            Self::Oracle => 1521,
+            _ => 5432,
         }
     }
 }
@@ -147,6 +175,9 @@ pub struct AppConfig {
     pub db_user: String,
     pub db_password: String,
     pub db_sslmode: SslMode,
+    /// SQL Server, MySQL, Oracle: a full ODBC connection string instead of the one built from host, port and name
+    /// (`db.odbc`, without the password: it is added from the secret).
+    pub db_odbc: String,
     pub ea_path: PathBuf,
     pub ea_user: String,
     /// Credential Manager entry with the EA account password (the settings' account, or a conversation's own account).
@@ -298,11 +329,12 @@ impl AppConfig {
             model_source: ModelSource::parse(&get_or("model.source", "postgres")).context("model.source")?,
             model_file: PathBuf::from(get_or("model.file", "")),
             db_host: get_or("db.host", ""),
-            db_port: get_or("db.port", "5432").parse().context("db.port")?,
+            db_port: get_or("db.port", &ModelSource::parse(&get_or("model.source", "postgres")).map(|s| s.default_port()).unwrap_or(5432).to_string()).parse().context("db.port")?,
             db_name: get_or("db.name", ""),
             db_user: get_or("db.user", "postgres"),
             db_password: migrate_db_password(props_path, p.get("db.password").map(String::as_str).unwrap_or("")),
             db_sslmode: SslMode::parse(&get_or("db.sslmode", "prefer")).context("db.sslmode")?,
+            db_odbc: get_or("db.odbc", ""),
             // Older files have the path stored with doubled backslashes (C:\\Program Files\\...): convert it to a normal one.
             ea_path: PathBuf::from({
                 let raw = get_or("ea.path", r"C:\Program Files\Sparx Systems\EA\EA.exe");

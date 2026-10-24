@@ -21,6 +21,8 @@ anyhow = "1"
 thiserror = "1"
 base64 = "0.22"
 postgres = "0.19"
+# SQL Server, MySQL and Oracle repositories through their ODBC drivers.
+odbc-api = "8"
 # TLS for the model database (Windows SChannel: the Windows certificate store, including company CAs).
 native-tls = "0.2"
 postgres-native-tls = "0.5"
