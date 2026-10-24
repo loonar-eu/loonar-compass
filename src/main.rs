@@ -8,6 +8,7 @@ mod claude;
 mod cmdb;
 mod auth;
 mod documents;
+mod graphql;
 mod office;
 mod pptx;
 mod instructions;

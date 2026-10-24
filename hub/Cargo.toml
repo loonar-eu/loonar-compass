@@ -21,6 +21,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "serd
 uuid = { version = "1", features = ["v4"] }
 postgres = "0.19"
 odbc-api = "8"
+juniper = { version = "0.16", default-features = false, features = ["schema-language"] }
 docx-rs = "0.4"
 rust_xlsxwriter = "0.80"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }

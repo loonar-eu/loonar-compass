@@ -1543,3 +1543,4 @@ Modelling instructions: {0} ‖ Instrukcje modelowania: {0} ‖ Modellierungsanw
 Preparing the presentation {0} ‖ Przygotowanie prezentacji {0} ‖ Präsentation {0} wird vorbereitet ‖ Préparation de la présentation {0}
 Questions to you ‖ Pytania do Ciebie ‖ Fragen an Sie ‖ Questions pour vous
 A sub-agent is working: {0}… ‖ Pracuje podagent: {0}… ‖ Ein Sub-Agent arbeitet: {0}… ‖ Un sous-agent travaille : {0}…
+tables: elements, connectors, packages, diagrams, attributes, tagged_values ‖ tabele: elements, connectors, packages, diagrams, attributes, tagged_values ‖ Tabellen: elements, connectors, packages, diagrams, attributes, tagged_values ‖ tables : elements, connectors, packages, diagrams, attributes, tagged_values

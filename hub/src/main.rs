@@ -27,6 +27,8 @@ mod model_db;
 mod net;
 #[path = "../../src/auth.rs"]
 mod auth;
+#[path = "../../src/graphql.rs"]
+mod graphql;
 #[path = "../../src/docx.rs"]
 mod docx;
 #[path = "../../src/xlsx.rs"]

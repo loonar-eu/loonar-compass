@@ -1004,6 +1004,37 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
         }
         ("GET", ["api", "sources"]) => Ok((200, json!(hub.sources.iter().map(|s| json!({ "id": s.id, "name": s.name, "kind": if s.cfg.uses_file() { "file" } else { "database" } })).collect::<Vec<_>>()))),
         // Questions of people without EA: the assistant reads the source and answers (it cannot change the model).
+        // Read-only GraphQL over a model (any role).
+        ("POST", ["api", "sources", id, "graphql"]) => {
+            let source = hub.source(id)?;
+            Ok((200, crate::graphql::execute(&source.cfg, &body()?)))
+        }
+        ("GET", ["api", "graphql", "schema"]) => Ok((200, json!({ "sdl": crate::graphql::sdl() }))),
+        // Flat tables of a model for Power BI, Excel and other tools (Get Data → Web, with the Authorization header).
+        ("GET", ["api", "sources", id, "table", table]) => {
+            let source = hub.source(id)?;
+            let sql = match *table {
+                "elements" => "select o.object_id, o.name, o.object_type, o.stereotype, o.status, o.package_id, p.name as package, o.author, o.version, o.phase, o.createddate, o.modifieddate from t_object o left join t_package p on p.package_id = o.package_id where o.object_type <> 'Package'",
+                "connectors" => "select c.connector_id, c.connector_type, c.stereotype, c.name, c.start_object_id, s.name as source, c.end_object_id, t.name as target from t_connector c left join t_object s on s.object_id = c.start_object_id left join t_object t on t.object_id = c.end_object_id",
+                "packages" => "select package_id, name, parent_id, version, createddate, modifieddate from t_package",
+                "diagrams" => "select diagram_id, name, diagram_type, package_id, author, createddate, modifieddate from t_diagram",
+                "attributes" => "select a.id, a.object_id, o.name as element, a.name, a.type from t_attribute a left join t_object o on o.object_id = a.object_id",
+                "tagged_values" => "select v.propertyid, v.object_id, o.name as element, v.property, v.value from t_objectproperties v left join t_object o on o.object_id = v.object_id",
+                _ => return Err(deny(404, crate::i18n::tr("tables: elements, connectors, packages, diagrams, attributes, tagged_values"))),
+            };
+            let sql = crate::model_db::portable_sql(source.cfg.model_source, &format!("{sql} limit 100000"));
+            let names: Vec<String> = sql
+                .split(" from ")
+                .next()
+                .unwrap_or("")
+                .trim_start_matches("select ")
+                .trim_start_matches("top 100000 ")
+                .split(", ")
+                .map(|c| c.rsplit(" as ").next().unwrap_or(c).rsplit('.').next().unwrap_or(c).trim().to_string())
+                .collect();
+            let rows = crate::tools::query_rows(&source.cfg, &sql)?;
+            Ok((200, Value::Array(rows.into_iter().map(|r| Value::Object(names.iter().cloned().zip(r.into_iter().map(Value::String)).collect())).collect())))
+        }
         ("POST", ["api", "sources", id, "ask"]) => {
             let source = hub.source(id)?;
             let question = body()?["question"].as_str().unwrap_or("").trim().to_string();
@@ -1954,6 +1985,40 @@ mod tests {
         let missing = http.get("http://127.0.0.1:18733/api/sources/shop/report?package=999999").bearer_auth("viewer-token-reports-0123").send().unwrap();
         assert_eq!(missing.status(), 404);
         assert_eq!(http.get(format!("http://127.0.0.1:18733/api/sources/shop/report?package={package}")).send().unwrap().status(), 401, "only signed-in users");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// GraphQL and the Power BI tables: `LOONAR_HUB_FILE_PROPS=… cargo test hub_graphql -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a test model"]
+    fn hub_graphql() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        let dir = std::env::temp_dir().join(format!("loonar-hub-graphql-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:18734",
+            "sources": [{ "id": "shop", "name": "Shop", "properties": std::env::var("LOONAR_HUB_FILE_PROPS").unwrap() }],
+            "users": [{ "name": "olek", "token": "viewer-token-graphql-0123", "role": "viewer" }] }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        std::thread::spawn(move || serve(hub, &listen, |_| {}));
+        std::thread::sleep(Duration::from_millis(300));
+        let http = reqwest::blocking::Client::new();
+        let q = |query: &str, variables: Value| -> Value {
+            http.post("http://127.0.0.1:18734/api/sources/shop/graphql").bearer_auth("viewer-token-graphql-0123").json(&json!({ "query": query, "variables": variables })).send().unwrap().json().unwrap()
+        };
+        let answer = q("query($n: String) { elements(name: $n, type: \"Class\") { id name type package { name } attributes { name type } connectors { type source { name } target { name } } } }", json!({ "n": "order" }));
+        println!("{}", serde_json::to_string_pretty(&answer).unwrap().chars().take(1500).collect::<String>());
+        let order = answer["data"]["elements"].as_array().unwrap().iter().find(|e| e["name"] == "Order").expect("Order");
+        assert_eq!(order["package"]["name"], "Shop domain");
+        assert!(order["attributes"].as_array().unwrap().iter().any(|a| a["name"] == "date"));
+        assert!(!order["connectors"].as_array().unwrap().is_empty());
+        let roots = q("{ packages { name packages { name diagrams { name type } } } }", Value::Null);
+        assert!(roots["data"]["packages"].as_array().is_some_and(|p| !p.is_empty()), "{roots}");
+        let bad = q("{ nothing }", Value::Null);
+        assert!(!bad["errors"].as_array().unwrap().is_empty());
+        let table: Value = http.get("http://127.0.0.1:18734/api/sources/shop/table/elements").bearer_auth("viewer-token-graphql-0123").send().unwrap().json().unwrap();
+        assert!(table.as_array().unwrap().iter().any(|r| r["name"] == "Order" && r["package"] == "Shop domain"), "{}", table.to_string().chars().take(300).collect::<String>());
+        let schema: Value = http.get("http://127.0.0.1:18734/api/graphql/schema").bearer_auth("viewer-token-graphql-0123").send().unwrap().json().unwrap();
+        assert!(schema["sdl"].as_str().unwrap().contains("type Element"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

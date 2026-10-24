@@ -39,6 +39,8 @@ windows = { version = "0.58", features = ["Win32_Foundation", "Win32_Globalizati
 zip = { version = "2", default-features = false, features = ["deflate"] }
 # Text of PDF documents read by the assistant.
 pdf-extract = "0.9"
+# The read-only GraphQL API of the team hub.
+juniper = { version = "0.16", default-features = false, features = ["schema-language"] }
 # Images drawn by the assistant (SVG -> PNG), Word documents (DOCX) and Excel workbooks (XLSX).
 resvg = "0.45"
 docx-rs = "0.4"
