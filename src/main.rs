@@ -7166,7 +7166,7 @@ mod tests {
         .unwrap();
         let steps = steps.into_inner().unwrap();
         println!("{steps:#?}");
-        assert!(steps.iter().any(|s| s.to_lowercase().contains("delegate") || s.contains("sub-agent")), "the sub-agent was used");
+        assert!(steps.iter().any(|s| s.to_lowercase().contains("sub-agent")), "the sub-agent was used");
     }
 
     #[test]
