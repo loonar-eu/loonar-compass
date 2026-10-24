@@ -7,6 +7,7 @@ mod check;
 mod claude;
 mod cmdb;
 mod documents;
+mod instructions;
 mod ea_api;
 mod mdg;
 mod com;
@@ -79,7 +80,7 @@ const MAX_FILES: usize = 5;
 /// the application can do comes from the embedded changelog, so the assistant always describes the current version.
 fn system_prompt(cfg: &AppConfig) -> String {
     format!(
-        "{SYSTEM_PROMPT}\n\n{SAFETY_RULES}\n\n{MODEL_STORE}\n\n{LANGUAGE_RULE}\n\n{MEMORY_RULES}\n\n{memories}\n\n{DOC_RULES}\n\n{templates}\n\n\
+        "{SYSTEM_PROMPT}\n\n{SAFETY_RULES}\n\n{MODEL_STORE}\n\n{LANGUAGE_RULE}\n\n{MEMORY_RULES}\n\n{memories}\n\n{model_instructions}\n\n{DOC_RULES}\n\n{templates}\n\n\
          You are running inside the {app} application, version {version} (a desktop AI assistant for Enterprise Architect). \
          Application owner: {OWNER}, {OWNER_ADDRESS}, {OWNER_CONTACT}. Language model: {model}. User guide of this version: {docs}. \
          Answer questions about yourself, this application, its features and limitations based on the changelog below \
@@ -92,6 +93,7 @@ fn system_prompt(cfg: &AppConfig) -> String {
         model = config::CLAUDE_MODEL,
         docs = docs_url(),
         memories = memory::prompt_section(&cfg.memory_dir, &cfg.model_label()),
+        model_instructions = instructions::prompt_section(cfg),
         MODEL_STORE = format!("{} The model of this conversation: {}.", model_db::dialect(cfg), cfg.model_label()),
         LANGUAGE_RULE = format!("Response language: {} (the language selected in the application). Answer in it unless the user writes to you in a different language; then answer in the user's language. Create documents, pages and images in the response language unless the user asks for a different one. This applies to everything you write, also short notes between tool calls.", i18n::current().english_name()),
         templates = templates::prompt_section(&cfg.templates_dir),
