@@ -201,6 +201,54 @@ Leave out greetings and repeated tool output. Write in the language of the conve
     Ok(kept)
 }
 
+/// The start of the task list step (the list replaces its earlier version among the steps).
+const TASKS_MARK: &str = "📋";
+
+fn task_list_definition() -> Value {
+    json!({
+        "name": "task_list",
+        "description": "Shows the user your plan for a larger piece of work as a checklist with progress (in the steps of the answer, and in EA's System Output). \
+Use it when the work has 3 or more steps (e.g. creating several elements, diagrams and relationships, or a document from the model): first with all tasks pending, \
+then again whenever a task starts (in_progress) or is done (done), always with the whole list. Do not use it for a single question or a small change.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "tasks": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "title": { "type": "string" },
+                            "status": { "type": "string", "enum": ["pending", "in_progress", "done"] }
+                        },
+                        "required": ["title", "status"]
+                    }
+                }
+            },
+            "required": ["tasks"]
+        }
+    })
+}
+
+/// The header (with progress) and the lines of the task list.
+fn task_list_text(input: &Value) -> (String, String) {
+    let tasks: Vec<(String, String)> = input["tasks"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|t| Some((t["title"].as_str()?.trim().to_string(), t["status"].as_str().unwrap_or("pending").to_string())))
+        .filter(|(t, _)| !t.is_empty())
+        .take(30)
+        .collect();
+    let done = tasks.iter().filter(|(_, s)| s == "done").count();
+    let lines = tasks
+        .iter()
+        .map(|(title, status)| format!("{} {title}", match status.as_str() { "done" => "✓", "in_progress" => "▶", _ => "○" }))
+        .collect::<Vec<_>>()
+        .join("\n");
+    (crate::i18n::fmt("{0} Plan: {1} of {2} done", &[TASKS_MARK.to_string(), done.to_string(), tasks.len().to_string()]), lines)
+}
+
 /// The tool for clarifying questions: a form in the chat instead of questions buried in the text.
 fn ask_user_definition() -> Value {
     json!({
@@ -1061,6 +1109,8 @@ struct App {
     textures: HashMap<String, Option<egui::TextureHandle>>,
     /// Save approval request the user has not answered yet; the worker thread is waiting for it.
     pending_approval: Option<ApprovalRequest>,
+    /// Where the task list is among the steps (it is replaced in place at every update).
+    task_list_at: Option<usize>,
     /// Answers being filled in to the assistant's question forms: message time → (chosen option, text) per question.
     form_answers: HashMap<String, Vec<(Option<usize>, String)>>,
     /// Steps of the current (or last) turn of the assistant's work, shown in the chat below the messages.
@@ -1262,6 +1312,7 @@ impl App {
             consumed: 0,
             textures: HashMap::new(),
             pending_approval: None,
+            task_list_at: None,
             form_answers: HashMap::new(),
             steps: Vec::new(),
             spell: None,
@@ -2140,6 +2191,30 @@ impl App {
                     changed = true;
                 }
                 Ok(WorkerEvent::Status(status)) => self.status = status,
+                Ok(WorkerEvent::StepStart(text)) if text.starts_with(TASKS_MARK) => {
+                    // A new version of the task list replaces the earlier one (it stays where it first appeared).
+                    ea_ui::output(&text);
+                    let step = Step { clock: chrono::Local::now().format("%H:%M:%S").to_string(), started: std::time::Instant::now(), text, result: None };
+                    match self.steps.iter().position(|s| s.text.starts_with(TASKS_MARK)) {
+                        Some(i) => {
+                            self.steps.remove(i);
+                            self.steps.insert(i, step);
+                            self.task_list_at = Some(i);
+                        }
+                        None => {
+                            self.steps.push(step);
+                            self.task_list_at = Some(self.steps.len() - 1);
+                        }
+                    }
+                }
+                Ok(WorkerEvent::StepEnd { ok, detail }) if self.task_list_at.is_some_and(|i| self.steps.get(i).is_some_and(|s| s.result.is_none() && s.text.starts_with(TASKS_MARK))) => {
+                    let i = self.task_list_at.unwrap();
+                    for line in detail.lines() {
+                        ea_ui::output(&format!("   {line}"));
+                    }
+                    let step = &mut self.steps[i];
+                    step.result = Some((ok, detail, step.started.elapsed().as_secs_f32()));
+                }
                 Ok(WorkerEvent::StepStart(text)) => self.steps.push({
                     ea_ui::output(&format!("▶ {text}"));
                     Step {
@@ -4395,6 +4470,7 @@ fn run_turn_with(
         None => {
             if let Some(list) = tools.as_array_mut() {
                 list.push(ask_user_definition());
+                list.push(task_list_definition());
             }
             // Tools of the user's own MCP servers (a server that does not start is reported once and left out).
             let (mcp_tools, mcp_errors) = mcp_client::definitions(&cfg.base_dir);
@@ -4485,6 +4561,12 @@ fn run_turn_with(
             // A tool the model was not given is refused even if the model names it.
             let outcome = if allowed.is_some_and(|names| !names.contains(&name)) {
                 Err(anyhow::anyhow!("the tool {name} is not available here: only reading the model is allowed"))
+            } else if name == "task_list" {
+                // The plan of the work with its progress: one step of the answer, replaced at every update.
+                let (header, lines) = task_list_text(&block["input"]);
+                emit(WorkerEvent::StepStart(header));
+                emit(WorkerEvent::StepEnd { ok: true, detail: lines });
+                Ok(tools::ToolOutput::from("The task list is shown to the user. Update it (task_list) when a task starts or is done.".to_string()))
             } else if name == "ask_user" {
                 // The questions go to the chat as a form; the user's answers come as the next message.
                 match questions_message(&block["input"]) {
@@ -6730,6 +6812,37 @@ mod tests {
         let form = texts.iter().find_map(|t| split_questions(t)).expect("the assistant asked with a form");
         println!("{:#?}", form.1);
         assert!(!form.1.is_empty());
+    }
+
+    /// A larger read-only job with the real AI: the assistant shows and updates its plan.
+    /// `LOONAR_TEST_PROPS=… cargo test plans_larger_work -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires an API key and a test model"]
+    fn plans_larger_work() {
+        i18n::set(i18n::Lang::En);
+        let cfg = AppConfig::load(Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).unwrap();
+        let approver = tools::Approver::new(config::ApprovalMode::Ask, Box::new(|_| false));
+        let (_tx, inbox) = mpsc::channel();
+        let steps = std::sync::Mutex::new(Vec::<String>::new());
+        let messages = vec![Message { role: "user".into(), text: "Review the package Shop domain in four steps and show me your plan as a task list while you work: 1) list its classes, 2) list their relationships, 3) run the model check, 4) summarise the three most important problems.".into(), attachments: vec![], created: chrono::Utc::now().to_rfc3339() }];
+        run_turn(&cfg, &messages, &approver, &inbox, &AtomicBool::new(false), &|e| match e {
+            WorkerEvent::StepStart(t) if t.starts_with(TASKS_MARK) => steps.lock().unwrap().push(t),
+            WorkerEvent::StepEnd { detail, .. } if detail.contains('○') || detail.contains('✓') => steps.lock().unwrap().push(detail),
+            _ => {}
+        })
+        .unwrap();
+        let steps = steps.into_inner().unwrap();
+        println!("{}", steps.join("
+---
+"));
+        assert!(steps.iter().filter(|s| s.starts_with(TASKS_MARK)).count() >= 2, "the plan was shown and updated");
+    }
+
+    #[test]
+    fn task_list_lines() {
+        let (header, lines) = task_list_text(&json!({ "tasks": [{ "title": "Create package", "status": "done" }, { "title": "Add classes", "status": "in_progress" }, { "title": "Draw diagram", "status": "pending" }] }));
+        assert!(header.starts_with(TASKS_MARK) && header.contains("1 of 3"));
+        assert_eq!(lines, "✓ Create package\n▶ Add classes\n○ Draw diagram");
     }
 
     #[test]
