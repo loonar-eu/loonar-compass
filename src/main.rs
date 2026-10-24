@@ -201,6 +201,52 @@ Leave out greetings and repeated tool output. Write in the language of the conve
     Ok(kept)
 }
 
+/// One thing found in the model: kind (element, package, diagram), id, name, type, package.
+type Found = (&'static str, i64, String, String, String);
+
+#[derive(Default)]
+struct Picker {
+    query: String,
+    searched: Option<String>,
+    results: Vec<Found>,
+    error: String,
+    rx: Option<mpsc::Receiver<Result<Vec<Found>, String>>>,
+}
+
+/// Elements, packages and diagrams whose name contains the text (empty: the top packages), at most 60.
+fn find_in_model(cfg: &AppConfig, query: &str) -> anyhow::Result<Vec<Found>> {
+    let q = query.trim().replace('\'', "''").to_lowercase();
+    let portable = |sql: &str| model_db::portable_sql(cfg.model_source, sql);
+    let mut out = Vec::new();
+    if q.is_empty() {
+        for r in tools::query_rows(cfg, &portable("select p.package_id, p.name, coalesce(q.name,'') from t_package p left join t_package q on q.package_id = p.parent_id where p.parent_id = 0 or q.parent_id = 0 order by p.parent_id, p.tpos limit 60"))? {
+            out.push(("package", r[0].parse().unwrap_or(0), r[1].clone(), String::new(), r[2].clone()));
+        }
+        return Ok(out);
+    }
+    let like = format!("'%{q}%'");
+    for r in tools::query_rows(cfg, &portable(&format!("select o.object_id, o.name, o.object_type, coalesce(p.name,'') from t_object o left join t_package p on p.package_id = o.package_id where lower(o.name) like {like} and o.object_type <> 'Package' order by o.name limit 40")))? {
+        out.push(("element", r[0].parse().unwrap_or(0), r[1].clone(), r[2].clone(), r[3].clone()));
+    }
+    for r in tools::query_rows(cfg, &portable(&format!("select package_id, name from t_package where lower(name) like {like} order by name limit 10")))? {
+        out.push(("package", r[0].parse().unwrap_or(0), r[1].clone(), String::new(), String::new()));
+    }
+    for r in tools::query_rows(cfg, &portable(&format!("select d.diagram_id, d.name, d.diagram_type, coalesce(p.name,'') from t_diagram d left join t_package p on p.package_id = d.package_id where lower(d.name) like {like} order by d.name limit 10")))? {
+        out.push(("diagram", r[0].parse().unwrap_or(0), r[1].clone(), r[2].clone(), r[3].clone()));
+    }
+    Ok(out)
+}
+
+/// The same reference text as "Add to the Compass conversation" in EA.
+fn reference_of(found: &Found) -> String {
+    let (kind, id, name, typ, _) = found;
+    match *kind {
+        "element" => format!("«{}: {name} ({typ}, id {id})»", crate::i18n::tr("Element")),
+        "package" => format!("«{}: {name} (id {id})»", crate::i18n::tr("Package")),
+        _ => format!("«{}: {name} (id {id})»", crate::i18n::tr("Diagram")),
+    }
+}
+
 /// The start of the task list step (the list replaces its earlier version among the steps).
 const TASKS_MARK: &str = "📋";
 
@@ -1109,6 +1155,8 @@ struct App {
     textures: HashMap<String, Option<egui::TextureHandle>>,
     /// Save approval request the user has not answered yet; the worker thread is waiting for it.
     pending_approval: Option<ApprovalRequest>,
+    /// "Pick from the model": search of elements, packages and diagrams to add to the message.
+    picker: Option<Picker>,
     /// Where the task list is among the steps (it is replaced in place at every update).
     task_list_at: Option<usize>,
     /// Answers being filled in to the assistant's question forms: message time → (chosen option, text) per question.
@@ -1312,6 +1360,7 @@ impl App {
             consumed: 0,
             textures: HashMap::new(),
             pending_approval: None,
+            picker: None,
             task_list_at: None,
             form_answers: HashMap::new(),
             steps: Vec::new(),
@@ -2907,6 +2956,80 @@ impl App {
             // The thread has just finished: this message starts a new turn (it is already in `session.messages`).
         }
         self.start_turn(ctx);
+    }
+
+    /// The "Pick from the model" window: search as you type (in the background), click to add to the message.
+    fn picker_ui(&mut self, ctx: &egui::Context) {
+        let Some(picker) = self.picker.as_mut() else { return };
+        if let Some(rx) = &picker.rx {
+            if let Ok(result) = rx.try_recv() {
+                picker.rx = None;
+                match result {
+                    Ok(found) => {
+                        picker.results = found;
+                        picker.error.clear();
+                    }
+                    Err(e) => picker.error = e,
+                }
+            } else {
+                ctx.request_repaint_after(std::time::Duration::from_millis(100));
+            }
+        }
+        if picker.rx.is_none() && picker.searched.as_deref() != Some(picker.query.trim()) {
+            if let Some(base) = self.cfg.clone() {
+                let choice = self.session.model.clone().unwrap_or_else(|| ModelChoice::of(&base));
+                if let Ok(cfg) = choice.apply(&base) {
+                    let query = picker.query.trim().to_string();
+                    picker.searched = Some(query.clone());
+                    let (tx, rx) = mpsc::channel();
+                    let wake = ctx.clone();
+                    std::thread::spawn(move || {
+                        let _ = tx.send(find_in_model(&cfg, &query).map_err(|e| format!("{e:#}")));
+                        wake.request_repaint();
+                    });
+                    picker.rx = Some(rx);
+                }
+            }
+        }
+        let mut open = true;
+        let mut add: Option<String> = None;
+        egui::Window::new(crate::i18n::tr("Pick from the model")).open(&mut open).default_width(460.0).collapsible(false).show(ctx, |ui| {
+            ui.add(egui::TextEdit::singleline(&mut picker.query).hint_text(egui::RichText::new(crate::i18n::tr("Name of an element, package or diagram")).color(theme::HINT)).desired_width(f32::INFINITY))
+                .request_focus();
+            if picker.query.trim().is_empty() {
+                ui.label(egui::RichText::new(crate::i18n::tr("Top packages of the model:")).small().color(theme::MUTED));
+            }
+            if !picker.error.is_empty() {
+                ui.label(egui::RichText::new(&picker.error).color(theme::ERROR));
+            }
+            egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+                for found in &picker.results {
+                    let (kind, _, name, typ, package) = found;
+                    let label = match *kind {
+                        "element" => format!("{name}  ·  {typ}  ·  {package}"),
+                        "package" if !package.is_empty() => format!("📁 {name}  ·  {package}"),
+                        "package" => format!("📁 {name}"),
+                        _ => format!("🗺 {name}  ·  {typ}  ·  {package}"),
+                    };
+                    if ui.selectable_label(false, label).on_hover_text(crate::i18n::tr("Add to the message")).clicked() {
+                        add = Some(reference_of(found));
+                    }
+                }
+                if picker.results.is_empty() && picker.rx.is_none() && picker.error.is_empty() {
+                    ui.label(egui::RichText::new(crate::i18n::tr("Nothing found.")).color(theme::MUTED));
+                }
+            });
+        });
+        if let Some(reference) = add {
+            if !self.input.is_empty() && !self.input.ends_with(' ') && !self.input.ends_with('\n') {
+                self.input.push(' ');
+            }
+            self.input.push_str(&reference);
+            self.input.push(' ');
+        }
+        if !open {
+            self.picker = None;
+        }
     }
 
     /// Starts the worker thread for the current conversation (the latest user messages are waiting for a response).
@@ -5087,6 +5210,7 @@ impl eframe::App for App {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_dictionary();
+        self.picker_ui(ctx);
         // In a window of EA: a click in Compass takes the keyboard (EA keeps it after the user switched docked panels).
         if ea::in_ea_tab() {
             use raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -5796,6 +5920,9 @@ impl eframe::App for App {
                     ui.horizontal(|ui| {
                         if icon_button(ui, icons::PASTE, crate::i18n::tr("Paste"), crate::i18n::tr("Paste an image or files from the clipboard (Ctrl+V)")).clicked() {
                             paste = true;
+                        }
+                        if ui.add(egui::Button::new(egui::RichText::new("⌖").color(theme::HINT)).frame(false)).on_hover_text(crate::i18n::tr("Pick elements, packages or diagrams from the model and add them to the message")).clicked() {
+                            self.picker = Some(Picker::default());
                         }
                         // Reasoning on view: a summary of how the assistant thinks, shown in the steps (Claude only).
                         if let Some(cfg) = self.cfg.as_mut().filter(|c| !c.uses_openai()) {
@@ -6836,6 +6963,19 @@ mod tests {
 ---
 "));
         assert!(steps.iter().filter(|s| s.starts_with(TASKS_MARK)).count() >= 2, "the plan was shown and updated");
+    }
+
+    /// The model search of the picker on a test model: `LOONAR_TEST_PROPS=… cargo test picker_search -- --ignored`
+    #[test]
+    #[ignore = "requires a test model"]
+    fn picker_search() {
+        i18n::set(i18n::Lang::En);
+        let cfg = AppConfig::load(Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).unwrap();
+        let found = find_in_model(&cfg, "ord").unwrap();
+        assert!(found.iter().any(|f| f.0 == "element" && f.2 == "Order"), "{found:?}");
+        assert!(reference_of(found.iter().find(|f| f.2 == "Order").unwrap()).starts_with("«Element: Order (Class, id "));
+        assert!(!find_in_model(&cfg, "").unwrap().is_empty(), "top packages");
+        assert!(find_in_model(&cfg, "x' or '1'='1").unwrap().is_empty(), "the text is a literal");
     }
 
     #[test]
