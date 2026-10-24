@@ -7,6 +7,8 @@ mod check;
 mod claude;
 mod cmdb;
 mod documents;
+mod office;
+mod pptx;
 mod instructions;
 mod ea_api;
 mod mdg;
@@ -6976,6 +6978,28 @@ mod tests {
         assert!(reference_of(found.iter().find(|f| f.2 == "Order").unwrap()).starts_with("«Element: Order (Class, id "));
         assert!(!find_in_model(&cfg, "").unwrap().is_empty(), "top packages");
         assert!(find_in_model(&cfg, "x' or '1'='1").unwrap().is_empty(), "the text is a literal");
+    }
+
+    /// A presentation and a PDF document with the real AI and Office: `LOONAR_TEST_PROPS=… cargo test slides_and_pdf -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires an API key, a test model and Microsoft Office"]
+    fn slides_and_pdf() {
+        i18n::set(i18n::Lang::En);
+        let cfg = AppConfig::load(Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).unwrap();
+        let approver = tools::Approver::new(config::ApprovalMode::Ask, Box::new(|_| false));
+        let (_tx, inbox) = mpsc::channel();
+        let files = std::sync::Mutex::new(Vec::<String>::new());
+        let messages = vec![Message { role: "user".into(), text: "Make a 3-slide PowerPoint presentation about the classes of package Shop domain (with a PDF copy), and also a one-page PDF document listing those classes. Do not ask questions.".into(), attachments: vec![], created: chrono::Utc::now().to_rfc3339() }];
+        run_turn(&cfg, &messages, &approver, &inbox, &AtomicBool::new(false), &|e| {
+            if let WorkerEvent::Images(list) = e {
+                files.lock().unwrap().extend(list);
+            }
+        })
+        .unwrap();
+        let files = files.into_inner().unwrap();
+        println!("{files:?}");
+        assert!(files.iter().any(|f| f.ends_with(".pptx")), "a presentation");
+        assert!(files.iter().any(|f| f.ends_with(".pdf")), "a PDF made with Office");
     }
 
     #[test]

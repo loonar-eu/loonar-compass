@@ -228,6 +228,34 @@ After drawing, look at the result and fix it if anything overlaps.",
             }
         },
         {
+            "name": "create_presentation",
+            "description": "Creates a PowerPoint presentation (PPTX, 16:9) and shows it in the chat: a title slide, then slides with a title, bullet points (two levels) and/or a picture \
+(diagram:ID for a diagram from EA, image:NAME for an image drawn with render_image; with bullets the picture goes on the right). pdf: true also makes a PDF with Microsoft PowerPoint. \
+Use it when the user asks for slides or a presentation; keep slides short (at most 6 bullets).",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "file_name": { "type": "string" },
+                    "title": { "type": "string" },
+                    "subtitle": { "type": "string" },
+                    "slides": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "title": { "type": "string" },
+                                "bullets": { "type": "array", "items": { "anyOf": [{ "type": "string" }, { "type": "object", "properties": { "text": { "type": "string" }, "level": { "type": "integer" } }, "required": ["text"] }] } },
+                                "image": { "type": "string", "description": "diagram:ID or image:NAME" }
+                            },
+                            "required": ["title"]
+                        }
+                    },
+                    "pdf": { "type": "boolean" }
+                },
+                "required": ["file_name", "title", "slides"]
+            }
+        },
+        {
             "name": "create_document",
             "description": "Creates a Word document (DOCX) and shows it to the user in the chat with the \"Open\" and \"Save as…\" buttons. \
 Content in Markdown: # / ## / ### headings, paragraphs with **bold**, lists (- item, 1. item), tables (| a | b | with a |---|---| row), \
@@ -238,7 +266,8 @@ drawn earlier with render_image (NAME from its result). Use it when the user ask
                 "properties": {
                     "file_name": { "type": "string", "description": "File name without extension." },
                     "title": { "type": "string", "description": "Title at the beginning of the document (optional)." },
-                    "markdown": { "type": "string", "description": "Document content in Markdown." }
+                    "markdown": { "type": "string", "description": "Document content in Markdown." },
+                    "format": { "type": "string", "enum": ["docx", "pdf", "both"], "description": "docx (default), pdf (made with Microsoft Word on this computer) or both." }
                 },
                 "required": ["file_name", "markdown"]
             }
@@ -483,6 +512,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         }
         "render_image" => render_image(input, ctx),
         "create_document" => create_document(input, ctx),
+        "create_presentation" => create_presentation(input, ctx),
         "create_spreadsheet" => create_spreadsheet(input, ctx),
         "create_confluence_page" => create_confluence_page(input, ctx),
         "publish_confluence" => publish_confluence(input, ctx),
@@ -1006,6 +1036,18 @@ fn create_document(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
     })?;
     let stored = format!("{}_{}.docx", uuid::Uuid::new_v4().simple(), crate::history::sanitize_name(file_name.trim_end_matches(".docx")));
     std::fs::write(ctx.cfg.attachments_dir.join(&stored), &bytes).context(crate::i18n::tr("saving the document"))?;
+    let format = input["format"].as_str().unwrap_or("docx");
+    if format == "pdf" || format == "both" {
+        let pdf = stored.trim_end_matches(".docx").to_string() + ".pdf";
+        crate::office::docx_to_pdf(&ctx.cfg.attachments_dir.join(&stored), &ctx.cfg.attachments_dir.join(&pdf)).context(crate::i18n::tr("making the PDF with Microsoft Word"))?;
+        let mut files = vec![pdf];
+        if format == "both" {
+            files.push(stored);
+        } else {
+            let _ = std::fs::remove_file(ctx.cfg.attachments_dir.join(&stored));
+        }
+        return Ok(ToolOutput { text: format!("Document \"{file_name}\" is ready as PDF{} (images: {pictures}). The user sees it in the chat.", if format == "both" { " and DOCX" } else { "" }), images: Vec::new(), files });
+    }
     Ok(ToolOutput {
         text: format!(
             "Document \"{file_name}.docx\" is ready ({} KB, images: {pictures}). The user sees it in the chat with the \"Open\" and \"Save as…\" buttons.",
@@ -1013,6 +1055,47 @@ fn create_document(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         ),
         images: Vec::new(),
         files: vec![stored],
+    })
+}
+
+/// Builds a PowerPoint presentation (and a PDF of it with PowerPoint, if asked) and shows it as a file in the chat.
+fn create_presentation(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
+    let file_name = input["file_name"].as_str().unwrap_or(crate::i18n::tr("Presentation"));
+    let title = input["title"].as_str().unwrap_or(file_name);
+    let subtitle = input["subtitle"].as_str().unwrap_or("");
+    let mut slides = Vec::new();
+    for s in input["slides"].as_array().with_context(|| crate::i18n::fmt("missing list '{0}'", &["slides".to_string()]))?.iter().take(60) {
+        let bullets = s["bullets"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|b| match b {
+                Value::String(t) => Some((t.clone(), 0u8)),
+                Value::Object(_) => Some((b["text"].as_str()?.to_string(), b["level"].as_u64().unwrap_or(0).min(1) as u8)),
+                _ => None,
+            })
+            .take(14)
+            .collect();
+        let picture = match s["image"].as_str().map(str::trim).filter(|i| !i.is_empty()) {
+            Some(source) => Some(picture(ctx, source)?),
+            None => None,
+        };
+        slides.push(crate::pptx::Slide { title: s["title"].as_str().unwrap_or("").to_string(), bullets, picture });
+    }
+    let bytes = crate::pptx::build(title, subtitle, &slides)?;
+    std::fs::create_dir_all(&ctx.cfg.attachments_dir).context(crate::i18n::tr("attachments folder"))?;
+    let stored = format!("{}_{}.pptx", uuid::Uuid::new_v4().simple(), crate::history::sanitize_name(file_name.trim_end_matches(".pptx")));
+    std::fs::write(ctx.cfg.attachments_dir.join(&stored), &bytes).context(crate::i18n::tr("saving the document"))?;
+    let mut files = vec![stored.clone()];
+    if input["pdf"] == true {
+        let pdf = stored.trim_end_matches(".pptx").to_string() + ".pdf";
+        crate::office::pptx_to_pdf(&ctx.cfg.attachments_dir.join(&stored), &ctx.cfg.attachments_dir.join(&pdf)).context(crate::i18n::tr("making the PDF with Microsoft PowerPoint"))?;
+        files.push(pdf);
+    }
+    Ok(ToolOutput {
+        text: format!("Presentation \"{file_name}.pptx\" is ready: {} slides{}. The user sees it in the chat with the \"Open\" and \"Save as…\" buttons.", slides.len() + 1, if files.len() > 1 { ", also as PDF" } else { "" }),
+        images: Vec::new(),
+        files,
     })
 }
 

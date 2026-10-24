@@ -1519,3 +1519,8 @@ Nothing found. ‖ Nic nie znaleziono. ‖ Nichts gefunden. ‖ Rien trouvé.
 Pick elements, packages or diagrams from the model and add them to the message ‖ Wybierz elementy, pakiety albo diagramy z modelu i dodaj je do wiadomości ‖ Elemente, Pakete oder Diagramme aus dem Modell wählen und zur Nachricht hinzufügen ‖ Choisir des éléments, paquetages ou diagrammes du modèle et les ajouter au message
 Pick from the model ‖ Wybierz z modelu ‖ Aus dem Modell wählen ‖ Choisir dans le modèle
 Top packages of the model: ‖ Główne pakiety modelu: ‖ Oberste Pakete des Modells: ‖ Paquetages principaux du modèle :
+Presentation ‖ Prezentacja ‖ Präsentation ‖ Présentation
+cannot start {0} ‖ nie można uruchomić {0} ‖ {0} kann nicht gestartet werden ‖ impossible de démarrer {0}
+making the PDF with Microsoft PowerPoint ‖ tworzenie PDF w Microsoft PowerPoint ‖ PDF mit Microsoft PowerPoint erstellen ‖ création du PDF avec Microsoft PowerPoint
+making the PDF with Microsoft Word ‖ tworzenie PDF w Microsoft Word ‖ PDF mit Microsoft Word erstellen ‖ création du PDF avec Microsoft Word
+{0} is not installed on this computer ‖ {0} nie jest zainstalowany na tym komputerze ‖ {0} ist auf diesem Computer nicht installiert ‖ {0} n’est pas installé sur cet ordinateur
