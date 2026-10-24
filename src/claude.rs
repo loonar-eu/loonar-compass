@@ -23,6 +23,10 @@ pub struct ClaudeClient {
     effort: String,
     /// Ask for a readable summary of the reasoning (thinking display "summarized").
     show_thinking: bool,
+    /// Another address of the Messages API (Azure AI Foundry, a gateway); empty = api.anthropic.com.
+    base_url: String,
+    /// OAuth2 client credentials (token URL, client id, scope, secret) used instead of the API key.
+    oauth: Option<(String, String, String, String)>,
     /// The provider answering: OpenAI (the request is translated) or Claude.
     openai: bool,
     /// OpenAI-compatible endpoint (empty = OpenAI).
@@ -35,7 +39,7 @@ impl ClaudeClient {
             .timeout(Duration::from_secs(300))
             .connect_timeout(Duration::from_secs(20))
             .build()?;
-        Ok(Self { http, api_key, model, max_tokens, workspace_id: workspace_id.trim().to_string(), effort: String::new(), show_thinking: false, openai: false, openai_url: String::new() })
+        Ok(Self { http, api_key, model, max_tokens, workspace_id: workspace_id.trim().to_string(), effort: String::new(), show_thinking: false, base_url: String::new(), oauth: None, openai: false, openai_url: String::new() })
     }
 
     /// The client of the provider chosen in the settings (Claude or OpenAI), with its key, model and effort.
@@ -44,18 +48,40 @@ impl ClaudeClient {
         if cfg.uses_openai() {
             // A local endpoint (Ollama, LM Studio) works without a key.
             let local = !cfg.openai_url.trim().is_empty() && crate::jira::check_base_url(cfg.openai_url.trim()).is_ok() && !cfg.openai_url.trim().to_ascii_lowercase().starts_with("https://");
-            let key = match secrets::get(secrets::OPENAI_API_KEY) {
-                Ok(key) => key,
-                Err(_) if local => String::new(),
-                Err(e) => return Err(e),
+            let key = if !cfg.ai_oauth_token_url.trim().is_empty() {
+                // A company gateway with OAuth2: the token takes the place of the key (fresh for every answer).
+                crate::auth::client_credentials(cfg.ai_oauth_token_url.trim(), cfg.ai_oauth_client_id.trim(), &secrets::get(secrets::AI_OAUTH_SECRET)?, cfg.ai_oauth_scope.trim())?
+            } else {
+                match secrets::get(secrets::OPENAI_API_KEY) {
+                    Ok(key) => key,
+                    Err(_) if local => String::new(),
+                    Err(e) => return Err(e),
+                }
             };
             let mut client = Self::new(key, cfg.openai_model.clone(), max_tokens, String::new())?.with_effort(&cfg.claude_effort);
             client.openai = true;
             client.openai_url = cfg.openai_url.trim().to_string();
             return Ok(client);
         }
-        let key = secrets::get(secrets::CLAUDE_API_KEY)?;
-        Ok(Self::new(key, cfg.claude_model.clone(), max_tokens, cfg.claude_workspace_id.clone())?.with_effort(&cfg.claude_effort).with_thinking(cfg.show_thinking))
+        let oauth = if cfg.ai_oauth_token_url.trim().is_empty() {
+            None
+        } else {
+            Some((cfg.ai_oauth_token_url.trim().to_string(), cfg.ai_oauth_client_id.trim().to_string(), cfg.ai_oauth_scope.trim().to_string(), secrets::get(secrets::AI_OAUTH_SECRET)?))
+        };
+        // With OAuth2 there may be no API key at all.
+        let key = match secrets::get(secrets::CLAUDE_API_KEY) {
+            Ok(key) => key,
+            Err(_) if oauth.is_some() => String::new(),
+            Err(e) => return Err(e),
+        };
+        let mut client = Self::new(key, cfg.claude_model.clone(), max_tokens, cfg.claude_workspace_id.clone())?.with_effort(&cfg.claude_effort).with_thinking(cfg.show_thinking);
+        let base = cfg.claude_url.trim().trim_end_matches('/').to_string();
+        if !base.is_empty() && crate::net::check_service_url(&base).is_err() {
+            anyhow::bail!("{}", crate::i18n::fmt("claude.url {0} must be https:// (http:// only on this computer)", &[base]));
+        }
+        client.base_url = base;
+        client.oauth = oauth;
+        Ok(client)
     }
 
     /// Effort for the requests of this client (the model's default when empty).
@@ -108,7 +134,17 @@ impl ClaudeClient {
     }
 
     fn send_once(&self, body: &Value) -> std::result::Result<Value, Failure> {
-        let mut request = self.http.post(API_URL).header("x-api-key", &self.api_key).header("anthropic-version", API_VERSION);
+        let url = if self.base_url.is_empty() { API_URL.to_string() } else { format!("{}/v1/messages", self.base_url) };
+        let mut request = self.http.post(&url).header("anthropic-version", API_VERSION);
+        if let Some((token_url, client_id, scope, secret)) = &self.oauth {
+            let token = crate::auth::client_credentials(token_url, client_id, secret, scope).map_err(Failure::Final)?;
+            request = request.bearer_auth(token);
+        } else if self.base_url.is_empty() {
+            request = request.header("x-api-key", &self.api_key);
+        } else {
+            // Azure AI Foundry and gateways take the key as api-key; Anthropic-compatible ones as x-api-key.
+            request = request.header("x-api-key", &self.api_key).header("api-key", &self.api_key);
+        }
         if !self.workspace_id.is_empty() {
             request = request.header("anthropic-workspace-id", &self.workspace_id);
         }

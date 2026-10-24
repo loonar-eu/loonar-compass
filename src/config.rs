@@ -156,6 +156,14 @@ pub struct AppConfig {
     pub claude_model: String,
     /// Effort (output_config.effort): low | medium | high | xhigh | max; empty = the model's default.
     pub claude_effort: String,
+    /// Claude through another address (Azure AI Foundry, a company gateway): the base URL, e.g.
+    /// https://<resource>.services.ai.azure.com/anthropic (`claude.url`; empty = api.anthropic.com).
+    pub claude_url: String,
+    /// OAuth2 client credentials for the AI service instead of an API key (`ai.oauth.token_url`, `ai.oauth.client_id`,
+    /// `ai.oauth.scope`; the secret `ai_oauth_client_secret`), e.g. Entra ID with scope https://cognitiveservices.azure.com/.default.
+    pub ai_oauth_token_url: String,
+    pub ai_oauth_client_id: String,
+    pub ai_oauth_scope: String,
     /// Show a summary of the model's reasoning in the steps of an answer (`claude.show_thinking`).
     pub show_thinking: bool,
     /// Model provider: "anthropic" (Claude) or "openai".
@@ -324,6 +332,10 @@ impl AppConfig {
             claude_model: get_or("claude.model", CLAUDE_MODEL),
             claude_effort: get_or("claude.effort", ""),
             show_thinking: get_or("claude.show_thinking", "false") == "true",
+            claude_url: get_or("claude.url", ""),
+            ai_oauth_token_url: get_or("ai.oauth.token_url", ""),
+            ai_oauth_client_id: get_or("ai.oauth.client_id", ""),
+            ai_oauth_scope: get_or("ai.oauth.scope", ""),
             ai_provider: get_or("ai.provider", "anthropic"),
             openai_model: get_or("openai.model", OPENAI_MODELS[0]),
             openai_url: get_or("openai.url", ""),
@@ -451,6 +463,8 @@ pub mod secrets {
     pub const CONFLUENCE_TOKEN: &str = "confluence_token";
     pub const MIRO_TOKEN: &str = "miro_token";
     pub const JIRA_TOKEN: &str = "jira_token";
+    /// The client secret for OAuth2 sign-in to the AI service.
+    pub const AI_OAUTH_SECRET: &str = "ai_oauth_client_secret";
     /// The client secret of the hub at the company sign-in (OIDC).
     pub const OIDC_CLIENT_SECRET: &str = "oidc_client_secret";
     pub const HUB_TOKEN: &str = "hub_token";

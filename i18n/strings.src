@@ -1527,3 +1527,8 @@ making the PDF with Microsoft Word ‖ tworzenie PDF w Microsoft Word ‖ PDF mi
 Report of the model {0} from the team hub, {1}. ‖ Raport modelu {0} z huba zespołu, {1}. ‖ Bericht des Modells {0} aus dem Team-Hub, {1}. ‖ Rapport du modèle {0} depuis le hub d’équipe, {1}.
 give the package (package_id) ‖ podaj pakiet (package_id) ‖ geben Sie das Paket an (package_id) ‖ indiquez le paquetage (package_id)
 report {0} downloaded ‖ pobrano raport {0} ‖ Bericht {0} heruntergeladen ‖ rapport {0} téléchargé
+MCP server {0}: unknown auth type {1} (basic, oauth2) ‖ serwer MCP {0}: nieznany typ auth {1} (basic, oauth2) ‖ MCP-Server {0}: unbekannter auth-Typ {1} (basic, oauth2) ‖ serveur MCP {0} : type auth inconnu {1} (basic, oauth2)
+cannot reach {0} ‖ nie można połączyć się z {0} ‖ {0} ist nicht erreichbar ‖ impossible de joindre {0}
+claude.url {0} must be https:// (http:// only on this computer) ‖ claude.url {0} musi zaczynać się od https:// (http:// tylko na tym komputerze) ‖ claude.url {0} muss mit https:// beginnen (http:// nur auf diesem Computer) ‖ claude.url {0} doit commencer par https:// (http:// seulement sur cet ordinateur)
+the identity provider refused the sign-in: {0} ‖ dostawca tożsamości odrzucił logowanie: {0} ‖ der Identitätsanbieter hat die Anmeldung abgelehnt: {0} ‖ le fournisseur d’identité a refusé la connexion : {0}
+the token address {0} must be https:// (http:// only on this computer) ‖ adres tokenu {0} musi zaczynać się od https:// (http:// tylko na tym komputerze) ‖ die Token-Adresse {0} muss mit https:// beginnen (http:// nur auf diesem Computer) ‖ l’adresse du jeton {0} doit commencer par https:// (http:// seulement sur cet ordinateur)

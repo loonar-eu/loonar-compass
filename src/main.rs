@@ -6,6 +6,7 @@
 mod check;
 mod claude;
 mod cmdb;
+mod auth;
 mod documents;
 mod office;
 mod pptx;
