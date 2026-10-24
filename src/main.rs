@@ -6053,7 +6053,7 @@ impl eframe::App for App {
                             }
                             // Code execution in Anthropic's sandbox (calculations, data analysis): off unless switched on.
                             let on = cfg.code_execution;
-                            let label = egui::RichText::new("🧮").color(if on { theme::NAV } else { theme::HINT });
+                            let label = egui::RichText::new("∑").color(if on { theme::NAV } else { theme::HINT });
                             let tip = if on { crate::i18n::tr("The assistant may run code in Anthropic's sandbox for calculations (click to switch off)") } else { crate::i18n::tr("Let the assistant run code in Anthropic's sandbox for calculations and data analysis (the data it passes there goes to Anthropic, like the conversation)") };
                             if ui.add(egui::Button::new(label).selected(on).frame(false)).on_hover_text(tip).clicked() {
                                 cfg.code_execution = !on;
