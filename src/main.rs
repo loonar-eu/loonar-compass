@@ -3399,7 +3399,7 @@ impl App {
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                 .show(ctx, |ui| {
                     ui.set_max_width(480.0);
-                    ui.add(egui::Label::new(crate::i18n::tr("Loonar Compass sends anonymous usage statistics once a day: which functions were used and how often they failed, the application version and the kind of setup. Never the content of conversations, names from the model, file paths or server addresses. This shows what to improve first. Everything that was sent is in the Usage statistics view, where you can also switch it off at any time.")).wrap());
+                    ui.add(egui::Label::new(crate::i18n::tr("Loonar Compass sends anonymous usage statistics once a day: which functions were used and how often they failed, the application version and the kind of setup. Never the content of conversations, names from the model, file paths or server addresses. It is your choice: the application works the same either way. Leaving them on helps a lot, because they are the only way to see what to improve first. Everything that was sent is in the Usage statistics view, where you can also switch them off at any time.")).wrap());
                     ui.add_space(10.0);
                     ui.horizontal(|ui| {
                         if ui.button(crate::i18n::tr("Keep on")).clicked() {

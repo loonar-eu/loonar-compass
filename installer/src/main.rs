@@ -1214,6 +1214,8 @@ fn remove_uninstaller_later(dir: &Path) {
 #[derive(Clone, Default)]
 struct ConfigForm {
     configure_now: bool,
+    /// Anonymous usage statistics (own wizard page): on unless the user switches them off there.
+    statistics: bool,
     api_key: String,
     /// "postgres" or "file" (an EA project file .qea/.qeax).
     model_source: String,
@@ -1252,8 +1254,13 @@ impl ConfigForm {
 fn save_user_settings(c: &ConfigForm, lang: Lang) -> Result<Vec<String>> {
     let props = config::user_data_dir().join("app.properties");
     let new_file = !props.is_file();
-    // Language chosen in the wizard: always, also on an update and when configuration is skipped now.
-    config::save_properties(&props, &[("ui.language", lang.code().to_string())])?;
+    // Language and the statistics choice made in the wizard: always, also on an update and when configuration is
+    // skipped now (the choice was made here, so the application does not ask again at its first start).
+    config::save_properties(&props, &[
+        ("ui.language", lang.code().to_string()),
+        ("telemetry.enabled", c.statistics.to_string()),
+        ("telemetry.notice", "shown".to_string()),
+    ])?;
     if !c.configure_now {
         return Ok(vec![crate::i18n::tr("Settings: to be completed in the application, in the \"Settings\" view").to_string()]);
     }
@@ -1494,6 +1501,7 @@ enum Page {
     Welcome,
     News,
     License,
+    Statistics,
     Folder,
     Config,
     Summary,
@@ -1830,6 +1838,7 @@ impl Setup {
             ea_path,
             ea_user: get("ea.user", ""),
             approval_mode,
+            statistics: saved.get("telemetry.enabled").is_none_or(|v| v != "false"),
             ..Default::default()
         };
         let lang = i18n::current();
@@ -2072,7 +2081,8 @@ impl eframe::App for Setup {
                                 (_, Page::Language) => (crate::i18n::tr("Next >"), Some(Page::Welcome)),
                                 (false, Page::Welcome) => (crate::i18n::tr("Next >"), Some(Page::News)),
                                 (_, Page::News) => (crate::i18n::tr("Next >"), Some(Page::License)),
-                                (_, Page::License) => (crate::i18n::tr("Next >"), Some(Page::Folder)),
+                                (_, Page::License) => (crate::i18n::tr("Next >"), Some(Page::Statistics)),
+                                (_, Page::Statistics) => (crate::i18n::tr("Next >"), Some(Page::Folder)),
                                 (_, Page::Folder) => (crate::i18n::tr("Next >"), Some(Page::Config)),
                                 (_, Page::Config) => (crate::i18n::tr("Next >"), Some(Page::Summary)),
                                 (_, Page::Summary) => (crate::i18n::tr("Install"), None),
@@ -2096,7 +2106,8 @@ impl eframe::App for Setup {
                                 Page::Welcome => Some(Page::Language),
                                 Page::News => Some(Page::Welcome),
                                 Page::License => Some(Page::News),
-                                Page::Folder => Some(Page::License),
+                                Page::Statistics => Some(Page::License),
+                                Page::Folder => Some(Page::Statistics),
                                 Page::Config => Some(Page::Folder),
                                 Page::Summary => Some(Page::Config),
                                 _ => None,
@@ -2122,6 +2133,7 @@ impl eframe::App for Setup {
                     (false, Page::Welcome) => self.welcome_page(ui),
                     (_, Page::News) => self.news_page(ui, height),
                     (_, Page::License) => self.license_page(ui, height),
+                    (_, Page::Statistics) => self.statistics_page(ui),
                     (_, Page::Folder) => self.folder_page(ui),
                     (_, Page::Config) => self.config_page(ui),
                     (_, Page::Summary) => self.summary_page(ui),
@@ -2258,6 +2270,33 @@ impl Setup {
         ui.add_space(8.0);
         ui.radio_value(&mut self.accepted, true, crate::i18n::tr("I accept the terms of the license agreement"));
         ui.radio_value(&mut self.accepted, false, crate::i18n::tr("I do not accept the terms of the license agreement"));
+    }
+
+    /// Anonymous usage statistics: the user's choice, on by default, with why they matter.
+    fn statistics_page(&mut self, ui: &mut egui::Ui) {
+        ui.label(bold(crate::i18n::tr("Usage statistics"), 21.0));
+        ui.add_space(4.0);
+        ui.add(egui::Label::new(crate::i18n::tr("Loonar Compass can send anonymous usage statistics once a day. It is your choice: the application works exactly the same either way, and you can change your mind at any time in the application, in the Usage statistics view.")).wrap());
+        ui.add_space(10.0);
+        egui::Frame::none().stroke(egui::Stroke::new(1.5_f32, theme::ERROR)).rounding(6.0).inner_margin(egui::Margin::same(12.0)).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(egui::RichText::new(crate::i18n::tr("Important: please leave them on")).size(15.0).strong().color(theme::ERROR));
+            ui.add_space(4.0);
+            ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Loonar Compass is free and developed by one person. The statistics are the only way to see which functions people really use, where the assistant fails and what to fix first. Without them, decisions about the next versions are guesses.")).color(theme::ERROR)).wrap());
+        });
+        ui.add_space(10.0);
+        ui.label(bold(crate::i18n::tr("What is sent"), 14.5));
+        ui.add(egui::Label::new(crate::i18n::tr("How often each function of the assistant was used and how often it failed, the number of answers, approvals, the application and Windows version, the language and the kind of setup, with a random installation id.")).wrap());
+        ui.add_space(6.0);
+        ui.label(bold(crate::i18n::tr("What is never sent"), 14.5));
+        ui.add(egui::Label::new(crate::i18n::tr("The content of conversations, names from your model, file paths, server addresses, error messages or user names.")).wrap());
+        ui.add_space(6.0);
+        ui.horizontal_wrapped(|ui| {
+            ui.label(crate::i18n::tr("All summaries are public:"));
+            ui.hyperlink_to("github.com/loonar-eu/compass-stats", "https://github.com/loonar-eu/compass-stats");
+        });
+        ui.add_space(12.0);
+        ui.checkbox(&mut self.config.statistics, egui::RichText::new(crate::i18n::tr("Send anonymous usage statistics (recommended)")).strong());
     }
 
     fn folder_page(&mut self, ui: &mut egui::Ui) {
@@ -2416,6 +2455,9 @@ impl Setup {
                 shortcuts.push(crate::i18n::tr("desktop"));
             }
             ui.label(if shortcuts.is_empty() { crate::i18n::tr("none").to_string() } else { shortcuts.join(", ") });
+            ui.add_space(6.0);
+            ui.label(bold(crate::i18n::tr("Usage statistics"), 14.5));
+            ui.label(if self.config.statistics { crate::i18n::tr("on (you can switch them off in the application)") } else { crate::i18n::tr("off") });
             ui.add_space(6.0);
             ui.label(bold(crate::i18n::tr("Configuration"), 14.5));
             if self.config.configure_now {
