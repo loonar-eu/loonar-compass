@@ -228,6 +228,15 @@ impl Session {
         Ok(())
     }
 
+    /// Moves the conversation to `history\bin` (it can be brought back by moving the file back; the list skips it).
+    pub fn move_to_bin(&self, history_dir: &Path) -> Result<PathBuf> {
+        let bin = history_dir.join("bin");
+        std::fs::create_dir_all(&bin)?;
+        let target = bin.join(format!("{}.json", self.id));
+        std::fs::rename(self.path(history_dir), &target)?;
+        Ok(target)
+    }
+
     pub fn load(path: &Path) -> Result<Self> {
         let text = std::fs::read_to_string(path)?;
         Ok(serde_json::from_str(&text)?)

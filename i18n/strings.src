@@ -1498,3 +1498,7 @@ give the text of the instructions ‖ podaj treść instrukcji ‖ geben Sie den
 the instructions are longer than 20 000 characters: make them shorter ‖ instrukcje mają ponad 20 000 znaków: skróć je ‖ die Anweisungen sind länger als 20 000 Zeichen: kürzen Sie sie ‖ les instructions dépassent 20 000 caractères : raccourcissez-les
 the model has no package under its root: create one first or give package ‖ model nie ma pakietu pod korzeniem: utwórz go najpierw albo podaj package ‖ das Modell hat kein Paket unter seiner Wurzel: legen Sie zuerst eines an oder geben Sie package an ‖ le modèle n’a aucun paquetage sous sa racine : créez-en un d’abord ou indiquez package
 unknown action {0}: use read, analyze, save or append ‖ nieznana akcja {0}: użyj read, analyze, save albo append ‖ unbekannte Aktion {0}: verwenden Sie read, analyze, save oder append ‖ action inconnue {0} : utilisez read, analyze, save ou append
+Conversation deleted (kept in {0}). ‖ Rozmowa usunięta (zachowana w {0}). ‖ Unterhaltung gelöscht (aufbewahrt in {0}). ‖ Conversation supprimée (conservée dans {0}).
+Could not delete the conversation: {0} ‖ Nie udało się usunąć rozmowy: {0} ‖ Die Unterhaltung konnte nicht gelöscht werden: {0} ‖ Impossible de supprimer la conversation : {0}
+Delete the conversation ‖ Usuń rozmowę ‖ Unterhaltung löschen ‖ Supprimer la conversation
+The assistant is working in it. ‖ Asystent w niej pracuje. ‖ Der Assistent arbeitet darin. ‖ L’assistant y travaille.

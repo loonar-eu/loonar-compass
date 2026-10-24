@@ -5173,6 +5173,7 @@ impl eframe::App for App {
                     let mut rename_start: Option<(String, String)> = None;
                     let mut rename_commit: Option<(String, String)> = None;
                     let mut rename_cancel = false;
+                    let mut to_bin: Option<Session> = None;
                     egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
                         ui.spacing_mut().item_spacing.y = 2.0;
                         let mut shown = 0;
@@ -5237,6 +5238,14 @@ impl eframe::App for App {
                                 if row.clicked() {
                                     open = Some(s.clone());
                                 }
+                                // Right click: delete (to the bin folder of the history, nothing is lost for good).
+                                let working_here = (selected && busy) || self.background.iter().any(|run| run.session.id == s.id);
+                                row.context_menu(|ui| {
+                                    if ui.add_enabled(!working_here, egui::Button::new(crate::i18n::tr("Delete the conversation"))).on_disabled_hover_text(crate::i18n::tr("The assistant is working in it.")).clicked() {
+                                        to_bin = Some(s.clone());
+                                        ui.close_menu();
+                                    }
+                                });
                                 if selected && icon_button(ui, icons::EDIT, "✎", crate::i18n::tr("Rename conversation")).clicked() {
                                     rename_start = Some((s.id.clone(), shown_title(&s.title).to_string()));
                                 }
@@ -5248,6 +5257,20 @@ impl eframe::App for App {
                         }
                     });
 
+                    if let Some(session) = to_bin {
+                        if let Some(cfg) = &self.cfg {
+                            match session.move_to_bin(&cfg.history_dir) {
+                                Ok(path) => {
+                                    self.status = crate::i18n::fmt("Conversation deleted (kept in {0}).", &[path.parent().map(|p| p.display().to_string()).unwrap_or_default()]);
+                                    self.sessions.retain(|s| s.id != session.id);
+                                    if session.id == self.session.id {
+                                        self.switch_to(Session::new());
+                                    }
+                                }
+                                Err(e) => self.status = crate::i18n::fmt("Could not delete the conversation: {0}", &[format!("{e:#}")]),
+                            }
+                        }
+                    }
                     if let Some(session) = open {
                         self.switch_to(session);
                         self.renaming = None;
