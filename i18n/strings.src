@@ -1535,3 +1535,11 @@ the token address {0} must be https:// (http:// only on this computer) ‖ adres
 Code in the sandbox ‖ Kod w piaskownicy ‖ Code in der Sandbox ‖ Code dans le bac à sable
 The assistant may run code in Anthropic's sandbox for calculations (click to switch off) ‖ Asystent może uruchamiać kod w piaskownicy Anthropic do obliczeń (kliknij, aby wyłączyć) ‖ Der Assistent darf für Berechnungen Code in der Sandbox von Anthropic ausführen (klicken zum Ausschalten) ‖ L’assistant peut exécuter du code dans le bac à sable d’Anthropic pour des calculs (cliquez pour désactiver)
 Let the assistant run code in Anthropic's sandbox for calculations and data analysis (the data it passes there goes to Anthropic, like the conversation) ‖ Pozwól asystentowi uruchamiać kod w piaskownicy Anthropic do obliczeń i analizy danych (przekazane tam dane trafiają do Anthropic, tak jak rozmowa) ‖ Dem Assistenten erlauben, für Berechnungen und Datenanalyse Code in der Sandbox von Anthropic auszuführen (die dorthin übergebenen Daten gehen wie die Unterhaltung an Anthropic) ‖ Autoriser l’assistant à exécuter du code dans le bac à sable d’Anthropic pour des calculs et l’analyse de données (les données transmises vont à Anthropic, comme la conversation)
+Sub-agent ({0}): {1} ‖ Podagent ({0}): {1} ‖ Sub-Agent ({0}): {1} ‖ Sous-agent ({0}) : {1}
+Reading the document {0} ‖ Czytanie dokumentu {0} ‖ Dokument {0} wird gelesen ‖ Lecture du document {0}
+MDG technologies: {0} ‖ Technologie MDG: {0} ‖ MDG-Technologien: {0} ‖ Technologies MDG : {0}
+EA API: {0} ‖ API EA: {0} ‖ EA-API: {0} ‖ API d’EA : {0}
+Modelling instructions: {0} ‖ Instrukcje modelowania: {0} ‖ Modellierungsanweisungen: {0} ‖ Instructions de modélisation : {0}
+Preparing the presentation {0} ‖ Przygotowanie prezentacji {0} ‖ Präsentation {0} wird vorbereitet ‖ Préparation de la présentation {0}
+Questions to you ‖ Pytania do Ciebie ‖ Fragen an Sie ‖ Questions pour vous
+A sub-agent is working: {0}… ‖ Pracuje podagent: {0}… ‖ Ein Sub-Agent arbeitet: {0}… ‖ Un sous-agent travaille : {0}…

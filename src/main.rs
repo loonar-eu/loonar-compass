@@ -250,6 +250,36 @@ fn reference_of(found: &Found) -> String {
     }
 }
 
+/// Sub-agents: the main assistant hands over a focused piece of work; the sub-agent reads the model in its own
+/// context (only the reading tools) and returns a compact result, so the main conversation stays short.
+fn delegate_definition() -> Value {
+    json!({
+        "name": "delegate",
+        "description": "Hands a focused piece of work to a sub-agent with its own context (it can only read the model) and returns its result. Roles: \
+impact (what a planned change affects: elements, diagrams, relationships, risks — give the change and the ids), \
+review (check a package, a draft or a list of planned operations against good modelling practice and the team's instructions), \
+document (draft the text of a document section from the model, as Markdown, without writing anything). \
+Use it for larger analyses that would fill the conversation with query results; give the sub-agent everything it needs in task (ids, names, the goal).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "role": { "type": "string", "enum": ["impact", "review", "document"] },
+                "task": { "type": "string" }
+            },
+            "required": ["role", "task"]
+        }
+    })
+}
+
+fn subagent_prompt(role: &str, task: &str) -> String {
+    let focus = match role {
+        "impact" => "You are an impact-analysis sub-agent. Find everything the planned change affects (elements, relationships, diagrams, packages, operations), read the model as needed, and report: directly affected, indirectly affected, risks, and what to check after the change. Be complete but compact.",
+        "document" => "You are a documentation sub-agent. Read the model and draft the requested text as Markdown (headings, short paragraphs, tables). Use only facts from the model; mark what is unknown as \"to be completed\".",
+        _ => "You are a review sub-agent. Check what you are given against good modelling practice (naming, types and stereotypes, relationships, descriptions, structure) and against the team's instructions in the model if there are any (an element with the stereotype CompassInstructions). Report concrete findings with ids, most important first.",
+    };
+    format!("{focus}\n\nTask from the main assistant:\n{task}\n\nAnswer with the result only (it goes back to the main assistant), in the language of the task.")
+}
+
 /// The start of the task list step (the list replaces its earlier version among the steps).
 const TASKS_MARK: &str = "📋";
 
@@ -4445,6 +4475,13 @@ fn tool_step(name: &str, input: &Value) -> String {
             let mut parts = other.trim_start_matches("mcp__").splitn(2, "__");
             crate::i18n::fmt("MCP {0}: {1}", &[parts.next().unwrap_or("").to_string(), parts.next().unwrap_or("").to_string()])
         }
+        "delegate" => crate::i18n::fmt("Sub-agent ({0}): {1}", &[input["role"].as_str().unwrap_or("").to_string(), shorten(input["task"].as_str().unwrap_or(""), 120)]),
+        "read_document" => crate::i18n::fmt("Reading the document {0}", &[input["file"].as_str().unwrap_or("").to_string()]),
+        "mdg_technologies" => crate::i18n::fmt("MDG technologies: {0}", &[input["technology"].as_str().unwrap_or("list").to_string()]),
+        "ea_api" => crate::i18n::fmt("EA API: {0}", &[input["class"].as_str().unwrap_or("list").to_string()]),
+        "model_instructions" => crate::i18n::fmt("Modelling instructions: {0}", &[input["action"].as_str().unwrap_or("read").to_string()]),
+        "create_presentation" => crate::i18n::fmt("Preparing the presentation {0}", &[input["file_name"].as_str().unwrap_or("").to_string()]),
+        "ask_user" => crate::i18n::tr("Questions to you").to_string(),
         other => crate::i18n::fmt("Tool {0}", &[(other).to_string()]),
     }
 }
@@ -4597,6 +4634,7 @@ fn run_turn_with(
             if let Some(list) = tools.as_array_mut() {
                 list.push(ask_user_definition());
                 list.push(task_list_definition());
+                list.push(delegate_definition());
                 // Calculations and analysis in Anthropic's sandbox: only when switched on, only with Claude.
                 if cfg.code_execution && !cfg.uses_openai() {
                     list.push(json!({ "type": "code_execution_20260521", "name": "code_execution" }));
@@ -4703,6 +4741,17 @@ fn run_turn_with(
             // A tool the model was not given is refused even if the model names it.
             let outcome = if allowed.is_some_and(|names| !names.contains(&name)) {
                 Err(anyhow::anyhow!("the tool {name} is not available here: only reading the model is allowed"))
+            } else if name == "delegate" {
+                // A sub-agent with its own, empty context: it reads the model and returns only its result.
+                let role = block["input"]["role"].as_str().unwrap_or("review");
+                let task = block["input"]["task"].as_str().unwrap_or("").trim();
+                emit(WorkerEvent::Status(crate::i18n::fmt("A sub-agent is working: {0}…", &[role.to_string()])));
+                if task.is_empty() {
+                    Err(anyhow::anyhow!("give the task of the sub-agent"))
+                } else {
+                    run_agent(&cfg, &subagent_prompt(role, task), std::time::Duration::from_secs(240))
+                        .map(|answer| tools::ToolOutput::from(format!("Result of the {role} sub-agent:\n{answer}")))
+                }
             } else if name == "task_list" {
                 // The plan of the work with its progress: one step of the answer, replaced at every update.
                 let (header, lines) = task_list_text(&block["input"]);
@@ -7047,6 +7096,27 @@ mod tests {
         let all = seen.into_inner().unwrap().join("\n");
         println!("{all}");
         assert!(all.contains("832040"), "the 30th Fibonacci number");
+    }
+
+    /// A sub-agent with the real AI: `LOONAR_TEST_PROPS=… cargo test subagent_impact -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires an API key and a test model"]
+    fn subagent_impact() {
+        i18n::set(i18n::Lang::En);
+        let cfg = AppConfig::load(Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).unwrap();
+        let approver = tools::Approver::new(config::ApprovalMode::Ask, Box::new(|_| false));
+        let (_tx, inbox) = mpsc::channel();
+        let steps = std::sync::Mutex::new(Vec::<String>::new());
+        let messages = vec![Message { role: "user".into(), text: "Use an impact sub-agent (delegate) to find out what renaming the class Order to PurchaseOrder would affect, then tell me in 3 lines. Do not change anything.".into(), attachments: vec![], created: chrono::Utc::now().to_rfc3339() }];
+        run_turn(&cfg, &messages, &approver, &inbox, &AtomicBool::new(false), &|e| {
+            if let WorkerEvent::StepStart(t) = e {
+                steps.lock().unwrap().push(t);
+            }
+        })
+        .unwrap();
+        let steps = steps.into_inner().unwrap();
+        println!("{steps:#?}");
+        assert!(steps.iter().any(|s| s.to_lowercase().contains("delegate") || s.contains("sub-agent")), "the sub-agent was used");
     }
 
     #[test]
