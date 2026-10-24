@@ -4310,6 +4310,11 @@ fn run_turn_with(
                 return Err(e);
             }
         };
+        // The summary of the model's reasoning (only when asked for): a step of the answer.
+        for thinking in resp["content"].as_array().into_iter().flatten().filter(|b| b["type"] == "thinking").filter_map(|b| b["thinking"].as_str()).filter(|t| !t.trim().is_empty()) {
+            emit(WorkerEvent::StepStart(crate::i18n::tr("💭 The assistant's reasoning").into()));
+            emit(WorkerEvent::StepEnd { ok: true, detail: shorten(thinking.trim(), 1200) });
+        }
         let planned: Vec<&str> = resp["content"]
             .as_array()
             .map(|blocks| blocks.iter().filter(|b| b["type"] == "tool_use").filter_map(|b| b["name"].as_str()).collect())
@@ -5585,6 +5590,16 @@ impl eframe::App for App {
                     ui.horizontal(|ui| {
                         if icon_button(ui, icons::PASTE, crate::i18n::tr("Paste"), crate::i18n::tr("Paste an image or files from the clipboard (Ctrl+V)")).clicked() {
                             paste = true;
+                        }
+                        // Reasoning on view: a summary of how the assistant thinks, shown in the steps (Claude only).
+                        if let Some(cfg) = self.cfg.as_mut().filter(|c| !c.uses_openai()) {
+                            let on = cfg.show_thinking;
+                            let label = egui::RichText::new("💭").color(if on { theme::NAV } else { theme::HINT });
+                            let tip = if on { crate::i18n::tr("The assistant's reasoning is shown in the steps (click to hide)") } else { crate::i18n::tr("Show the assistant's reasoning in the steps") };
+                            if ui.add(egui::Button::new(label).selected(on).frame(false)).on_hover_text(tip).clicked() {
+                                cfg.show_thinking = !on;
+                                let _ = config::save_properties(&self.props_path, &[("claude.show_thinking", (!on).to_string())]);
+                            }
                         }
                         if !ea::in_ea_tab() {
                             ui.add(egui::Label::new(

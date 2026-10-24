@@ -1502,3 +1502,6 @@ Conversation deleted (kept in {0}). ‖ Rozmowa usunięta (zachowana w {0}). ‖
 Could not delete the conversation: {0} ‖ Nie udało się usunąć rozmowy: {0} ‖ Die Unterhaltung konnte nicht gelöscht werden: {0} ‖ Impossible de supprimer la conversation : {0}
 Delete the conversation ‖ Usuń rozmowę ‖ Unterhaltung löschen ‖ Supprimer la conversation
 The assistant is working in it. ‖ Asystent w niej pracuje. ‖ Der Assistent arbeitet darin. ‖ L’assistant y travaille.
+Show the assistant's reasoning in the steps ‖ Pokazuj rozumowanie asystenta w krokach ‖ Überlegungen des Assistenten in den Schritten anzeigen ‖ Afficher le raisonnement de l’assistant dans les étapes
+The assistant's reasoning is shown in the steps (click to hide) ‖ Rozumowanie asystenta jest pokazywane w krokach (kliknij, aby ukryć) ‖ Die Überlegungen des Assistenten werden in den Schritten angezeigt (klicken zum Ausblenden) ‖ Le raisonnement de l’assistant est affiché dans les étapes (cliquez pour le masquer)
+💭 The assistant's reasoning ‖ 💭 Rozumowanie asystenta ‖ 💭 Überlegungen des Assistenten ‖ 💭 Raisonnement de l’assistant

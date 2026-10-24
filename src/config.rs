@@ -156,6 +156,8 @@ pub struct AppConfig {
     pub claude_model: String,
     /// Effort (output_config.effort): low | medium | high | xhigh | max; empty = the model's default.
     pub claude_effort: String,
+    /// Show a summary of the model's reasoning in the steps of an answer (`claude.show_thinking`).
+    pub show_thinking: bool,
     /// Model provider: "anthropic" (Claude) or "openai".
     pub ai_provider: String,
     /// OpenAI model id (used when the provider is OpenAI).
@@ -321,6 +323,7 @@ impl AppConfig {
             // The model is fixed: the `claude.model` entry in the file is informational only and does not change the model.
             claude_model: get_or("claude.model", CLAUDE_MODEL),
             claude_effort: get_or("claude.effort", ""),
+            show_thinking: get_or("claude.show_thinking", "false") == "true",
             ai_provider: get_or("ai.provider", "anthropic"),
             openai_model: get_or("openai.model", OPENAI_MODELS[0]),
             openai_url: get_or("openai.url", ""),

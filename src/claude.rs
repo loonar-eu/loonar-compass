@@ -21,6 +21,8 @@ pub struct ClaudeClient {
     workspace_id: String,
     /// Effort level sent as output_config.effort (empty = the model's default).
     effort: String,
+    /// Ask for a readable summary of the reasoning (thinking display "summarized").
+    show_thinking: bool,
     /// The provider answering: OpenAI (the request is translated) or Claude.
     openai: bool,
     /// OpenAI-compatible endpoint (empty = OpenAI).
@@ -33,7 +35,7 @@ impl ClaudeClient {
             .timeout(Duration::from_secs(300))
             .connect_timeout(Duration::from_secs(20))
             .build()?;
-        Ok(Self { http, api_key, model, max_tokens, workspace_id: workspace_id.trim().to_string(), effort: String::new(), openai: false, openai_url: String::new() })
+        Ok(Self { http, api_key, model, max_tokens, workspace_id: workspace_id.trim().to_string(), effort: String::new(), show_thinking: false, openai: false, openai_url: String::new() })
     }
 
     /// The client of the provider chosen in the settings (Claude or OpenAI), with its key, model and effort.
@@ -53,10 +55,16 @@ impl ClaudeClient {
             return Ok(client);
         }
         let key = secrets::get(secrets::CLAUDE_API_KEY)?;
-        Ok(Self::new(key, cfg.claude_model.clone(), max_tokens, cfg.claude_workspace_id.clone())?.with_effort(&cfg.claude_effort))
+        Ok(Self::new(key, cfg.claude_model.clone(), max_tokens, cfg.claude_workspace_id.clone())?.with_effort(&cfg.claude_effort).with_thinking(cfg.show_thinking))
     }
 
     /// Effort for the requests of this client (the model's default when empty).
+    /// The reasoning summary in the answer (thinking blocks with text); the model thinks either way.
+    pub fn with_thinking(mut self, show: bool) -> Self {
+        self.show_thinking = show;
+        self
+    }
+
     pub fn with_effort(mut self, effort: &str) -> Self {
         self.effort = effort.trim().to_string();
         self
@@ -80,6 +88,9 @@ impl ClaudeClient {
         }
         if !self.effort.is_empty() {
             body["output_config"] = json!({ "effort": self.effort });
+        }
+        if self.show_thinking {
+            body["thinking"] = json!({ "type": "adaptive", "display": "summarized" });
         }
         let mut attempt = 1;
         loop {
@@ -181,6 +192,29 @@ mod tests {
 
 #[cfg(test)]
 mod model_probe {
+    /// The reasoning summary comes back, and a tool round trip with thinking blocks passed back works (real API).
+    /// `cargo test reasoning_summary -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn reasoning_summary() {
+        use serde_json::json;
+        let key = crate::config::secrets::get(crate::config::secrets::CLAUDE_API_KEY).unwrap();
+        let client = super::ClaudeClient::new(key, crate::config::CLAUDE_MODEL.to_string(), 4000, String::new()).unwrap().with_effort("high").with_thinking(true);
+        let tools = json!([{ "name": "count_classes", "description": "Counts the classes in the model.", "input_schema": { "type": "object", "properties": {} } }]);
+        let mut messages = vec![json!({ "role": "user", "content": "Think carefully: a model has classes with inheritance cycles A->B->C->A and an interface I realised by A and C. Which modelling problems are there and in which order would you fix them? First count the classes with the tool." })];
+        let first = client.send_value("You are an assistant for a UML model.", &messages, Some(&tools)).unwrap();
+        let thinking: Vec<&str> = first["content"].as_array().unwrap().iter().filter(|b| b["type"] == "thinking").filter_map(|b| b["thinking"].as_str()).collect();
+        println!("stop {} thinking blocks {}: {:?}", first["stop_reason"], thinking.len(), thinking.iter().map(|t| t.chars().take(120).collect::<String>()).collect::<Vec<_>>());
+        assert_eq!(first["stop_reason"], "tool_use");
+        let id = first["content"].as_array().unwrap().iter().find(|b| b["type"] == "tool_use").unwrap()["id"].clone();
+        messages.push(json!({ "role": "assistant", "content": first["content"].clone() }));
+        messages.push(json!({ "role": "user", "content": [{ "type": "tool_result", "tool_use_id": id, "content": "7 classes" }] }));
+        let second = client.send_value("You are an assistant for a UML model.", &messages, Some(&tools)).unwrap();
+        let text: String = second["content"].as_array().unwrap().iter().filter_map(|b| b["text"].as_str()).collect();
+        println!("answer: {text}");
+        assert!(text.contains('7'));
+    }
+
     /// Every offered model answers with an effort level (real API, key from the Credential Manager).
     #[test]
     #[ignore]
