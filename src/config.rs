@@ -167,6 +167,12 @@ pub struct AppConfig {
     /// Code execution in Anthropic's sandbox for calculations and data analysis (`claude.code_execution`, off by
     /// default): the data the assistant passes there goes to Anthropic like the rest of the conversation.
     pub code_execution: bool,
+    /// SharePoint document library (Microsoft Graph): site address, library name, Entra tenant and app client id;
+    /// the secret `sharepoint_client_secret`.
+    pub sharepoint_site: String,
+    pub sharepoint_library: String,
+    pub sharepoint_tenant: String,
+    pub sharepoint_client_id: String,
     /// Show a summary of the model's reasoning in the steps of an answer (`claude.show_thinking`).
     pub show_thinking: bool,
     /// Model provider: "anthropic" (Claude) or "openai".
@@ -335,6 +341,10 @@ impl AppConfig {
             claude_model: get_or("claude.model", CLAUDE_MODEL),
             claude_effort: get_or("claude.effort", ""),
             show_thinking: get_or("claude.show_thinking", "false") == "true",
+            sharepoint_site: get_or("sharepoint.site", ""),
+            sharepoint_library: get_or("sharepoint.library", ""),
+            sharepoint_tenant: get_or("sharepoint.tenant", ""),
+            sharepoint_client_id: get_or("sharepoint.client_id", ""),
             code_execution: get_or("claude.code_execution", "false") == "true",
             claude_url: get_or("claude.url", ""),
             ai_oauth_token_url: get_or("ai.oauth.token_url", ""),
@@ -467,6 +477,8 @@ pub mod secrets {
     pub const CONFLUENCE_TOKEN: &str = "confluence_token";
     pub const MIRO_TOKEN: &str = "miro_token";
     pub const JIRA_TOKEN: &str = "jira_token";
+    /// The client secret of the app registration for SharePoint (Microsoft Graph).
+    pub const SHAREPOINT_SECRET: &str = "sharepoint_client_secret";
     /// The client secret for OAuth2 sign-in to the AI service.
     pub const AI_OAUTH_SECRET: &str = "ai_oauth_client_secret";
     /// The client secret of the hub at the company sign-in (OIDC).

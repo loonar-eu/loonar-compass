@@ -8,6 +8,7 @@ mod claude;
 mod cmdb;
 mod auth;
 mod documents;
+mod sharepoint;
 mod graphql;
 mod office;
 mod pptx;
@@ -1026,6 +1027,11 @@ struct Form {
     jira_user: String,
     jira_project: String,
     jira_token: String,
+    sharepoint_site: String,
+    sharepoint_library: String,
+    sharepoint_tenant: String,
+    sharepoint_client_id: String,
+    sharepoint_secret: String,
     hub_url: String,
     hub_source: String,
     hub_token: String,
@@ -1071,6 +1077,10 @@ impl Form {
             jira_url: c.jira_url.clone(),
             jira_user: c.jira_user.clone(),
             jira_project: c.jira_project.clone(),
+            sharepoint_site: c.sharepoint_site.clone(),
+            sharepoint_library: c.sharepoint_library.clone(),
+            sharepoint_tenant: c.sharepoint_tenant.clone(),
+            sharepoint_client_id: c.sharepoint_client_id.clone(),
             hub_url: c.hub_url.clone(),
             hub_source: c.hub_source.clone(),
             mcp_json: std::fs::read_to_string(mcp_client::config_file(&c.base_dir)).unwrap_or_default(),
@@ -1219,7 +1229,7 @@ struct App {
     /// Conversations in which the assistant finished working in the background and the user has not looked at yet (conversation ids).
     unseen: std::collections::HashSet<String>,
     /// Result of the last save and test of each of the four settings groups.
-    group_status: [GroupStatus; 10],
+    group_status: [GroupStatus; 11],
     /// Findings of the live model check already shown in EA (not repeated).
     live_reported: Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
     /// When each event agent last ran for an object (not more than once a minute).
@@ -2625,6 +2635,20 @@ impl App {
                     self.form.hub_token.clear();
                 }
             }
+            GROUP_SHAREPOINT => {
+                let site = f.sharepoint_site.trim().trim_end_matches('/').to_string();
+                if !site.is_empty() && !site.starts_with("https://") {
+                    bail!("{}", crate::i18n::tr("the SharePoint site address starts with https://"));
+                }
+                updates.push(("sharepoint.site", site));
+                updates.push(("sharepoint.library", f.sharepoint_library.trim().to_string()));
+                updates.push(("sharepoint.tenant", f.sharepoint_tenant.trim().to_string()));
+                updates.push(("sharepoint.client_id", f.sharepoint_client_id.trim().to_string()));
+                if !f.sharepoint_secret.is_empty() {
+                    secrets::set(secrets::SHAREPOINT_SECRET, f.sharepoint_secret.trim())?;
+                    self.form.sharepoint_secret.clear();
+                }
+            }
             GROUP_JIRA => {
                 let url = f.jira_url.trim().trim_end_matches('/').to_string();
                 if !url.is_empty() {
@@ -3381,6 +3405,22 @@ impl App {
             self.group_footer(ui, &ctx2, GROUP_JIRA, crate::i18n::tr("Save and test Jira connection"));
         });
         ui.add_space(12.0);
+        settings_group(ui, "SharePoint", inner_width * 2.0 + 44.0, |ui| {
+            ui.add(egui::Label::new(
+                egui::RichText::new(crate::i18n::tr("For reading documents from the team's SharePoint library and uploading documents and presentations the assistant made (each upload with your consent). It needs an app registration in Microsoft Entra ID with the Microsoft Graph application permission Sites.Selected (granted to this site) or Sites.ReadWrite.All, and a client secret; ask your Microsoft 365 administrator."))
+                    .color(theme::MUTED),
+            ).wrap());
+            ui.add_space(6.0);
+            egui::Grid::new("settings_sharepoint").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
+                row_hint(ui, crate::i18n::tr("Site address"), &mut self.form.sharepoint_site, crate::i18n::tr("e.g. https://company.sharepoint.com/sites/Architecture"));
+                row_hint(ui, crate::i18n::tr("Document library"), &mut self.form.sharepoint_library, crate::i18n::tr("empty = Documents"));
+                row_hint(ui, crate::i18n::tr("Tenant (directory) ID"), &mut self.form.sharepoint_tenant, crate::i18n::tr("e.g. contoso.onmicrosoft.com or a GUID"));
+                row_hint(ui, crate::i18n::tr("Application (client) ID"), &mut self.form.sharepoint_client_id, "00000000-0000-0000-0000-000000000000");
+                row_secret(ui, crate::i18n::tr("Client secret"), &mut self.form.sharepoint_secret, secrets::exists(secrets::SHAREPOINT_SECRET));
+            });
+            self.group_footer(ui, &ctx2, GROUP_SHAREPOINT, crate::i18n::tr("Save and test SharePoint connection"));
+        });
+        ui.add_space(12.0);
         settings_group(ui, crate::i18n::tr("Event agents (Compass in EA)"), inner_width * 2.0 + 44.0, |ui| {
             ui.add(egui::Label::new(
                 egui::RichText::new(crate::i18n::tr("Rules for the assistant to react to what happens in EA while Compass is open in its tab: a new element, a changed element, a new relationship or diagram. The assistant reads the model and answers in the \"Loonar Compass\" tab of System Output; it does not change the model on its own. \"applies_to\": an element type, «stereotype» or * (wildcards * ?)."))
@@ -3988,6 +4028,7 @@ const GROUP_JIRA: usize = 6;
 const GROUP_HUB: usize = 7;
 const GROUP_MCP: usize = 8;
 const GROUP_AGENTS: usize = 9;
+const GROUP_SHAREPOINT: usize = 10;
 
 /// "Send to Miro" window: the diagram, the board, and where on the board the frame goes (shown on a thumbnail
 /// of the board, where the user can move it).
@@ -4334,6 +4375,14 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
             let mode = policy["min_approval"].as_str().unwrap_or("-").to_string();
             let rules = ["naming", "required_tags", "allowed_relations"].iter().filter(|k| policy["governance"][**k].as_array().is_some_and(|a| !a.is_empty())).count();
             Ok(crate::i18n::fmt("Saved. Connected to the hub as {0} ({1}); team policy: minimum approval {2}, rule sets {3}.", &[name, role, mode, rules.to_string()]))
+        }
+        GROUP_SHAREPOINT => {
+            if cfg.sharepoint_site.trim().is_empty() {
+                return Ok(crate::i18n::tr("Saved. Without a site address the assistant does not use SharePoint.").into());
+            }
+            let site = sharepoint::Site::connect(cfg)?;
+            let items = site.list("")?;
+            Ok(crate::i18n::fmt("Saved. Connected to SharePoint: {0} items in the library.", &[items.len().to_string()]))
         }
         GROUP_JIRA => {
             if cfg.jira_url.trim().is_empty() {
