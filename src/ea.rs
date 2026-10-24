@@ -53,6 +53,21 @@ fn connection_string(cfg: &AppConfig) -> String {
     if cfg.uses_file() {
         return cfg.model_file.display().to_string();
     }
+    // EA's own connection for the background session: `ea.conn` (the text of an EA shortcut, e.g. for MySQL and
+    // Oracle through an ODBC data source) or one built for SQL Server (OLE DB) and PostgreSQL (Pro Cloud-style SSDB).
+    if !cfg.ea_conn.trim().is_empty() {
+        return cfg.ea_conn.trim().to_string();
+    }
+    let host = if cfg.db_host.trim().eq_ignore_ascii_case("localhost") { "127.0.0.1" } else { cfg.db_host.trim() };
+    if cfg.model_source == crate::config::ModelSource::SqlServer {
+        return format!(
+            "{db} --- DBType=1;Connect=Provider=SQLOLEDB.1;Password={pwd};Persist Security Info=True;User ID={user};Initial Catalog={db};Data Source={host},{port};LazyLoad=1;",
+            db = cfg.db_name,
+            pwd = cfg.db_password,
+            user = cfg.db_user,
+            port = cfg.db_port,
+        );
+    }
     format!(
         "{db} --- DBType=4;Connect=Provider=SSDB;SRC={host},{port}@{db};UID={user};PWD={pwd};",
         db = cfg.db_name,

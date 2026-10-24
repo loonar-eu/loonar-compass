@@ -1564,3 +1564,12 @@ the SharePoint site address starts with https:// ‖ adres witryny SharePoint za
 the site has no document library "{0}" ‖ witryna nie ma biblioteki dokumentów "{0}" ‖ die Website hat keine Dokumentbibliothek "{0}" ‖ le site n’a pas de bibliothèque de documents « {0} »
 unknown action {0}: use list, read or upload ‖ nieznana akcja {0}: użyj list, read albo upload ‖ unbekannte Aktion {0}: verwenden Sie list, read oder upload ‖ action inconnue {0} : utilisez list, read ou upload
 upload only files from the attachments folder (documents and presentations you created) ‖ wysyłać można tylko pliki z folderu załączników (dokumenty i prezentacje przygotowane przez asystenta) ‖ hochladen nur Dateien aus dem Anhangsordner (vom Assistenten erstellte Dokumente und Präsentationen) ‖ n’envoyer que des fichiers du dossier des pièces jointes (documents et présentations créés par l’assistant)
+Claude address ‖ Adres Claude ‖ Claude-Adresse ‖ Adresse de Claude
+OAuth2 client ID ‖ Identyfikator klienta OAuth2 ‖ OAuth2-Client-ID ‖ ID client OAuth2
+OAuth2 client secret ‖ Klucz tajny klienta OAuth2 ‖ Geheimer OAuth2-Clientschlüssel ‖ Secret client OAuth2
+OAuth2 scope ‖ Zakres OAuth2 (scope) ‖ OAuth2-Bereich (Scope) ‖ Portée OAuth2 (scope)
+OAuth2 token address ‖ Adres tokenu OAuth2 ‖ OAuth2-Token-Adresse ‖ Adresse du jeton OAuth2
+e.g. https://cognitiveservices.azure.com/.default ‖ np. https://cognitiveservices.azure.com/.default ‖ z. B. https://cognitiveservices.azure.com/.default ‖ p. ex. https://cognitiveservices.azure.com/.default
+empty = Anthropic; Azure AI Foundry or a company gateway: its base address ‖ puste = Anthropic; Azure AI Foundry albo firmowa bramka: jej adres bazowy ‖ leer = Anthropic; Azure AI Foundry oder ein Firmen-Gateway: dessen Basisadresse ‖ vide = Anthropic ; Azure AI Foundry ou une passerelle d’entreprise : son adresse de base
+optional, instead of an API key, e.g. https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token ‖ opcjonalnie, zamiast klucza API, np. https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token ‖ optional, statt eines API-Schlüssels, z. B. https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token ‖ facultatif, à la place d’une clé API, p. ex. https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token
+{0} must start with https:// (http:// only on this computer) ‖ {0} musi zaczynać się od https:// (http:// tylko na tym komputerze) ‖ {0} muss mit https:// beginnen (http:// nur auf diesem Computer) ‖ {0} doit commencer par https:// (http:// seulement sur cet ordinateur)

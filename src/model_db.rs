@@ -714,6 +714,29 @@ Describe the result to the user clearly (what is affected and why), and on reque
 mod odbc_tests {
     use serde_json::json;
 
+    /// A write through EA into a SQL Server repository (EA opens it with the OLE DB connection Compass builds):
+    /// `LOONAR_TEST_MSSQL_RW="127.0.0.1;14330;ea_lab;sa;<password>" cargo test sqlserver_write_through_ea -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA, a licence and a SQL Server EA repository"]
+    fn sqlserver_write_through_ea() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        let spec = std::env::var("LOONAR_TEST_MSSQL_RW").unwrap();
+        let parts: Vec<&str> = spec.split(';').collect();
+        let props = std::env::temp_dir().join(format!("loonar-mssql-rw-{}.properties", std::process::id()));
+        std::fs::write(&props, format!("model.source=sqlserver\ndb.host={}\ndb.port={}\ndb.name={}\ndb.user={}\napproval.mode=auto\n", parts[0], parts[1], parts[2], parts[3])).unwrap();
+        let mut cfg = crate::config::AppConfig::load(&props).unwrap();
+        cfg.db_password = parts[4].to_string();
+        let package = super::query_rows(&cfg, "select package_id from t_package where name = 'Shop domain'").unwrap()[0][0].parse::<i64>().unwrap();
+        let name = format!("MssqlProbe{}", std::process::id());
+        let approver = crate::tools::Approver::new(crate::config::ApprovalMode::Auto, Box::new(|_| true));
+        let ctx = crate::tools::ToolContext { cfg: &cfg, approver: &approver };
+        let result = crate::tools::run("ea_write", &json!({ "ops": [{ "op": "create_element", "key": "c", "package": package, "name": name, "type": "Class" }] }), &ctx);
+        println!("{:?}", result.as_ref().map(|r| r.text.lines().take(3).collect::<Vec<_>>().join(" | ")));
+        result.unwrap();
+        let found = super::query_rows(&cfg, &format!("select count(*) from t_object where name = '{name}'")).unwrap();
+        assert_eq!(found[0][0], "1", "the class is in SQL Server");
+    }
+
     #[test]
     fn sql_is_made_portable() {
         use crate::config::ModelSource::*;

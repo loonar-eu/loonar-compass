@@ -167,6 +167,10 @@ pub struct AppConfig {
     /// Code execution in Anthropic's sandbox for calculations and data analysis (`claude.code_execution`, off by
     /// default): the data the assistant passes there goes to Anthropic like the rest of the conversation.
     pub code_execution: bool,
+    /// EA's own connection string for saving through a background EA (`ea.conn`, the text of an EA shortcut): needed
+    /// for MySQL and Oracle repositories (EA reaches them through an ODBC data source); built automatically for
+    /// PostgreSQL and SQL Server.
+    pub ea_conn: String,
     /// SharePoint document library (Microsoft Graph): site address, library name, Entra tenant and app client id;
     /// the secret `sharepoint_client_secret`.
     pub sharepoint_site: String,
@@ -341,6 +345,7 @@ impl AppConfig {
             claude_model: get_or("claude.model", CLAUDE_MODEL),
             claude_effort: get_or("claude.effort", ""),
             show_thinking: get_or("claude.show_thinking", "false") == "true",
+            ea_conn: get_or("ea.conn", ""),
             sharepoint_site: get_or("sharepoint.site", ""),
             sharepoint_library: get_or("sharepoint.library", ""),
             sharepoint_tenant: get_or("sharepoint.tenant", ""),
@@ -485,7 +490,7 @@ pub mod secrets {
     pub const OIDC_CLIENT_SECRET: &str = "oidc_client_secret";
     pub const HUB_TOKEN: &str = "hub_token";
     /// Every secret the application stores (removed together on uninstall).
-    pub const ALL: [&str; 8] = [CLAUDE_API_KEY, OPENAI_API_KEY, EA_PASSWORD, DB_PASSWORD, CONFLUENCE_TOKEN, MIRO_TOKEN, JIRA_TOKEN, HUB_TOKEN];
+    pub const ALL: [&str; 11] = [CLAUDE_API_KEY, OPENAI_API_KEY, EA_PASSWORD, DB_PASSWORD, CONFLUENCE_TOKEN, MIRO_TOKEN, JIRA_TOKEN, HUB_TOKEN, SHAREPOINT_SECRET, AI_OAUTH_SECRET, OIDC_CLIENT_SECRET];
 
     /// Secrets from the environment instead of Credential Manager: the team hub as a service or in a container.
     static FROM_ENVIRONMENT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);

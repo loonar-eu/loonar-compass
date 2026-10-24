@@ -1004,6 +1004,11 @@ struct Form {
     openai_url: String,
     openai_api_key: String,
     claude_api_key: String,
+    claude_url: String,
+    ai_oauth_token_url: String,
+    ai_oauth_client_id: String,
+    ai_oauth_scope: String,
+    ai_oauth_secret: String,
     model_source: String,
     model_file: String,
     db_host: String,
@@ -1077,6 +1082,10 @@ impl Form {
             jira_url: c.jira_url.clone(),
             jira_user: c.jira_user.clone(),
             jira_project: c.jira_project.clone(),
+            claude_url: c.claude_url.clone(),
+            ai_oauth_token_url: c.ai_oauth_token_url.clone(),
+            ai_oauth_client_id: c.ai_oauth_client_id.clone(),
+            ai_oauth_scope: c.ai_oauth_scope.clone(),
             sharepoint_site: c.sharepoint_site.clone(),
             sharepoint_library: c.sharepoint_library.clone(),
             sharepoint_tenant: c.sharepoint_tenant.clone(),
@@ -2523,6 +2532,20 @@ impl App {
                     self.form.openai_api_key.clear();
                 }
                 updates.push(("claude.effort", f.claude_effort.trim().to_string()));
+                // Another address of Claude (Azure AI Foundry, a gateway) and OAuth2 instead of a key.
+                for (key, value) in [("claude.url", &f.claude_url), ("ai.oauth.token_url", &f.ai_oauth_token_url)] {
+                    let value = value.trim().trim_end_matches('/').to_string();
+                    if !value.is_empty() && net::check_service_url(&value).is_err() {
+                        bail!("{}", crate::i18n::fmt("{0} must start with https:// (http:// only on this computer)", &[key.to_string()]));
+                    }
+                    updates.push((key, value));
+                }
+                updates.push(("ai.oauth.client_id", f.ai_oauth_client_id.trim().to_string()));
+                updates.push(("ai.oauth.scope", f.ai_oauth_scope.trim().to_string()));
+                if !f.ai_oauth_secret.is_empty() {
+                    secrets::set(secrets::AI_OAUTH_SECRET, f.ai_oauth_secret.trim())?;
+                    self.form.ai_oauth_secret.clear();
+                }
                 if !f.claude_api_key.is_empty() {
                     secrets::set(secrets::CLAUDE_API_KEY, &f.claude_api_key)?;
                     self.form.claude_api_key.clear();
@@ -3209,6 +3232,13 @@ impl App {
                         } else {
                             row_hint(ui, crate::i18n::tr("Workspace ID"), &mut self.form.claude_workspace_id, crate::i18n::tr("optional, e.g. wrkspc_…"));
                             row_secret(ui, crate::i18n::tr("Claude API key"), &mut self.form.claude_api_key, secrets::exists(secrets::CLAUDE_API_KEY));
+                            row_hint(ui, crate::i18n::tr("Claude address"), &mut self.form.claude_url, crate::i18n::tr("empty = Anthropic; Azure AI Foundry or a company gateway: its base address"));
+                        }
+                        row_hint(ui, crate::i18n::tr("OAuth2 token address"), &mut self.form.ai_oauth_token_url, crate::i18n::tr("optional, instead of an API key, e.g. https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token"));
+                        if !self.form.ai_oauth_token_url.trim().is_empty() {
+                            row(ui, crate::i18n::tr("OAuth2 client ID"), &mut self.form.ai_oauth_client_id);
+                            row_hint(ui, crate::i18n::tr("OAuth2 scope"), &mut self.form.ai_oauth_scope, crate::i18n::tr("e.g. https://cognitiveservices.azure.com/.default"));
+                            row_secret(ui, crate::i18n::tr("OAuth2 client secret"), &mut self.form.ai_oauth_secret, secrets::exists(secrets::AI_OAUTH_SECRET));
                         }
                     });
                     ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Higher effort: more thorough answers and model work, more tokens and time. Lower: faster and cheaper.")).small().color(theme::MUTED)).wrap());
