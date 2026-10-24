@@ -201,6 +201,115 @@ Leave out greetings and repeated tool output. Write in the language of the conve
     Ok(kept)
 }
 
+/// The tool for clarifying questions: a form in the chat instead of questions buried in the text.
+fn ask_user_definition() -> Value {
+    json!({
+        "name": "ask_user",
+        "description": "Asks the user clarifying questions as a form in the chat (choices or short text answers) and ends your answer; the answers come as the next message. \
+Use it before larger changes of the model when something important is unclear (which package, which notation, naming, scope), instead of guessing. \
+At most 5 questions; give options when the answer is one of a few choices (the user can still type something else).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "intro": { "type": "string", "description": "One short sentence above the questions (optional)." },
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "question": { "type": "string" },
+                            "options": { "type": "array", "items": { "type": "string" }, "description": "Choices (optional)." }
+                        },
+                        "required": ["question"]
+                    }
+                }
+            },
+            "required": ["questions"]
+        }
+    })
+}
+
+/// The assistant's message with the questions: the intro and a ```questions block with JSON (kept in the history,
+/// so the form survives a restart and the model sees what it asked).
+fn questions_message(input: &Value) -> anyhow::Result<String> {
+    let questions: Vec<Value> = input["questions"]
+        .as_array()
+        .map(|list| {
+            list.iter()
+                .filter_map(|q| {
+                    let question = q["question"].as_str()?.trim().to_string();
+                    let options: Vec<String> = q["options"].as_array().into_iter().flatten().filter_map(|o| o.as_str()).map(|o| o.trim().to_string()).filter(|o| !o.is_empty()).take(8).collect();
+                    (!question.is_empty()).then(|| json!({ "question": question, "options": options }))
+                })
+                .take(5)
+                .collect()
+        })
+        .unwrap_or_default();
+    if questions.is_empty() {
+        anyhow::bail!("give at least one question");
+    }
+    let intro = input["intro"].as_str().unwrap_or("").trim();
+    Ok(format!("{intro}\n```questions\n{}\n```", Value::Array(questions)))
+}
+
+/// The intro and the questions (question, options) of a message with a question form.
+fn split_questions(text: &str) -> Option<(String, Vec<(String, Vec<String>)>)> {
+    let start = text.find("```questions\n")?;
+    let body = &text[start + "```questions\n".len()..];
+    let end = body.find("\n```")?;
+    let list: Vec<Value> = serde_json::from_str(&body[..end]).ok()?;
+    let questions = list
+        .iter()
+        .filter_map(|q| Some((q["question"].as_str()?.to_string(), q["options"].as_array().into_iter().flatten().filter_map(|o| o.as_str()).map(String::from).collect())))
+        .collect::<Vec<_>>();
+    Some((text[..start].to_string(), questions))
+}
+
+/// The form: a choice or a text per question, and the button that sends the answers as the next message.
+fn questions_form(ui: &mut egui::Ui, questions: &[(String, Vec<String>)], answered: bool, state: &mut Vec<(Option<usize>, String)>, send: &mut Option<String>) {
+    state.resize(questions.len(), (None, String::new()));
+    egui::Frame::none().fill(theme::SURFACE).stroke(egui::Stroke::new(1.0_f32, theme::BORDER)).rounding(12.0).inner_margin(egui::Margin::symmetric(14.0, 12.0)).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        for (n, (question, options)) in questions.iter().enumerate() {
+            ui.label(egui::RichText::new(format!("{}. {question}", n + 1)).strong());
+            let (choice, text) = &mut state[n];
+            ui.add_enabled_ui(!answered, |ui| {
+                for (i, option) in options.iter().enumerate() {
+                    if ui.radio(*choice == Some(i), option).clicked() {
+                        *choice = Some(i);
+                    }
+                }
+                let hint = if options.is_empty() { crate::i18n::tr("Your answer") } else { crate::i18n::tr("Something else…") };
+                let edit = ui.add(egui::TextEdit::singleline(text).hint_text(egui::RichText::new(hint).color(theme::HINT)).desired_width(f32::INFINITY));
+                if edit.changed() && !text.trim().is_empty() {
+                    *choice = None;
+                }
+            });
+            ui.add_space(6.0);
+        }
+        if answered {
+            ui.label(egui::RichText::new(crate::i18n::tr("Answered.")).small().color(theme::MUTED));
+            return;
+        }
+        let ready = state.iter().zip(questions).all(|((c, t), _)| c.is_some() || !t.trim().is_empty());
+        let button = egui::Button::new(egui::RichText::new(crate::i18n::tr("Send answers")).color(egui::Color32::WHITE)).fill(theme::NAV);
+        if ui.add_enabled(ready, button).clicked() {
+            let lines: Vec<String> = questions
+                .iter()
+                .zip(state.iter())
+                .map(|((q, options), (c, t))| {
+                    let answer = match c {
+                        Some(i) => options.get(*i).cloned().unwrap_or_default(),
+                        None => t.trim().to_string(),
+                    };
+                    format!("- {q} → {answer}")
+                })
+                .collect();
+            *send = Some(format!("{}\n{}", crate::i18n::tr("My answers:"), lines.join("\n")));
+        }
+    });
+}
+
 /// Rules for preparing documentation (Word, Confluence, templates).
 const DOC_RULES: &str = "Documentation: when the user asks for a document or a page (feasibility study, BRD, change description, process description, specification), \
 check whether a template from the <templates> section fits; if so, read it (read_template) and fill its structure with content from the model (db_query, \
@@ -952,6 +1061,8 @@ struct App {
     textures: HashMap<String, Option<egui::TextureHandle>>,
     /// Save approval request the user has not answered yet; the worker thread is waiting for it.
     pending_approval: Option<ApprovalRequest>,
+    /// Answers being filled in to the assistant's question forms: message time → (chosen option, text) per question.
+    form_answers: HashMap<String, Vec<(Option<usize>, String)>>,
     /// Steps of the current (or last) turn of the assistant's work, shown in the chat below the messages.
     steps: Vec<Step>,
     /// System spell-checking dictionary (`None` = the system has no dictionary for its language).
@@ -1151,6 +1262,7 @@ impl App {
             consumed: 0,
             textures: HashMap::new(),
             pending_approval: None,
+            form_answers: HashMap::new(),
             steps: Vec::new(),
             spell: None,
             spell_ready: false,
@@ -4281,6 +4393,9 @@ fn run_turn_with(
             }
         }
         None => {
+            if let Some(list) = tools.as_array_mut() {
+                list.push(ask_user_definition());
+            }
             // Tools of the user's own MCP servers (a server that does not start is reported once and left out).
             let (mcp_tools, mcp_errors) = mcp_client::definitions(&cfg.base_dir);
             if let Some(list) = tools.as_array_mut() {
@@ -4370,6 +4485,15 @@ fn run_turn_with(
             // A tool the model was not given is refused even if the model names it.
             let outcome = if allowed.is_some_and(|names| !names.contains(&name)) {
                 Err(anyhow::anyhow!("the tool {name} is not available here: only reading the model is allowed"))
+            } else if name == "ask_user" {
+                // The questions go to the chat as a form; the user's answers come as the next message.
+                match questions_message(&block["input"]) {
+                    Ok(text) => {
+                        emit(WorkerEvent::Text(text));
+                        Ok(tools::ToolOutput::from("The questions are shown to the user as a form. End your answer now without repeating them; the answers come in the user's next message.".to_string()))
+                    }
+                    Err(e) => Err(e),
+                }
             } else {
                 tools::run(name, &block["input"], &tool_ctx)
             };
@@ -5702,7 +5826,8 @@ impl eframe::App for App {
                 // Confluence page: copying the code to the clipboard and the images folder.
                 let mut copy_page_request: Option<String> = None;
                 let mut page_folder_request: Option<String> = None;
-
+                // Answers to the assistant's questions (a form in the chat), sent as the next message.
+                let mut answers_to_send: Option<String> = None;
                 let mut open_conn_empty = false;
                 let mut confirm_request = false;
                 egui::CentralPanel::default()
@@ -5763,7 +5888,7 @@ impl eframe::App for App {
                         .stick_to_bottom(true)
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
-                            for m in &self.session.messages {
+                            for (index, m) in self.session.messages.iter().enumerate() {
                                 let is_user = m.role == "user";
                                 // The failure note is saved in the language of that moment: check all languages (the UI language may have changed).
                                 let failed = !is_user && i18n::Lang::ALL.iter().any(|lang| m.text.starts_with(i18n::tr_in(*lang, "Could not finish")));
@@ -5805,7 +5930,16 @@ impl eframe::App for App {
                                                 ui.add(egui::Label::new(egui::RichText::new(&m.text).color(color)).wrap().halign(egui::Align::LEFT));
                                             } else {
                                                 // The assistant's response is in Markdown: bold, lists, tables, code.
-                                                markdown::show(ui, &m.text, &m.created);
+                                                if let Some((intro, questions)) = split_questions(&m.text) {
+                                                    if !intro.trim().is_empty() {
+                                                        markdown::show(ui, &intro, &m.created);
+                                                    }
+                                                    let answered = self.session.messages[index + 1..].iter().any(|n| n.role == "user");
+                                                    let state = self.form_answers.entry(m.created.clone()).or_default();
+                                                    questions_form(ui, &questions, answered, state, &mut answers_to_send);
+                                                } else {
+                                                    markdown::show(ui, &m.text, &m.created);
+                                                }
                                             }
                                         }
                                         for a in &m.attachments {
@@ -6018,6 +6152,10 @@ impl eframe::App for App {
                 }
                 if let Some(id) = edit_request {
                     self.open_diagram_editor(ctx, id);
+                }
+                if let Some(answers) = answers_to_send {
+                    self.input = answers;
+                    self.send(ctx);
                 }
                 if let Some(id) = miro_request {
                     self.open_miro(ctx, id);
@@ -6569,6 +6707,40 @@ mod tests {
         assert!(shorter.len() <= SUMMARY_KEEP + 1 && shorter[0]["role"] == "user");
         assert!(first.contains("summary_of_earlier_conversation") && first.contains("Shop domain"));
         assert!(conversation_chars(&shorter) < conversation_chars(&msgs) / 3);
+    }
+
+    /// An unclear request with the real AI: the assistant asks with the form instead of guessing.
+    /// `LOONAR_TEST_PROPS=… cargo test asks_when_unclear -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires an API key and a test model"]
+    fn asks_when_unclear() {
+        i18n::set(i18n::Lang::En);
+        let cfg = AppConfig::load(Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).unwrap();
+        let approver = tools::Approver::new(config::ApprovalMode::Ask, Box::new(|_| false));
+        let (_tx, inbox) = mpsc::channel();
+        let texts = std::sync::Mutex::new(Vec::<String>::new());
+        let messages = vec![Message { role: "user".into(), text: "Add a new class for payments to the model. Ask me with a form about anything you need to know first (the package and the attributes) before you change anything.".into(), attachments: vec![], created: chrono::Utc::now().to_rfc3339() }];
+        run_turn(&cfg, &messages, &approver, &inbox, &AtomicBool::new(false), &|e| {
+            if let WorkerEvent::Text(t) = e {
+                texts.lock().unwrap().push(t);
+            }
+        })
+        .unwrap();
+        let texts = texts.into_inner().unwrap();
+        let form = texts.iter().find_map(|t| split_questions(t)).expect("the assistant asked with a form");
+        println!("{:#?}", form.1);
+        assert!(!form.1.is_empty());
+    }
+
+    #[test]
+    fn question_forms_round_trip() {
+        let text = questions_message(&json!({ "intro": "Two things first:", "questions": [{ "question": "Which package?", "options": ["Shop domain", "Order handling"] }, { "question": "Name of the class?" }, { "question": "  " }] })).unwrap();
+        let (intro, questions) = split_questions(&text).unwrap();
+        assert_eq!(intro.trim(), "Two things first:");
+        assert_eq!(questions.len(), 2, "an empty question is dropped");
+        assert_eq!(questions[0].1, vec!["Shop domain", "Order handling"]);
+        assert!(split_questions("plain text").is_none());
+        assert!(questions_message(&json!({ "questions": [] })).is_err());
     }
 
     #[test]
