@@ -35,6 +35,32 @@ The hub reads secrets from environment variables `LOONAR_SECRET_<NAME>`, or from
 | `LOONAR_SECRET_CONFLUENCE_TOKEN` | Confluence pages from the web view |
 | `LOONAR_SECRET_DB_PASSWORD` | models in PostgreSQL |
 
+## Company sign-in (OpenID Connect)
+
+People can sign in to the web view with their company account (AD FS, Microsoft Entra ID, Keycloak, Okta and other
+OpenID Connect providers). Add to `hub.json`:
+
+```json
+"oidc": {
+  "issuer": "https://adfs.example.com/adfs",
+  "client_id": "<the client id from the provider>",
+  "redirect_uri": "https://hub.example.com/auth/callback",
+  "groups_claim": "groups",
+  "roles": { "admin": ["Compass-Admins"], "architect": ["Compass-Architects"], "viewer": ["Compass-Viewers"] },
+  "password_login": true
+}
+```
+
+- Register the hub at the provider as a confidential web application, flow *authorization code*, with the redirect URI
+  above, the scopes `openid profile email` (AD FS: also `allatclaims`) and a `groups` claim in the ID token with group
+  names. The client secret is the hub secret `OIDC_CLIENT_SECRET` (`LOONAR_SECRET_OIDC_CLIENT_SECRET`).
+- The hub checks the ID token itself: RS256 signature with the provider's keys, issuer, audience, expiry, nonce; the
+  sign-in uses PKCE (S256) and a one-time state.
+- The role comes from the groups at every sign-in (the highest one wins). A person in none of the groups gets no access.
+  `name_claim` chooses the user name (default: `upn`, then `preferred_username`, `email`).
+- `"password_login": false` turns off sign-in with a name and a password; API tokens for Compass and MCP clients still work.
+- Every company sign-in is in the audit trail.
+
 ## Security
 
 - **HTTPS:** the hub speaks plain HTTP. For access from other computers, put it behind an HTTPS reverse proxy (IIS, nginx).

@@ -37,6 +37,7 @@ mod model_db;
 mod ops;
 mod agent_ro;
 mod net;
+mod oidc;
 mod scripts;
 mod agents;
 mod model_spell;

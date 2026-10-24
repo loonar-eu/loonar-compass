@@ -416,6 +416,8 @@ pub mod secrets {
     pub const CONFLUENCE_TOKEN: &str = "confluence_token";
     pub const MIRO_TOKEN: &str = "miro_token";
     pub const JIRA_TOKEN: &str = "jira_token";
+    /// The client secret of the hub at the company sign-in (OIDC).
+    pub const OIDC_CLIENT_SECRET: &str = "oidc_client_secret";
     pub const HUB_TOKEN: &str = "hub_token";
     /// Every secret the application stores (removed together on uninstall).
     pub const ALL: [&str; 8] = [CLAUDE_API_KEY, OPENAI_API_KEY, EA_PASSWORD, DB_PASSWORD, CONFLUENCE_TOKEN, MIRO_TOKEN, JIRA_TOKEN, HUB_TOKEN];

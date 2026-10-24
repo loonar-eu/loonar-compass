@@ -43,6 +43,7 @@ h3 { font-size:14px; margin:16px 0 6px; }
 .login p { margin:0 0 16px; }
 .login input { width:100%; margin-bottom:12px; padding:9px 10px; }
 .login button { width:100%; padding:9px; }
+.login a.sso { display:block; text-align:center; margin-top:8px; padding:9px; border:1px solid var(--line); border-radius:6px; text-decoration:none; color:var(--accent); }
 .small { font-size:12px; }
 .actions { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; }
 .notice { padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:var(--bg); margin:8px 0; }
@@ -60,6 +61,7 @@ h3 { font-size:14px; margin:16px 0 6px; }
     </div>
     <div id="bytoken" hidden><input id="token" type="password" placeholder="Your hub token" aria-label="Hub token"></div>
     <button id="login">Sign in</button>
+    <a id="sso" class="sso" href="/auth/login" hidden>Sign in with your company account</a>
     <p class="error" id="loginerror"></p>
     <p class="muted small"><a href="#" id="usetoken">Sign in with a token instead</a> · No account yet? Ask the administrator of the hub.</p>
   </div>
@@ -124,6 +126,11 @@ h3 { font-size:14px; margin:16px 0 6px; }
 const $ = id => document.getElementById(id);
 let token = '';
 try { token = sessionStorage.getItem('hubToken') || ''; } catch (e) {}
+// Back from the company sign-in: the session is in the fragment, taken out of the address at once.
+if (location.hash.startsWith('#session=')) {
+  token = decodeURIComponent(location.hash.slice('#session='.length));
+  history.replaceState(null, '', '/');
+}
 let selectedPackage = null;
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 async function api(path) {
@@ -370,6 +377,10 @@ $('askgo').onclick = ask;
 $('question').onkeydown = e => { if (e.key === 'Enter') ask(); };
 $('q').onkeydown = e => { if (e.key === 'Enter') search(); };
 $('source').onchange = () => { loadTree(); $('results').innerHTML = ''; $('lint').innerHTML = ''; };
+fetch('/api/auth').then(r => r.json()).then(a => {
+  if (a.oidc) { $('sso').textContent = a.button || $('sso').textContent; $('sso').hidden = false; }
+  if (a.password_login === false) { $('byname').hidden = true; $('login').hidden = true; $('usetoken').hidden = true; }
+}).catch(() => {});
 if (token) login();
 </script>
 </body>

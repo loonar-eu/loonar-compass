@@ -100,6 +100,10 @@ pub struct Hub {
     failures: Mutex<HashMap<IpAddr, Vec<Instant>>>,
     /// Questions per user.
     asks: Mutex<HashMap<String, Vec<Instant>>>,
+    /// Sign-in with a company account (OIDC), if "oidc" is in hub.json.
+    oidc: Option<crate::oidc::Provider>,
+    /// People signed in with a company account: name → role from their groups at the last sign-in.
+    external: Mutex<HashMap<String, Role>>,
 }
 
 /// A user of the hub.
@@ -217,6 +221,12 @@ pub fn load(file: &Path) -> Result<(Hub, String)> {
         file: file.to_path_buf(), dir, sources, users: Mutex::new(users), sessions: Mutex::new(HashMap::new()), policy: Mutex::new(value["policy"].clone()),
         audit_lock: Mutex::new(()), ask_lock: Mutex::new(()), change_lock: Mutex::new(()), failures: Mutex::new(HashMap::new()), asks: Mutex::new(HashMap::new()),
         integrations: value["integrations"].clone(),
+        oidc: match crate::oidc::Config::from_json(&value["oidc"])? {
+            // A provider without a client secret (a public client with PKCE) works too.
+            Some(config) => Some(crate::oidc::Provider::new(config, crate::config::secrets::get(crate::config::secrets::OIDC_CLIENT_SECRET).unwrap_or_default())),
+            None => None,
+        },
+        external: Mutex::new(HashMap::new()),
     };
     if default_account {
         hub.save_users()?;
@@ -438,6 +448,29 @@ fn respond(mut stream: &TcpStream, status: u16, content_type: &str, body: &[u8])
     Ok(())
 }
 
+/// A redirect (the company sign-in): to the provider, or back to the page.
+fn redirect(mut stream: &TcpStream, location: &str) -> Result<()> {
+    write!(
+        stream,
+        "HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n\
+         X-Frame-Options: DENY\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\n\r\n"
+    )?;
+    stream.flush()?;
+    Ok(())
+}
+
+/// A small page when the company sign-in did not work, with the way back.
+fn sign_in_problem(stream: &TcpStream, message: &str) -> Result<()> {
+    let esc = message.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;");
+    let page = format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>Compass Hub</title></head><body style=\"font-family:Segoe UI,sans-serif;max-width:560px;margin:60px auto;color:#1b2a3a\">\
+         <h1 style=\"font-size:22px\">{}</h1><p>{esc}</p><p><a href=\"/\">{}</a></p></body></html>",
+        crate::i18n::tr("Sign-in did not work"),
+        crate::i18n::tr("Back to the sign-in page")
+    );
+    respond(stream, 403, "text/html; charset=utf-8", page.as_bytes())
+}
+
 /// An error with its HTTP status.
 struct HttpError(u16, String);
 
@@ -476,6 +509,52 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
             "/app.js" => return respond(&stream, 200, "text/javascript; charset=utf-8", web_page().1.as_bytes()),
             "/api/health" => return respond(&stream, 200, "application/json; charset=utf-8", json!({ "ok": true, "app": crate::config::APP_NAME, "version": env!("CARGO_PKG_VERSION") }).to_string().as_bytes()),
             "/favicon.ico" => return respond(&stream, 204, "text/plain", b""),
+            "/api/auth" => {
+                let info = match &hub.oidc {
+                    Some(p) => json!({ "oidc": true, "button": p.config.button, "password_login": p.config.password_login }),
+                    None => json!({ "oidc": false, "password_login": true }),
+                };
+                return respond(&stream, 200, "application/json; charset=utf-8", info.to_string().as_bytes());
+            }
+            "/auth/login" => {
+                let Some(provider) = &hub.oidc else { return respond(&stream, 404, "text/plain", b"not found") };
+                return match provider.start() {
+                    Ok(url) => redirect(&stream, &url),
+                    Err(e) => {
+                        log(&hub.dir, &format!("company sign-in could not start: {e:#}"));
+                        sign_in_problem(&stream, &crate::i18n::tr("The company sign-in is not available right now. Try again later or ask the administrator of the hub."))
+                    }
+                };
+            }
+            "/auth/callback" => {
+                let Some(provider) = &hub.oidc else { return respond(&stream, 404, "text/plain", b"not found") };
+                if let Some(error) = query.get("error") {
+                    let detail = query.get("error_description").cloned().unwrap_or_default();
+                    log(&hub.dir, &format!("company sign-in refused by the provider: {error} {detail}"));
+                    return sign_in_problem(&stream, &crate::i18n::fmt("The sign-in was refused: {0}", &[if detail.is_empty() { error.clone() } else { detail }]));
+                }
+                let (code, state) = (query.get("code").cloned().unwrap_or_default(), query.get("state").cloned().unwrap_or_default());
+                return match provider.finish(&code, &state) {
+                    Ok(who) => {
+                        if hub.users.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|u| u.name.eq_ignore_ascii_case(&who.name)) {
+                            log(&hub.dir, &format!("company sign-in of {} refused: a local user has the same name", who.name));
+                            return sign_in_problem(&stream, &crate::i18n::tr("A local user of the hub has the same name: the administrator has to rename or remove it first."));
+                        }
+                        let role = Role::parse(&who.role);
+                        hub.external.lock().unwrap_or_else(|p| p.into_inner()).insert(who.name.clone(), role);
+                        let session = format!("lcs_{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
+                        hub.sessions.lock().unwrap_or_else(|p| p.into_inner()).insert(token_hash(&session), (who.name.clone(), Instant::now() + Duration::from_secs(SESSION_HOURS * 3600)));
+                        log(&hub.dir, &format!("{} signed in with a company account as {}", who.name, role.name()));
+                        let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": who.name, "source": "", "summary": crate::i18n::fmt("signed in with a company account ({0})", &[role.name().to_string()]), "ok": true }));
+                        // The session goes to the page in the fragment: it never reaches a server log or a proxy.
+                        redirect(&stream, &format!("/#session={session}"))
+                    }
+                    Err(e) => {
+                        log(&hub.dir, &format!("company sign-in failed: {e:#}"));
+                        sign_in_problem(&stream, &format!("{e:#}"))
+                    }
+                };
+            }
             _ => {}
         }
     }
@@ -488,6 +567,9 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
             Ok(body) => body,
             Err(HttpError(status, message)) => return respond(&stream, status, "application/json; charset=utf-8", json!({ "error": message }).to_string().as_bytes()),
         };
+        if hub.oidc.as_ref().is_some_and(|p| !p.config.password_login) {
+            return respond(&stream, 403, "application/json; charset=utf-8", json!({ "error": crate::i18n::tr("this hub accepts only the company sign-in") }).to_string().as_bytes());
+        }
         let (status, value) = hub.login(&body, peer);
         return respond(&stream, status, "application/json; charset=utf-8", value.to_string().as_bytes());
     }
@@ -566,6 +648,9 @@ impl Hub {
         let mut sessions = self.sessions.lock().unwrap_or_else(|p| p.into_inner());
         sessions.retain(|_, (_, until)| *until > Instant::now());
         let (name, _) = sessions.get(&hash)?.clone();
+        if let Some(role) = self.external.lock().unwrap_or_else(|p| p.into_inner()).get(&name) {
+            return Some((name.clone(), *role, false));
+        }
         users.iter().find(|u| u.name == name).map(|u| (u.name.clone(), u.role, u.must_change))
     }
 
@@ -1655,6 +1740,68 @@ mod tests {
         assert!(body.contains("<table>") && body.contains("Published from the model Shop"), "{body}");
         let audit: Value = http.get(format!("{base}/api/audit?limit=10")).bearer_auth(viewer).send().unwrap().json().unwrap();
         assert!(audit.as_array().unwrap().iter().filter(|e| e["summary"].as_str().is_some_and(|s| s.starts_with("Jira") || s.starts_with("Confluence"))).count() >= 3, "{audit}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Company sign-in end to end against a local Keycloak (scratchpad kc/compass-realm.json):
+    /// `docker run -p 127.0.0.1:8180:8080 … quay.io/keycloak/keycloak:26.0 start-dev --import-realm`, then
+    /// `LOONAR_HUB_FILE_PROPS=… cargo test hub_oidc_keycloak -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a local Keycloak and a test model"]
+    fn hub_oidc_keycloak() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        crate::config::secrets::use_environment();
+        std::env::set_var("LOONAR_SECRET_OIDC_CLIENT_SECRET", "lab-test-client-secret-5f1c9e");
+        let dir = std::env::temp_dir().join(format!("loonar-hub-oidc-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:18731",
+            "sources": [{ "id": "shop", "name": "Shop", "properties": std::env::var("LOONAR_HUB_FILE_PROPS").unwrap() }],
+            "users": [{ "name": "admin", "token": "admin-token-0123456789", "role": "admin" }],
+            "oidc": { "issuer": "http://127.0.0.1:8180/realms/compass", "client_id": "compass-hub", "redirect_uri": "http://127.0.0.1:18731/auth/callback" } }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        std::thread::spawn(move || serve(hub, &listen, |_| {}));
+        std::thread::sleep(Duration::from_millis(300));
+        let http = reqwest::blocking::Client::builder().redirect(reqwest::redirect::Policy::none()).build().unwrap();
+        let base = "http://127.0.0.1:18731";
+        assert_eq!(http.get(format!("{base}/api/auth")).send().unwrap().json::<Value>().unwrap()["oidc"], true);
+
+        // A browser: the hub sends it to Keycloak, the login form is filled in, Keycloak sends it back with a code.
+        let sign_in = |user: &str, password: &str| -> reqwest::blocking::Response {
+            let to_provider = http.get(format!("{base}/auth/login")).send().unwrap();
+            assert_eq!(to_provider.status(), 302);
+            let url = to_provider.headers()["location"].to_str().unwrap().to_string();
+            assert!(url.contains("code_challenge_method=S256") && url.contains("nonce="));
+            let page = http.get(&url).send().unwrap();
+            let cookies: Vec<String> = page.headers().get_all("set-cookie").iter().filter_map(|c| c.to_str().ok()).map(|c| c.split(';').next().unwrap().to_string()).collect();
+            let html = page.text().unwrap();
+            let action = html.split("action=\"").nth(1).unwrap().split('"').next().unwrap().replace("&amp;", "&");
+            let back = http.post(&action).header("Cookie", cookies.join("; ")).form(&[("username", user), ("password", password), ("credentialId", "")]).send().unwrap();
+            assert_eq!(back.status(), 302, "Keycloak accepted the password");
+            let callback = back.headers()["location"].to_str().unwrap().to_string();
+            assert!(callback.starts_with(&format!("{base}/auth/callback?")), "{callback}");
+            http.get(&callback).send().unwrap()
+        };
+        let anna = sign_in("anna", "Lab-Test-anna-7Q2");
+        assert_eq!(anna.status(), 302);
+        let location = anna.headers()["location"].to_str().unwrap().to_string();
+        let session = location.strip_prefix("/#session=").expect("the session in the fragment").to_string();
+        let me: Value = http.get(format!("{base}/api/me")).bearer_auth(&session).send().unwrap().json().unwrap();
+        println!("anna: {me}");
+        assert_eq!(me["role"], "architect");
+        assert_eq!(me["name"], "anna");
+        let celina = sign_in("celina", "Lab-Test-celina-9X4");
+        let session = celina.headers()["location"].to_str().unwrap().strip_prefix("/#session=").unwrap().to_string();
+        let me: Value = http.get(format!("{base}/api/me")).bearer_auth(&session).send().unwrap().json().unwrap();
+        assert_eq!(me["role"], "admin", "the highest role of the groups");
+        // Without a Compass group: no session, a page with the reason.
+        let ewa = sign_in("ewa", "Lab-Test-ewa-3K8");
+        assert_eq!(ewa.status(), 403);
+        assert!(ewa.text().unwrap().contains("not in any group of the hub"));
+        // A callback with a state the hub did not start is refused.
+        let forged = http.get(format!("{base}/auth/callback?code=x&state=forged")).send().unwrap();
+        assert_eq!(forged.status(), 403);
+        let audit = std::fs::read_to_string(dir.join("audit.jsonl")).unwrap_or_default();
+        assert!(audit.contains("signed in with a company account"), "the sign-in is in the audit trail");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
