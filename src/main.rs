@@ -4002,6 +4002,54 @@ fn tool_step(name: &str, input: &Value) -> String {
 /// One answer of an event agent: a conversation of one message, reading tools only (a write is refused: nobody is
 /// there to approve it). Returns the assistant's text.
 /// The assistant without a user (event agents, questions in the hub): reads the model only, stops after `timeout`.
+/// Guards of deletions (event agents in "guard" mode): EA asks before deleting and waits for the answer. Started once,
+/// in a tab of EA; reads the requests of the add-in and answers each one, a block with its reason.
+fn start_guards(cfg: &AppConfig) {
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    let cfg = cfg.clone();
+    STARTED.call_once(move || {
+        std::thread::spawn(move || {
+            let Some(rot) = ea_ui::rot_name() else { return };
+            let mut agents = agents::load(&cfg.base_dir);
+            let mut loaded = std::time::Instant::now();
+            agents::publish_guarded_events(rot, &agents);
+            loop {
+                if loaded.elapsed() > std::time::Duration::from_secs(5) {
+                    agents = agents::load(&cfg.base_dir);
+                    agents::publish_guarded_events(rot, &agents);
+                    loaded = std::time::Instant::now();
+                }
+                guard_requests_once(&cfg, rot, &agents);
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+        });
+    });
+}
+
+/// Answers the guard requests EA has made so far (see `start_guards`).
+fn guard_requests_once(cfg: &AppConfig, rot: &str, agents: &[agents::Agent]) {
+                for (request, event, id) in agents::guard_requests(rot) {
+                    let mut block = None;
+                    if let Some((object, object_type, stereotype)) = agents::describe(cfg, &event, id) {
+                        for guard in agents::guards(agents, &event, &object_type, &stereotype) {
+                            ea_ui::output(&crate::i18n::fmt("🛡 {0}: {1}…", &[guard.name.clone(), object.clone()]));
+                            match run_agent(cfg, &agents::guard_prompt(guard, &event, &object), std::time::Duration::from_secs(agents::GUARD_TIMEOUT_SECS - 5)) {
+                                Ok(answer) => {
+                                    if let Some(reason) = agents::guard_decision(&answer) {
+                                        ea_ui::output(&crate::i18n::fmt("🛡 {0}: blocked - {1}", &[guard.name.clone(), reason.clone()]));
+                                        block = Some(format!("{}: {reason}", guard.name));
+                                        break;
+                                    }
+                                    ea_ui::output(&crate::i18n::fmt("🛡 {0}: allowed", &[guard.name.clone()]));
+                                }
+                                Err(e) => ea_ui::output(&crate::i18n::fmt("🛡 {0}: no decision, the deletion goes ahead - {1}", &[guard.name.clone(), format!("{e:#}")])),
+                            }
+                        }
+                    }
+                    agents::answer_guard(&request, block.as_deref());
+                }
+}
+
 pub(crate) fn run_agent(cfg: &AppConfig, prompt: &str, timeout: std::time::Duration) -> anyhow::Result<String> {
     agent_ro::run(cfg, prompt, timeout)
 }
@@ -4702,6 +4750,9 @@ impl eframe::App for App {
             }
             // Live governance: a relationship just drawn or an element just changed in EA is checked by the rules,
             // findings go to the "Loonar Compass" tab of System Output (each one once).
+            if let Some(cfg) = &self.cfg {
+                start_guards(cfg);
+            }
             let events = ea_ui::take_events();
             if !events.is_empty() {
                 if let Some(cfg) = self.cfg.clone() {
@@ -6123,6 +6174,34 @@ mod tests {
     /// Change sets: Compass proposes, the author cannot approve, another architect comments and approves, Compass applies
     /// (the element is in the model and verified), the hub records it as applied. LOONAR_TEST_PROPS = a test model.
     /// Run with: `cargo test hub_change_set_flow -- --ignored --nocapture`.
+    /// A guard of deletions with the real AI on a test model: one class is protected, another is not.
+    /// `LOONAR_TEST_PROPS=… cargo test guard_round_trip -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires an API key and a test model"]
+    fn guard_round_trip() {
+        i18n::set(i18n::Lang::En);
+        let cfg = AppConfig::load(Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).unwrap();
+        let agents = agents::parse(r#"{"agents":[{"name":"Keep orders","event":"element_deleting","mode":"guard","applies_to":"Class","prompt":"Block deleting the class named Order (the core of the shop). Any other class may be deleted."}]}"#).unwrap();
+        let id_of = |name: &str| tools::query_rows(&cfg, &format!("select object_id as c0 from t_object where name = '{name}' and object_type = 'Class'")).unwrap()[0][0].parse::<i64>().unwrap();
+        let rot = format!("test{}", std::process::id());
+        let dir = std::env::temp_dir();
+        let ask = |name: &str| {
+            let request = dir.join(format!("loonar-ea-guard-{rot}-{name}.req"));
+            std::fs::write(&request, format!("element_deleting:{}", id_of(name))).unwrap();
+            guard_requests_once(&cfg, &rot, &agents);
+            let answer = std::fs::read_to_string(request.with_extension("res")).unwrap();
+            let _ = std::fs::remove_file(request.with_extension("res"));
+            answer
+        };
+        let order = ask("Order");
+        println!("Order: {order}");
+        assert!(order.starts_with("block
+"), "Order is protected: {order}");
+        let product = ask("Product");
+        println!("Product: {product}");
+        assert_eq!(product, "allow");
+    }
+
     #[test]
     #[ignore = "requires EA and a test model"]
     fn hub_change_set_flow() {

@@ -1453,3 +1453,10 @@ a user name: letters, digits and . - _ @ ‖ nazwa użytkownika: litery, cyfry o
 there is no user {0} ‖ nie ma użytkownika {0} ‖ es gibt keinen Benutzer {0} ‖ il n'y a pas d'utilisateur {0}
 the hub needs at least one admin ‖ hub musi mieć co najmniej jednego admina ‖ der Hub braucht mindestens einen Admin ‖ le hub a besoin d'au moins un admin
 you cannot remove yourself ‖ nie możesz usunąć samego siebie ‖ Sie können sich nicht selbst entfernen ‖ vous ne pouvez pas vous supprimer vous-même
+blocked by a guard of the model ‖ zablokowane przez strażnika modelu ‖ von einem Wächter des Modells blockiert ‖ bloqué par un gardien du modèle
+event agent {0}: mode must be advise or guard ‖ agent zdarzeń {0}: mode musi mieć wartość advise albo guard ‖ Ereignis-Agent {0}: mode muss advise oder guard sein ‖ agent d’événement {0} : mode doit valoir advise ou guard
+event agent {0}: only the *_deleting events can be guarded (EA asks before deleting; other events are reported after they happen) ‖ agent zdarzeń {0}: strażnikiem można objąć tylko zdarzenia *_deleting (EA pyta przed usunięciem; pozostałe zdarzenia są zgłaszane po fakcie) ‖ Ereignis-Agent {0}: Nur die Ereignisse *_deleting können bewacht werden (EA fragt vor dem Löschen; andere Ereignisse werden erst danach gemeldet) ‖ agent d’événement {0} : seuls les événements *_deleting peuvent être gardés (EA demande avant de supprimer ; les autres événements sont signalés après coup)
+🛡 {0}: allowed ‖ 🛡 {0}: dozwolone ‖ 🛡 {0}: erlaubt ‖ 🛡 {0} : autorisé
+🛡 {0}: blocked - {1} ‖ 🛡 {0}: zablokowane - {1} ‖ 🛡 {0}: blockiert - {1} ‖ 🛡 {0} : bloqué - {1}
+🛡 {0}: no decision, the deletion goes ahead - {1} ‖ 🛡 {0}: brak decyzji, usunięcie zostaje wykonane - {1} ‖ 🛡 {0}: keine Entscheidung, das Löschen wird ausgeführt - {1} ‖ 🛡 {0} : pas de décision, la suppression a lieu - {1}
+🛡 {0}: {1}… ‖ 🛡 {0}: {1}… ‖ 🛡 {0}: {1}… ‖ 🛡 {0} : {1}…

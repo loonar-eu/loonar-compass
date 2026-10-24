@@ -53,22 +53,68 @@ namespace LoonarCompass
             return false;
         }
 
-        /// <summary>An element changed in EA (name, stereotype, tagged values…): Compass checks it by the model rules.
-        /// New elements are checked after their first edit (EA creates them as "Class1" and the name is typed next).</summary>
+        /// <summary>An element, relationship, diagram or package changed in EA (name, stereotype, tagged values…): Compass
+        /// checks it by the model rules and passes it to event agents. New elements are checked after their first edit
+        /// (EA creates them as "Class1" and the name is typed next).</summary>
         public void EA_OnNotifyContextItemModified(object repository, string guid, int type)
         {
-            // 4 = otElement
-            if (type != 4 || current == null || current.IsDisposed)
+            if (current == null || current.IsDisposed)
                 return;
             try
             {
                 dynamic r = repository;
-                dynamic element = r.GetElementByGuid(guid);
-                current.Event("element:" + element.ElementID);
+                switch (type)
+                {
+                    case 4: // otElement
+                        current.Event("element:" + r.GetElementByGuid(guid).ElementID);
+                        break;
+                    case 7: // otConnector
+                        current.Event("connector_changed:" + r.GetConnectorByGuid(guid).ConnectorID);
+                        break;
+                    case 8: // otDiagram
+                        current.Event("diagram_changed:" + r.GetDiagramByGuid(guid).DiagramID);
+                        break;
+                    case 5: // otPackage
+                        current.Event("package_changed:" + r.GetPackageByGuid(guid).PackageID);
+                        break;
+                }
             }
             catch (Exception e)
             {
                 Log.Write("ContextItemModified: " + e.Message);
+            }
+        }
+
+        public bool EA_OnPostNewPackage(object repository, object info) { Pass("package_created", info, "PackageID"); return false; }
+        public bool EA_OnPostNewAttribute(object repository, object info) { Pass("attribute_created", info, "AttributeID"); return false; }
+        public bool EA_OnPostNewMethod(object repository, object info) { Pass("method_created", info, "MethodID"); return false; }
+        public bool EA_OnPostNewGlossaryTerm(object repository, object info) { Pass("glossary_term_created", info, "GlossaryID"); return false; }
+
+        // Before a deletion EA asks the add-in: event agents get the event, and a guard (an agent in "guard" mode in
+        // Compass) can stop it. True = EA goes ahead.
+        public bool EA_OnPreDeleteElement(object repository, object info) { return Ask("element_deleting", info, "ElementID"); }
+        public bool EA_OnPreDeleteConnector(object repository, object info) { return Ask("connector_deleting", info, "ConnectorID"); }
+        public bool EA_OnPreDeleteDiagram(object repository, object info) { return Ask("diagram_deleting", info, "DiagramID"); }
+        public bool EA_OnPreDeletePackage(object repository, object info) { return Ask("package_deleting", info, "PackageID"); }
+        public bool EA_OnPreDeleteAttribute(object repository, object info) { return Ask("attribute_deleting", info, "AttributeID"); }
+        public bool EA_OnPreDeleteMethod(object repository, object info) { return Ask("method_deleting", info, "MethodID"); }
+        public bool EA_OnPreDeleteGlossaryTerm(object repository, object info) { return Ask("glossary_term_deleting", info, "GlossaryID"); }
+
+        static bool Ask(string kind, object info, string property)
+        {
+            if (current == null || current.IsDisposed)
+                return true;
+            try
+            {
+                dynamic properties = info;
+                string line = kind + ":" + properties.Get(property).Value;
+                current.Event(line);
+                return current.Guard(kind, line);
+            }
+            catch (Exception e)
+            {
+                Log.Write(kind + " guard: " + e.Message);
+                return true;
             }
         }
 
@@ -384,6 +430,64 @@ namespace LoonarCompass
             }
             catch
             {
+            }
+        }
+
+        /// <summary>Asks Compass whether a deletion may go ahead: only when a guard watches this event (Compass lists them in
+        /// a file). Waits at most 40 seconds; no answer = the deletion goes ahead, so EA never hangs on Compass.</summary>
+        public bool Guard(string kind, string line)
+        {
+            if (rotName == null || process == null)
+                return true;
+            string temp = Path.GetTempPath();
+            try
+            {
+                string guarded = Path.Combine(temp, "loonar-ea-guards-" + rotName + ".txt");
+                if (!File.Exists(guarded) || Array.IndexOf(File.ReadAllLines(guarded), kind) < 0)
+                    return true;
+            }
+            catch
+            {
+                return true;
+            }
+            string id = Guid.NewGuid().ToString("N");
+            string request = Path.Combine(temp, "loonar-ea-guard-" + rotName + "-" + id + ".req");
+            string response = Path.Combine(temp, "loonar-ea-guard-" + rotName + "-" + id + ".res");
+            Cursor previous = Cursor.Current;
+            try
+            {
+                Cursor.Current = Cursors.WaitCursor;
+                File.WriteAllText(request, line);
+                DateTime until = DateTime.Now.AddSeconds(40);
+                while (DateTime.Now < until)
+                {
+                    if (File.Exists(response))
+                    {
+                        string[] answer = File.ReadAllLines(response);
+                        File.Delete(response);
+                        if (answer.Length > 0 && answer[0] == "block")
+                        {
+                            string reason = answer.Length > 1 ? answer[1] : "";
+                            Cursor.Current = previous;
+                            MessageBox.Show(L10n.Get("Loonar Compass stopped this deletion:") + "\n\n" + reason, "Loonar Compass", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return false;
+                        }
+                        return true;
+                    }
+                    System.Threading.Thread.Sleep(100);
+                }
+                Out(DateTime.Now.ToString("HH:mm:ss") + "  " + L10n.Get("No decision of the guard in time: the deletion goes ahead."));
+                return true;
+            }
+            catch (Exception e)
+            {
+                Log.Write("Guard: " + e.Message);
+                return true;
+            }
+            finally
+            {
+                Cursor.Current = previous;
+                try { File.Delete(request); } catch { }
             }
         }
 
@@ -768,6 +872,8 @@ namespace LoonarCompass
                 case "Loonar Compass is working with the project": return lang == "de" ? "Loonar Compass arbeitet mit dem Projekt" : lang == "fr" ? "Loonar Compass travaille sur le projet" : "Loonar Compass pracuje na projekcie";
                 case "Loonar Compass closed": return lang == "de" ? "Loonar Compass geschlossen" : lang == "fr" ? "Loonar Compass fermé" : "Loonar Compass zamknięty";
                 case "Loonar Compass was closed.": return lang == "de" ? "Loonar Compass wurde geschlossen." : lang == "fr" ? "Loonar Compass a été fermé." : "Loonar Compass został zamknięty.";
+                case "Loonar Compass stopped this deletion:": return lang == "de" ? "Loonar Compass hat dieses Löschen gestoppt:" : lang == "fr" ? "Loonar Compass a arrêté cette suppression :" : "Loonar Compass zatrzymał to usunięcie:";
+                case "No decision of the guard in time: the deletion goes ahead.": return lang == "de" ? "Keine Entscheidung des Wächters rechtzeitig: das Löschen wird ausgeführt." : lang == "fr" ? "Pas de décision du gardien à temps : la suppression a lieu." : "Strażnik nie zdecydował na czas: usunięcie zostaje wykonane.";
                 case "Loonar Compass did not open its window.": return lang == "de" ? "Loonar Compass hat sein Fenster nicht geöffnet." : lang == "fr" ? "Loonar Compass n'a pas ouvert sa fenêtre." : "Loonar Compass nie otworzył okna.";
             }
             return english;

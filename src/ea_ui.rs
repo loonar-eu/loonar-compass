@@ -46,6 +46,11 @@ fn with_running_ea<T: Send + 'static>(timeout: Duration, f: impl FnOnce(&Disp) -
 
 static ROT_NAME: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
+/// The name this Compass tab is registered under (hand-over files with the add-in); `None` outside a tab of EA.
+pub fn rot_name() -> Option<&'static str> {
+    ROT_NAME.get().map(String::as_str)
+}
+
 /// Compass in a tab of EA: the name under which that EA's add-in registered its repository (`--ea-rot`).
 pub fn set_rot_name(name: &str) {
     let _ = ROT_NAME.set(name.to_string());
