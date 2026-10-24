@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a bug from the application (fastest)
+    url: https://loonar.eu/docs/latest/en/
+    about: In Loonar Compass use "Report a problem with this answer" under an answer or the "Report a bug" view. The answer, steps and screenshots go to the maintainer privately.
+  - name: Private report by e-mail
+    url: https://loonar.eu/legal/
+    about: For reports with confidential information.

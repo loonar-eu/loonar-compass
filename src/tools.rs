@@ -31,13 +31,20 @@ impl Approver {
         Self { mode, ask, approved_in_turn: Cell::new(false) }
     }
 
+    /// Asks the user (the answer is counted in the usage statistics: asked, accepted, rejected).
+    fn ask_user(&self, summary: &str) -> bool {
+        let accepted = (self.ask)(summary.to_string());
+        crate::telemetry::approval(accepted);
+        accepted
+    }
+
     fn confirm(&self, summary: &str) -> Result<()> {
         let must_ask = match self.mode {
             ApprovalMode::Auto => false,
             ApprovalMode::Ask => true,
             ApprovalMode::Plan => !self.approved_in_turn.get(),
         };
-        if must_ask && !(self.ask)(summary.to_string()) {
+        if must_ask && !self.ask_user(summary) {
             bail!("{}", crate::i18n::tr("the user rejected this change; nothing was saved"));
         }
         self.approved_in_turn.set(true);
@@ -47,7 +54,7 @@ impl Approver {
     /// Destructive changes (deleting, moving, copying whole packages) ask also in `plan` mode after an earlier
     /// approval in the same answer: the plan the user approved may not have shown them.
     fn confirm_destructive(&self, summary: &str) -> Result<()> {
-        if self.mode != ApprovalMode::Auto && !(self.ask)(summary.to_string()) {
+        if self.mode != ApprovalMode::Auto && !self.ask_user(summary) {
             bail!("{}", crate::i18n::tr("the user rejected this change; nothing was saved"));
         }
         self.approved_in_turn.set(true);
@@ -56,7 +63,7 @@ impl Approver {
 
     /// Consent regardless of the mode (also in auto) for a risky change of the model (deleting elements with relationships).
     fn confirm_risky(&self, summary: &str) -> Result<()> {
-        if !(self.ask)(summary.to_string()) {
+        if !self.ask_user(summary) {
             bail!("{}", crate::i18n::tr("the user rejected this change; nothing was saved"));
         }
         self.approved_in_turn.set(true);
@@ -65,7 +72,7 @@ impl Approver {
 
     /// Consent regardless of the mode (also in auto): for actions that send content outside the application and the model.
     fn confirm_always(&self, summary: &str) -> Result<()> {
-        if !(self.ask)(summary.to_string()) {
+        if !self.ask_user(summary) {
             bail!("{}", crate::i18n::tr("the user rejected this operation; nothing was sent"));
         }
         Ok(())

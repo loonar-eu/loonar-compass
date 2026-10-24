@@ -159,6 +159,7 @@ mod tests {
             include_str!("relang.rs"),
             include_str!("../installer/src/main.rs"),
             include_str!("check.rs"),
+            include_str!("telemetry.rs"),
             include_str!("claude.rs"),
             include_str!("model_db.rs"),
             include_str!("ops.rs"),

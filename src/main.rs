@@ -4,6 +4,7 @@
 //! Attachments: drag files from Explorer and the browser; limit 10 MB per file, 5 files per message.
 
 mod check;
+mod telemetry;
 mod claude;
 mod cmdb;
 mod com;
@@ -165,6 +166,8 @@ const CHANGELOG_EN: &str = include_str!("../CHANGELOG.en.md");
 const THIRD_PARTY_NOTICES: &str = include_str!("../THIRD-PARTY-NOTICES.txt");
 /// Support the project (the "Support" view opens this page).
 const DONATE_URL: &str = "https://suppi.pl/loonar";
+/// The public list of issues and ideas (bug reports from the application land there).
+const ISSUES_URL: &str = "https://github.com/loonar-eu/loonar-compass/issues";
 /// Source code of the application.
 const SOURCE_URL: &str = "https://github.com/loonar-eu/loonar-compass";
 /// License text ("About" tab).
@@ -234,6 +237,7 @@ mod icons {
     pub const MEMORY: &str = "\u{E8F1}";
     pub const REPORT: &str = "\u{E939}";
     pub const HEART: &str = "\u{EB51}";
+    pub const STATS: &str = "\u{E9D2}";
     pub const AUDIT: &str = "\u{E8A5}";
     pub const TEMPLATES: &str = "\u{E8B7}";
     pub const ADD: &str = "\u{E710}";
@@ -422,8 +426,12 @@ fn info_ui(ui: &mut egui::Ui) {
         ui.label("·");
         ui.hyperlink_to(crate::i18n::tr("Source code on GitHub"), SOURCE_URL);
         ui.label("·");
+        ui.hyperlink_to(crate::i18n::tr("Issues and ideas"), ISSUES_URL);
+        ui.label("·");
         ui.hyperlink_to("loonar.eu", "https://loonar.eu");
     });
+    ui.add_space(8.0);
+    install_id_row(ui);
     ui.add_space(8.0);
     ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. Atlassian, Confluence and Jira are trademarks of Atlassian. Microsoft, Windows, Word and Excel are trademarks of the Microsoft group of companies. PostgreSQL is a registered trademark of the PostgreSQL Community Association. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.")).small().color(theme::MUTED)).wrap());
     ui.add_space(16.0);
@@ -444,6 +452,22 @@ fn info_ui(ui: &mut egui::Ui) {
     if ui.button(crate::i18n::tr("Show licenses of the components")).clicked() {
         open_third_party_notices();
     }
+}
+
+/// The installation id with a copy button: quoted when creating an issue or an idea on GitHub.
+fn install_id_row(ui: &mut egui::Ui) {
+    let id = telemetry::install_id();
+    if id.is_empty() {
+        return;
+    }
+    ui.horizontal_wrapped(|ui| {
+        ui.label(crate::i18n::tr("Installation id:"));
+        ui.label(egui::RichText::new(&id).monospace());
+        if ui.small_button(crate::i18n::tr("Copy")).clicked() {
+            ui.ctx().copy_text(id.clone());
+        }
+    });
+    ui.label(egui::RichText::new(crate::i18n::tr("Give it when you create an issue or an idea on GitHub. It is random and says nothing about you or your computer.")).small().color(theme::HINT));
 }
 
 /// "Support the project" view: the application is free; voluntary support goes through Suppi.
@@ -645,6 +669,39 @@ enum View {
     Audit,
     Report,
     Info,
+    Stats,
+}
+
+/// The name of a view in the usage statistics.
+fn view_name(view: View) -> &'static str {
+    match view {
+        View::Chat => "chat",
+        View::Support => "support",
+        View::Settings => "settings",
+        View::Changelog => "changelog",
+        View::Memory => "memory",
+        View::Templates => "templates",
+        View::Audit => "audit",
+        View::Report => "report",
+        View::Info => "info",
+        View::Stats => "statistics",
+    }
+}
+
+/// The Statistics view and the first-start notice.
+#[derive(Default)]
+struct Stats {
+    /// Work done once, in the first frame (the start options are known then).
+    started: bool,
+    /// The notice "statistics are on" has not been answered yet.
+    notice_open: bool,
+    /// The view was loaded: what was sent, what today looks like.
+    loaded: bool,
+    sent: Vec<(String, String, String)>,
+    today: String,
+    status: String,
+    last_view: Option<View>,
+    next_send: Option<std::time::Instant>,
 }
 
 /// Settings form fields. An empty secret means "unchanged".
@@ -773,6 +830,13 @@ struct Contact {
     newsletter_email: String,
     newsletter_on: bool,
     newsletter_status: String,
+    /// The reported answer of the assistant (question, answer, steps): sent privately, only the author sees it.
+    context: String,
+    include_context: bool,
+    /// Send by e-mail (private) instead of the public issue on GitHub.
+    via_email: bool,
+    /// The address of the issue created by the last report.
+    issue_url: String,
     /// Photos attached to the report and their thumbnails (in the same order).
     files: Vec<report::File>,
     thumbnails: Vec<egui::TextureHandle>,
@@ -804,6 +868,8 @@ impl Contact {
 
 struct App {
     contact: Contact,
+    /// Usage statistics: the view and the first-start notice.
+    stats: Stats,
     /// Moving memory and templates to the new language: whether it is pending, the result in progress, the last message.
     relang_pending: bool,
     relang_rx: Option<mpsc::Receiver<Result<String, String>>>,
@@ -982,6 +1048,14 @@ impl App {
             missing.push(crate::i18n::tr("EA account password@@in-sentence"));
         }
 
+        // Usage statistics: on unless switched off in the settings or by a policy; the first start shows a notice.
+        let saved = std::fs::read_to_string(&props_path).map(|t| config::parse_properties(&t)).unwrap_or_default();
+        let telemetry_on = saved.get("telemetry.enabled").is_none_or(|v| v != "false");
+        if let Some(dir) = props_path.parent() {
+            telemetry::init(dir, telemetry_on);
+        }
+        let telemetry_notice = telemetry_on && telemetry::policy_block().is_none() && !saved.contains_key("telemetry.notice");
+
         let (view, status) = if let Some(error) = load_error {
             (View::Settings, crate::i18n::fmt("The settings file {0} contains an error: {1}. Correct the value and save the card again.", &[props_path.display().to_string(), error]))
         } else if cfg.is_none() {
@@ -1012,7 +1086,8 @@ impl App {
             .unwrap_or_default();
         let (settings_tx, settings_rx) = mpsc::channel();
         Self {
-            contact: Contact { technical: true, ..Default::default() },
+            contact: Contact { technical: true, include_context: true, ..Default::default() },
+            stats: Stats { notice_open: telemetry_notice, ..Default::default() },
             relang_pending: false,
             relang_rx: None,
             relang_message: String::new(),
@@ -1084,6 +1159,7 @@ impl App {
                 "templates" => View::Templates,
                 "report" => View::Report,
                 "support" => View::Support,
+                "statistics" => View::Stats,
                 _ => View::Chat,
             };
         }
@@ -3004,21 +3080,30 @@ impl App {
     }
 
     /// "Report a bug" view: a form with photos, handed over to the Windows mail program (Simple MAPI).
+    /// "Report a bug": a public issue on GitHub (default) or an e-mail to the author. Opened from the chat under an
+    /// answer, the report already carries that answer (privately).
     fn report_ui(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
-        // Sending result from the background thread.
+        // Sending result from the background thread: the address of the new issue, or a message about the e-mail.
         if let Some(rx) = &self.contact.sending {
             if let Ok(result) = rx.try_recv() {
                 self.contact.sending = None;
                 match result {
                     Ok(message) => {
-                        self.contact.status = message;
+                        if message.starts_with("https://github.com/") {
+                            self.contact.issue_url = message;
+                            self.contact.status = crate::i18n::tr("Thank you! The report is on GitHub, where you can follow what happens with it:").into();
+                        } else {
+                            self.contact.issue_url.clear();
+                            self.contact.status = message;
+                        }
                         self.contact.subject.clear();
                         self.contact.body.clear();
+                        self.contact.context.clear();
                         self.contact.files.clear();
                         self.contact.thumbnails.clear();
                     }
-                    Err(e) => self.contact.status = crate::i18n::fmt("Could not prepare the message: {0}", &[(e).to_string()]),
+                    Err(e) => self.contact.status = crate::i18n::fmt("Could not send the report: {0}", &[(e).to_string()]),
                 }
             } else {
                 ctx.request_repaint_after(std::time::Duration::from_millis(200));
@@ -3037,23 +3122,36 @@ impl App {
             }
         }
 
+        let via_email = self.contact.via_email;
         ui.label(egui::RichText::new(crate::i18n::tr("Report a bug")).font(egui::FontId::new(24.0, egui::FontFamily::Name(markdown::BOLD_FAMILY.into()))));
         ui.add_space(2.0);
-        ui.add(egui::Label::new(
-            egui::RichText::new(crate::i18n::fmt("Describe what happened and what should have happened, and attach screenshots with the problem marked. \"Send report\" opens a ready-made message to the author ({0}) with the images attached in your mail program: all you have to do is send it.", &[report::TO.to_string()]))
-            .color(theme::MUTED),
-        ).wrap());
+        let intro = if via_email {
+            crate::i18n::fmt("Describe what happened and what should have happened, and attach screenshots with the problem marked. \"Send report\" opens a ready-made message to the author ({0}) with the images attached in your mail program: all you have to do is send it.", &[report::TO.to_string()])
+        } else {
+            crate::i18n::tr("Describe what is wrong. The report becomes a public issue on GitHub, where you can follow what happens with it. Public: the title, your description and the technical information. Only the author sees the screenshots, the reported answer and your e-mail address.").to_string()
+        };
+        ui.add(egui::Label::new(egui::RichText::new(intro).color(theme::MUTED)).wrap());
         ui.add_space(4.0);
         ui.add(egui::Label::new(
             egui::RichText::new(crate::i18n::tr("The report (description, screenshots, optional technical information and your e-mail address) goes to Loonar Mariusz Głowacki and is used only to answer and improve the application; it is kept for up to 2 years after the matter is closed. Remove personal and confidential data from the screenshots before sending."))
                 .small()
                 .color(theme::MUTED),
         ).wrap());
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.hyperlink_to(egui::RichText::new(crate::i18n::tr("Privacy policy")).small(), privacy_url());
+            ui.label(egui::RichText::new("·").small());
+            ui.hyperlink_to(egui::RichText::new(crate::i18n::tr("Issues and ideas")).small(), ISSUES_URL);
         });
         ui.add_space(14.0);
-        let technical = crate::i18n::fmt("Loonar Compass {0}\nSystem: {1}\nModel: {2}\nApproval mode: {3}\nLast message: {4}", &[app_version().to_string(), (windows_version_cached()).to_string(), (self.cfg.as_ref().map(|c| c.ai_model().to_string()).unwrap_or_default()).to_string(), (self.cfg.as_ref().map(|c| c.approval_mode.as_str()).unwrap_or("-")).to_string(), (self.status).to_string()]);
+        let install = telemetry::install_id();
+        let ai_model = self.cfg.as_ref().map(|c| c.ai_model().to_string()).unwrap_or_default();
+        let approval = self.cfg.as_ref().map(|c| c.approval_mode.as_str()).unwrap_or("-").to_string();
+        let failed_steps = self.steps.iter().filter(|s| matches!(&s.result, Some((false, _, _)))).count();
+        // Public technical information: no names from the model, no paths, no addresses.
+        let technical_public = crate::i18n::fmt("Loonar Compass {0}\nSystem: {1}\nAI model: {2}\nApproval mode: {3}\nSteps in the last answer: {4} (failed: {5})\nInstallation: {6}", &[
+            app_version().to_string(), windows_version_cached().to_string(), ai_model.clone(), approval.clone(), self.steps.len().to_string(), failed_steps.to_string(), install.clone(),
+        ]);
+        let technical_email = crate::i18n::fmt("Loonar Compass {0}\nSystem: {1}\nModel: {2}\nApproval mode: {3}\nLast message: {4}", &[app_version().to_string(), (windows_version_cached()).to_string(), ai_model, approval, (self.status).to_string()]);
         let sending = self.contact.sending.is_some();
         let c = &mut self.contact;
         let mut remove = None;
@@ -3065,6 +3163,11 @@ impl App {
             .inner_margin(egui::Margin::symmetric(18.0, 16.0))
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
+                ui.horizontal_wrapped(|ui| {
+                    ui.radio_value(&mut c.via_email, false, crate::i18n::tr("Public issue on GitHub (recommended)"));
+                    ui.radio_value(&mut c.via_email, true, crate::i18n::tr("E-mail to the author (private)"));
+                });
+                ui.add_space(8.0);
                 ui.label(crate::i18n::tr("Subject"));
                 ui.add(egui::TextEdit::singleline(&mut c.subject).hint_text(egui::RichText::new(crate::i18n::tr("e.g. The assistant did not add a step to the subprocess")).color(theme::HINT)).desired_width(f32::INFINITY));
                 ui.add_space(8.0);
@@ -3072,9 +3175,20 @@ impl App {
                 ui.add(
                     egui::TextEdit::multiline(&mut c.body)
                         .hint_text(egui::RichText::new(crate::i18n::tr("What you were doing, what happened, what you expected. You can paste the error text from the chat.")).color(theme::HINT))
-                        .desired_rows(7)
+                        .desired_rows(5)
                         .desired_width(f32::INFINITY),
                 );
+                if !c.via_email {
+                    ui.label(egui::RichText::new(crate::i18n::tr("The subject and the description are public: do not put confidential information in them.")).small().color(theme::HINT));
+                }
+                if !c.context.is_empty() {
+                    ui.add_space(8.0);
+                    ui.checkbox(&mut c.include_context, crate::i18n::tr("Attach the reported answer: your question, the answer and the steps (only the author sees it)"));
+                    egui::CollapsingHeader::new(egui::RichText::new(crate::i18n::tr("Show what is attached")).small()).id_salt("report_context").show(ui, |ui| {
+                        let shown: String = c.context.chars().take(6000).collect();
+                        ui.add(egui::Label::new(egui::RichText::new(shown).monospace().small().color(theme::MUTED)).wrap());
+                    });
+                }
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
                     ui.label(crate::i18n::tr("Images"));
@@ -3104,7 +3218,11 @@ impl App {
                 ui.label(crate::i18n::tr("Your email address for replies (optional)"));
                 ui.add(egui::TextEdit::singleline(&mut c.reply_to).hint_text(egui::RichText::new(crate::i18n::tr("e.g. john.smith@example.com")).color(theme::HINT)).desired_width(320.0));
                 ui.add_space(8.0);
-                ui.checkbox(&mut c.technical, crate::i18n::tr("Include technical information (application version, system, model, approval mode, last message; no passwords or keys)"));
+                if c.via_email {
+                    ui.checkbox(&mut c.technical, crate::i18n::tr("Include technical information (application version, system, model, approval mode, last message; no passwords or keys)"));
+                } else {
+                    ui.checkbox(&mut c.technical, crate::i18n::tr("Include technical information (public): version, Windows, AI model, approval mode, number of steps, installation id"));
+                }
             });
         if let Some(i) = remove {
             c.files.remove(i);
@@ -3130,21 +3248,30 @@ impl App {
             c.thumbnails.push(texture);
         }
         ui.add_space(12.0);
-        let mut body = c.body.trim().to_string();
-        if !c.reply_to.trim().is_empty() {
-            body.push_str(&crate::i18n::fmt("\n\nContact: {0}", &[(c.reply_to.trim()).to_string()]));
-        }
-        if c.technical {
-            body.push_str(&format!("\n\n---\n{technical}"));
-        }
-        let subject = format!("[{} {}] {}", config::APP_NAME, app_version(), if c.subject.trim().is_empty() { crate::i18n::tr("Bug report") } else { c.subject.trim() });
+        let context = if c.include_context && !c.context.is_empty() { Some(c.context.clone()) } else { None };
+        let reply = c.reply_to.trim().to_string();
         ui.horizontal(|ui| {
-            let label = if sending { crate::i18n::tr("Waiting for the mail program…") } else { crate::i18n::tr("Send report") };
+            let label = if sending {
+                if c.via_email { crate::i18n::tr("Waiting for the mail program…") } else { crate::i18n::tr("Sending…") }
+            } else {
+                crate::i18n::tr("Send report")
+            };
             let send = egui::Button::new(egui::RichText::new(label).color(egui::Color32::WHITE)).fill(theme::NAV).stroke(egui::Stroke::NONE);
             if ui.add_enabled(!sending, send).clicked() {
                 if c.body.trim().is_empty() {
                     c.status = crate::i18n::tr("First describe what happened.").into();
-                } else {
+                } else if c.via_email {
+                    let mut body = c.body.trim().to_string();
+                    if !reply.is_empty() {
+                        body.push_str(&crate::i18n::fmt("\n\nContact: {0}", &[reply.clone()]));
+                    }
+                    if let Some(context) = &context {
+                        body.push_str(&format!("\n\n---\n{context}"));
+                    }
+                    if c.technical {
+                        body.push_str(&format!("\n\n---\n{technical_email}"));
+                    }
+                    let subject = format!("[{} {}] {}", config::APP_NAME, app_version(), if c.subject.trim().is_empty() { crate::i18n::tr("Bug report") } else { c.subject.trim() });
                     let (tx, rx) = mpsc::channel();
                     let files = c.files.clone();
                     let wake = ctx.clone();
@@ -3154,6 +3281,27 @@ impl App {
                     });
                     c.sending = Some(rx);
                     c.status = crate::i18n::tr("Opening the message in your mail program…").into();
+                } else {
+                    let mut private = context.clone().unwrap_or_default();
+                    if !reply.is_empty() {
+                        private = crate::i18n::fmt("Contact: {0}\n\n{1}", &[reply.clone(), private]);
+                    }
+                    let bug = telemetry::BugReport {
+                        title: if c.subject.trim().is_empty() { crate::i18n::tr("Bug report").to_string() } else { c.subject.trim().to_string() },
+                        description: c.body.trim().to_string(),
+                        technical: c.technical.then(|| technical_public.clone()),
+                        private: Some(private).filter(|p| !p.trim().is_empty()),
+                        images: c.files.clone(),
+                    };
+                    let (tx, rx) = mpsc::channel();
+                    let wake = ctx.clone();
+                    std::thread::spawn(move || {
+                        let _ = tx.send(telemetry::send_bug_report(&bug).map_err(|e| format!("{e:#}")));
+                        wake.request_repaint();
+                    });
+                    c.sending = Some(rx);
+                    c.issue_url.clear();
+                    c.status = crate::i18n::tr("Sending the report…").into();
                 }
             }
             if sending {
@@ -3163,6 +3311,201 @@ impl App {
         if !c.status.is_empty() {
             ui.add_space(6.0);
             ui.add(egui::Label::new(egui::RichText::new(&c.status).color(theme::MUTED)).wrap());
+        }
+        if !c.issue_url.is_empty() {
+            ui.hyperlink_to(&c.issue_url, &c.issue_url);
+        }
+    }
+
+    /// "Report a problem with this answer" in the chat: the report with the question, the answer and its steps
+    /// (the steps only for the last answer, the one they belong to) and the images of the answer.
+    fn report_answer(&mut self, index: usize) {
+        let messages = &self.session.messages;
+        let Some(answer) = messages.get(index) else { return };
+        let question = messages[..index].iter().rev().find(|m| m.role == "user").map(|m| m.text.clone()).unwrap_or_default();
+        let last_answer = messages.iter().rposition(|m| m.role == "assistant") == Some(index);
+        let mut context = format!("{}\n{}\n\n{}\n{}", crate::i18n::tr("Question:"), question.trim(), crate::i18n::tr("Answer:"), answer.text.trim());
+        if last_answer && !self.steps.is_empty() {
+            context.push_str(&format!("\n\n{}\n", crate::i18n::tr("Steps:")));
+            for step in &self.steps {
+                let (mark, detail) = match &step.result {
+                    Some((true, detail, _)) => ("ok", detail.as_str()),
+                    Some((false, detail, _)) => ("FAILED", detail.as_str()),
+                    None => ("…", ""),
+                };
+                context.push_str(&format!("- [{mark}] {} {}\n", step.text, detail));
+            }
+        }
+        let images: Vec<PathBuf> = self
+            .cfg
+            .as_ref()
+            .map(|cfg| answer.attachments.iter().filter(|a| is_image(a)).take(3).map(|a| cfg.attachments_dir.join(a)).collect())
+            .unwrap_or_default();
+        let c = &mut self.contact;
+        c.context = context.chars().take(30_000).collect();
+        c.include_context = true;
+        c.via_email = false;
+        c.subject = crate::i18n::tr("Wrong answer of the assistant").into();
+        c.body.clear();
+        c.status.clear();
+        c.issue_url.clear();
+        c.files.clear();
+        c.thumbnails.clear();
+        for path in images {
+            c.add_file_from_path(&path);
+        }
+        telemetry::event("report_from_answer");
+        self.view = View::Report;
+    }
+
+    /// Usage statistics: the setup and the session at the start, a send of ended days a minute after the start and
+    /// then every hour, the views opened and the notice at the first start.
+    fn telemetry_tick(&mut self, ctx: &egui::Context) {
+        if !self.stats.started {
+            self.stats.started = true;
+            telemetry::event(if ea::in_ea_tab() { "session_ea_tab" } else { "session_standalone" });
+            if let Some(cfg) = &self.cfg {
+                let mcp = std::fs::read_to_string(cfg.base_dir.join("mcp_servers.json"))
+                    .ok()
+                    .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+                    .and_then(|v| v["servers"].as_array().map(Vec::len))
+                    .unwrap_or(0);
+                telemetry::setup(telemetry::setup_of(cfg, ea::in_ea_tab(), mcp, agents::load(&cfg.base_dir).len()));
+            }
+        }
+        let now = std::time::Instant::now();
+        match self.stats.next_send {
+            None => self.stats.next_send = Some(now + std::time::Duration::from_secs(60)),
+            Some(when) if now >= when => {
+                self.stats.next_send = Some(now + std::time::Duration::from_secs(3600));
+                let cfg = self.cfg.clone();
+                std::thread::spawn(move || {
+                    let team_off = cfg.as_ref().and_then(hub::team_policy).is_some_and(|p| p["telemetry"] == serde_json::Value::Bool(false));
+                    telemetry::send_due(team_off);
+                });
+            }
+            Some(when) => ctx.request_repaint_after(when.saturating_duration_since(now)),
+        }
+        if self.stats.last_view != Some(self.view) {
+            self.stats.last_view = Some(self.view);
+            telemetry::view(view_name(self.view));
+        }
+        if self.stats.notice_open {
+            let mut answer: Option<bool> = None;
+            let mut details = false;
+            egui::Window::new(crate::i18n::tr("Usage statistics"))
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.set_max_width(480.0);
+                    ui.add(egui::Label::new(crate::i18n::tr("Loonar Compass sends anonymous usage statistics once a day: which functions were used and how often they failed, the application version and the kind of setup. Never the content of conversations, names from the model, file paths or server addresses. This shows what to improve first. Everything that was sent is in the Usage statistics view, where you can also switch it off at any time.")).wrap());
+                    ui.add_space(10.0);
+                    ui.horizontal(|ui| {
+                        if ui.button(crate::i18n::tr("Keep on")).clicked() {
+                            answer = Some(true);
+                        }
+                        if ui.button(crate::i18n::tr("Switch off")).clicked() {
+                            answer = Some(false);
+                        }
+                        if ui.link(crate::i18n::tr("Show details")).clicked() {
+                            details = true;
+                        }
+                    });
+                });
+            if details {
+                answer = Some(true);
+                self.view = View::Stats;
+            }
+            if let Some(on) = answer {
+                self.stats.notice_open = false;
+                self.set_telemetry(on);
+            }
+        }
+    }
+
+    /// Switches the statistics on or off and remembers it (also that the first-start notice was answered).
+    fn set_telemetry(&mut self, on: bool) {
+        telemetry::set_enabled(on);
+        let saved = config::save_properties(&self.props_path, &[("telemetry.enabled", on.to_string()), ("telemetry.notice", "shown".to_string())]);
+        self.stats.status = match saved {
+            Err(e) => crate::i18n::fmt("Could not save settings: {0}", &[(e).to_string()]),
+            Ok(()) if on => crate::i18n::tr("Statistics are on.").into(),
+            Ok(()) => crate::i18n::tr("Statistics are off; the days not sent yet were deleted.").into(),
+        };
+        self.stats.loaded = false;
+    }
+
+    /// The "Usage statistics" view: the switch, the installation id, today so far and what was sent in 30 days.
+    fn stats_ui(&mut self, ui: &mut egui::Ui) {
+        if !self.stats.loaded {
+            self.stats.loaded = true;
+            self.stats.sent = telemetry::sent_records();
+            self.stats.today = telemetry::today_preview().map(|v| serde_json::to_string_pretty(&v).unwrap_or_default()).unwrap_or_default();
+        }
+        let bold = |size: f32| egui::FontId::new(size, egui::FontFamily::Name(markdown::BOLD_FAMILY.into()));
+        ui.add_space(10.0);
+        ui.label(egui::RichText::new(crate::i18n::tr("Usage statistics")).font(bold(24.0)));
+        ui.add_space(6.0);
+        ui.add(egui::Label::new(crate::i18n::tr("Once a day Compass sends a summary of the previous day: how often each function of the assistant was used and how often it failed, answers, AI service errors, approvals, views opened, tokens, the application version, Windows version, the interface language and the kind of setup (model source, AI provider and model family, approval mode, whether Jira, Confluence, the hub, MCP servers and event agents are set up). It never sends the content of conversations, names or ids from the model, file paths, server addresses, error messages or user names. The summaries are public, so everybody can see what is collected.")).wrap());
+        ui.horizontal_wrapped(|ui| {
+            ui.hyperlink_to(crate::i18n::tr("Published statistics"), telemetry::STATS_URL);
+            ui.label("·");
+            ui.hyperlink_to(crate::i18n::tr("Privacy policy"), privacy_url());
+        });
+        ui.add_space(12.0);
+        match telemetry::policy_block() {
+            Some(why) => {
+                ui.add(egui::Label::new(egui::RichText::new(crate::i18n::fmt("Switched off by a policy of your organisation ({0}).", &[why])).color(theme::MUTED)).wrap());
+            }
+            None => {
+                let mut on = telemetry::enabled();
+                if ui.checkbox(&mut on, crate::i18n::tr("Send anonymous usage statistics (once a day)")).changed() {
+                    self.set_telemetry(on);
+                }
+                ui.label(egui::RichText::new(crate::i18n::tr("Organisations can switch them off for everybody: the environment variable LOONAR_TELEMETRY=0, the registry value Telemetry = 0 (DWORD) under HKLM\\SOFTWARE\\Policies\\Loonar\\Compass, or \"telemetry\": false in the policy of the team hub.")).small().color(theme::HINT));
+            }
+        }
+        if !self.stats.status.is_empty() {
+            ui.label(egui::RichText::new(&self.stats.status).color(theme::MUTED));
+        }
+        let error = telemetry::last_error();
+        if !error.is_empty() {
+            ui.add(egui::Label::new(egui::RichText::new(crate::i18n::fmt("The last send failed: {0}. The days wait for the next try.", &[error])).small().color(theme::MUTED)).wrap());
+        }
+        ui.add_space(10.0);
+        install_id_row(ui);
+        if ui.small_button(crate::i18n::tr("New identifier")).on_hover_text(crate::i18n::tr("Later days can no longer be joined with the earlier ones.")).clicked() {
+            telemetry::new_install_id();
+            self.stats.loaded = false;
+        }
+        ui.add_space(14.0);
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new(crate::i18n::tr("Today so far (sent tomorrow)")).font(bold(16.0)));
+            if ui.small_button(crate::i18n::tr("Refresh")).clicked() {
+                self.stats.loaded = false;
+            }
+        });
+        let today = if self.stats.today.is_empty() { crate::i18n::tr("Nothing counted yet today.").to_string() } else { self.stats.today.clone() };
+        egui::Frame::none().fill(theme::SIDEBAR).rounding(8.0).inner_margin(egui::Margin::same(10.0)).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.add(egui::Label::new(egui::RichText::new(today).monospace().small()).wrap());
+        });
+        ui.add_space(14.0);
+        ui.label(egui::RichText::new(crate::i18n::tr("Sent in the last 30 days")).font(bold(16.0)));
+        if self.stats.sent.is_empty() {
+            ui.label(egui::RichText::new(crate::i18n::tr("Nothing has been sent yet.")).color(theme::MUTED));
+        }
+        for (day, sent, json) in &self.stats.sent {
+            egui::CollapsingHeader::new(crate::i18n::fmt("{0} – sent {1}", &[day.clone(), sent.clone()])).id_salt(("sent_day", day)).show(ui, |ui| {
+                if ui.small_button(crate::i18n::tr("Copy")).clicked() {
+                    ui.ctx().copy_text(json.clone());
+                }
+                egui::Frame::none().fill(theme::SIDEBAR).rounding(8.0).inner_margin(egui::Margin::same(10.0)).show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.add(egui::Label::new(egui::RichText::new(json).monospace().small()).wrap());
+                });
+            });
         }
     }
 
@@ -4076,6 +4419,11 @@ fn run_turn_with(
     allowed: Option<&[&str]>,
 ) -> anyhow::Result<()> {
     let tool_ctx = tools::ToolContext { cfg, approver };
+    if allowed.is_some() {
+        telemetry::event("event_agent_run");
+    } else {
+        telemetry::turn();
+    }
     let client = claude::ClaudeClient::from_config(cfg, cfg.claude_max_tokens)?;
     let mut msgs = history_to_api(messages, &cfg.attachments_dir)?;
     let mut tools = tools::definitions();
@@ -4111,10 +4459,12 @@ fn run_turn_with(
         let resp = match client.send_value(&system, &msgs, Some(&tools)) {
             Ok(resp) => resp,
             Err(e) => {
+                telemetry::ai_error();
                 emit(WorkerEvent::StepEnd { ok: false, detail: shorten(&format!("{e:#}"), 200) });
                 return Err(e);
             }
         };
+        telemetry::tokens(resp["usage"]["input_tokens"].as_u64().unwrap_or(0), resp["usage"]["output_tokens"].as_u64().unwrap_or(0));
         let planned: Vec<&str> = resp["content"]
             .as_array()
             .map(|blocks| blocks.iter().filter(|b| b["type"] == "tool_use").filter_map(|b| b["name"].as_str()).collect())
@@ -4170,6 +4520,7 @@ fn run_turn_with(
             } else {
                 tools::run(name, &block["input"], &tool_ctx)
             };
+            telemetry::tool(name, outcome.is_ok());
             emit(match &outcome {
                 Ok(output) => WorkerEvent::StepEnd { ok: true, detail: tool_result_summary(name, &output.text) },
                 Err(e) => WorkerEvent::StepEnd { ok: false, detail: shorten(&format!("{e:#}"), 200) },
@@ -4663,11 +5014,13 @@ impl eframe::App for App {
 
     /// Closing the window: the EA session first, so the EA process does not stay in the background holding a license.
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        telemetry::flush();
         ea::shutdown();
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_dictionary();
+        self.telemetry_tick(ctx);
         // In a window of EA: a click in Compass takes the keyboard (EA keeps it after the user switched docked panels).
         if ea::in_ea_tab() {
             use raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -4785,6 +5138,7 @@ impl eframe::App for App {
                             (View::Audit, icons::AUDIT, crate::i18n::tr("Model audit log")),
                             (View::Changelog, icons::CHANGELOG, crate::i18n::tr("Changelog")),
                             (View::Report, icons::REPORT, crate::i18n::tr("Report a bug")),
+                            (View::Stats, icons::STATS, crate::i18n::tr("Usage statistics")),
                             (View::Support, icons::HEART, crate::i18n::tr("Support the project")),
                             (View::Info, icons::INFO, crate::i18n::tr("About")),
                         ] {
@@ -4831,6 +5185,11 @@ impl eframe::App for App {
                     let info = crate::i18n::tr("About");
                     if nav_button(ui, icons::INFO, &fallback_of(info), info, self.view == View::Info, None) {
                         self.view = View::Info;
+                    }
+                    ui.add_space(4.0);
+                    let stats = crate::i18n::tr("Usage statistics");
+                    if nav_button(ui, icons::STATS, &fallback_of(stats), stats, self.view == View::Stats, None) {
+                        self.view = View::Stats;
                     }
                     ui.add_space(4.0);
                     let support = crate::i18n::tr("Support the project");
@@ -5104,6 +5463,14 @@ impl eframe::App for App {
                     page_scroll().show(ui, |ui| {
                         ui.set_max_width(900.0);
                         self.memory_ui(ui);
+                    });
+                });
+            }
+            View::Stats => {
+                egui::CentralPanel::default().frame(page_frame()).show(ctx, |ui| {
+                    page_scroll().show(ui, |ui| {
+                        ui.set_max_width(860.0);
+                        self.stats_ui(ui);
                     });
                 });
             }
@@ -5453,6 +5820,8 @@ impl eframe::App for App {
                 // Confluence page: copying the code to the clipboard and the images folder.
                 let mut copy_page_request: Option<String> = None;
                 let mut page_folder_request: Option<String> = None;
+                // "Report a problem with this answer" under an answer: the index of the message.
+                let mut report_answer: Option<usize> = None;
 
                 let mut open_conn_empty = false;
                 let mut confirm_request = false;
@@ -5514,7 +5883,7 @@ impl eframe::App for App {
                         .stick_to_bottom(true)
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
-                            for m in &self.session.messages {
+                            for (index, m) in self.session.messages.iter().enumerate() {
                                 let is_user = m.role == "user";
                                 // The failure note is saved in the language of that moment: check all languages (the UI language may have changed).
                                 let failed = !is_user && i18n::Lang::ALL.iter().any(|lang| m.text.starts_with(i18n::tr_in(*lang, "Could not finish")));
@@ -5651,10 +6020,17 @@ impl eframe::App for App {
                                 // Message time: small grey text under it, on the same side as the message
                                 // (under an assistant response aligned with the text, not with the icon).
                                 let time = message_time(&m.created);
-                                if !time.is_empty() {
+                                if !time.is_empty() || !is_user {
                                     ui.with_layout(layout, |ui| {
                                         ui.add_space(if is_user { 20.0 } else { 34.0 });
                                         ui.label(egui::RichText::new(time).small().color(theme::HINT));
+                                        if !is_user {
+                                            ui.add_space(8.0);
+                                            let report = egui::Button::new(egui::RichText::new(crate::i18n::tr("Report a problem with this answer")).small().color(theme::HINT)).frame(false);
+                                            if ui.add(report).on_hover_text(crate::i18n::tr("Opens a bug report with this answer, your question and the steps already filled in: just say what is wrong.")).clicked() {
+                                                report_answer = Some(index);
+                                            }
+                                        }
                                     });
                                 }
                                 ui.add_space(if is_user { 14.0 } else { 18.0 });
@@ -5769,6 +6145,9 @@ impl eframe::App for App {
                 }
                 if let Some(id) = edit_request {
                     self.open_diagram_editor(ctx, id);
+                }
+                if let Some(index) = report_answer {
+                    self.report_answer(index);
                 }
                 if let Some(id) = miro_request {
                     self.open_miro(ctx, id);
