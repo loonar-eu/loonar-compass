@@ -46,6 +46,7 @@ impl Config {
         }
         let text = |k: &str| v[k].as_str().map(str::trim).unwrap_or("").to_string();
         let issuer = text("issuer").trim_end_matches('/').to_string();
+        let adfs = issuer.to_lowercase().ends_with("/adfs");
         let client_id = text("client_id");
         let redirect_uri = text("redirect_uri");
         if issuer.is_empty() || client_id.is_empty() || redirect_uri.is_empty() {
@@ -76,7 +77,10 @@ impl Config {
             issuer,
             client_id,
             redirect_uri,
-            scopes: v["scopes"].as_str().map(str::trim).filter(|s| !s.is_empty()).unwrap_or("openid profile email").to_string(),
+            // AD FS puts the groups into the ID token only with "allatclaims": added by default for an AD FS issuer.
+            scopes: v["scopes"].as_str().map(str::trim).filter(|s| !s.is_empty()).map(String::from).unwrap_or_else(|| {
+                if adfs { "openid profile email allatclaims".into() } else { "openid profile email".into() }
+            }),
             groups_claim: v["groups_claim"].as_str().map(str::trim).filter(|s| !s.is_empty()).unwrap_or("groups").to_string(),
             name_claims,
             roles,
@@ -335,6 +339,11 @@ mod tests {
         assert!(who(json!(["Domain Users"])).is_err(), "no group of the hub = no access");
         assert_eq!(identity_of(&c, &json!({ "preferred_username": "bartek", "groups": ["compass-viewers"] })).unwrap().name, "bartek");
         assert!(Config::from_json(&json!({ "issuer": "http://adfs.lab.local/adfs", "client_id": "c", "redirect_uri": "https://h/auth/callback" })).is_err(), "http only on this computer");
+        // AD FS sends the groups only with allatclaims: the default scopes of an AD FS issuer include it.
+        let scopes = |issuer: &str| Config::from_json(&json!({ "issuer": issuer, "client_id": "c", "redirect_uri": "https://h/auth/callback" })).unwrap().unwrap().scopes;
+        assert_eq!(scopes("https://adfs.lab.local/adfs"), "openid profile email allatclaims");
+        assert_eq!(scopes("https://kc.lab.local/realms/compass"), "openid profile email");
+        assert_eq!(Config::from_json(&json!({ "issuer": "https://adfs.lab.local/adfs/", "client_id": "c", "redirect_uri": "https://h/auth/callback", "scopes": "openid" })).unwrap().unwrap().scopes, "openid", "given scopes win");
         assert!(Config::from_json(&Value::Null).unwrap().is_none());
     }
 
