@@ -1227,6 +1227,27 @@ compass-hub --service-uninstall</pre>
 </ul>
 <pre>{ elements(type: "Component", limit: 20) { name stereotype taggedValues { name value } connectors { type target { name } } } }</pre>
 
+<h3>Klucze AI, Jira i Confluence na hubie</h3>
+<p>Hub może trzymać klucze Claude i konta Jira oraz Confluence zespołu, tak żeby ludzie nie mieli ich na swoich komputerach. Klucze są sekretami huba (zmienne <code>LOONAR_SECRET_&lt;NAZWA&gt;</code> albo pliki <code>LOONAR_SECRET_&lt;NAZWA&gt;_FILE</code>), a w <code>hub.json</code> wskazuje się, kto którego używa:</p>
+<pre>"ai": {
+  "keys": [
+    {"for": "anna.architekt@lab.local", "secret": "claude_key_anna"},
+    {"for": "role:architect", "secret": "claude_key_team"},
+    {"for": "*", "secret": "claude_key_team"}
+  ],
+  "limits": [
+    {"for": "role:viewer", "tokens_per_day": 50000},
+    {"for": "*", "tokens_per_day": 300000, "tokens_per_month": 5000000}
+  ],
+  "models": ["claude-haiku-5-5", "claude-sonnet-5-5"]
+},
+"policy": {"ai_via_hub": true, "jira_via_hub": true, "confluence_via_hub": true, "web_access": false}</pre>
+<ul>
+  <li><b>keys</b> – klucz dla osoby (nazwa z huba albo UPN konta firmowego), dla roli (<code>role:viewer</code>, <code>role:architect</code>, <code>role:admin</code>) albo dla wszystkich (<code>*</code>); wygrywa pierwszy pasujący wpis dla osoby, potem dla roli, potem <code>*</code>. Kto nie ma klucza, dostaje odmowę.</li>
+  <li><b>limits</b> – tokeny (wejście + wyjście) na dzień i na miesiąc, w tej samej kolejności. Zużycie każdej osoby widać w zakładce <b>Users</b> (dziś i w tym miesiącu); szczegóły są w <code>ai_usage.jsonl</code>.</li>
+  <li><b>models</b> – opcjonalnie: tylko te modele.</li>
+  <li><b>Polityka</b>: <code>"ai_via_hub": true</code> – Compass pyta Claude przez hub (bez własnego klucza); <code>"jira_via_hub"</code> i <code>"confluence_via_hub"</code> – Compass korzysta z Jiry i Confluence przez hub, kontem z sekcji <code>integrations</code> (viewer tylko czyta, każda zmiana trafia do audytu z nazwą osoby), a projekt i przestrzeń zespołu są domyślne.</li>
+</ul>
 <h3>Zasady komputera: wymuszenie huba (GPO, Intune)</h3>
 <p>Polityka zespołu w hubie działa u tych, którzy są do niego podłączeni. Żeby obowiązywała wszystkich, dział IT ustawia <b>zasady komputera</b> w kluczu <code>HKLM\SOFTWARE\Policies\Loonar\Compass</code> (dla komputera) albo <code>HKCU\SOFTWARE\Policies\Loonar\Compass</code> (dla użytkownika), przez zasady grupy (GPO) albo Intune. Zwykły użytkownik nie może ich zmienić. Zasady tylko zaostrzają ustawienia:</p>
 <ul>

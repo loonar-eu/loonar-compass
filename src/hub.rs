@@ -30,6 +30,8 @@ use std::time::{Duration, Instant};
 
 pub const DEFAULT_LISTEN: &str = "127.0.0.1:8730";
 const MAX_BODY: usize = 4 * 1024 * 1024;
+/// A request to the AI gateway may carry images and documents of the conversation.
+const MAX_AI_BODY: usize = 32 * 1024 * 1024;
 /// Request line and headers together.
 const MAX_HEAD: usize = 16 * 1024;
 const MAX_HEADERS: usize = 100;
@@ -96,6 +98,8 @@ pub struct Hub {
     change_lock: Mutex<()>,
     /// The team's Jira and Confluence ("integrations" in hub.json); tokens from the hub's secrets.
     integrations: Value,
+    /// The AI gateway ("ai" in hub.json): which key each person, role or everybody uses.
+    ai: Value,
     /// Wrong tokens per address.
     failures: Mutex<HashMap<IpAddr, Vec<Instant>>>,
     /// Questions per user.
@@ -221,6 +225,7 @@ pub fn load(file: &Path) -> Result<(Hub, String)> {
         file: file.to_path_buf(), dir, sources, users: Mutex::new(users), sessions: Mutex::new(HashMap::new()), policy: Mutex::new(value["policy"].clone()),
         audit_lock: Mutex::new(()), ask_lock: Mutex::new(()), change_lock: Mutex::new(()), failures: Mutex::new(HashMap::new()), asks: Mutex::new(HashMap::new()),
         integrations: value["integrations"].clone(),
+        ai: value["ai"].clone(),
         oidc: match crate::oidc::Config::from_json(&value["oidc"])? {
             // A provider without a client secret (a public client with PKCE) works too.
             Some(config) => Some(crate::oidc::Provider::new(config, crate::config::secrets::get(crate::config::secrets::OIDC_CLIENT_SECRET).unwrap_or_default())),
@@ -329,6 +334,7 @@ struct Head {
     token: String,
     /// The last address of X-Forwarded-For (the one the proxy in front of the hub added).
     forwarded: Option<IpAddr>,
+    content_type: String,
 }
 
 fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Head, HttpError> {
@@ -364,7 +370,7 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
     let mut parts = first.split_whitespace();
     let method = parts.next().unwrap_or("").to_string();
     let target = parts.next().unwrap_or("/").to_string();
-    let (mut length, mut token, mut forwarded) = (0usize, String::new(), None);
+    let (mut length, mut token, mut forwarded, mut content_type) = (0usize, String::new(), None, String::new());
     for count in 0.. {
         if count > MAX_HEADERS {
             return Err(deny(431, "too many headers"));
@@ -378,15 +384,18 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
                 "content-length" => length = value.trim().parse().map_err(|_| deny(400, "Content-Length"))?,
                 "transfer-encoding" => return Err(deny(501, "Transfer-Encoding is not supported")),
                 "authorization" => token = value.trim().strip_prefix("Bearer ").unwrap_or("").trim().to_string(),
+                // Compass talking to the hub's AI gateway sends the hub token as an Anthropic key.
+                "x-api-key" if token.is_empty() => token = value.trim().to_string(),
+                "content-type" => content_type = value.trim().to_string(),
                 "x-forwarded-for" => forwarded = value.split(',').next_back().and_then(|a| forwarded_address(a.trim())),
                 _ => {}
             }
         }
     }
-    if length > MAX_BODY {
+    if length > MAX_AI_BODY || (length > MAX_BODY && !target.starts_with("/ai/")) {
         return Err(deny(413, "request body too large"));
     }
-    Ok(Head { method, target, length, token, forwarded })
+    Ok(Head { method, target, length, token, forwarded, content_type })
 }
 
 /// An address of X-Forwarded-For: "10.1.2.3", "2001:db8::1", or with a port as IIS/ARR sends it by default
@@ -653,6 +662,7 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
         Ok(body) => body,
         Err(HttpError(status, message)) => return respond(&stream, status, "application/json; charset=utf-8", json!({ "error": message }).to_string().as_bytes()),
     };
+    let content_type = head.content_type.clone();
     let request = Request { method: head.method, path, query, token: head.token, body };
     // An account with a password set by someone else (the default one, a reset) can only change it or sign out.
     if must_change && !matches!((request.method.as_str(), request.path.as_str()), ("GET", "/api/me") | ("POST", "/api/password") | ("POST", "/api/logout")) {
@@ -676,6 +686,25 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
                 Err(HttpError(status, message)) => respond(&stream, status, "application/json; charset=utf-8", json!({ "error": message }).to_string().as_bytes()),
             };
         }
+    }
+    // The team's services for Compass: Claude with the team's key, Jira and Confluence with the team's account.
+    let gateway = if request.method == "POST" && request.path == "/ai/v1/messages" {
+        Some(hub.ai_gateway(&user, role, &request.body))
+    } else if let Some(rest) = request.path.strip_prefix("/proxy/jira") {
+        Some(hub.service_proxy("jira", &user, role, &request.method, rest, &request.query, &request.body, &content_type))
+    } else if let Some(rest) = request.path.strip_prefix("/proxy/confluence") {
+        Some(hub.service_proxy("confluence", &user, role, &request.method, rest, &request.query, &request.body, &content_type))
+    } else {
+        None
+    };
+    if let Some(result) = gateway {
+        return match result {
+            Ok((status, content_type, bytes)) => respond(&stream, status, &content_type, &bytes),
+            Err(HttpError(status, message)) => {
+                log(&hub.dir, &format!("{} {} ({user}) -> {status} {message}", request.method, request.path));
+                respond(&stream, status, "application/json; charset=utf-8", json!({ "type": "error", "error": { "type": "hub_error", "message": message } }).to_string().as_bytes())
+            }
+        };
     }
     match route(hub, &request, user.to_string(), role) {
         Ok((status, value)) => respond(&stream, status, "application/json; charset=utf-8", value.to_string().as_bytes()),
@@ -919,6 +948,10 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
             let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": "", "summary": "password changed", "ok": true }));
             Ok((200, json!({ "ok": true })))
         }
+        ("GET", ["api", "users", "ai"]) => {
+            require(role, Role::Admin)?;
+            Ok((200, json!(hub.ai_usage_all())))
+        }
         ("GET", ["api", "users", "company"]) => {
             require(role, Role::Admin)?;
             Ok((200, json!(hub.company_accounts())))
@@ -1052,7 +1085,17 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
             let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": id, "summary": format!("Confluence page {page_id}: {title}"), "ok": true }));
             Ok((201, json!({ "title": title, "url": page_url, "created": created })))
         }
-        ("GET", ["api", "policy"]) => Ok((200, hub.policy.lock().unwrap().clone())),
+        ("GET", ["api", "policy"]) => {
+            let mut policy = hub.policy.lock().unwrap().clone();
+            // Compass working through the hub needs the team's project and space as its defaults.
+            if policy["jira_via_hub"] == true {
+                policy["jira_project"] = hub.integrations["jira"]["project"].clone();
+            }
+            if policy["confluence_via_hub"] == true {
+                policy["confluence_space"] = hub.integrations["confluence"]["space"].clone();
+            }
+            Ok((200, policy))
+        }
         ("PUT", ["api", "policy"]) => {
             require(role, Role::Admin)?;
             let policy = body()?;
@@ -1492,6 +1535,120 @@ fn package_page(cfg: &AppConfig, model: &str, package: i64) -> Result<(String, S
 }
 
 impl Hub {
+    /// The AI gateway: the hub keeps the Claude keys ("ai": {"keys": [{"for": "<user>" | "role:<role>" | "*", "secret": "<name>"}]}),
+    /// Compass sends its requests here with the hub token. The first entry for the person, then for their role,
+    /// then for everybody gives the key (a hub secret, e.g. LOONAR_SECRET_CLAUDE_KEY_TEAM). Usage per person goes to
+    /// ai_usage.jsonl. The request is passed to Anthropic as it is.
+    fn ai_gateway(&self, user: &str, role: Role, body: &[u8]) -> Result<(u16, String, Vec<u8>), HttpError> {
+        let keys = self.ai["keys"].as_array().cloned().unwrap_or_default();
+        let wanted = [user.to_lowercase(), format!("role:{}", role.name()), "*".to_string()];
+        let secret = wanted.iter().find_map(|w| keys.iter().find(|k| k["for"].as_str().is_some_and(|f| f.trim().to_lowercase() == *w)).and_then(|k| k["secret"].as_str()))
+            .ok_or_else(|| deny(403, crate::i18n::tr("the hub has no AI key for you: ask the administrator of the hub")))?;
+        let key = crate::config::secrets::get(secret).map_err(|e| HttpError(500, format!("{e:#}")))?;
+        // Limits ("ai": {"limits": [{"for": …, "tokens_per_day": N, "tokens_per_month": N}]}): the first entry for the
+        // person, their role or everybody; input and output tokens counted from ai_usage.jsonl.
+        let limits = self.ai["limits"].as_array().cloned().unwrap_or_default();
+        if let Some(limit) = wanted.iter().find_map(|w| limits.iter().find(|l| l["for"].as_str().is_some_and(|f| f.trim().to_lowercase() == *w))) {
+            let (day, month) = self.ai_usage_of(user);
+            if limit["tokens_per_day"].as_u64().is_some_and(|max| day >= max) {
+                return Err(deny(429, crate::i18n::fmt("your AI limit for today is used up ({0} tokens); it renews tomorrow or ask the administrator of the hub", &[day.to_string()])));
+            }
+            if limit["tokens_per_month"].as_u64().is_some_and(|max| month >= max) {
+                return Err(deny(429, crate::i18n::fmt("your AI limit for this month is used up ({0} tokens); ask the administrator of the hub", &[month.to_string()])));
+            }
+        }
+        let request: Value = serde_json::from_slice(body).map_err(|_| deny(400, "the request is not JSON"))?;
+        if let Some(models) = self.ai["models"].as_array() {
+            let model = request["model"].as_str().unwrap_or("");
+            if !models.iter().any(|m| m.as_str() == Some(model)) {
+                return Err(deny(403, crate::i18n::fmt("the model {0} is not allowed by the hub", &[model.to_string()])));
+            }
+        }
+        let http = reqwest::blocking::Client::builder().timeout(Duration::from_secs(600)).build().map_err(|e| HttpError(500, e.to_string()))?;
+        let response = http.post(crate::claude::API_URL).header("x-api-key", key).header("anthropic-version", crate::claude::API_VERSION)
+            .header("content-type", "application/json").body(body.to_vec()).send().map_err(|e| deny(502, format!("Anthropic: {e}")))?;
+        let status = response.status().as_u16();
+        let bytes = response.bytes().map_err(|e| deny(502, format!("Anthropic: {e}")))?.to_vec();
+        if let Ok(answer) = serde_json::from_slice::<Value>(&bytes) {
+            let usage = json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "model": request["model"], "status": status,
+                "input_tokens": answer["usage"]["input_tokens"], "output_tokens": answer["usage"]["output_tokens"] });
+            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(self.dir.join("ai_usage.jsonl")) {
+                let _ = writeln!(f, "{usage}");
+            }
+        }
+        Ok((status, "application/json".into(), bytes))
+    }
+
+    /// Tokens (input + output) the person used today and this month, from ai_usage.jsonl.
+    fn ai_usage_of(&self, user: &str) -> (u64, u64) {
+        let text = std::fs::read_to_string(self.dir.join("ai_usage.jsonl")).unwrap_or_default();
+        let now = chrono::Local::now();
+        let (today, this_month) = (now.format("%Y-%m-%d").to_string(), now.format("%Y-%m").to_string());
+        let (mut day, mut month) = (0u64, 0u64);
+        for entry in text.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok()).filter(|e| e["user"].as_str().is_some_and(|u| u.eq_ignore_ascii_case(user))) {
+            let time = entry["time"].as_str().unwrap_or("");
+            let tokens = entry["input_tokens"].as_u64().unwrap_or(0) + entry["output_tokens"].as_u64().unwrap_or(0);
+            if time.starts_with(&this_month) {
+                month += tokens;
+                if time.starts_with(&today) {
+                    day += tokens;
+                }
+            }
+        }
+        (day, month)
+    }
+
+    /// The AI usage of every person, today and this month (the Users tab of the administrator).
+    fn ai_usage_all(&self) -> Vec<Value> {
+        let text = std::fs::read_to_string(self.dir.join("ai_usage.jsonl")).unwrap_or_default();
+        let mut people: Vec<String> = text.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok()).filter_map(|e| e["user"].as_str().map(String::from)).collect();
+        people.sort_by_key(|p| p.to_lowercase());
+        people.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+        people.iter().map(|p| {
+            let (day, month) = self.ai_usage_of(p);
+            json!({ "user": p, "tokens_today": day, "tokens_month": month })
+        }).collect()
+    }
+
+    /// Jira or Confluence through the hub, with the team's account from "integrations": only their REST API, viewers
+    /// only read, every change is in the audit trail with the person who made it.
+    #[allow(clippy::too_many_arguments)]
+    fn service_proxy(&self, kind: &str, user: &str, role: Role, method: &str, rest: &str, query: &HashMap<String, String>, body: &[u8], content_type: &str) -> Result<(u16, String, Vec<u8>), HttpError> {
+        let s = &self.integrations[kind];
+        let base = s["url"].as_str().unwrap_or("").trim().trim_end_matches('/').to_string();
+        if base.is_empty() {
+            return Err(deny(404, crate::i18n::fmt("the hub has no {0}: the administrator sets \"integrations\" in hub.json", &[kind.to_string()])));
+        }
+        if !rest.starts_with("/rest/") || rest.contains("..") {
+            return Err(deny(403, "only the REST API goes through the hub"));
+        }
+        if method != "GET" && role == Role::Viewer {
+            return Err(deny(403, crate::i18n::tr("a viewer only reads")));
+        }
+        let secret = if kind == "jira" { crate::config::secrets::JIRA_TOKEN } else { crate::config::secrets::CONFLUENCE_TOKEN };
+        let token = crate::config::secrets::get(secret).map_err(|e| HttpError(500, format!("{e:#}")))?;
+        let mut url = reqwest::Url::parse(&format!("{base}{rest}")).map_err(|_| deny(400, "invalid address"))?;
+        for (k, v) in query {
+            url.query_pairs_mut().append_pair(k, v);
+        }
+        let http = reqwest::blocking::Client::builder().timeout(Duration::from_secs(60)).build().map_err(|e| HttpError(500, e.to_string()))?;
+        let method_value = reqwest::Method::from_bytes(method.as_bytes()).map_err(|_| deny(405, "method"))?;
+        let mut request = http.request(method_value, url).header("Accept", "application/json").header("X-Atlassian-Token", "no-check");
+        let account = s["user"].as_str().unwrap_or("").trim();
+        request = if account.is_empty() { request.bearer_auth(&token) } else { request.basic_auth(account, Some(&token)) };
+        if !body.is_empty() {
+            request = request.header("Content-Type", if content_type.is_empty() { "application/json" } else { content_type }).body(body.to_vec());
+        }
+        let response = request.send().map_err(|e| deny(502, format!("{kind}: {e}")))?;
+        let status = response.status().as_u16();
+        let response_type = response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|c| c.to_str().ok()).unwrap_or("application/json").to_string();
+        let bytes = response.bytes().map_err(|e| deny(502, format!("{kind}: {e}")))?.to_vec();
+        if method != "GET" {
+            let _ = self.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": "", "summary": format!("{kind}: {method} {rest}"), "ok": status < 400 }));
+        }
+        Ok((status, response_type, bytes))
+    }
+
     /// The team's Jira from hub.json ("integrations": {"jira": {"url", "user", "project", "issue_type"}}); token: secret jira_token.
     fn create_issue(&self, summary: &str, description: &str) -> Result<(String, String), HttpError> {
         let j = &self.integrations["jira"];
@@ -1708,6 +1865,22 @@ pub fn required(cfg: &AppConfig) -> Result<(), String> {
     }
 }
 
+/// The hub address and token when the team policy routes this service through the hub ("ai_via_hub",
+/// "jira_via_hub", "confluence_via_hub"): Compass then uses the team's key or account kept on the hub.
+pub fn via_hub(cfg: &AppConfig, service: &str) -> Option<(String, String)> {
+    let policy = team_policy(cfg)?;
+    if policy[format!("{service}_via_hub").as_str()] != true {
+        return None;
+    }
+    let client = Client::from_config(cfg)?;
+    Some((client.url, client.token))
+}
+
+/// A default the team policy gives (e.g. "jira_project", "confluence_space").
+pub fn team_default(cfg: &AppConfig, key: &str) -> Option<String> {
+    team_policy(cfg)?[key].as_str().map(str::trim).filter(|v| !v.is_empty()).map(String::from)
+}
+
 /// The approval mode in force: the one from the settings, made stricter by the team policy ("min_approval").
 pub fn effective_mode(cfg: &AppConfig) -> crate::config::ApprovalMode {
     // The settings already carry the computer's minimum (MachinePolicy::apply).
@@ -1875,6 +2048,42 @@ mod tests {
         assert_eq!(forwarded_address("[2001:db8::1]:51234"), Some("2001:db8::1".parse().unwrap()));
         assert_eq!(forwarded_address("2001:db8::1"), Some("2001:db8::1".parse().unwrap()));
         assert_eq!(forwarded_address("unknown"), None);
+    }
+
+    /// The AI gateway and the Jira proxy with real services: `LOONAR_SECRET_CLAUDE_KEY_TEAM=… LOONAR_SECRET_JIRA_TOKEN=…
+    /// LOONAR_TEST_JIRA_URL=… LOONAR_TEST_JIRA_USER=… cargo test hub_gateways -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a Claude key and a Jira account"]
+    fn hub_gateways() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        crate::config::secrets::use_environment();
+        let dir = std::env::temp_dir().join(format!("loonar-hub-gw-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0", "sources": [],
+            "users": [{ "name": "anna", "token": "anna-token-0123456789", "role": "architect" }, { "name": "bartek", "token": "bartek-token-0123456789", "role": "viewer" }],
+            "integrations": { "jira": { "url": std::env::var("LOONAR_TEST_JIRA_URL").unwrap(), "user": std::env::var("LOONAR_TEST_JIRA_USER").unwrap(), "project": "LC" } },
+            "ai": { "keys": [{ "for": "role:architect", "secret": "claude_key_team" }], "limits": [{ "for": "anna", "tokens_per_day": 1 }] } }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let base = format!("http://{}", rx.recv().unwrap());
+        let http = reqwest::blocking::Client::new();
+        let ask = |key: &str| http.post(format!("{base}/ai/v1/messages")).header("x-api-key", key).header("anthropic-version", "2023-06-01")
+            .json(&json!({ "model": "claude-haiku-5-5", "max_tokens": 50, "messages": [{ "role": "user", "content": "Say OK." }] })).send().unwrap();
+        let first = ask("anna-token-0123456789");
+        assert_eq!(first.status(), 200, "{}", first.text().unwrap_or_default());
+        assert_eq!(ask("anna-token-0123456789").status(), 429, "the daily limit of 1 token is used up");
+        assert_eq!(ask("bartek-token-0123456789").status(), 403, "no key for a viewer");
+        assert_eq!(ask("wrong-token").status(), 401);
+        let usage = std::fs::read_to_string(dir.join("ai_usage.jsonl")).unwrap();
+        assert!(usage.contains("\"user\":\"anna\""), "{usage}");
+        // Jira through the hub: reading works for everybody, writing not for a viewer, nothing outside the REST API.
+        let me = http.get(format!("{base}/proxy/jira/rest/api/3/myself")).bearer_auth("bartek-token-0123456789").send().unwrap();
+        assert_eq!(me.status(), 200);
+        assert_eq!(http.post(format!("{base}/proxy/jira/rest/api/3/issue")).bearer_auth("bartek-token-0123456789").json(&json!({})).send().unwrap().status(), 403);
+        assert_eq!(http.get(format!("{base}/proxy/jira/secure/Dashboard.jspa")).bearer_auth("anna-token-0123456789").send().unwrap().status(), 403);
+        // Compass reads the team's project from the policy.
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// Compass's sign-in may return only to its own one-time address on the loopback.

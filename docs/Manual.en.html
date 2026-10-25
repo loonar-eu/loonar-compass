@@ -1212,6 +1212,27 @@ compass-hub --service-uninstall</pre>
 </ul>
 <pre>{ elements(type: "Component", limit: 20) { name stereotype taggedValues { name value } connectors { type target { name } } } }</pre>
 
+<h3>AI keys, Jira and Confluence on the hub</h3>
+<p>The hub can keep the team's Claude keys and Jira and Confluence accounts, so people do not keep them on their computers. The keys are hub secrets (<code>LOONAR_SECRET_&lt;NAME&gt;</code> variables or <code>LOONAR_SECRET_&lt;NAME&gt;_FILE</code> files), and <code>hub.json</code> says who uses which:</p>
+<pre>"ai": {
+  "keys": [
+    {"for": "anna.architekt@lab.local", "secret": "claude_key_anna"},
+    {"for": "role:architect", "secret": "claude_key_team"},
+    {"for": "*", "secret": "claude_key_team"}
+  ],
+  "limits": [
+    {"for": "role:viewer", "tokens_per_day": 50000},
+    {"for": "*", "tokens_per_day": 300000, "tokens_per_month": 5000000}
+  ],
+  "models": ["claude-haiku-5-5", "claude-sonnet-5-5"]
+},
+"policy": {"ai_via_hub": true, "jira_via_hub": true, "confluence_via_hub": true, "web_access": false}</pre>
+<ul>
+  <li><b>keys</b> – a key for a person (a hub name or the UPN of a company account), for a role (<code>role:viewer</code>, <code>role:architect</code>, <code>role:admin</code>) or for everybody (<code>*</code>); the first entry for the person wins, then for the role, then <code>*</code>. Without a key the request is refused.</li>
+  <li><b>limits</b> – tokens (input + output) per day and per month, in the same order. Each person's usage is shown in the <b>Users</b> tab (today and this month); the details are in <code>ai_usage.jsonl</code>.</li>
+  <li><b>models</b> – optional: only these models.</li>
+  <li><b>Policy</b>: <code>"ai_via_hub": true</code> – Compass asks Claude through the hub (without a key of its own); <code>"jira_via_hub"</code> and <code>"confluence_via_hub"</code> – Compass uses Jira and Confluence through the hub, with the account from the <code>integrations</code> section (a viewer only reads, every change is in the audit trail with the person's name), and the team's project and space are the defaults.</li>
+</ul>
 <h3>Computer policy: enforcing the hub (Group Policy, Intune)</h3>
 <p>The team policy of the hub applies to those connected to it. To make it apply to everyone, IT sets the <b>computer policy</b> in <code>HKLM\SOFTWARE\Policies\Loonar\Compass</code> (for the computer) or <code>HKCU\SOFTWARE\Policies\Loonar\Compass</code> (for the user), through Group Policy or Intune. A normal user cannot change it. The rules only make the settings stricter:</p>
 <ul>

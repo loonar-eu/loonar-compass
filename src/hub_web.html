@@ -125,7 +125,8 @@ h3 { font-size:14px; margin:16px 0 6px; }
     <div id="view-policy" hidden>
       <p class="muted">The team's rules for every Compass connected to this hub, as JSON: <b>min_approval</b> (plan, ask, auto), <b>governance</b> (model check rules),
       <b>event_agents</b> (agents that run in everybody's Compass in EA, the same format as event_agents.json; "mode": "guard" stops deletions), <b>ask_min_role</b>, <b>ask_per_hour</b>,
-      <b>web_access</b> (false switches the assistant's web search and page reading off for everybody), <b>web_allowed_domains</b> (the only domains it may use, e.g. ["learn.microsoft.com", "sparxsystems.com"]), <b>update_check</b> (false: Compass does not check for new versions, when IT updates centrally).</p>
+      <b>web_access</b> (false switches the assistant's web search and page reading off for everybody), <b>web_allowed_domains</b> (the only domains it may use, e.g. ["learn.microsoft.com", "sparxsystems.com"]), <b>update_check</b> (false: Compass does not check for new versions, when IT updates centrally),
+      <b>ai_via_hub</b>, <b>jira_via_hub</b>, <b>confluence_via_hub</b> (true: Compass uses Claude, Jira or Confluence through the hub, with the keys and accounts kept here; keys and limits per person in hub.json, section "ai").</p>
       <textarea id="policytext" rows="22" spellcheck="false" style="width:100%;font-family:Consolas,monospace;font-size:12px"></textarea>
       <div class="row"><button id="policysave">Save the policy</button><span id="policystatus" class="muted"></span></div>
     </div>
@@ -204,7 +205,13 @@ async function loadUsers() {
     list.map(u => '<tr><td>' + esc(u.name) + '</td><td>' + esc(u.role) + '</td><td>' + (u.password ? 'password' : '') + (u.password && u.token ? ' + ' : '') + (u.token ? 'API token' : '') + (u.must_change ? ' <span class="muted">(must change)</span>' : '') +
       '</td><td><button class="ghost" data-act="role" data-name="' + esc(u.name) + '">Role</button> <button class="ghost" data-act="reset" data-name="' + esc(u.name) + '">Reset password</button> <button class="ghost" data-act="token" data-name="' + esc(u.name) + '">New API token</button> <button class="ghost" data-act="del" data-name="' + esc(u.name) + '">Remove</button></td></tr>').join('') + '</table>' +
     '<p class="muted small">An API token is for Compass (Settings → Team) and for MCP clients; it is shown once. A password set here must be changed at the next sign-in.</p>' +
-    '<h3>Company accounts</h3><div id="company"></div>';
+    '<h3>Company accounts</h3><div id="company"></div><h3>AI usage (tokens through the hub)</h3><div id="aiusage"></div>';
+  api('/api/users/ai').then(list => {
+    $('aiusage').innerHTML = list.length ? '<table><tr><th>Person</th><th>Today</th><th>This month</th></tr>' +
+      list.map(u => '<tr><td>' + esc(u.user) + '</td><td>' + u.tokens_today + '</td><td>' + u.tokens_month + '</td></tr>').join('') + '</table>' +
+      '<p class="muted small">Keys and limits per person, role or everybody are set in hub.json, section "ai".</p>'
+      : '<p class="muted">Nobody has used the AI through the hub yet.</p>';
+  }).catch(() => {});
   api('/api/users/company').then(list => {
     $('company').innerHTML = list.length ? '<table><tr><th>Account</th><th>Role at the last sign-in</th><th>Last sign-in</th></tr>' +
       list.map(c => '<tr><td>' + esc(c.name) + '</td><td>' + esc(c.role) + '</td><td>' + esc((c.last_sign_in || '').slice(0, 19).replace('T', ' ')) + '</td></tr>').join('') + '</table>' +

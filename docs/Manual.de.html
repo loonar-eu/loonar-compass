@@ -1218,6 +1218,27 @@ compass-hub --service-uninstall</pre>
 </ul>
 <pre>{ elements(type: "Component", limit: 20) { name stereotype taggedValues { name value } connectors { type target { name } } } }</pre>
 
+<h3>KI-Schlüssel, Jira und Confluence auf dem Hub</h3>
+<p>Der Hub kann die Claude-Schlüssel und die Jira- und Confluence-Konten des Teams verwahren, sodass sie nicht auf den Computern der Leute liegen. Die Schlüssel sind Hub-Geheimnisse (Variablen <code>LOONAR_SECRET_&lt;NAME&gt;</code> oder Dateien <code>LOONAR_SECRET_&lt;NAME&gt;_FILE</code>), und <code>hub.json</code> legt fest, wer welchen nutzt:</p>
+<pre>"ai": {
+  "keys": [
+    {"for": "anna.architekt@lab.local", "secret": "claude_key_anna"},
+    {"for": "role:architect", "secret": "claude_key_team"},
+    {"for": "*", "secret": "claude_key_team"}
+  ],
+  "limits": [
+    {"for": "role:viewer", "tokens_per_day": 50000},
+    {"for": "*", "tokens_per_day": 300000, "tokens_per_month": 5000000}
+  ],
+  "models": ["claude-haiku-5-5", "claude-sonnet-5-5"]
+},
+"policy": {"ai_via_hub": true, "jira_via_hub": true, "confluence_via_hub": true, "web_access": false}</pre>
+<ul>
+  <li><b>keys</b> – ein Schlüssel für eine Person (Hub-Name oder UPN des Firmenkontos), für eine Rolle (<code>role:viewer</code>, <code>role:architect</code>, <code>role:admin</code>) oder für alle (<code>*</code>); es gilt der erste Eintrag für die Person, dann für die Rolle, dann <code>*</code>. Ohne Schlüssel wird die Anfrage abgelehnt.</li>
+  <li><b>limits</b> – Tokens (Eingabe + Ausgabe) pro Tag und Monat, in derselben Reihenfolge. Der Verbrauch jeder Person steht im Tab <b>Users</b> (heute und diesen Monat); Details in <code>ai_usage.jsonl</code>.</li>
+  <li><b>models</b> – optional: nur diese Modelle.</li>
+  <li><b>Richtlinie</b>: <code>"ai_via_hub": true</code> – Compass fragt Claude über den Hub (ohne eigenen Schlüssel); <code>"jira_via_hub"</code> und <code>"confluence_via_hub"</code> – Compass nutzt Jira und Confluence über den Hub mit dem Konto aus <code>integrations</code> (ein Viewer liest nur, jede Änderung steht mit dem Namen der Person im Audit), Projekt und Bereich des Teams sind Standard.</li>
+</ul>
 <h3>Richtlinie des Computers: den Hub erzwingen (Gruppenrichtlinie, Intune)</h3>
 <p>Die Teamrichtlinie des Hubs gilt für alle, die mit ihm verbunden sind. Damit sie für alle gilt, setzt die IT die <b>Richtlinie des Computers</b> in <code>HKLM\SOFTWARE\Policies\Loonar\Compass</code> (für den Computer) oder <code>HKCU\SOFTWARE\Policies\Loonar\Compass</code> (für den Benutzer), über Gruppenrichtlinien oder Intune. Ein normaler Benutzer kann sie nicht ändern. Die Regeln machen die Einstellungen nur strenger:</p>
 <ul>

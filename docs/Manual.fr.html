@@ -1209,6 +1209,27 @@ compass-hub --service-uninstall</pre>
 </ul>
 <pre>{ elements(type: "Component", limit: 20) { name stereotype taggedValues { name value } connectors { type target { name } } } }</pre>
 
+<h3>Clés d'IA, Jira et Confluence sur le hub</h3>
+<p>Le hub peut conserver les clés Claude et les comptes Jira et Confluence de l'équipe, pour que les personnes ne les aient pas sur leur ordinateur. Les clés sont des secrets du hub (variables <code>LOONAR_SECRET_&lt;NOM&gt;</code> ou fichiers <code>LOONAR_SECRET_&lt;NOM&gt;_FILE</code>), et <code>hub.json</code> indique qui utilise laquelle :</p>
+<pre>"ai": {
+  "keys": [
+    {"for": "anna.architekt@lab.local", "secret": "claude_key_anna"},
+    {"for": "role:architect", "secret": "claude_key_team"},
+    {"for": "*", "secret": "claude_key_team"}
+  ],
+  "limits": [
+    {"for": "role:viewer", "tokens_per_day": 50000},
+    {"for": "*", "tokens_per_day": 300000, "tokens_per_month": 5000000}
+  ],
+  "models": ["claude-haiku-5-5", "claude-sonnet-5-5"]
+},
+"policy": {"ai_via_hub": true, "jira_via_hub": true, "confluence_via_hub": true, "web_access": false}</pre>
+<ul>
+  <li><b>keys</b> – une clé pour une personne (nom du hub ou UPN du compte d'entreprise), pour un rôle (<code>role:viewer</code>, <code>role:architect</code>, <code>role:admin</code>) ou pour tous (<code>*</code>) ; la première entrée pour la personne l'emporte, puis pour le rôle, puis <code>*</code>. Sans clé, la requête est refusée.</li>
+  <li><b>limits</b> – jetons (entrée + sortie) par jour et par mois, dans le même ordre. La consommation de chacun s'affiche dans l'onglet <b>Users</b> (aujourd'hui et ce mois-ci) ; détails dans <code>ai_usage.jsonl</code>.</li>
+  <li><b>models</b> – facultatif : seulement ces modèles.</li>
+  <li><b>Politique</b> : <code>"ai_via_hub": true</code> – Compass interroge Claude via le hub (sans clé propre) ; <code>"jira_via_hub"</code> et <code>"confluence_via_hub"</code> – Compass utilise Jira et Confluence via le hub, avec le compte de la section <code>integrations</code> (un viewer ne fait que lire, chaque modification figure dans l'audit avec le nom de la personne), et le projet et l'espace de l'équipe sont les valeurs par défaut.</li>
+</ul>
 <h3>Stratégie de l'ordinateur : imposer le hub (stratégie de groupe, Intune)</h3>
 <p>La politique d'équipe du hub s'applique à ceux qui y sont connectés. Pour qu'elle s'applique à tous, le service informatique définit la <b>stratégie de l'ordinateur</b> dans <code>HKLM\SOFTWARE\Policies\Loonar\Compass</code> (pour l'ordinateur) ou <code>HKCU\SOFTWARE\Policies\Loonar\Compass</code> (pour l'utilisateur), par stratégie de groupe ou Intune. Un utilisateur standard ne peut pas la modifier. Les règles ne font que durcir les paramètres :</p>
 <ul>

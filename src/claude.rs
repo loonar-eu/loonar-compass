@@ -68,6 +68,12 @@ impl ClaudeClient {
         } else {
             Some((cfg.ai_oauth_token_url.trim().to_string(), cfg.ai_oauth_client_id.trim().to_string(), cfg.ai_oauth_scope.trim().to_string(), secrets::get(secrets::AI_OAUTH_SECRET)?))
         };
+        // The team policy may route Claude through the hub (the hub keeps the key): the hub token is the key there.
+        if let Some((hub, token)) = crate::hub::via_hub(cfg, "ai") {
+            let mut client = Self::new(token, cfg.claude_model.clone(), max_tokens, String::new())?.with_effort(&cfg.claude_effort).with_thinking(cfg.show_thinking);
+            client.base_url = format!("{hub}/ai");
+            return Ok(client);
+        }
         // With OAuth2 there may be no API key at all.
         let key = match secrets::get(secrets::CLAUDE_API_KEY) {
             Ok(key) => key,

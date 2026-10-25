@@ -798,11 +798,7 @@ fn trace_requirements(input: &Value, ctx: &ToolContext) -> Result<String> {
         let path = read_path(ctx, file, false)?;
         crate::traceability::read_document(&path)?
     } else if let Some(page) = input["confluence_page"].as_str().filter(|p| !p.trim().is_empty()) {
-        if ctx.cfg.confluence_url.trim().is_empty() {
-            bail!("{}", crate::i18n::tr("Confluence is not configured in the settings"));
-        }
-        let token = crate::config::secrets::get(crate::config::secrets::CONFLUENCE_TOKEN).context(crate::i18n::tr("no Confluence token"))?;
-        let connection = crate::confluence::Connection { base_url: ctx.cfg.confluence_url.clone(), user: ctx.cfg.confluence_user.clone(), token };
+        let connection = confluence_connection(ctx.cfg)?;
         crate::traceability::html_text(&connection.page_body(page)?.1)
     } else {
         input["text"].as_str().filter(|t| !t.trim().is_empty()).with_context(|| crate::i18n::tr("give 'file', 'confluence_page' or 'text'"))?.to_string()
@@ -852,8 +848,11 @@ fn ea_script(input: &Value, ctx: &ToolContext) -> Result<String> {
     }
 }
 
-/// Connection to Jira from the settings.
+/// Connection to Jira from the settings, or through the hub when the team policy says so.
 fn jira(cfg: &AppConfig) -> Result<crate::jira::Connection> {
+    if let Some((hub, token)) = crate::hub::via_hub(cfg, "jira") {
+        return Ok(crate::jira::Connection { base_url: format!("{hub}/proxy/jira"), user: String::new(), token });
+    }
     if cfg.jira_url.trim().is_empty() {
         bail!("{}", crate::i18n::tr("Jira is not configured: enter its address and token in Settings → Jira"));
     }
@@ -869,7 +868,9 @@ fn jira(cfg: &AppConfig) -> Result<crate::jira::Connection> {
 /// New Jira issue: always with the user's consent (the content leaves the application).
 fn jira_create_issue(input: &Value, ctx: &ToolContext) -> Result<String> {
     let connection = jira(ctx.cfg)?;
-    let project = input["project"].as_str().map(str::trim).filter(|p| !p.is_empty()).unwrap_or(ctx.cfg.jira_project.trim()).to_string();
+    let team_project = crate::hub::team_default(ctx.cfg, "jira_project").unwrap_or_default();
+    let own_project = if ctx.cfg.jira_project.trim().is_empty() { team_project.as_str() } else { ctx.cfg.jira_project.trim() };
+    let project = input["project"].as_str().map(str::trim).filter(|p| !p.is_empty()).unwrap_or(own_project).to_string();
     if project.is_empty() {
         bail!("{}", crate::i18n::tr("no Jira project: give 'project' or set the default project in Settings → Jira"));
     }
@@ -959,6 +960,9 @@ fn create_confluence_page(input: &Value, ctx: &ToolContext) -> Result<ToolOutput
 }
 
 fn confluence_connection(cfg: &AppConfig) -> Result<crate::confluence::Connection> {
+    if let Some((hub, token)) = crate::hub::via_hub(cfg, "confluence") {
+        return Ok(crate::confluence::Connection { base_url: format!("{hub}/proxy/confluence"), user: String::new(), token });
+    }
     if cfg.confluence_url.trim().is_empty() {
         bail!("{}", crate::i18n::tr("Confluence is not configured: complete Settings → Confluence (address, space, token)"));
     }
@@ -975,7 +979,9 @@ fn publish_confluence(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
     let (title_line, markdown) = source.split_once('\n').unwrap_or(("", &source));
     let saved_title = title_line.trim().trim_start_matches(TITLE_MARKER).trim_start_matches(LEGACY_TITLE_MARKER).trim_end_matches("-->").trim().to_string();
     let title = input["title"].as_str().map(str::to_string).unwrap_or(saved_title);
-    let space = input["space"].as_str().map(str::to_string).unwrap_or_else(|| ctx.cfg.confluence_space.clone());
+    let space = input["space"].as_str().map(str::to_string).unwrap_or_else(|| {
+        if ctx.cfg.confluence_space.trim().is_empty() { crate::hub::team_default(ctx.cfg, "confluence_space").unwrap_or_default() } else { ctx.cfg.confluence_space.clone() }
+    });
     if space.trim().is_empty() {
         bail!("{}", crate::i18n::tr("specify the Confluence space (space) or set a default one in the settings"));
     }
