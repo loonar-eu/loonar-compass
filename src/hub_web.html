@@ -124,7 +124,8 @@ h3 { font-size:14px; margin:16px 0 6px; }
     <div id="view-users" hidden><div id="users"></div></div>
     <div id="view-policy" hidden>
       <p class="muted">The team's rules for every Compass connected to this hub, as JSON: <b>min_approval</b> (plan, ask, auto), <b>governance</b> (model check rules),
-      <b>event_agents</b> (agents that run in everybody's Compass in EA, the same format as event_agents.json; "mode": "guard" stops deletions), <b>ask_min_role</b>, <b>ask_per_hour</b>.</p>
+      <b>event_agents</b> (agents that run in everybody's Compass in EA, the same format as event_agents.json; "mode": "guard" stops deletions), <b>ask_min_role</b>, <b>ask_per_hour</b>,
+      <b>web_access</b> (false switches the assistant's web search and page reading off for everybody), <b>web_allowed_domains</b> (the only domains it may use, e.g. ["learn.microsoft.com", "sparxsystems.com"]), <b>update_check</b> (false: Compass does not check for new versions, when IT updates centrally).</p>
       <textarea id="policytext" rows="22" spellcheck="false" style="width:100%;font-family:Consolas,monospace;font-size:12px"></textarea>
       <div class="row"><button id="policysave">Save the policy</button><span id="policystatus" class="muted"></span></div>
     </div>

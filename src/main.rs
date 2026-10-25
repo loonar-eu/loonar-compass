@@ -50,6 +50,8 @@ mod model_spell;
 mod traceability;
 mod code_drift;
 mod undo;
+mod web;
+mod update;
 mod estimate;
 mod templates;
 mod tools;
@@ -1146,6 +1148,8 @@ struct Contact {
     newsletter_loaded: bool,
     newsletter_email: String,
     newsletter_on: bool,
+    /// The setting "check for new versions", shown next to the newsletter.
+    update_check: bool,
     newsletter_status: String,
     /// Photos attached to the report and their thumbnails (in the same order).
     files: Vec<report::File>,
@@ -1178,6 +1182,10 @@ impl Contact {
 
 struct App {
     contact: Contact,
+    /// The check for a newer release (started once, in the background) and the release to tell the user about.
+    update_rx: Option<mpsc::Receiver<Option<update::Release>>>,
+    update_started: bool,
+    update: Option<update::Release>,
     /// Moving memory and templates to the new language: whether it is pending, the result in progress, the last message.
     relang_pending: bool,
     relang_rx: Option<mpsc::Receiver<Result<String, String>>>,
@@ -1392,6 +1400,9 @@ impl App {
             .unwrap_or_default();
         let (settings_tx, settings_rx) = mpsc::channel();
         Self {
+            update_rx: None,
+            update_started: false,
+            update: None,
             contact: Contact { technical: true, ..Default::default() },
             relang_pending: false,
             relang_rx: None,
@@ -3718,6 +3729,7 @@ impl App {
             let saved = std::fs::read_to_string(&self.props_path).map(|t| config::parse_properties(&t)).unwrap_or_default();
             self.contact.newsletter_email = saved.get("newsletter.email").cloned().unwrap_or_default();
             self.contact.newsletter_on = saved.get("newsletter.subscribed").is_some_and(|v| v == "true");
+            self.contact.update_check = saved.get("app.update_check").is_none_or(|v| v != "false");
             self.contact.newsletter_loaded = true;
         }
         if let Some(rx) = &self.contact.newsletter_sending {
@@ -3752,6 +3764,13 @@ impl App {
                 ui.end_row();
                 ui.label(crate::i18n::tr("Subscribe"));
                 ui.checkbox(&mut c.newsletter_on, crate::i18n::tr("I want to receive news about new releases"));
+                ui.end_row();
+                ui.label(crate::i18n::tr("In the application"));
+                let mut check = c.update_check;
+                if ui.checkbox(&mut check, crate::i18n::tr("Check once a day whether a new version is available")).on_hover_text(crate::i18n::tr("A plain request to GitHub, without any identifier of this installation; nothing is downloaded or installed by itself. The team hub can switch it off for everybody.")).changed() {
+                    c.update_check = check;
+                    let _ = config::save_properties(&props_path, &[("app.update_check", check.to_string())]);
+                }
                 ui.end_row();
             });
             ui.add_space(4.0);
@@ -4572,6 +4591,7 @@ fn tool_step(name: &str, input: &Value) -> String {
         "ea_api" => crate::i18n::fmt("EA API: {0}", &[input["class"].as_str().unwrap_or("list").to_string()]),
         "model_instructions" => crate::i18n::fmt("Modelling instructions: {0}", &[input["action"].as_str().unwrap_or("read").to_string()]),
         "create_presentation" => crate::i18n::fmt("Preparing the presentation {0}", &[input["file_name"].as_str().unwrap_or("").to_string()]),
+        "web_fetch" => crate::i18n::fmt("🌐 Web page: {0}", &[input["url"].as_str().unwrap_or("").to_string()]),
         "ask_user" => crate::i18n::tr("Questions to you").to_string(),
         other => crate::i18n::fmt("Tool {0}", &[(other).to_string()]),
     }
@@ -4838,7 +4858,34 @@ fn run_turn_with(
                 list.push(task_list_definition());
                 list.push(delegate_definition());
                 // Calculations and analysis in Anthropic's sandbox: only when switched on, only with Claude.
-                if cfg.code_execution && !cfg.uses_openai() {
+                let mut code_execution = cfg.code_execution && !cfg.uses_openai();
+                // The web: only when switched on, and only if the team policy of the hub allows it. With Claude,
+                // Anthropic searches and reads pages; the newer tool versions filter results with their own code, so
+                // the separate sandbox is then left out (two sandboxes confuse the model). OpenAI and compatible
+                // gateways have no web tools of their own: Compass reads the pages the user names (no search).
+                if cfg.web_access {
+                    match hub::web_access(cfg) {
+                        Ok(_) if cfg.uses_openai() => list.push(web::definition()),
+                        Ok(domains) => {
+                            let newer = !cfg.claude_model.contains("haiku");
+                            let (search, fetch) = if newer { ("web_search_20260209", "web_fetch_20260209") } else { ("web_search_20250305", "web_fetch_20250910") };
+                            let mut search = json!({ "type": search, "name": "web_search", "max_uses": 5 });
+                            let mut fetch = json!({ "type": fetch, "name": "web_fetch", "max_uses": 5 });
+                            if !domains.is_empty() {
+                                search["allowed_domains"] = json!(domains);
+                                fetch["allowed_domains"] = json!(domains);
+                            }
+                            list.push(search);
+                            list.push(fetch);
+                            code_execution &= !newer;
+                        }
+                        Err(reason) => {
+                            emit(WorkerEvent::StepStart(crate::i18n::tr("🌐 Web access").into()));
+                            emit(WorkerEvent::StepEnd { ok: false, detail: reason });
+                        }
+                    }
+                }
+                if code_execution {
                     list.push(json!({ "type": "code_execution_20260521", "name": "code_execution" }));
                 }
             }
@@ -4898,6 +4945,28 @@ fn run_turn_with(
             emit(WorkerEvent::Text(text));
         }
 
+        // The web: every search and every page read, as a step (the query or the URL, and what came back).
+        for block in resp["content"].as_array().into_iter().flatten() {
+            match block["type"].as_str().unwrap_or("") {
+                "server_tool_use" if block["name"] == "web_search" => {
+                    emit(WorkerEvent::StepStart(crate::i18n::fmt("🌐 Web search: {0}", &[block["input"]["query"].as_str().unwrap_or("").to_string()])));
+                }
+                "server_tool_use" if block["name"] == "web_fetch" => {
+                    emit(WorkerEvent::StepStart(crate::i18n::fmt("🌐 Web page: {0}", &[block["input"]["url"].as_str().unwrap_or("").to_string()])));
+                }
+                "web_search_tool_result" => {
+                    let found: Vec<String> = block["content"].as_array().into_iter().flatten().filter_map(|r| r["url"].as_str()).map(String::from).take(5).collect();
+                    let error = block["content"]["error_code"].as_str();
+                    emit(WorkerEvent::StepEnd { ok: error.is_none(), detail: error.map(String::from).unwrap_or_else(|| found.join("\n")) });
+                }
+                "web_fetch_tool_result" => {
+                    let error = block["content"]["error_code"].as_str();
+                    let title = block["content"]["content"]["title"].as_str().or(block["content"]["url"].as_str()).unwrap_or("");
+                    emit(WorkerEvent::StepEnd { ok: error.is_none(), detail: error.map(String::from).unwrap_or_else(|| title.to_string()) });
+                }
+                _ => {}
+            }
+        }
         // Code that ran in the sandbox: what it printed, as a step.
         for block in resp["content"].as_array().into_iter().flatten().filter(|b| b["type"].as_str().is_some_and(|t| t.ends_with("code_execution_tool_result"))) {
             let result = &block["content"];
@@ -4960,6 +5029,17 @@ fn run_turn_with(
                 emit(WorkerEvent::StepStart(header));
                 emit(WorkerEvent::StepEnd { ok: true, detail: lines });
                 Ok(tools::ToolOutput::from("The task list is shown to the user. Update it (task_list) when a task starts or is done.".to_string()))
+            } else if name == "web_fetch" {
+                // A page for a provider without its own web tools: only an address the user or a tool result gave.
+                let url = block["input"]["url"].as_str().unwrap_or("");
+                if !web::seen_in_conversation(url, &msgs) {
+                    Err(anyhow::anyhow!("this address is not in the conversation: read only addresses the user gave or a page linked to"))
+                } else {
+                    match hub::web_access(&cfg) {
+                        Ok(domains) => web::fetch(url, &domains).map(tools::ToolOutput::from),
+                        Err(reason) => Err(anyhow::anyhow!(reason)),
+                    }
+                }
             } else if name == "ask_user" {
                 // The questions go to the chat as a form; the user's answers come as the next message.
                 match questions_message(&block["input"]) {
@@ -5465,6 +5545,49 @@ fn row_secret(ui: &mut egui::Ui, label: &str, value: &mut String, stored: bool) 
     ui.end_row();
 }
 
+impl App {
+    /// A newer release: checked once in the background; a bar above the window (in EA: one line in System Output).
+    fn update_bar(&mut self, ctx: &egui::Context) {
+        if !self.update_started {
+            if let Some(cfg) = self.cfg.clone() {
+                self.update_started = true;
+                let (tx, rx) = mpsc::channel();
+                self.update_rx = Some(rx);
+                let repaint = ctx.clone();
+                std::thread::spawn(move || {
+                    let _ = tx.send(update::check(&cfg));
+                    repaint.request_repaint();
+                });
+            }
+        }
+        if let Some(found) = self.update_rx.as_ref().and_then(|rx| rx.try_recv().ok()) {
+            self.update_rx = None;
+            if let Some(release) = found {
+                if ea::in_ea_tab() {
+                    ea_ui::output(&crate::i18n::fmt("Loonar Compass {0} is available: {1}", &[release.version.clone(), release.url.clone()]));
+                } else {
+                    self.update = Some(release);
+                }
+            }
+        }
+        let Some(release) = self.update.clone() else { return };
+        egui::TopBottomPanel::top("update_bar").frame(egui::Frame::none().fill(theme::SURFACE).inner_margin(egui::Margin::symmetric(14.0, 6.0))).show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(crate::i18n::fmt("Loonar Compass {0} is available.", &[release.version.clone()]));
+                if ui.link(crate::i18n::tr("What's new and download")).clicked() {
+                    ctx.open_url(egui::OpenUrl::new_tab(release.url.clone()));
+                }
+                if ui.small_button(crate::i18n::tr("Not now")).clicked() {
+                    if let Some(cfg) = &self.cfg {
+                        update::dismiss(cfg, &release.version);
+                    }
+                    self.update = None;
+                }
+            });
+        });
+    }
+}
+
 impl eframe::App for App {
     /// In a tab of EA the window is a child of EA's window: Windows does not report it as focused, and egui would
     /// then hide the text cursor. It counts as focused there.
@@ -5587,6 +5710,7 @@ impl eframe::App for App {
         self.poll_events(ctx);
         self.poll_background(ctx);
         self.poll_relang(ctx);
+        self.update_bar(ctx);
         let busy = self.busy();
 
         // In a narrow tab of EA: the views as a row of icons at the bottom, the conversations above the chat, no footer.
@@ -6215,6 +6339,15 @@ impl eframe::App for App {
                             if ui.add(egui::Button::new(label).selected(on).frame(false)).on_hover_text(tip).clicked() {
                                 cfg.code_execution = !on;
                                 let _ = config::save_properties(&self.props_path, &[("claude.code_execution", (!on).to_string())]);
+                            }
+                            // The web (search and reading pages through Anthropic): off unless switched on; the team
+                            // policy of the hub can switch it off for everybody (the step of the answer then says so).
+                            let on = cfg.web_access;
+                            let label = egui::RichText::new("🌐").color(if on { theme::NAV } else { theme::HINT });
+                            let tip = if on { crate::i18n::tr("The assistant may search the web and read pages (click to switch off)") } else { crate::i18n::tr("Let the assistant search the web and read pages (the searches go through Anthropic; the team policy of the hub can switch this off)") };
+                            if ui.add(egui::Button::new(label).selected(on).frame(false)).on_hover_text(tip).clicked() {
+                                cfg.web_access = !on;
+                                let _ = config::save_properties(&self.props_path, &[("claude.web_access", (!on).to_string())]);
                             }
                         }
                         if !ea::in_ea_tab() {

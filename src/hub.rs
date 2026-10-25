@@ -1618,6 +1618,21 @@ pub fn last_failure() -> Option<String> {
     LAST_FAILURE.lock().unwrap().clone()
 }
 
+/// Web access as the team policy allows it: Err(reason) when the hub's policy has "web_access": false, otherwise the
+/// domains to allow (the team's "web_allowed_domains" replace the user's own list).
+pub fn web_access(cfg: &AppConfig) -> Result<Vec<String>, String> {
+    let Some(policy) = team_policy(cfg) else {
+        return Ok(cfg.web_domains.clone());
+    };
+    if policy["web_access"] == false {
+        return Err(crate::i18n::tr("the team policy of the hub switches web access off").into());
+    }
+    match policy["web_allowed_domains"].as_array() {
+        Some(list) => Ok(list.iter().filter_map(|d| d.as_str()).map(|d| d.trim().to_lowercase()).filter(|d| !d.is_empty()).collect()),
+        None => Ok(cfg.web_domains.clone()),
+    }
+}
+
 /// The team policy from the hub of the settings (None without a hub or when it does not answer).
 pub fn team_policy(cfg: &AppConfig) -> Option<Value> {
     let client = Client::from_config(cfg)?;

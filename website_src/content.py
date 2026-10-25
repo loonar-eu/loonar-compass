@@ -29,6 +29,7 @@ ICONS = {
  "script": '<path d="M7 3h9l3 3v15H7z"/><path d="M16 3v3h3"/><path d="M10 11l-2 2 2 2M14 11l2 2-2 2"/>',
  "chip": '<rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M10 10h4v4h-4z"/><path d="M9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4"/>',
  "bolt": '<path d="M13 2L5 13h6l-1 9 8-11h-6z"/>',
+ "globe": '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/>',
  "heart": '<path d="M12 20s-7.5-4.6-7.5-10.1A4.2 4.2 0 0 1 12 7.4a4.2 4.2 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z"/>',
 }
 # Brand marks (filled, monochrome): (viewBox, SVG content) - the GitHub mark and the LinkedIn "in" logo.
@@ -37,7 +38,7 @@ MARKS = {
  "github": ("0 0 16 16", '<path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>'),
  "linkedin": ("0 0 24 24", '<path d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.86 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zm1.78 13.02H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/>'),
 }
-FEATURE_ICONS = ["ask","edit","bpmn","layout","lock","check","impact","window","doc","page","memory","lang","trace","rules","undo","team","code","plug","script","chip","bolt"]
+FEATURE_ICONS = ["ask","edit","bpmn","layout","lock","check","impact","window","doc","page","memory","lang","trace","rules","undo","team","code","plug","script","chip","bolt","globe"]
 SEC_ICONS = ["local","key","shield","lock","send","wallet"]
 # FAQ: anchor ids (same in every language), in the order of the `faq` lists below.
 # Every answer is checked against the code, the user guide and the licence of the current release;
@@ -86,6 +87,7 @@ T["en"] = dict(
   ('Scripts, XMI and reports','Writes and runs EA scripts (JScript, VBScript, JavaScript) after your approval, exports and imports packages as XMI, lays diagrams out automatically, adds swimlanes and linked documents, and generates documents from your EA report templates.'),
   ('Any AI model, also local','Claude or OpenAI with your own key, Azure OpenAI in your own tenant, a company AI gateway, or a local model in Ollama or LM Studio — then nothing leaves your computer. You choose the model and the effort level.'),
   ('Event agents in EA','Rules that react while you model: when an element or a diagram is created, an element changes or a relationship is drawn, the assistant checks it and advises in EA’s System Output — for example whether a new component has an owner and a description. Agents read the model; they never change it on their own.'),
+  ('Web search you control','The assistant can search the web and read pages — product documentation, a standard, an article you name — and cite what it found; every search and page shows in the steps. Off by default; with OpenAI it reads only pages whose addresses you give. You can limit it to chosen domains, and the team hub can switch it off for everybody.'),
  ],
  h_h="How it works", h_sub="You stay in charge at every step.",
  steps=[
@@ -288,6 +290,7 @@ T["pl"] = dict(
   ('Skrypty, XMI i raporty','Pisze i po Twojej zgodzie uruchamia skrypty EA (JScript, VBScript, JavaScript), eksportuje i importuje pakiety jako XMI, automatycznie układa diagramy, dodaje tory (swimlanes) i dokumenty powiązane oraz tworzy dokumenty z Twoich szablonów raportów EA.'),
   ('Dowolny model AI, także lokalny','Claude albo OpenAI z Twoim kluczem, Azure OpenAI w Twojej dzierżawie, firmowa bramka AI albo model lokalny w Ollama lub LM Studio — wtedy nic nie opuszcza Twojego komputera. Wybierasz model i poziom wysiłku.'),
   ('Agenci zdarzeń w EA','Reguły, które reagują w trakcie modelowania: gdy powstaje element lub diagram, zmienia się element albo rysujesz relację, asystent to sprawdza i doradza w oknie System Output w EA — np. czy nowy komponent ma właściciela i opis. Agenci czytają model; nigdy nie zmieniają go sami.'),
+  ('Internet pod kontrolą','Asystent może szukać w internecie i czytać strony — dokumentację produktu, normę, artykuł, który wskażesz — i powołać się na to, co znalazł; każde wyszukiwanie i każda strona są widoczne w krokach. Domyślnie wyłączony; z OpenAI czyta tylko strony, których adresy podasz. Możesz ograniczyć go do wybranych domen, a hub zespołu może go wyłączyć wszystkim.'),
  ],
  h_h="Jak to działa", h_sub="Na każdym kroku decydujesz Ty.",
  steps=[
@@ -486,6 +489,7 @@ T["de"] = dict(
   ('Skripte, XMI und Berichte','Schreibt EA-Skripte (JScript, VBScript, JavaScript) und startet sie nach Ihrer Freigabe, exportiert und importiert Pakete als XMI, ordnet Diagramme automatisch an, fügt Swimlanes und verknüpfte Dokumente hinzu und erstellt Dokumente aus Ihren EA-Berichtsvorlagen.'),
   ('Jedes KI-Modell, auch lokal','Claude oder OpenAI mit Ihrem Schlüssel, Azure OpenAI in Ihrem eigenen Tenant, ein KI-Gateway des Unternehmens oder ein lokales Modell in Ollama oder LM Studio – dann verlässt nichts Ihren Rechner. Sie wählen Modell und Aufwandsstufe.'),
   ('Ereignis-Agenten in EA','Regeln, die beim Modellieren reagieren: Entsteht ein Element oder Diagramm, ändert sich ein Element oder zeichnen Sie eine Beziehung, prüft der Assistent das und gibt Hinweise im System Output von EA – etwa ob eine neue Komponente einen Verantwortlichen und eine Beschreibung hat. Agenten lesen das Modell; sie ändern es nie selbst.'),
+  ('Websuche unter Kontrolle','Der Assistent kann im Web suchen und Seiten lesen — Produktdokumentation, eine Norm, einen Artikel, den Sie nennen — und sich auf das Gefundene stützen; jede Suche und jede Seite erscheint in den Schritten. Standardmäßig aus; mit OpenAI liest er nur Seiten, deren Adressen Sie angeben. Sie können ihn auf gewählte Domains begrenzen, und der Team-Hub kann ihn für alle ausschalten.'),
  ],
  h_h="So funktioniert’s", h_sub="Sie behalten bei jedem Schritt die Kontrolle.",
  steps=[
@@ -684,6 +688,7 @@ T["fr"] = dict(
   ('Scripts, XMI et rapports','Écrit des scripts EA (JScript, VBScript, JavaScript) et les exécute après votre accord, exporte et importe des paquetages en XMI, dispose automatiquement les diagrammes, ajoute des couloirs (swimlanes) et des documents liés, et génère des documents à partir de vos modèles de rapports EA.'),
   ('Tout modèle d’IA, même local','Claude ou OpenAI avec votre clé, Azure OpenAI dans votre propre tenant, une passerelle d’IA d’entreprise ou un modèle local dans Ollama ou LM Studio — alors rien ne quitte votre ordinateur. Vous choisissez le modèle et le niveau d’effort.'),
   ('Agents d’événements dans EA','Des règles qui réagissent pendant que vous modélisez : quand un élément ou un diagramme est créé, qu’un élément change ou que vous tracez une relation, l’assistant le vérifie et conseille dans la fenêtre System Output d’EA — par exemple si un nouveau composant a un responsable et une description. Les agents lisent le modèle ; ils ne le modifient jamais d’eux-mêmes.'),
+  ('Recherche web sous contrôle',"L'assistant peut chercher sur le web et lire des pages — documentation produit, norme, article que vous indiquez — et s'appuyer sur ce qu'il a trouvé ; chaque recherche et chaque page apparaissent dans les étapes. Désactivé par défaut ; avec OpenAI, il ne lit que les pages dont vous donnez l'adresse. Vous pouvez le limiter à des domaines choisis, et le hub d'équipe peut le désactiver pour tous."),
  ],
  h_h="Comment ça marche", h_sub="Vous gardez la main à chaque étape.",
  steps=[

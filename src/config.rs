@@ -167,6 +167,13 @@ pub struct AppConfig {
     /// Code execution in Anthropic's sandbox for calculations and data analysis (`claude.code_execution`, off by
     /// default): the data the assistant passes there goes to Anthropic like the rest of the conversation.
     pub code_execution: bool,
+    /// Web search and reading web pages through Anthropic's server tools (`claude.web_access`, off by default; the
+    /// team policy of the hub can switch it off for everybody).
+    pub web_access: bool,
+    /// Checking once a day whether a newer release exists (`app.update_check`, on by default).
+    pub update_check: bool,
+    /// The only domains the assistant may search and read (`claude.web_domains`, comma-separated; empty = any).
+    pub web_domains: Vec<String>,
     /// EA's own connection string for saving through a background EA (`ea.conn`, the text of an EA shortcut): needed
     /// for MySQL and Oracle repositories (EA reaches them through an ODBC data source); built automatically for
     /// PostgreSQL and SQL Server.
@@ -351,6 +358,9 @@ impl AppConfig {
             sharepoint_tenant: get_or("sharepoint.tenant", ""),
             sharepoint_client_id: get_or("sharepoint.client_id", ""),
             code_execution: get_or("claude.code_execution", "false") == "true",
+            web_access: get_or("claude.web_access", "false") == "true",
+            update_check: get_or("app.update_check", "true") == "true",
+            web_domains: get_or("claude.web_domains", "").split(',').map(|d| d.trim().to_lowercase()).filter(|d| !d.is_empty()).collect(),
             claude_url: get_or("claude.url", ""),
             ai_oauth_token_url: get_or("ai.oauth.token_url", ""),
             ai_oauth_client_id: get_or("ai.oauth.client_id", ""),

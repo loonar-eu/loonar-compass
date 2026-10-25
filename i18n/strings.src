@@ -1579,3 +1579,16 @@ company sign-in refused: a local user has the same name ‖ logowanie firmowe od
 company sign-in failed: {0} ‖ logowanie firmowe nie powiodło się: {0} ‖ Firmenanmeldung fehlgeschlagen: {0} ‖ échec de la connexion d'entreprise : {0}
 sign-in blocked: too many wrong sign-ins from this address ‖ logowanie zablokowane: zbyt wiele nieudanych prób z tego adresu ‖ Anmeldung gesperrt: zu viele fehlgeschlagene Anmeldungen von dieser Adresse ‖ connexion bloquée : trop d'échecs depuis cette adresse
 sign-in ‖ logowanie ‖ Anmeldung ‖ connexion
+the team policy of the hub switches web access off ‖ polityka zespołu w hubie wyłącza dostęp do internetu ‖ die Teamrichtlinie des Hubs schaltet den Webzugriff aus ‖ la politique d'équipe du hub désactive l'accès au web
+🌐 Web access ‖ 🌐 Dostęp do internetu ‖ 🌐 Webzugriff ‖ 🌐 Accès au web
+🌐 Web search: {0} ‖ 🌐 Wyszukiwanie w internecie: {0} ‖ 🌐 Websuche: {0} ‖ 🌐 Recherche web : {0}
+🌐 Web page: {0} ‖ 🌐 Strona internetowa: {0} ‖ 🌐 Webseite: {0} ‖ 🌐 Page web : {0}
+The assistant may search the web and read pages (click to switch off) ‖ Asystent może szukać w internecie i czytać strony (kliknij, aby wyłączyć) ‖ Der Assistent darf im Web suchen und Seiten lesen (zum Ausschalten klicken) ‖ L'assistant peut chercher sur le web et lire des pages (cliquez pour désactiver)
+Let the assistant search the web and read pages (the searches go through Anthropic; the team policy of the hub can switch this off) ‖ Pozwól asystentowi szukać w internecie i czytać strony (wyszukiwanie idzie przez Anthropic; polityka zespołu w hubie może to wyłączyć) ‖ Dem Assistenten erlauben, im Web zu suchen und Seiten zu lesen (die Suche läuft über Anthropic; die Teamrichtlinie des Hubs kann dies ausschalten) ‖ Permettre à l'assistant de chercher sur le web et de lire des pages (les recherches passent par Anthropic ; la politique d'équipe du hub peut le désactiver)
+Loonar Compass {0} is available: {1} ‖ Dostępna jest wersja Loonar Compass {0}: {1} ‖ Loonar Compass {0} ist verfügbar: {1} ‖ Loonar Compass {0} est disponible : {1}
+Loonar Compass {0} is available. ‖ Dostępna jest wersja Loonar Compass {0}. ‖ Loonar Compass {0} ist verfügbar. ‖ Loonar Compass {0} est disponible.
+What's new and download ‖ Co nowego i pobieranie ‖ Neuigkeiten und Download ‖ Nouveautés et téléchargement
+Not now ‖ Nie teraz ‖ Nicht jetzt ‖ Pas maintenant
+In the application ‖ W aplikacji ‖ In der Anwendung ‖ Dans l'application
+Check once a day whether a new version is available ‖ Sprawdzaj raz dziennie, czy jest nowa wersja ‖ Einmal täglich prüfen, ob eine neue Version verfügbar ist ‖ Vérifier une fois par jour si une nouvelle version est disponible
+A plain request to GitHub, without any identifier of this installation; nothing is downloaded or installed by itself. The team hub can switch it off for everybody. ‖ Zwykłe zapytanie do GitHuba, bez żadnego identyfikatora tej instalacji; nic nie jest pobierane ani instalowane samo. Hub zespołu może to wyłączyć wszystkim. ‖ Eine einfache Anfrage an GitHub, ohne Kennung dieser Installation; nichts wird von selbst heruntergeladen oder installiert. Der Team-Hub kann es für alle ausschalten. ‖ Une simple requête à GitHub, sans aucun identifiant de cette installation ; rien n'est téléchargé ni installé tout seul. Le hub d'équipe peut le désactiver pour tous.
