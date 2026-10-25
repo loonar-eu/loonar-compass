@@ -1,6 +1,6 @@
-# Shows development work in Jira (project LC): commits with a key in the message ("LC-123 …") appear in the
-# Development panel of the issue, the tests of the push as a build with results, and a published release as a
-# deployment to production of every issue named in its commits.
+# Adds to Jira (project LC) what GitHub for Jira does not send: the test results of a push (passed / failed counts
+# on the build of every issue named in its commits, "LC-123 …") and a published release as a deployment to
+# production of those issues. Commits, branches and pull requests come from the GitHub for Jira app.
 # Repository settings: secrets JIRA_CLIENT_ID and JIRA_CLIENT_SECRET (Jira OAuth credentials "Loonar Compass"),
 # variable JIRA_CLOUD_ID.
 name: Jira
@@ -21,17 +21,6 @@ env:
   JIRA_CLOUD_ID: ${{ vars.JIRA_CLOUD_ID }}
 
 jobs:
-  commits:
-    if: github.event_name != 'release'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Send commits to Jira
-        run: python3 .github/jira/jira_sync.py commits
-
   tests:
     if: github.event_name != 'release'
     runs-on: windows-latest
