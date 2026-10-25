@@ -923,6 +923,17 @@ fn main() -> eframe::Result {
     if args.iter().any(|a| a == "--check") {
         std::process::exit(check::run(&args, &props_path));
     }
+    // A conversation without a window (regression tests, pipelines): `--ask "<message>" …`, see `ask_from_command_line`.
+    if args.iter().any(|a| a == "--ask") {
+        check::attach_console();
+        std::process::exit(match ask_from_command_line(&args, &props_path) {
+            Ok(code) => code,
+            Err(e) => {
+                eprintln!("{e:#}");
+                2
+            }
+        });
+    }
     // A new hub token and its SHA-256 for hub.json: `--hub-token`.
     if args.iter().any(|a| a == "--hub-token") {
         check::attach_console();
@@ -4669,6 +4680,117 @@ fn tool_status(name: &str, input: &Value) -> String {
 /// One turn of the assistant's work: sends the conversation to the model and runs tools until the model finishes.
 /// Texts, images and status go to the window as they happen through `emit`. Messages the user adds
 /// in the meantime (`inbox`) are passed to the model at the next step, without interrupting the work.
+const ASK_USAGE: &str = "LoonarCompass.exe --ask \"<message>\" [--then \"<next message>\"]... [--model <file.qea|file.qeax|app.properties>] \
+[--attach <file>]... [--reasoning] [--code] [--approve yes|no] [--out <folder>] [--lang pl|en|de|fr]";
+
+/// A conversation without a window, as the window would run it: each `--ask` / `--then` message is one turn of the
+/// same conversation. Writes `transcript.md` (the messages, every step with its result, the answers, question forms,
+/// write approvals) into `--out`, and the files the assistant created into its `files` subfolder. A model file is
+/// used through its own settings in `--out\.compass`, so the installation's settings and history stay untouched.
+/// Writes are approved or refused as `--approve` says (default: refused). Exit code 0 = every turn finished.
+fn ask_from_command_line(args: &[String], default_props: &Path) -> anyhow::Result<i32> {
+    let (mut said, mut attach, mut model, mut out) = (Vec::<String>::new(), Vec::<PathBuf>::new(), None::<PathBuf>, PathBuf::from("."));
+    let (mut reasoning, mut code, mut approve, mut lang) = (false, false, false, "pl".to_string());
+    let mut i = 0;
+    while i < args.len() {
+        let value = || args.get(i + 1).cloned().ok_or_else(|| anyhow::anyhow!("{} needs a value\n{ASK_USAGE}", args[i]));
+        match args[i].as_str() {
+            "--ask" | "--then" => said.push(value()?),
+            "--attach" => attach.push(PathBuf::from(value()?)),
+            "--model" => model = Some(PathBuf::from(value()?)),
+            "--out" => out = PathBuf::from(value()?),
+            "--lang" => lang = value()?,
+            "--approve" => approve = matches!(value()?.as_str(), "yes" | "tak" | "true"),
+            flag => {
+                reasoning |= flag == "--reasoning";
+                code |= flag == "--code";
+                i += 1;
+                continue;
+            }
+        }
+        i += 2;
+    }
+    anyhow::ensure!(!said.is_empty(), "no message\n{ASK_USAGE}");
+    std::fs::create_dir_all(out.join(".compass"))?;
+    let props = match model {
+        Some(path) if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("qea") || e.eq_ignore_ascii_case("qeax")) => {
+            let file = std::fs::canonicalize(&path).with_context(|| format!("model file {}", path.display()))?;
+            let file = file.display().to_string().trim_start_matches(r"\\?\").replace('\\', "/");
+            let props = out.join(".compass").join("app.properties");
+            std::fs::write(&props, format!("model.source=file\nmodel.file={file}\nui.language={lang}\n"))?;
+            props
+        }
+        Some(path) => path,
+        None => default_props.to_path_buf(),
+    };
+    let mut cfg = AppConfig::load(&props)?;
+    i18n::set(i18n::Lang::parse(&lang));
+    cfg.show_thinking = reasoning;
+    cfg.code_execution = code;
+    cfg.attachments_dir = out.join("files");
+    std::fs::create_dir_all(&cfg.attachments_dir)?;
+    let mut stored = Vec::new();
+    for file in &attach {
+        stored.push(history::store_attachment(&cfg.attachments_dir, file)?);
+    }
+    let approvals = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let log = approvals.clone();
+    let approver = tools::Approver::new(ApprovalMode::Ask, Box::new(move |summary| {
+        log.lock().unwrap().push(format!("{} — {summary}", if approve { "zatwierdzono" } else { "odrzucono" }));
+        approve
+    }));
+    let mut md = format!("# Rozmowa bez okna (Loonar Compass {})\n\nModel: {}\nRozumowanie: {reasoning}, wykonywanie kodu: {code}, zapisy: {}\n",
+        env!("CARGO_PKG_VERSION"), props.display(), if approve { "zatwierdzane" } else { "odrzucane" });
+    let mut history: Vec<Message> = Vec::new();
+    let mut failed = false;
+    for (n, text) in said.iter().enumerate() {
+        history.push(Message { role: "user".into(), text: text.clone(), attachments: if n == 0 { stored.clone() } else { vec![] }, created: chrono::Utc::now().to_rfc3339() });
+        md += &format!("\n## Wiadomość {}\n\n> {}\n", n + 1, text.replace('\n', "\n> "));
+        if n == 0 && !stored.is_empty() {
+            md += &format!("\nZałączniki: {}\n", stored.join(", "));
+        }
+        let lines = std::sync::Mutex::new(Vec::<String>::new());
+        let answers = std::sync::Mutex::new(Vec::<String>::new());
+        let (_tx, inbox) = mpsc::channel();
+        let result = run_turn(&cfg, &history, &approver, &inbox, &AtomicBool::new(false), &|e| match e {
+            WorkerEvent::StepStart(t) => lines.lock().unwrap().push(format!("- ▶ {t}")),
+            WorkerEvent::StepEnd { ok, detail } => lines.lock().unwrap().push(format!("  - {} {}", if ok { "✓" } else { "✗" }, detail.replace('\n', "\n    "))),
+            WorkerEvent::Text(t) => answers.lock().unwrap().push(t),
+            WorkerEvent::Images(names) => lines.lock().unwrap().push(format!("  - obrazy: {}", names.join(", "))),
+            WorkerEvent::Failed(e) => lines.lock().unwrap().push(format!("- ✗ błąd: {e}")),
+            _ => {}
+        });
+        md += &format!("\n### Kroki\n\n{}\n", lines.into_inner().unwrap().join("\n"));
+        let answers = answers.into_inner().unwrap();
+        md += "\n### Odpowiedź\n\n";
+        for answer in &answers {
+            match split_questions(answer) {
+                Some((intro, questions)) => {
+                    md += &format!("{intro}\n\nFormularz pytań:\n");
+                    for (question, options) in questions {
+                        md += &format!("- {question}{}\n", if options.is_empty() { String::new() } else { format!(" (opcje: {})", options.join(" / ")) });
+                    }
+                }
+                None => md += &format!("{answer}\n\n"),
+            }
+        }
+        if let Err(e) = result {
+            md += &format!("\n### Błąd\n\n{e:#}\n");
+            failed = true;
+        }
+        history.push(Message { role: "assistant".into(), text: answers.join("\n\n"), attachments: vec![], created: chrono::Utc::now().to_rfc3339() });
+    }
+    let approvals = approvals.lock().unwrap().clone();
+    if !approvals.is_empty() {
+        md += &format!("\n## Prośby o zgodę na zapis\n\n{}\n", approvals.iter().map(|a| format!("- {a}")).collect::<Vec<_>>().join("\n"));
+    }
+    let created: Vec<String> = std::fs::read_dir(&cfg.attachments_dir)?.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().to_string()).filter(|n| !stored.contains(n)).collect();
+    md += &format!("\n## Pliki utworzone w rozmowie\n\n{}\n", if created.is_empty() { "(brak)".to_string() } else { created.iter().map(|f| format!("- files/{f}")).collect::<Vec<_>>().join("\n") });
+    std::fs::write(out.join("transcript.md"), &md)?;
+    println!("{md}");
+    Ok(if failed { 1 } else { 0 })
+}
+
 fn run_turn(
     cfg: &AppConfig,
     messages: &[Message],
