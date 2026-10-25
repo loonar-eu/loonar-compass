@@ -361,7 +361,11 @@ impl AppConfig {
             claude_max_tokens: get_or("claude.max_tokens", "10000").parse().context("claude.max_tokens")?,
             claude_workspace_id: get_or("claude.workspace_id", ""),
             model_source: ModelSource::parse(&get_or("model.source", "postgres")).context("model.source")?,
-            model_file: PathBuf::from(get_or("model.file", "")),
+            // A relative model file is next to the settings (a portable copy), whatever folder EA or Compass starts in.
+            model_file: match get_or("model.file", "") {
+                f if f.is_empty() || Path::new(&f).is_absolute() => PathBuf::from(f),
+                f => base_dir.join(f),
+            },
             db_host: get_or("db.host", ""),
             db_port: get_or("db.port", &ModelSource::parse(&get_or("model.source", "postgres")).map(|s| s.default_port()).unwrap_or(5432).to_string()).parse().context("db.port")?,
             db_name: get_or("db.name", ""),
