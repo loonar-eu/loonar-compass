@@ -221,7 +221,26 @@ pub fn run_batch(cfg: &AppConfig, ops: &[Value], options: &BatchOptions) -> Resu
     let (reply, answer) = mpsc::channel();
     let request = Request { ops: ops.to_vec(), rollback_key: options.rollback_key.clone(), keep_locks: options.keep_locks, locks, reply };
     let sent = guard.as_ref().expect("EA thread").requests.send(request).is_ok();
-    let result = if sent { answer.recv_timeout(timeout()) } else { Err(mpsc::RecvTimeoutError::Disconnected) };
+    let started = guard.as_ref().expect("EA thread").started_wall;
+    // Waits in short slices: a message box of the background EA (which nobody sees) stops the job at once,
+    // with the box's text, instead of after the whole time limit.
+    let deadline = Instant::now() + timeout();
+    let result = loop {
+        if !sent {
+            break Err(mpsc::RecvTimeoutError::Disconnected);
+        }
+        match answer.recv_timeout(Duration::from_secs(2)) {
+            Err(mpsc::RecvTimeoutError::Timeout) if Instant::now() < deadline => {
+                if let Some(text) = crate::ea_ui::background_message_box(started) {
+                    if let Some(worker) = guard.take() {
+                        kill_orphan_ea(worker.started_wall);
+                    }
+                    bail!("{}", crate::i18n::fmt("EA stopped the operation with a message: {0}. Nothing more was written.", &[if text.is_empty() { "?".to_string() } else { text }]));
+                }
+            }
+            other => break other,
+        }
+    };
     let result = match result {
         Ok(result) => result,
         Err(mpsc::RecvTimeoutError::Timeout) => {
@@ -317,6 +336,24 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::path::Path;
+
+    /// LC-228: a message box of the background EA (here "File not found") stops the job within seconds, with its
+    /// text, instead of after the time limit. `cargo test background_box_stops_job -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA"]
+    fn background_box_stops_job() {
+        let dir = std::env::temp_dir().join(format!("loonar-lc228-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("app.properties"), "model.source=file
+model.file=C:/nie-ma/takiego/pliku.qea
+").unwrap();
+        let cfg = AppConfig::load(&dir.join("app.properties")).unwrap();
+        let start = Instant::now();
+        let result = run_batch(&cfg, &[json!({ "op": "set_notes", "element": 1, "notes": "x" })], &BatchOptions::default());
+        println!("{:?} after {:?}", result.as_ref().err().map(|e| e.to_string()), start.elapsed());
+        assert!(result.is_err());
+        assert!(start.elapsed() < Duration::from_secs(60), "stopped quickly");
+    }
 
     /// Closes the EA session at the end of a test, also after a failure (otherwise EA stays in the background and holds a license).
     struct CloseEa;

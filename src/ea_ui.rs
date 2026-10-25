@@ -352,6 +352,112 @@ fn close_error_box(ea_pid: u32, skip: Option<&std::collections::HashSet<isize>>)
     Vec::new()
 }
 
+/// A message box shown by an EA started in the background after `since` (the user cannot see or answer it, and
+/// the EA call waits for it): closes it with its OK/Cancel button and returns its text. The user's own EA, started
+/// earlier, is left alone.
+pub fn background_message_box(since: chrono::DateTime<chrono::Local>) -> Option<String> {
+    #[repr(C)]
+    #[derive(Default, Clone, Copy)]
+    struct FileTime {
+        low: u32,
+        high: u32,
+    }
+    #[link(name = "user32")]
+    extern "system" {
+        fn EnumWindows(callback: extern "system" fn(isize, isize) -> i32, param: isize) -> i32;
+        fn GetWindowThreadProcessId(window: isize, process: *mut u32) -> u32;
+        fn GetClassNameW(window: isize, name: *mut u16, max: i32) -> i32;
+        fn IsWindowVisible(window: isize) -> i32;
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn OpenProcess(access: u32, inherit: i32, pid: u32) -> isize;
+        fn CloseHandle(handle: isize) -> i32;
+        fn QueryFullProcessImageNameW(process: isize, flags: u32, name: *mut u16, size: *mut u32) -> i32;
+        fn GetProcessTimes(process: isize, created: *mut FileTime, exited: *mut FileTime, kernel: *mut FileTime, user: *mut FileTime) -> i32;
+    }
+    extern "system" fn top(window: isize, param: isize) -> i32 {
+        // SAFETY: param points to the Vec below for the duration of EnumWindows.
+        let found = unsafe { &mut *(param as *mut Vec<(isize, u32)>) };
+        let mut class = [0u16; 16];
+        // SAFETY: the buffer and its size match.
+        let n = unsafe { GetClassNameW(window, class.as_mut_ptr(), 16) };
+        if unsafe { IsWindowVisible(window) } != 0 && String::from_utf16_lossy(&class[..n.max(0) as usize]) == "#32770" {
+            let mut pid = 0u32;
+            unsafe { GetWindowThreadProcessId(window, &mut pid) };
+            found.push((window, pid));
+        }
+        1
+    }
+    // FILETIME: 100 ns ticks since 1601.
+    let since_ticks = (since.timestamp() as u64 + 11_644_473_600) * 10_000_000;
+    let mut boxes: Vec<(isize, u32)> = Vec::new();
+    // SAFETY: the callback only uses the Vec passed in, which outlives the call.
+    unsafe { EnumWindows(top, &mut boxes as *mut Vec<(isize, u32)> as isize) };
+    for (window, pid) in boxes {
+        // PROCESS_QUERY_LIMITED_INFORMATION
+        let process = unsafe { OpenProcess(0x1000, 0, pid) };
+        if process == 0 {
+            continue;
+        }
+        let mut name = [0u16; 520];
+        let mut size = name.len() as u32;
+        let (mut created, mut x1, mut x2, mut x3) = (FileTime::default(), FileTime::default(), FileTime::default(), FileTime::default());
+        // SAFETY: valid process handle, buffers of the given sizes.
+        let ok = unsafe { QueryFullProcessImageNameW(process, 0, name.as_mut_ptr(), &mut size) } != 0
+            && unsafe { GetProcessTimes(process, &mut created, &mut x1, &mut x2, &mut x3) } != 0;
+        unsafe { CloseHandle(process) };
+        let exe = String::from_utf16_lossy(&name[..size as usize]).to_lowercase();
+        let started = ((created.high as u64) << 32) | created.low as u64;
+        if ok && exe.ends_with("\\ea.exe") && started >= since_ticks {
+            let text = box_text(window);
+            close_box(window);
+            return Some(text.trim().to_string());
+        }
+    }
+    None
+}
+
+/// The texts of a message box (its Static controls).
+fn box_text(window: isize) -> String {
+    #[link(name = "user32")]
+    extern "system" {
+        fn EnumChildWindows(parent: isize, callback: extern "system" fn(isize, isize) -> i32, param: isize) -> i32;
+        fn GetClassNameW(window: isize, name: *mut u16, max: i32) -> i32;
+        fn GetWindowTextW(window: isize, text: *mut u16, max: i32) -> i32;
+    }
+    extern "system" fn child(window: isize, param: isize) -> i32 {
+        // SAFETY: param points to the String below for the duration of EnumChildWindows.
+        let text = unsafe { &mut *(param as *mut String) };
+        let mut class = [0u16; 16];
+        let n = unsafe { GetClassNameW(window, class.as_mut_ptr(), 16) };
+        if String::from_utf16_lossy(&class[..n.max(0) as usize]) == "Static" {
+            let mut buffer = vec![0u16; 2048];
+            let m = unsafe { GetWindowTextW(window, buffer.as_mut_ptr(), 2048) };
+            text.push_str(&String::from_utf16_lossy(&buffer[..m.max(0) as usize]));
+            text.push(' ');
+        }
+        1
+    }
+    let mut text = String::new();
+    // SAFETY: the callback only uses the String passed in, which outlives the call.
+    unsafe { EnumChildWindows(window, child, &mut text as *mut String as isize) };
+    text
+}
+
+/// Closes a message box with OK (IDOK), and with Cancel (IDCANCEL) if it has no OK.
+fn close_box(window: isize) {
+    #[link(name = "user32")]
+    extern "system" {
+        fn PostMessageW(window: isize, message: u32, w: usize, l: isize) -> i32;
+    }
+    // SAFETY: plain window messages to a window handle (a closed window ignores them).
+    unsafe {
+        PostMessageW(window, 0x0111, 1, 0);
+        PostMessageW(window, 0x0111, 2, 0);
+    }
+}
+
 /// EA's SQLQuery result: `<EADATA><Dataset_0><Data><Row><col>value</col>…</Row>…`. Columns in the order of the
 /// first row; a column missing in a row is NULL.
 fn parse_sql_xml(xml: &str, limit: usize) -> (Vec<String>, Vec<Vec<Option<String>>>, bool) {
