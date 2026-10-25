@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Loonar Compass 0.8.2 - User guide</title>
+<title>Loonar Compass 0.9 - User guide</title>
 <style>
   @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
   body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1f1e1b; }
@@ -39,7 +39,7 @@
   <img src="img/logo.png" alt="Loonar Compass logo">
   <h1 style="margin-top: 10mm;">Loonar Compass</h1>
   <div class="sub">User guide</div>
-  <div class="sub" style="font-size: 11pt;">version 0.8.2 &middot; October 2026</div>
+  <div class="sub" style="font-size: 11pt;">version 0.9 &middot; October 2026</div>
   <div class="owner">
     Loonar Mariusz Głowacki<br>
     ul. Gombrowicza 12, 73-110 Stargard<br>
@@ -62,7 +62,7 @@
     <li><a href="#s10">Compass in Enterprise Architect</a></li>
     <li><a href="#s11">Diagram editor</a></li>
     <li><a href="#s12">Sending diagrams to Miro</a></li>
-    <li><a href="#s13">Documents: Word, Excel, images, Confluence</a></li>
+    <li><a href="#s13">Documents: Word, Excel, PowerPoint, PDF, images, Confluence, SharePoint</a></li>
     <li><a href="#s14">Document templates</a></li>
     <li><a href="#s15">Assistant memory</a></li>
     <li><a href="#s16">Approving changes and the audit log</a></li>
@@ -86,10 +86,12 @@
   <li><b>keeps the EA project glossary</b> (terms with their meaning and type) and <b>structured scenarios of elements</b> (actor and system steps),</li>
   <li><b>draws</b> diagrams from a description, a photo, a sketch or an attached file,</li>
   <li><b>shows diagrams</b> as images in the chat, just as Enterprise Architect draws them,</li>
-  <li><b>prepares documents</b> from the model's content: Word, Excel, PNG images and Confluence pages, also based on templates,</li>
+  <li><b>prepares documents</b> from the model's content: Word, Excel, PowerPoint, PDF, PNG images and Confluence pages, also based on templates,</li>
+  <li><b>reads documents</b>: PDF, Word, PowerPoint, Visio and Excel, from your disk or from the team's SharePoint library,</li>
+  <li><b>follows the team's modelling instructions</b> kept in the EA repository itself, so everybody who works with the repository uses the same rules,</li>
   <li><b>remembers notes</b> between conversations (modeling conventions, preferences, corrections).</li>
 </ul>
-<p>The application uses an AI language model over the Internet, with your API key: Claude Haiku 5.5 (Anthropic) by default; in the settings you can choose another Claude model or an OpenAI model (chapter 5). It connects to the EA model in two ways: it reads it directly (from the PostgreSQL database or from the .qea/.qeax file) and writes to it through Enterprise Architect, using the model user account given in the settings when the model has one. With a model file you have open in EA, the changes go through your EA window; otherwise EA runs in the background.</p>
+<p>The application uses an AI language model over the Internet, with your API key: Claude Haiku 5.5 (Anthropic) by default; in the settings you can choose another Claude model or an OpenAI model (chapter 5). It connects to the EA model in two ways: it reads it directly (from a PostgreSQL, SQL Server, MySQL/MariaDB or Oracle database, or from the .qea/.qeax file) and writes to it through Enterprise Architect, using the model user account given in the settings when the model has one. With a model file you have open in EA, the changes go through your EA window; otherwise EA runs in the background.</p>
 <p>The interface and the assistant's answers are available in four languages: Polish, English, German and French (chapter 5). Answers and changes are prepared by an AI model and may contain errors: review them before you approve them (chapter 16).</p>
 <p>Loonar Compass runs as a separate window, started from the Start menu, or as a window docked in Enterprise Architect itself, which works with the project open in that EA window (chapter 10).</p>
 <p>Without a window, Compass also checks the model in CI pipelines (chapter 23), and the separate program Compass Hub serves the team's models to people and tools (chapter 22).</p>
@@ -98,7 +100,7 @@
 <div class="note">
   <b>Prerequisites.</b> The application works only when the following are met:
   <ol style="margin: 4pt 0 0 0;">
-    <li><b>The model is an EA project file .qea or .qeax, or is in a PostgreSQL database.</b> Older file formats (.eap, .eapx, .feap) and other databases are not supported; Enterprise Architect converts an .eap/.eapx file to .qea with a project transfer (Settings → Model → Transfer → Full Project Transfer).</li>
+    <li><b>The model is an EA project file .qea or .qeax, or is in a PostgreSQL, SQL Server, MySQL/MariaDB or Oracle database.</b> Older file formats (.eap, .eapx, .feap) are not supported; Enterprise Architect converts an .eap/.eapx file to .qea with a project transfer (Settings → Model → Transfer → Full Project Transfer).</li>
     <li><b>A model in a database has user security enabled</b> (in Enterprise Architect: Settings → Security → Enable Security), in “Require User Lock to Edit” mode. In a model file, security is optional: without it, the assistant needs no EA account. The application logs in to the model as a specific user and locks objects while saving. When security is turned off, the locks are skipped; this is not a supported configuration. In the application you mark this on the <b>Model</b> card of the settings with the options “The model has security enabled (EA user accounts)” and “The model requires a lock to edit (Require User Lock to Edit)” (chapter 5).</li>
     <li><b>A model with security enabled has a user account for the assistant</b> (Settings → Security → Users), with a password and edit permissions. The account name can be anything, for example <code>claude</code> or <code>assistant</code>, but the account must exist. You enter its login and password on the <b>Model</b> card of the settings, together with the model file or database.</li>
   </ol>
@@ -107,19 +109,22 @@
   <tr><th style="width: 32%;">What</th><th>Details</th></tr>
   <tr><td>System</td><td>Windows 10 or Windows 11 (64-bit)</td></tr>
   <tr><td>Enterprise Architect</td><td>Installed on the same computer, with a valid license. The application starts it in the background; while it runs, it takes up one license seat. Compass in EA (chapter 10) works in your EA window.</td></tr>
-  <tr><td>EA model</td><td>An EA project file .qea or .qeax (you need only its path), or a repository in a PostgreSQL database with user security enabled (you need: the server, port, database name, and the database user and password). A .qea file is meant for one person; .qeax for a small team sharing the file. For company use, give Compass a PostgreSQL role with SELECT only on the EA tables (<code>t_*</code>) and set the connection encryption to “Required, certificate verified” (chapter 5). Enterprise Architect saves with the same database account, so a model the assistant should also change needs INSERT, UPDATE and DELETE on these tables as well, never superuser rights.</td></tr>
+  <tr><td>EA model</td><td>An EA project file .qea or .qeax (you need only its path), or a repository in a PostgreSQL database with user security enabled (you need: the server, port, database name, and the database user and password). A .qea file is meant for one person; .qeax for a small team sharing the file. For company use, give Compass a PostgreSQL role with SELECT only on the EA tables (<code>t_*</code>) and set the connection encryption to “Required, certificate verified” (chapter 5). Enterprise Architect saves with the same database account, so a model the assistant should also change needs INSERT, UPDATE and DELETE on these tables as well, never superuser rights. A repository on SQL Server, MySQL/MariaDB or Oracle: the same details, with the same rule for the account (chapter 5, “SQL Server, MySQL and Oracle”); saving needs an EA edition that supports DBMS repositories.</td></tr>
+  <tr><td>ODBC driver (SQL Server, MySQL, Oracle)</td><td>Only for a model on SQL Server, MySQL/MariaDB or Oracle: the 64-bit ODBC driver of the database vendor. For SQL Server, Windows already has its own “SQL Server” driver; Microsoft's “ODBC Driver 18 for SQL Server” (or 17) is better and is used first when it is installed.</td></tr>
   <tr><td>Model user account</td><td>For a database model, or a model file with security enabled: the login and password of a user defined in the EA model. Ideally a separate account just for the assistant, so that its changes and locks are visible separately and do not clash with yours.</td></tr>
   <tr><td>API key</td><td>A Claude API key from the Anthropic Console or, when you choose OpenAI as the provider, an OpenAI API key from the OpenAI platform (chapter 5).</td></tr>
   <tr><td>Internet</td><td>An HTTPS connection to api.anthropic.com (or to api.openai.com when OpenAI is the provider). The application uses the proxy from the Windows Internet settings or from the HTTPS_PROXY and ALL_PROXY variables (chapter 18).</td></tr>
   <tr><td>Confluence (optional)</td><td>Confluence Cloud or Data Center, only for publishing pages through the assistant: the Confluence address (https://), a token and the space key (chapter 13). Without them, pages are still created and you paste the code yourself.</td></tr>
   <tr><td>Miro (optional)</td><td>Only for sending diagrams to a Miro board: an access token of a Miro app (chapter 12).</td></tr>
+  <tr><td>Microsoft Office (optional)</td><td>Only for PDF files made by the assistant: Word turns a document into PDF, PowerPoint a presentation (chapter 13). Word and PowerPoint files themselves are made without Office.</td></tr>
+  <tr><td>SharePoint (optional)</td><td>Only for documents in the team's SharePoint library: an app registration in Microsoft Entra ID with a client secret (chapter 13).</td></tr>
   <tr><td>Node.js (optional)</td><td>Only for MCP servers started with <code>npx</code>, for example the ready-made Azure DevOps and Files servers (chapter 7).</td></tr>
   <tr><td>Mail program (optional)</td><td>For reporting bugs and subscribing to news about new releases: a mail program set as the default in Windows, for example Outlook.</td></tr>
 </table>
 <div class="note"><b>Costs.</b> The application itself is free. You pay the chosen provider (Anthropic or OpenAI) for your use of the AI model, through the account the API key belongs to.</div>
 
 <h2 id="s3" data-page="install">3. Installation</h2>
-<p>Run the file <code>LoonarCompass-Setup-0.8.2.exe</code>. The wizard guides you through the steps with the <b>Next</b> and <b>Back</b> buttons. You do not need administrator rights unless you install the application for all users of the computer.</p>
+<p>Run the file <code>LoonarCompass-Setup-0.9.exe</code>. The wizard guides you through the steps with the <b>Next</b> and <b>Back</b> buttons. You do not need administrator rights unless you install the application for all users of the computer.</p>
 <div class="note"><b>Windows SmartScreen.</b> The installer is not digitally signed yet, so when you run it for the first time, Windows SmartScreen may show the warning “Windows protected your PC”. Click <b>More info</b> and then <b>Run anyway</b>. If Smart App Control is turned on, Windows blocks unsigned applications altogether; in that case, wait for the signed version.</div>
 <figure class="small"><img src="img/en/installer-language.png" alt="Setup wizard: the language selection page with Polish, English, German and French"><figcaption>The first page of the wizard: choosing the language</figcaption></figure>
 <ol>
@@ -157,7 +162,7 @@
 <table>
   <tr><th style="width: 26%;">Icon</th><th>What it contains</th></tr>
   <tr><td><b>Chat</b></td><td>The list of conversations and the conversation with the assistant (chapters 6 and 17)</td></tr>
-  <tr><td><b>Settings</b></td><td>AI model, EA model, Enterprise Architect, language and approval mode, new releases, Confluence, Miro (chapter 5)</td></tr>
+  <tr><td><b>Settings</b></td><td>AI model, EA model, Enterprise Architect, language and approval mode, new releases, Confluence, Jira, SharePoint, event agents, MCP servers, team hub, Miro (chapter 5)</td></tr>
   <tr><td><b>Assistant memory</b></td><td>Notes the assistant has remembered between conversations (chapter 15)</td></tr>
   <tr><td><b>Document templates</b></td><td>Document templates that the assistant fills with content from the model (chapter 14)</td></tr>
   <tr><td><b>Model audit log</b></td><td>The assistant's saves to the model, with export to Excel (chapter 16)</td></tr>
@@ -170,26 +175,27 @@
 <p><b>Support the project.</b> Loonar Compass is free, also for commercial use, and it will stay free. If it saves you time, you can support its development with a voluntary contribution: the <b>Support on suppi.pl</b> button opens <a href="https://suppi.pl/loonar">suppi.pl/loonar</a>. The contributions pay, among other things, for a code-signing certificate. Other ways to help: report bugs and ideas (Report a bug), recommend the application to other Enterprise Architect users or star the project on GitHub.</p>
 <h3>Chat view</h3>
 <ul>
-  <li><b>The list of conversations</b> on the left is grouped into “Today”, “Yesterday”, “Last 7 days” and “Earlier”. You start a new conversation with the <b>+</b> button. The selected conversation is highlighted.</li>
+  <li><b>The list of conversations</b> on the left is grouped into “Today”, “Yesterday”, “Last 7 days” and “Earlier”. You start a new conversation with the <b>+</b> button. The selected conversation is highlighted. Right-click a conversation to delete it (chapter 17).</li>
   <li><b>The conversation header</b> shows its title, the <b>Model: …</b> button with the model of the conversation (chapter 17) and, while the assistant is working, the “The assistant is working” indicator.</li>
   <li><b>Messages:</b> yours are in a beige bubble, the assistant's answers have the application icon. Each message shows the time (older ones also the date).</li>
   <li><b>The new conversation screen</b> shows the logo, a hint about what you can do, and which EA model the conversation will use, with the <b>Choose another model…</b> and <b>Confirm the model and start</b> buttons (chapter 17).</li>
-  <li><b>The message card</b> at the bottom: the text field, the paste button, the model and approval mode, and the round send and stop buttons (chapter 6). Below the card, a reminder says that answers and changes are prepared by an AI model.</li>
+  <li><b>The message card</b> at the bottom: the text field, the paste button, the <b>⌖</b> button (pick from the model), with Claude also the <b>💭</b> (reasoning) and <b>∑</b> (code in the sandbox) switches, the model and approval mode, and the round send and stop buttons (chapter 6). Below the card, a reminder says that answers and changes are prepared by an AI model.</li>
 </ul>
 
 <h2 id="s5">5. Settings and language</h2>
-<p>The <b>Settings</b> view has eleven cards: <b>AI model</b> and <b>Language and change approval</b> in the left column, <b>Model</b> and <b>Enterprise Architect</b> in the right one, and below them <b>New releases (newsletter)</b>, <b>Confluence</b> and <b>Miro</b>. In Compass opened in Enterprise Architect, there are no Model and Enterprise Architect cards, because the model is the project open in that EA window (chapter 10). You save each card separately with the button below the card, and the application immediately checks that the details work. The result appears below the button: green with a description or red with the cause of the error.</p>
+<p>The <b>Settings</b> view has twelve cards: <b>AI model</b> and <b>Language and change approval</b> in the left column, <b>Model</b> and <b>Enterprise Architect</b> in the right one, and below them <b>Confluence</b>, <b>Jira</b>, <b>SharePoint</b>, <b>Event agents (Compass in EA)</b>, <b>MCP servers</b>, <b>Team (Compass Hub)</b>, <b>Miro</b> and <b>New releases (newsletter)</b>. In Compass opened in Enterprise Architect, there are no Model and Enterprise Architect cards, because the model is the project open in that EA window (chapter 10). You save each card separately with the button below the card, and the application immediately checks that the details work. The result appears below the button: green with a description or red with the cause of the error.</p>
 <figure><img src="img/en/settings.png" alt="Settings view of an earlier version of the application, with numbered cards"><figcaption>Settings: each card with its own save and test (screenshot of an earlier version: the cards had numbers, the “AI model” card was called “Claude”, and the EA account was on the Enterprise Architect card)</figcaption></figure>
 <table>
   <tr><th style="width: 26%;">Card</th><th>Fields</th><th style="width: 34%;">What the test checks</th></tr>
-  <tr><td>AI model</td><td>Provider, Model, Effort, Max tokens, Workspace ID (Claude only) and the API key of the chosen provider: Claude API key or OpenAI API key (described below). A note below the fields says what the application sends to the provider (chapter 18).</td><td>“Save and test key” checks the key with a short request to the chosen model</td></tr>
-  <tr><td>Model</td><td>Choice: <b>PostgreSQL database</b> (Server, Port, Database name, Database user, Database password stored in Windows Credential Manager, Connection encryption) or <b>EA file (.qea, .qeax)</b> (Model file; the <b>…</b> button opens a file selection dialog). Below, the model's EA account: the checkbox <b>“The model has security enabled (EA user accounts)”</b>, EA user account and EA account password (without the checkbox, both fields are disabled and EA opens the model without a login), and the option <b>“The model requires a lock to edit (Require User Lock to Edit)”</b>: when on, the assistant locks the packages and elements it changes and releases the locks afterwards; without it, it locks nothing.</td><td>Database: “Save and test connection” connects, counts packages, elements and diagrams, says whether the connection is encrypted and warns if the database user is a superuser. File: “Save and test the file” opens it read-only and counts packages, elements and diagrams. The test also saves a test package in the model, checks it and deletes it at once</td></tr>
+  <tr><td>AI model</td><td>Provider, Model, Effort, Max tokens, Workspace ID and Claude address (Claude only), OAuth2 token address (with the OAuth2 client ID, scope and client secret) and the API key of the chosen provider: Claude API key or OpenAI API key (described below). A note below the fields says what the application sends to the provider (chapter 18).</td><td>“Save and test key” checks the key with a short request to the chosen model</td></tr>
+  <tr><td>Model</td><td>Choice: <b>PostgreSQL database</b>, <b>SQL Server</b>, <b>MySQL</b> or <b>Oracle</b> (Server, Port, Database name, Database user, Database password stored in Windows Credential Manager, Connection encryption; described below) or <b>EA file (.qea, .qeax)</b> (Model file; the <b>…</b> button opens a file selection dialog). Below, the model's EA account: the checkbox <b>“The model has security enabled (EA user accounts)”</b>, EA user account and EA account password (without the checkbox, both fields are disabled and EA opens the model without a login), and the option <b>“The model requires a lock to edit (Require User Lock to Edit)”</b>: when on, the assistant locks the packages and elements it changes and releases the locks afterwards; without it, it locks nothing.</td><td>Database: “Save and test connection” connects, counts packages, elements and diagrams and, for PostgreSQL, says whether the connection is encrypted and warns if the database user is a superuser. File: “Save and test the file” opens it read-only and counts packages, elements and diagrams. The test also saves a test package in the model, checks it and deletes it at once</td></tr>
   <tr><td>Enterprise Architect</td><td>Path to EA.exe (the <b>…</b> button opens a file selection dialog). The EA account is set on the Model card, because it belongs to the model file or database.</td><td>“Save and test EA access” opens the model in EA (a model file you have open: in your EA window), logs in with the account from the Model card, saves a test package in the model, checks it and deletes it at once (from a few to over ten seconds)</td></tr>
   <tr><td>Language and change approval</td><td>Language; Approval mode: ask, plan or auto (chapter 16); after a language change, also the <b>Translate now</b> button</td><td>Saving only</td></tr>
   <tr><td>New releases (newsletter)</td><td>Email address and consent to news about new releases, with an information note and a link to the privacy policy (chapter 20)</td><td>Prepares a message in the mail program</td></tr>
   <tr><td>Confluence</td><td>Confluence address, Email (Cloud only), Token, Space key, Parent page ID (chapter 13). The address must start with https:// (http:// only for a server on the same computer).</td><td>Connects to Confluence with the given token and checks the space</td></tr>
   <tr><td>Miro</td><td>Access token of a Miro app with the boards:read and boards:write permissions (chapter 12)</td><td>Connects to Miro and counts the boards the token can see</td></tr>
   <tr><td>Jira</td><td>Jira address, Email (Cloud only), Token, Default project key (chapter 7). The address must start with <code>https://</code>.</td><td>“Save and test Jira connection” connects to Jira and checks the project</td></tr>
+  <tr><td>SharePoint</td><td>Site address, Document library (empty = Documents), Tenant (directory) ID, Application (client) ID, Client secret (chapter 13)</td><td>“Save and test SharePoint connection” signs in to Microsoft Graph and counts the items in the library</td></tr>
   <tr><td>Team (Compass Hub)</td><td>Hub address, Token, This model in the hub (optional) (chapter 22)</td><td>“Save and test hub connection” connects to the hub and shows your account, role and the team policy</td></tr>
   <tr><td>MCP servers</td><td>The list of your own MCP servers, stored in the file <code>mcp_servers.json</code> next to the settings, the list <b>Add a ready-made server</b> and the field <b>Token for an MCP server</b> (chapter 7)</td><td>“Save and test MCP servers” connects to each server and shows the number of its tools</td></tr>
   <tr><td>Event agents (Compass in EA)</td><td>Rules in the file <code>event_agents.json</code> (chapter 10)</td><td>“Save event agents” checks the rules and shows the number of agents</td></tr>
@@ -207,6 +213,7 @@
   <tr><td>Effort</td><td><b>model default</b> (default), <b>low</b>, <b>medium</b>, <b>high</b>, <b>xhigh</b> or <b>max</b>. Higher effort gives more thorough answers and model work, but uses more tokens and time, so it costs more; lower effort is faster and cheaper. With OpenAI, the effort maps to the model's reasoning effort.</td></tr>
   <tr><td>Max tokens</td><td>The length limit of a single model answer (see below).</td></tr>
   <tr><td>Workspace ID</td><td>Claude only, optional: the ID of a workspace from the Anthropic Console, for example <code>wrkspc_…</code>.</td></tr>
+  <tr><td>Claude address, OAuth2 token address</td><td>Optional: Claude through Azure AI Foundry or a company gateway, and sign-in with OAuth2 instead of an API key (see “Sign-in to the AI service” below).</td></tr>
   <tr><td>Endpoint</td><td>OpenAI only. Empty = OpenAI. You can enter the address of another server compatible with the OpenAI API: Azure OpenAI (<code>https://&lt;resource&gt;.openai.azure.com/openai/v1</code>; the key is sent in the <code>api-key</code> header), Ollama (<code>http://localhost:11434/v1</code>), LM Studio (<code>http://localhost:1234/v1</code>) or a company gateway. Local servers work without a key, and <code>http://</code> is allowed only for localhost. In the Model field enter the model name (in Azure: the deployment name).</td></tr>
   <tr><td>Claude API key / OpenAI API key</td><td>The key of the chosen provider. You create a Claude key in the Anthropic Console. You create an OpenAI key on the OpenAI platform: <code>platform.openai.com</code> → <b>API keys</b> → <b>Create new secret key</b>. The keys are stored in Windows Credential Manager, each separately.</td></tr>
 </table>
@@ -235,12 +242,35 @@
   <li>With certificate verification, the name in the <b>Server</b> field must match the name in the server certificate.</li>
   <li>The database administrator can enforce TLS for all clients with <code>hostssl</code> entries in the <code>pg_hba.conf</code> file.</li>
   <li>The setting applies to the assistant's reading of the model. Enterprise Architect's own connection to the database (when saving) follows EA's settings.</li>
+  <li>With SQL Server, the setting goes to the ODBC driver (“Required”: encrypted, the certificate is not verified; “Required, certificate verified”: encrypted and verified). With MySQL and Oracle, set the encryption in the driver or in <code>db.odbc</code> (below).</li>
 </ul>
+<h3>SQL Server, MySQL and Oracle</h3>
+<p>Besides PostgreSQL and EA files, Compass reads EA repositories on <b>SQL Server</b>, <b>MySQL/MariaDB</b> and <b>Oracle</b>: in the separate window, in the team hub (chapter 22) and in check mode (chapter 23). On the <b>Model</b> card choose <b>SQL Server</b>, <b>MySQL</b> or <b>Oracle</b> and fill in the same fields as for PostgreSQL; the port changes to the usual one of that database (1433, 3306, 1521) unless you have changed it yourself. The model of a conversation (chapter 17) can be such a database too.</p>
+<ul>
+  <li><b>ODBC driver.</b> Compass connects through the 64-bit ODBC driver of the database vendor and finds it by itself. For SQL Server it takes “ODBC Driver 18 for SQL Server”, then 17, and at the end Windows' own “SQL Server” driver. For MySQL the MySQL or MariaDB ODBC driver, for Oracle the Oracle client's driver (“Oracle in …”). If none is installed, the test names the drivers that are.</li>
+  <li><b>Your own connection string.</b> When the connection needs something the card does not have (for example an Oracle TNS name or driver options), put a full ODBC connection string in <code>app.properties</code> as <code>db.odbc</code>, without the password: Compass adds the password from Credential Manager. Example: <code>db.odbc=Driver={ODBC Driver 18 for SQL Server};Server=sql01,1433;Database=ea;UID=compass;Encrypt=yes</code>.</li>
+  <li><b>Read only.</b> Reading runs in a transaction that is always rolled back, so nothing is changed in the database by Compass itself. An account with SELECT on the EA tables (<code>t_*</code>) is enough for reading; when Enterprise Architect saves with the same account (SQL Server, below), it also needs INSERT, UPDATE and DELETE on these tables.</li>
+</ul>
+<p><b>Saving.</b> Changes of such a model are saved by Enterprise Architect, as with PostgreSQL. Your edition of EA must support DBMS repositories.</p>
+<ul>
+  <li><b>SQL Server:</b> Compass builds EA's own connection by itself (OLE DB provider SQLOLEDB), from the fields of the Model card. Test it with “Save and test EA access”.</li>
+  <li><b>MySQL and Oracle:</b> EA reaches them through an ODBC data source. Put EA's connection in <code>app.properties</code> as <code>ea.conn</code>: the text of an EA connection shortcut, for example <code>ea_lab --- DBType=0;Connect=Provider=MSDASQL.1;Data Source=&lt;ODBC DSN&gt;;…</code>. Without <code>ea.conn</code>, use Compass in Enterprise Architect (chapter 10) for changes: it saves through your EA window, which works with any repository open in EA.</li>
+</ul>
+<p>In <code>app.properties</code> the choice is <code>model.source=sqlserver</code>, <code>mysql</code> or <code>oracle</code> (<code>postgres</code> and <code>file</code> as before), with <code>db.host</code>, <code>db.port</code>, <code>db.name</code>, <code>db.user</code> and <code>db.sslmode</code>.</p>
+<h3>Sign-in to the AI service: OAuth2 and other addresses</h3>
+<p>Some companies give access to the AI model through their own gateway or through Microsoft Azure instead of an API key. The <b>AI model</b> card has fields for this:</p>
+<table>
+  <tr><th style="width: 30%;">Field</th><th>Meaning</th></tr>
+  <tr><td>Claude address</td><td>Claude only: empty = Anthropic; Azure AI Foundry or a company gateway: its base address, for example <code>https://&lt;resource&gt;.services.ai.azure.com/anthropic</code>. It must start with <code>https://</code> (<code>http://</code> only on this computer).</td></tr>
+  <tr><td>OAuth2 token address</td><td>Optional, instead of an API key: Compass gets a token from this address (OAuth2 client credentials) and sends it instead of the key, for Claude and for OpenAI. For Microsoft Entra ID: <code>https://login.microsoftonline.com/&lt;tenant&gt;/oauth2/v2.0/token</code>.</td></tr>
+  <tr><td>OAuth2 client ID, OAuth2 scope, OAuth2 client secret</td><td>Shown when the token address is filled in: the ID and secret of the application registered at the provider, and the scope, for example <code>https://cognitiveservices.azure.com/.default</code>. The secret is stored in Windows Credential Manager.</td></tr>
+</table>
+<p>The fields are saved as <code>claude.url</code>, <code>ai.oauth.token_url</code>, <code>ai.oauth.client_id</code> and <code>ai.oauth.scope</code> in <code>app.properties</code>. Test them with <b>Save and test key</b>.</p>
 
 <h2 id="s6" class="break">6. Talking to the assistant</h2>
 <figure><img src="img/en/chat.png" alt="Conversation window with a diagram image from Enterprise Architect in the chat"><figcaption>A conversation with a diagram shown as an image in the chat: the list of conversations on the left, the message card at the bottom</figcaption></figure>
 <h3>Writing</h3>
-<p>You type a message in the <b>message card</b> at the bottom of the window. The card contains the text field, the paste button, the model name and the current approval mode, and round buttons: <b>Send</b> and, while the assistant is working, <b>Stop</b>. Below the card you see the reminder: “Answers and changes are prepared by an AI model and may contain errors. Review them before you approve.”</p>
+<p>You type a message in the <b>message card</b> at the bottom of the window. The card contains the text field, the paste button, the <b>⌖</b> button (Pick from the model, described below), with Claude also the switches <b>💭</b> and <b>∑</b> (“Reasoning and calculations” below), the model name and the current approval mode, and round buttons: <b>Send</b> and, while the assistant is working, <b>Stop</b>. Below the card you see the reminder: “Answers and changes are prepared by an AI model and may contain errors. Review them before you approve.”</p>
 <table>
   <tr><th style="width: 34%;">Key</th><th>Action</th></tr>
   <tr><td><span class="key">Enter</span></td><td>Sends the message</td></tr>
@@ -249,16 +279,23 @@
   <tr><td><span class="key">Ctrl</span> + <span class="key">V</span></td><td>Pastes text, and when the clipboard contains an image or files, adds them as attachments</td></tr>
 </table>
 <p>The message field grows with the text. Spelling errors are underlined in red using the Windows system dictionary, in the language from the system settings. Right-click an underlined word and choose <b>Add “…” to the dictionary</b>: the word goes into the Windows dictionary, and a Polish expression goes in with all its forms (singular and plural, from the nominative to the vocative). In the same menu, <b>Add “…” to the EA project glossary</b> asks the assistant to add the term to the project glossary (chapter 7).</p>
+<h3>Pick from the model</h3>
+<p>The <b>⌖</b> button next to the paste button opens <b>Pick from the model</b>. Type a part of the name of an element, package or diagram in the field “Name of an element, package or diagram”; with an empty field you see the “Top packages of the model:”. Click a result to add it to the message as a reference, for example «Element: Order (Class, id 26)». It is the same reference as the one EA's right-click menu <b>Add to the Compass conversation</b> gives (chapter 10), so the assistant knows exactly which object you mean.</p>
+<div class="prompt">Describe «Element: Order (Class, id 26)» and list the diagrams it is on.</div>
 <h3>Attachments</h3>
 <p>You can attach up to 5 files to a message, each up to 10 MB. Ways to do it: drag files into the window (from Explorer or from a browser), paste them from the clipboard (<span class="key">Ctrl</span> + <span class="key">V</span>) or use the paste button in the message card.</p>
 <table>
   <tr><th style="width: 34%;">File type</th><th>What the assistant sees</th></tr>
   <tr><td>Images (PNG, JPG)</td><td>The image: a photo of a whiteboard, a sketch, a screenshot</td></tr>
   <tr><td>Images (GIF, WebP)</td><td>The image; in the chat, such an attachment is shown as a file card, not as an image</td></tr>
-  <tr><td>PDF</td><td>The whole document</td></tr>
-  <tr><td>DOCX</td><td>The text of the document</td></tr>
+  <tr><td>PDF</td><td>The whole document, every page; also a scan without a text layer, whose pages the model reads as images</td></tr>
+  <tr><td>Word (DOCX)</td><td>The text of the document</td></tr>
+  <tr><td>PowerPoint (PPTX, PPTM)</td><td>Each slide with its text and its notes</td></tr>
+  <tr><td>Visio (VSDX, VSDM)</td><td>Each page: the shapes with their text and the connections between them (A → B), for example a process to model in EA</td></tr>
+  <tr><td>Excel (XLSX, XLSM)</td><td>Each sheet with the values of its cells</td></tr>
   <tr><td>Text files (BPMN, XML, CSV, JSON, code…)</td><td>The content of the file; the file must be saved in UTF-8</td></tr>
-  <tr><td>XLSX, PPTX, DOC and other binary files</td><td>Not read: the assistant only learns that the content of the file cannot be passed to it</td></tr>
+  <tr><td>Old formats DOC, PPT, XLS, VSD</td><td>Not read: open the file in Word, PowerPoint, Excel or Visio and save it in the new format (DOCX, PPTX, XLSX, VSDX)</td></tr>
+  <tr><td>Other binary files</td><td>Not read: the assistant only learns that the content of the file cannot be passed to it</td></tr>
   <tr><td>ZIP</td><td>The files inside it, each according to its type: at most 20 files and 30 MB in total; a ZIP inside a ZIP is not unpacked</td></tr>
 </table>
 <h3>While the assistant is working</h3>
@@ -269,6 +306,18 @@
   <li>An answer can take at most <b>24 steps</b>. If the assistant has not finished by then, it stops so as not to run in an endless loop; send a new message (for example “continue”) to carry on.</li>
 </ul>
 <figure><img src="img/en/steps.png" alt="Steps card listing the assistant's steps with their duration and results"><figcaption>The assistant at work: the list of steps</figcaption></figure>
+<h3>Questions, plan and sub-agents</h3>
+<ul>
+  <li><b>Clarifying questions.</b> When something important is unclear before a larger change (which package, which notation, naming, scope), the assistant does not guess: it shows a small form “Questions to you” in the chat, with choices or a field for a short answer. A choice can be replaced by your own text in the field “Something else…”. <b>Send answers</b> sends them as your next message, starting with “My answers:”, and the assistant carries on.</li>
+  <li><b>Plan of larger work.</b> For work with three or more steps, the assistant shows its plan in the steps card, for example “📋 Plan: 1 of 4 done”, with the tasks marked ✓ (done), ▶ (in progress) and ○ (waiting). The plan is updated as it works; in Compass in EA it also appears in System Output (chapter 10).</li>
+  <li><b>Sub-agents.</b> For a larger analysis the assistant can hand a focused task to a sub-agent: <b>impact</b> (what a planned change affects), <b>review</b> (a package, a draft or planned changes against good practice and the team's instructions) or <b>document</b> (a draft text of a document section). The sub-agent only reads the model, in its own context, and returns a compact result, so the conversation stays short. The step shows “Sub-agent (impact): …”.</li>
+</ul>
+<h3>Reasoning and calculations</h3>
+<p>Two switches in the message card work with Claude only (with OpenAI they are not shown); the setting is remembered.</p>
+<ul>
+  <li><b>💭 Show the assistant's reasoning in the steps.</b> A summary of how the model reasons appears in the steps as “💭 The assistant's reasoning”. The model reasons either way; the switch only shows it. How much it reasons stays set by the effort on the <b>AI model</b> card (chapter 5).</li>
+  <li><b>∑ Code in the sandbox</b> (off by default). The assistant may run code in Anthropic's sandbox for calculations and data analysis, for example totals of an estimate or statistics of a model export. Its output appears as the step “Code in the sandbox”. The data the assistant passes there goes to Anthropic, like the conversation (chapter 18).</li>
+</ul>
 <p><b>What can the assistant do?</b> The assistant knows the application's features from the changelog. Ask it: “What can you do in this application?”.</p>
 
 <h2 id="s7" class="break">7. Working with the Enterprise Architect model</h2>
@@ -326,6 +375,17 @@
 <h3>Structured scenarios of elements</h3>
 <p>The assistant creates, changes and deletes structured scenarios of elements, for example of use cases. They appear in EA on the element's <b>Scenarios</b> tab, with steps performed by the actor or by the system.</p>
 <div class="prompt">Add a basic path scenario to the “Place order” use case: the customer confirms the cart, the system calculates the order value, the customer chooses a payment method, the system saves the order.</div>
+<h3>Modelling instructions of the team</h3>
+<p>The team's rulebook for a repository (naming, element types and stereotypes, package structure, diagrams, required tagged values, quality checks) can live <b>in the EA repository itself</b>: in the notes of an Artifact element with the stereotype «CompassInstructions», named “Loonar Compass – modelling instructions”. Everybody who opens the repository with Compass works by the same rules, and the history of changes is EA's own (audit, baselines, version control).</p>
+<ul>
+  <li>The assistant gets the instructions in every answer and follows them as the conventions of the repository.</li>
+  <li><b>Starting wizard:</b> when the repository has no instructions yet, the assistant analyzes it (element types and stereotypes, relationships, diagrams, packages, tagged values, statuses, sample names) and shows a draft of the rules. It saves them only when you agree.</li>
+  <li><b>Changes:</b> the assistant replaces the instructions or adds one rule to them, for example a correction you gave. Each save is a change of the model and goes through the usual approval (chapter 16). The element is created in the first package under the model root, unless you name another package.</li>
+  <li>The instructions are at most 20 000 characters long. You can also edit the notes of the element in EA yourself.</li>
+</ul>
+<div class="prompt">Prepare modelling instructions for this repository.</div>
+<div class="prompt">Add to the instructions: activities start with a verb.</div>
+<p>The instructions of the repository apply to everybody who works with it; the assistant's memory (chapter 15) holds your own notes on this computer.</p>
 <h3>Model quality check</h3>
 <p>With a single command the assistant checks a package together with its subpackages. The check is done by the program, not by the AI model, so nothing is guessed. Built-in checks:</p>
 <ul>
@@ -383,6 +443,10 @@
 <div class="prompt">Compare the CMDB export C:\Exports\cmdb_ci_appl.csv with the components of the model.</div>
 <div class="prompt">Fetch the application CIs from ServiceNow and compare them with the model.</div>
 <p>The second prompt needs an MCP server of ServiceNow on the <b>MCP servers</b> card (see “Your own MCP servers” below). On request, the assistant adds missing elements, owners or ids to the model (with your approval) or saves the report to Excel. In a pipeline, the same comparison runs with <code>--cmdb</code> (chapter 23).</p>
+<h3>Reading documents</h3>
+<p>The assistant reads documents on your computer that you name in the conversation (the tool <code>read_document</code>), in the same formats as attachments (chapter 6): PDF (every page), PowerPoint .pptx (slides with notes), Visio .vsdx (pages, shapes with their text and the connections A → B), Excel .xlsx (sheets and cells), Word .docx, HTML and text files. A file that is not an attachment of the conversation is asked for first. A PDF without a text layer (a scan) cannot be read this way: attach it to the conversation, and the model reads its pages as images. Old formats (.doc, .ppt, .xls, .vsd) must first be saved in the new format. Documents in the team's SharePoint library are read the same way (chapter 13).</p>
+<div class="prompt">Read the process in C:\Documents\Complaints.vsdx and model it as a BPMN diagram in the package Processes.</div>
+<p>Requirements for the comparison with the model (section 8.5) and for the requirements chain can also come from PDF, PowerPoint, Visio and Excel files, in the conversation and in check mode (<code>--requirements</code>, chapter 23).</p>
 <h3>Jira issues</h3>
 <p>Once the <b>Jira</b> card is filled in (chapter 5), the assistant reads issues by key or by JQL search and uses them as context: it draws diagrams from the description of an issue (a story) or checks whether the model covers its requirements. <b>Always with your consent in the approval panel</b> it creates issues, adds comments and links to model elements.</p>
 <table>
@@ -397,7 +461,7 @@
 <h3>Verification of a save</h3>
 <p>After every save, Compass reads the model again and compares it with the request: whether the created objects exist, whether new relationships have the asked ends, whether new elements are in the asked package, whether changed names, notes, stereotypes and tagged values have the new values, and whether deleted objects are gone. Differences are given to the assistant, which must report them instead of saying “done”.</p>
 <p>Saves are <b>all or nothing</b>: if a save fails halfway, the objects it already created are deleted again. Deleting an element that has relationships always asks for your consent (also in <b>auto</b> mode), and the approval panel lists those relationships.</p>
-<p><b>Always asked, with full details.</b> Writing files (XMI export, documents from EA document templates) and importing XMI always ask for your consent, also in <b>auto</b> mode, and the panel shows the full path. Only full paths on a local drive are accepted: network shares and system, program and application-data folders are refused. An id must be a number. Saving a note to the assistant's memory, saving a document template and saving or running an EA script also always ask, with the whole text or code shown (texts longer than 20 000 characters are refused); a script runs exactly as shown, together with its <code>!INC</code> includes. When the assistant wants to read a file that is not an attachment of the conversation (a requirements document, a source folder), it asks you first.</p>
+<p><b>Always asked, with full details.</b> Writing files (XMI export, documents from EA document templates) and importing XMI always ask for your consent, also in <b>auto</b> mode, and the panel shows the full path. Only full paths on a local drive are accepted: network shares and system, program and application-data folders are refused. An id must be a number. Saving a note to the assistant's memory, saving a document template and saving or running an EA script also always ask, with the whole text or code shown (texts longer than 20 000 characters are refused); a script runs exactly as shown, together with its <code>!INC</code> includes. Version control actions on a package and uploads to SharePoint also always ask. When the assistant wants to read a file that is not an attachment of the conversation (a requirements document, a source folder), it asks you first.</p>
 <h3>Your own MCP servers</h3>
 <p>Your own MCP servers give the assistant extra tools, for example a ticket system, a repository or a company knowledge base. You list the servers in the file <code>mcp_servers.json</code> next to the settings file and test them in the <b>MCP servers</b> card. A server can be a local program (<code>command</code> and <code>args</code>, talking over stdio) or an HTTP service (<code>url</code> and <code>headers</code>, Streamable HTTP):</p>
 <pre>{"servers":[{"name":"hub","url":"http://127.0.0.1:8730/mcp","headers":{"Authorization":"Bearer ${secret:hub_token}"}},
@@ -408,6 +472,7 @@
   <li>Compass's own keys and passwords (the AI provider keys, the database, EA, Confluence, Jira and Miro passwords and tokens) cannot be used in <code>${secret:…}</code>. The only exception is <code>${secret:hub_token}</code> in the headers of the team hub's own MCP endpoint (the hub address from Settings with the path <code>/mcp</code>), as in the example above. Save the tokens of other servers under their own names in Windows Credential Manager.</li>
   <li>A local program (<code>command</code>) gets only the basic Windows environment variables (PATH, TEMP, the user profile folders, the proxy settings…) and the variables listed in its <code>"env"</code>.</li>
   <li><code>"command": "npx"</code> works: Compass starts <code>npx.cmd</code> (likewise npm, pnpm and yarn). Servers started with npx need Node.js on the computer.</li>
+  <li><b>Sign-in other than a header.</b> An HTTP server can have <code>"auth"</code> instead of an <code>Authorization</code> header: <code>{"type": "basic", "user": …, "password": …}</code> for a user name and password, or <code>{"type": "oauth2", "token_url": …, "client_id": …, "client_secret": …, "scope": …}</code> for OAuth2 client credentials: Compass gets a token from <code>token_url</code> and sends it as <code>Bearer</code>. Keep the passwords and secrets in Credential Manager as <code>${secret:mcp_…}</code>.</li>
   <li>The button <b>Save and test MCP servers</b> connects to each server and shows the number of its tools.</li>
 </ul>
 <p><b>Ready-made servers.</b> On the <b>MCP servers</b> card, choose a server in <b>Add a ready-made server</b> and click <b>Add</b>: its entry goes into the text of <code>mcp_servers.json</code>, where you complete it and save the card. A name that is already used gets a number.</p>
@@ -419,10 +484,22 @@
   <tr><td>Files (a local folder)</td><td>A local server started with <code>npx</code> that reads a folder: change <code>C:/docs</code> to your folder.</td></tr>
   <tr><td>Compass Hub</td><td>Offered only when the hub address is filled in on the <b>Team (Compass Hub)</b> card: the hub's MCP server with your hub token, marked <code>"trusted": true</code>.</td></tr>
 </table>
-<p><b>Token for an MCP server.</b> Type a name that starts with <code>mcp_</code> (letters, digits and <code>_</code>, for example <code>mcp_github</code>) and the token, then click <b>Save and test MCP servers</b>. The token is saved in Windows Credential Manager; in <code>mcp_servers.json</code> you use it as <code>${secret:mcp_github}</code>.</p>
+<p><b>Token for an MCP server.</b> Type a name that starts with <code>mcp_</code> (letters, digits and <code>_</code>, for example <code>mcp_github</code>) and the token, then click <b>Save and test MCP servers</b>. The token is saved in Windows Credential Manager; in <code>mcp_servers.json</code> you use it as <code>${secret:mcp_github}</code>. The same field saves the password or client secret of a server with <code>"auth"</code>, for example:</p>
+<pre>{"servers":[{"name":"wiki","url":"https://mcp.example.com/mcp",
+  "auth":{"type":"oauth2","token_url":"https://login.example.com/oauth2/token",
+          "client_id":"compass","client_secret":"${secret:mcp_wiki}","scope":"mcp.read"}}]}</pre>
 <h3>EA scripts</h3>
 <p>The assistant lists the script groups and scripts of the model, reads a script, saves a script (JScript, VBScript or JavaScript; a missing group is created) and runs it. <b>Saving and running a script need your consent every time</b>, also in <b>auto</b> mode, because a script can change anything in the model; the approval panel shows the whole code. The script runs in the open EA window or, when there is none, in Compass's own background EA session. <code>Repository</code> and <code>Session.Output</code> work as in EA, and <code>!INC Group.Script</code> includes are resolved from the model. If another model is open in EA, the run stops with a message.</p>
 <div class="prompt">List the scripts in the model and then run the script “Report.Missing notes”.</div>
+<h3>MDG technologies and the EA API</h3>
+<ul>
+  <li><b>MDG technologies</b> (the tool <code>mdg_technologies</code>): which profiles the model really uses, and how many times; the technology files of EA and your own; the technologies imported into the model. For a technology (for example ArchiMate3, BPMN2.0, SysML1.5) the assistant lists its stereotypes with the metatype and what they apply to, and for a stereotype its tagged values with the type, the allowed values and the default. It uses this before it creates elements with stereotypes of a technology and before it fills tagged values.</li>
+  <li><b>The EA API</b> (the tool <code>ea_api</code>): the automation interface of EA, read from the type library <code>EA.tlb</code> of the EA installed on this computer (the path to EA.exe in Settings): classes, properties (read or read/write), methods with their parameters, and enumerations. The assistant checks it before it writes an EA script, so that the property and method names are right for your EA version.</li>
+</ul>
+<div class="prompt">Which stereotypes of ArchiMate3 does our model use, and which tagged values does «ArchiMate_ApplicationComponent» have?</div>
+<h3>Version control of packages</h3>
+<p>When packages of the model are under version control in EA (SVN, Git, TFS or a file share), the assistant reads their state (the tool <code>version_control_status</code>): the configuration, the file, who has each package checked out, the last save and load. On request it does <b>check out</b>, <b>check in</b> (with a comment), <b>get latest</b>, <b>put latest</b> or <b>resync</b> of a package. Each of these actions <b>always asks for your consent</b>, in every mode. The package must already be under version control in EA (Package → Version Control → Add Package to Version Control); the assistant does not set up version control.</p>
+<div class="prompt">Which packages are checked out and by whom? Check out the package Orders.</div>
 <h3>More model operations</h3>
 <ul>
   <li><b>Automatic diagram layout</b>: direction down, right, up or left, and spacing.</li>
@@ -488,7 +565,7 @@
 <p><b>Tip:</b> after the check, ask for one group of findings to be fixed at a time, for example “Fill in the missing descriptions of the classes in the Shop domain package”. The save goes through the usual approval and verification.</p>
 
 <h3>8.5 A requirements document against the model</h3>
-<p>The assistant reads requirements from a document (Word <code>.docx</code>, <code>.txt</code>, <code>.md</code>, an attachment of the conversation, a Confluence page by ID or pasted text) and compares them with the model. A requirement is a line or table row that starts with an identifier, for example W1, R.1.2, REQ-12, FR-01. The matching is done by the program: it looks for elements carrying that identifier (in the name, alias, notes, tagged values), trace relationships and similar words. The assistant judges the candidates.</p>
+<p>The assistant reads requirements from a document (Word <code>.docx</code>, PDF, PowerPoint <code>.pptx</code>, Visio <code>.vsdx</code>, Excel <code>.xlsx</code>, <code>.txt</code>, <code>.md</code>, an attachment of the conversation, a Confluence page by ID or pasted text) and compares them with the model. A requirement is a line or table row that starts with an identifier, for example W1, R.1.2, REQ-12, FR-01. The matching is done by the program: it looks for elements carrying that identifier (in the name, alias, notes, tagged values), trace relationships and similar words. The assistant judges the candidates.</p>
 <div class="prompt">Compare the requirements from the document C:\Documents\BRD.docx with the model: what is covered and what is missing?</div>
 <div class="prompt">Compare the requirements from Confluence page 123456 with the model and save the traceability matrix to Excel.</div>
 <div class="prompt">Create trace relationships for the covered requirements.</div>
@@ -562,7 +639,7 @@
 <pre>{"agents":[{"name":"Component owner","event":"element_created","applies_to":"Component",
   "prompt":"Check that the new component has an owner and a description; suggest what to fill in."}]}</pre>
 <p><b>What you see:</b> in System Output a line such as “🤖 Component owner: …” with the assistant's remarks. The agent <b>only reads the model</b>: it has no access to files, Jira, Confluence or MCP servers and cannot propose or save anything. The same agent reacts to the same object at most once a minute. A new element is checked only after its first edit, because EA first gives it the name Class1.</p>
-<p><b>Tip:</b> write short, concrete agent prompts and narrow them with <code>applies_to</code> (a type, a «stereotype» or <code>*</code>). After changing the file, click <b>Save event agents</b>.</p>
+<p><b>Tip:</b> write short, concrete agent prompts and narrow them with <code>applies_to</code> (a type, a «stereotype» or <code>*</code>). After changing the file, click <b>Save event agents</b>. An agent can also guard deletions and stop them (section 8.22).</p>
 
 <h3>8.15 Checking the model in a CI pipeline</h3>
 <p>Check mode runs the model check, the comparison with the code and with the CMDB, and the requirements chain without the window and without the AI model, and ends with an exit code that a pipeline understands (chapter 23).</p>
@@ -586,6 +663,62 @@
 </ul>
 <p><b>What you see:</b> “Created ARCH-…” with the link to the issue; in the change set a line “Jira: ARCH-…”; for Confluence “Created:” or “Updated:” with a link to the page. Each action is recorded in the <b>Audit trail</b> tab under your name.</p>
 <p><b>Tip:</b> the Confluence page is a text summary of the package (elements with their descriptions and relationships, without diagrams) and is replaced at every publication: edit the model, not the page. For a page with diagrams, publish from Compass (chapter 13).</p>
+
+<h3>8.18 Modelling instructions of the team</h3>
+<p>The team's rules for a repository are kept in the repository itself, as the notes of an Artifact «CompassInstructions» (chapter 7, “Modelling instructions of the team”). The assistant follows them in every answer, for everybody who opens the repository.</p>
+<div class="prompt">Prepare modelling instructions for this repository.</div>
+<div class="prompt">Add to the instructions: activities start with a verb.</div>
+<p><b>What you see:</b> for the first prompt, the analysis of the repository in the steps (“Modelling instructions: …”), then a draft of the rules under headings (naming, element types and stereotypes, package structure, diagrams, relationships, tagged values, quality checks) and the question whether to save it. The save, and the added rule of the second prompt, go through the usual approval panel as a change of the element “Loonar Compass – modelling instructions”.</p>
+<p><b>Tip:</b> after a correction you gave in the conversation, ask the assistant to add it to the instructions: then it applies to the whole team, not only to you. Personal preferences belong in the assistant's memory (chapter 15).</p>
+
+<h3>8.19 Documents: PDF, PowerPoint, Visio, Excel</h3>
+<p>The assistant reads documents you attach or name: PDF, Word, PowerPoint with the notes, Visio with the shapes and connections, Excel with the sheets (chapter 7, “Reading documents”).</p>
+<div class="prompt">Read the process in C:\Documents\Complaints.vsdx and model it as a BPMN diagram in the package Processes.</div>
+<div class="prompt">Compare the requirements in the attached PDF with the package Shop domain.</div>
+<p><b>What you see:</b> for a file that is not an attachment, first a question whether the assistant may read it, then the step “Reading the document …”. For the Visio drawing, the assistant proposes the elements and flows from the shapes and connections; the save goes through the usual approval.</p>
+<p><b>Tip:</b> a scanned PDF has no text: attach it to the conversation instead of naming its path, and the model reads the pages as images. Save old .doc, .ppt, .xls and .vsd files in the new format first.</p>
+
+<h3>8.20 Presentations and PDF</h3>
+<p>The assistant makes PowerPoint presentations from the model (title slide, slides with bullets and diagrams) and Word documents also as PDF (chapter 13).</p>
+<div class="prompt">Prepare a presentation of 5 slides about the Shop domain package, with the Domain model diagram, also as PDF.</div>
+<div class="prompt">Prepare a description of the Order process as a PDF document.</div>
+<p><b>What you see:</b> the step “Preparing the presentation …” and a file card with the <b>Open</b> and <b>Save as…</b> buttons; with PDF, a second card for the PDF file. The PDF is made by Microsoft PowerPoint or Word on this computer.</p>
+<p><b>Tip:</b> without Microsoft Office the presentation and the document are still made as PPTX and DOCX; only the PDF is missing, and the assistant says so.</p>
+
+<h3>8.21 Larger tasks: questions, plan, sub-agents</h3>
+<p>Before a larger change the assistant asks what is unclear, shows its plan and can hand analyses to sub-agents (chapter 6, “Questions, plan and sub-agents”).</p>
+<div class="prompt">Model the returns process: a BPMN diagram, the domain classes and the use cases.</div>
+<div class="prompt">Before you change the Payment component, have a sub-agent analyze the impact.</div>
+<p><b>What you see:</b> a form “Questions to you” (for example which package, which notation), with choices and the field “Something else…”. After <b>Send answers</b>, the plan “📋 Plan: 0 of 4 done” in the steps, updated with ✓ ▶ ○ as the work goes on. A sub-agent's work appears as the step “Sub-agent (impact): …”, followed by its compact result.</p>
+<p><b>Tip:</b> if you already know the answers, put them in the prompt (“in the package Returns, BPMN 2.0”): the assistant then asks less.</p>
+
+<h3>8.22 A guard that stops a deletion</h3>
+<p>An event agent with <code>"mode": "guard"</code> is asked by EA before something is deleted and can stop the deletion (chapter 10, “Event agents”).</p>
+<pre>{"agents":[{"name":"Keep approved","event":"element_deleting","mode":"guard","applies_to":"Requirement",
+  "prompt":"Block deleting a requirement whose status is Approved."}]}</pre>
+<p><b>What you see:</b> when you delete an approved requirement in EA, the message “Loonar Compass stopped this deletion:” with the reason, and the requirement stays. In System Output the lines “🛡 Keep approved: blocked - …” or “🛡 Keep approved: allowed”.</p>
+<p><b>Tip:</b> a guard answers within a few seconds; if it does not answer within 40 seconds, the deletion goes ahead, so that EA never hangs. Write guard prompts that say plainly when to block.</p>
+
+<h3>8.23 Version control of packages</h3>
+<p>For packages under version control in EA, the assistant shows who has what checked out and checks packages out and in (chapter 7, “Version control of packages”).</p>
+<div class="prompt">Which packages are checked out and by whom?</div>
+<div class="prompt">Check in the package Orders with the comment “Returns added”.</div>
+<p><b>What you see:</b> for the first prompt, a list of the packages under version control with their configuration, file and state (“checked out to …” or “checked in”). For the second, an approval panel “Version control: check_in – package Orders”, which appears in every mode.</p>
+<p><b>Tip:</b> put the package under version control in EA first; the assistant works only with packages that are already there.</p>
+
+<h3>8.24 SharePoint</h3>
+<p>With the <b>SharePoint</b> card filled in (chapter 13), the assistant reads documents from the team's library and uploads the documents and presentations it has made.</p>
+<div class="prompt">List the documents in the folder Requirements on SharePoint and compare the newest BRD with the model.</div>
+<div class="prompt">Upload the presentation you made to SharePoint, folder Reviews.</div>
+<p><b>What you see:</b> the list of the folder, then the text of the document read as in section 8.19. For the upload, an approval panel “Upload … to SharePoint: …” with the site, the library and the folder; it appears in every mode.</p>
+<p><b>Tip:</b> only files the assistant made in the conversation can be uploaded (from its attachments folder), not any file on your disk.</p>
+
+<h3>8.25 Power BI and GraphQL from the hub</h3>
+<p>The team hub gives the models as flat tables and through a read-only GraphQL API, for Power BI, Excel and other tools (chapter 22, “GraphQL and tables for Power BI”).</p>
+<pre>POST https://hub.example.com/api/sources/shop-db/graphql
+{"query":"{ elements(type: \"Component\", limit: 20) { name stereotype connectors { type target { name } } } }"}</pre>
+<p><b>What you see:</b> a JSON answer with the components and their relationships. In Power BI: <b>Get Data</b> → <b>Web</b> → <b>Advanced</b>, the address <code>https://&lt;hub&gt;/api/sources/&lt;id&gt;/table/elements</code> and the header <code>Authorization</code> with the value <code>Bearer &lt;API token&gt;</code>.</p>
+<p><b>Tip:</b> ask the hub administrator for an API token of your own (the <b>Users</b> tab); any role may read.</p>
 
 <h3>Tips for good prompts</h3>
 <ul>
@@ -625,13 +758,13 @@
   <li>You choose conversations from the drop-down at the top of the window. The list shows only the conversations with this project. The <b>+</b> button starts a new conversation, and the pencil renames the selected one.</li>
   <li>The view icons are at the bottom of the window; in a narrow window the pages scroll sideways and up and down.</li>
   <li><span class="key">Ctrl</span> + <span class="key">V</span> pastes pictures, files and text, as in the separate application.</li>
-  <li>The settings in EA have no Model and Enterprise Architect cards. The AI model, Language and change approval, Confluence, Miro, Jira and Team (Compass Hub) cards work as in the separate application (chapter 5).</li>
+  <li>The settings in EA have no Model and Enterprise Architect cards. The AI model, Language and change approval, Confluence, Miro, Jira, SharePoint and Team (Compass Hub) cards work as in the separate application (chapter 5).</li>
 </ul>
 <h3>Changes, diagrams and references to objects</h3>
 <ul>
   <li>Writes go through the same EA window, so changes show at once in the Project Browser and on diagrams. Change approval works as in the separate application (chapter 16).</li>
   <li><b>Show diagram</b> and <b>Edit diagram</b> open the diagram in EA itself instead of showing an image in the chat.</li>
-  <li>Right-click an element, package or diagram (in the Project Browser or on a diagram) and choose <b>Specialize</b> → <b>Add to the Compass conversation</b>. A reference to the object goes into the message, for example «Package: Shop (id 5)», so the assistant knows which object you mean.</li>
+  <li>Right-click an element, package or diagram (in the Project Browser or on a diagram) and choose <b>Specialize</b> → <b>Add to the Compass conversation</b>. A reference to the object goes into the message, for example «Package: Shop (id 5)», so the assistant knows which object you mean. The <b>⌖</b> button in the message card adds the same references by searching the model (chapter 6, “Pick from the model”).</li>
 </ul>
 <div class="prompt">Describe «Package: Shop (id 5)» and suggest the missing requirements.</div>
 <h3>Live check</h3>
@@ -641,14 +774,27 @@
 <pre>{"agents":[{"name":"Component owner","event":"element_created","applies_to":"Component",
   "prompt":"Check that the new component has an owner and a description; suggest what to fill in."}]}</pre>
 <ul>
-  <li>Events (<code>event</code>): <code>element_created</code>, <code>element_changed</code>, <code>connector_created</code>, <code>diagram_created</code>. In <code>applies_to</code> give an element type, «stereotype» or <code>*</code> (the wildcards <code>*</code> and <code>?</code> work).</li>
+  <li>Events (<code>event</code>), 18 in all:
+    <ul>
+      <li>elements: <code>element_created</code>, <code>element_changed</code>, <code>element_deleting</code>;</li>
+      <li>connectors: <code>connector_created</code>, <code>connector_changed</code>, <code>connector_deleting</code>;</li>
+      <li>diagrams: <code>diagram_created</code>, <code>diagram_changed</code>, <code>diagram_deleting</code>;</li>
+      <li>packages: <code>package_created</code>, <code>package_changed</code>, <code>package_deleting</code>;</li>
+      <li>attributes and methods: <code>attribute_created</code>, <code>attribute_deleting</code>, <code>method_created</code>, <code>method_deleting</code>;</li>
+      <li>the project glossary: <code>glossary_term_created</code>, <code>glossary_term_deleting</code>.</li>
+    </ul>
+  In <code>applies_to</code> give an element type, «stereotype» or <code>*</code> (the wildcards <code>*</code> and <code>?</code> work).</li>
   <li>Agents work while Compass is open in its tab in EA. The assistant reads the model and answers in the <b>Loonar Compass</b> tab of System Output (lines start with 🤖). <b>It only reads the model:</b> it has no access to files, Jira, Confluence or MCP servers and cannot propose or save anything.</li>
   <li>The same agent reacts to the same object at most once a minute.</li>
   <li>The button <b>Save event agents</b> saves the rules and shows the number of agents.</li>
 </ul>
+<p><b>Guards.</b> By default an agent advises after the event (<code>"mode": "advise"</code>). With <code>"mode": "guard"</code>, allowed only for the <code>*_deleting</code> events, EA asks Compass before it deletes the object. The guard answers ALLOW or BLOCK with a reason. With BLOCK, EA shows “Loonar Compass stopped this deletion:” with the reason and cancels the deletion. If the guard does not answer within 40 seconds, the deletion goes ahead, so that EA never hangs. System Output shows “🛡 …: allowed” or “🛡 …: blocked - …”.</p>
+<pre>{"agents":[{"name":"Keep approved","event":"element_deleting","mode":"guard","applies_to":"Requirement",
+  "prompt":"Block deleting a requirement whose status is Approved."}]}</pre>
+<p><b>Team agents.</b> With a team hub (chapter 22), the agents of the team policy (<code>event_agents</code>) work in everybody's Compass in EA, next to the agents of this computer. Their names are marked “(team)”.</p>
 <p><b>Live spelling.</b> The notes of a changed element are checked in the language of Compass; remarks appear in System Output as “✎ Spelling: …”.</p>
 <h3>The assistant's steps in System Output</h3>
-<p>EA's <b>System Output</b> window has a <b>Loonar Compass</b> tab: your messages and every step of the assistant (model reads, writes to EA, results) with the time. Meanwhile, the chat in the Compass window shows only the last step, in one line.</p>
+<p>EA's <b>System Output</b> window has a <b>Loonar Compass</b> tab: your messages and every step of the assistant (model reads, writes to EA, results, the plan “📋 Plan: …” of larger work) with the time. Meanwhile, the chat in the Compass window shows only the last step, in one line.</p>
 <p><b>Closing.</b> Compass closes together with Enterprise Architect and saves the conversation. When you close the project in EA, Compass asks you to open a project.</p>
 
 <h2 id="s11" class="break">11. Diagram editor</h2>
@@ -702,17 +848,37 @@
 </ol>
 <p>Sequence diagrams go as lifelines with numbered messages in their EA order (replies dashed). Sending the same diagram again puts a new frame next to the earlier one, so nothing changed on the board is overwritten.</p>
 
-<h2 id="s13" class="break">13. Documents: Word, Excel, images, Confluence</h2>
+<h2 id="s13" class="break">13. Documents: Word, Excel, PowerPoint, PDF, images, Confluence, SharePoint</h2>
 <p>The assistant prepares documents from the content of the model and the conversation. The finished file appears in the chat as a card with buttons.</p>
 <table>
   <tr><th style="width: 22%;">Type</th><th>What it contains</th><th style="width: 30%;">Buttons in the chat</th></tr>
   <tr><td>Word (DOCX)</td><td>Headings, paragraphs, lists, tables, diagrams from EA and images drawn earlier in the conversation</td><td><b>Open</b>, <b>Save as…</b></td></tr>
   <tr><td>Excel (XLSX)</td><td>Several sheets, headers with a filter and a frozen first row, numbers as numbers; for example a list of elements, a matrix, the result of an impact analysis</td><td><b>Open</b>, <b>Save as…</b></td></tr>
+  <tr><td>PowerPoint (PPTX)</td><td>A presentation in 16:9: a title slide, then slides with a title, bullets on two levels and/or a diagram from EA or an image drawn in the conversation</td><td><b>Open</b>, <b>Save as…</b></td></tr>
+  <tr><td>PDF</td><td>A Word document or a presentation as PDF, made by Microsoft Word or PowerPoint on this computer</td><td><b>Open</b>, <b>Save as…</b></td></tr>
   <tr><td>Image (PNG)</td><td>A matrix (for example of use cases and requirements), a table, a chart, a schematic. The assistant sees the result and can correct it.</td><td><b>Save as…</b>, <b>Open full size</b></td></tr>
   <tr><td>Confluence page</td><td>The page code for the source editor, and diagrams and images as files</td><td><b>Copy page code</b>, <b>Open images folder</b>, <b>Save as…</b></td></tr>
 </table>
 <div class="prompt">Prepare a Word document describing the “Shop” package: a list of use cases with descriptions and the use case diagram.</div>
 <div class="prompt">Draw a matrix of use cases and requirements from the “Shop” package as an image.</div>
+<h3>Presentations and PDF</h3>
+<ul>
+  <li><b>PowerPoint:</b> the assistant builds the presentation (16:9) from the model and the conversation: a title slide with a subtitle, then slides with a title, at most about six bullets on two levels and/or a picture: a diagram from EA or an image drawn in the conversation. With bullets, the picture goes on the right.</li>
+  <li><b>PDF:</b> on request the presentation is also saved as PDF by Microsoft PowerPoint, and a Word document by Microsoft Word (as PDF only, or as DOCX and PDF). Office runs invisibly in the background. Without Office, the PPTX or DOCX is still made and the assistant says that the PDF could not be.</li>
+</ul>
+<div class="prompt">Prepare a presentation for the steering committee about the changes in the Shop package, with the Domain model diagram, also as PDF.</div>
+<h3>SharePoint</h3>
+<p>The assistant works with a document library of the team's SharePoint site (the tool <code>sharepoint</code>): it lists a folder, reads the text of a document (PDF, Word, PowerPoint, Visio, Excel) and uploads a file it has made in this conversation (a document, a workbook, a presentation). <b>Every upload asks for your consent</b>, in every mode; files from elsewhere on your disk cannot be uploaded.</p>
+<table>
+  <tr><th style="width: 30%;">Field of the “SharePoint” card</th><th>What to enter</th></tr>
+  <tr><td>Site address</td><td>For example <code>https://company.sharepoint.com/sites/Architecture</code>. Empty: the assistant does not use SharePoint.</td></tr>
+  <tr><td>Document library</td><td>The name of the library; empty = Documents</td></tr>
+  <tr><td>Tenant (directory) ID</td><td>For example <code>contoso.onmicrosoft.com</code> or a GUID</td></tr>
+  <tr><td>Application (client) ID</td><td>The ID of the app registration in Microsoft Entra ID</td></tr>
+  <tr><td>Client secret</td><td>The secret of that app registration; stored in Windows Credential Manager</td></tr>
+</table>
+<p><b>App registration.</b> Ask your Microsoft 365 administrator for an app registration in Microsoft Entra ID with a client secret and the Microsoft Graph <b>application</b> permission <code>Sites.Selected</code>, granted to this site (recommended), or <code>Sites.ReadWrite.All</code>. Compass signs in as this application (OAuth2 client credentials) at <code>login.microsoftonline.com</code> and works through Microsoft Graph (<code>graph.microsoft.com</code>). Save the card with <b>Save and test SharePoint connection</b>: it shows “Saved. Connected to SharePoint: … items in the library.”</p>
+<div class="prompt">Read the document Requirements/BRD.docx from SharePoint and compare it with the model.</div>
 <h3>Confluence pages</h3>
 <p>The assistant prepares a page in the Confluence source editor format (storage XHTML): headings, tables, lists, a table of contents, panels (info, note, warning, tip, expand section), statuses, Jira issues, user mentions and code blocks. Diagrams from EA and images are added as attachments. The page code is saved in the attachments folder, and the page images in a folder next to it (<code>&lt;page&gt;_images</code>).</p>
 <p><b>Pasting manually</b> (without Confluence settings):</p>
@@ -787,7 +953,7 @@
 </table>
 <p>When approval is needed, a <b>“The assistant wants to save changes to the model”</b> panel appears above the message field, with a description of the changes (how many packages, diagrams, elements and connectors, and the names of the objects being deleted, moved or copied) and the <b>Approve</b> and <b>Reject</b> buttons. A rejected save does not change the model; the assistant is informed of the rejection and may suggest something else.</p>
 <figure><img src="img/en/approval.png" alt="Approval panel “The assistant wants to save changes to the model” with the Approve and Reject buttons"><figcaption>The approval panel for a change in the model</figcaption></figure>
-<p>Publishing to Confluence always asks for approval, in every mode, and says when an existing page will be replaced (chapter 13). Also in every mode, Compass asks before: deleting an element that has relationships, undoing saves, creating Jira issues, comments and links, writing files (XMI export, documents from EA templates) and importing XMI, saving a memory note or a document template, saving or running an EA script, calling a tool of an MCP server that is not trusted, and reading a file that is not an attachment of the conversation (chapter 7).</p>
+<p>Publishing to Confluence always asks for approval, in every mode, and says when an existing page will be replaced (chapter 13). Also in every mode, Compass asks before: deleting an element that has relationships, undoing saves, creating Jira issues, comments and links, writing files (XMI export, documents from EA templates) and importing XMI, saving a memory note or a document template, saving or running an EA script, check out, check in and the other version control actions on a package, uploading a file to SharePoint, calling a tool of an MCP server that is not trusted, and reading a file that is not an attachment of the conversation (chapter 7).</p>
 <p>In the approval panel the description of the changes has a <b>“Before → after:”</b> part: what is created (new objects), what changes from which value to which (field: old → new value) and what is deleted. So you see the effect of the save before you click <b>Approve</b>.</p>
 <p><b>Deleting an element that has relationships.</b> Deleting an element that has relationships always asks for your consent, also in <b>auto</b> mode. The approval panel lists those relationships.</p>
 <h3>Audit log</h3>
@@ -803,7 +969,8 @@
   <li><b>EA file dropped on the window:</b> a .qea or .qeax file dropped on the chat becomes the model of the conversation instead of an attachment; in a conversation with messages, a new conversation starts with that file.</li>
   <li><b>Conversations from earlier versions</b> get a copy of the model from the settings when version 0.5 or later starts for the first time, so they keep working with that model even if the settings change later. Hovering over a conversation in the list shows its model.</li>
   <li><b>Several conversations at once:</b> while the assistant is working, you can start a new conversation or switch to another one. The work already started continues in the background.</li>
-  <li><b>Deleting:</b> conversations cannot be deleted in the application. If you need to, close the application and delete the conversation's file in the <code>history</code> folder (chapter 18).</li>
+  <li><b>Deleting:</b> right-click a conversation in the list and choose <b>Delete the conversation</b>. Its file is moved to the folder <code>history\bin</code> (chapter 18), so you can bring it back by moving the file back to <code>history</code> while the application is closed. A conversation in which the assistant is working cannot be deleted until it finishes.</li>
+  <li><b>Long conversations:</b> when a conversation grows beyond about 100 000 tokens, the earlier part is replaced by a summary written by the model for the next answers, and the newest messages stay word for word. The step “The conversation is long: summarising its earlier part” shows it. So the answers stay fast and the conversation never reaches the model's limit; the history you see in the chat stays complete.</li>
 </ul>
 <table>
   <tr><th style="width: 30%;">Dot next to a conversation</th><th>Meaning</th></tr>
@@ -818,28 +985,37 @@
   <tr><th style="width: 36%;">What</th><th>Where</th></tr>
   <tr><td>Program</td><td>Just for you: <code>%LOCALAPPDATA%\Programs\Loonar Compass</code>; for all users: <code>%ProgramFiles%\Loonar Compass</code>. The folder also contains the license, the changelog and <code>THIRD-PARTY-NOTICES.txt</code>; the user guide is on loonar.eu (Start menu → User guide).</td></tr>
   <tr><td>Settings (<code>app.properties</code>, without passwords or keys)</td><td rowspan="6">The user data folder <code>%APPDATA%\Loonar Compass</code>. Each user of the computer has their own.</td></tr>
-  <tr><td>Conversation history (<code>history</code> folder)</td></tr>
-  <tr><td>Attachments and the files prepared by the assistant: Word, Excel, PNG and Confluence pages with their image folders <code>&lt;page&gt;_images</code> (<code>attachments</code> folder)</td></tr>
+  <tr><td>Conversation history (<code>history</code> folder; deleted conversations in <code>history\bin</code>)</td></tr>
+  <tr><td>Attachments and the files prepared by the assistant: Word, Excel, PowerPoint, PDF, PNG and Confluence pages with their image folders <code>&lt;page&gt;_images</code> (<code>attachments</code> folder)</td></tr>
   <tr><td>Assistant memory (<code>memory</code> folder with the <code>MEMORY.md</code> index)</td></tr>
   <tr><td>Document templates (<code>templates</code> folder)</td></tr>
   <tr><td>Audit log (<code>audit_log.jsonl</code>) and the list of published Confluence pages (<code>confluence_pages.json</code>)</td></tr>
-  <tr><td>Claude API key, OpenAI API key, EA account password, database password, Confluence and Miro tokens, tokens of MCP servers (<code>mcp_…</code>)</td><td>Windows Credential Manager, entries “loonar-compass” (encrypted by the system). Nothing secret is stored in <code>app.properties</code>.</td></tr>
+  <tr><td>Claude API key, OpenAI API key, EA account password, database password, Confluence and Miro tokens, the SharePoint client secret, the OAuth2 secret of the AI service (<code>ai_oauth_client_secret</code>), tokens and secrets of MCP servers (<code>mcp_…</code>)</td><td>Windows Credential Manager, entries “loonar-compass” (encrypted by the system). Nothing secret is stored in <code>app.properties</code>.</td></tr>
+  <tr><td>Modelling instructions of the team</td><td>In the EA repository itself (an Artifact «CompassInstructions», chapter 7), not on your computer</td></tr>
 </table>
 <p>Conversation history is stored as plain files in your Windows profile, protected by your Windows account; the application does not encrypt it.</p>
 <h3>What is sent to the AI model provider</h3>
-<p>So that the assistant can answer, every request to the chosen AI model provider (Anthropic or OpenAI, AI model card) contains: the content of the conversation, the attached files, the full content of the assistant's memory, the list of templates with their descriptions, and what the assistant has read from the model in that conversation, i.e. the results of its database queries (names and descriptions of packages, elements, diagrams) and images of the diagrams shown. The whole database is not sent, only what the assistant asked for. After a language change, the content of the memory and templates to be translated is also sent. The data goes directly to the chosen provider (api.anthropic.com or api.openai.com) with your API key; the other provider receives nothing, and Loonar does not receive it.</p>
+<p>So that the assistant can answer, every request to the chosen AI model provider (Anthropic or OpenAI, AI model card) contains: the content of the conversation, the attached files, the full content of the assistant's memory, the modelling instructions of the repository, the list of templates with their descriptions, and what the assistant has read from the model in that conversation, i.e. the results of its database queries (names and descriptions of packages, elements, diagrams) and images of the diagrams shown. The whole database is not sent, only what the assistant asked for. After a language change, the content of the memory and templates to be translated is also sent. The data goes directly to the chosen provider (api.anthropic.com or api.openai.com) with your API key; the other provider receives nothing, and Loonar does not receive it. With <code>claude.url</code> (chapter 5) the requests go to that address instead, for example your Azure AI Foundry resource or a company gateway.</p>
+<p><b>Other places your data can go</b>, only when you set them up or switch them on:</p>
+<table>
+  <tr><th style="width: 30%;">Where</th><th>What</th></tr>
+  <tr><td>Anthropic's sandbox (the <b>∑</b> switch, chapter 6)</td><td>The code the assistant runs and the data it passes to it, for calculations and data analysis. It goes to Anthropic, under the same terms as the conversation. Off by default.</td></tr>
+  <tr><td>SharePoint (Microsoft Graph, chapter 13)</td><td>The names of folders and documents the assistant lists, the documents it reads, and the files you approve for upload. Sign-in at <code>login.microsoftonline.com</code>, data at <code>graph.microsoft.com</code>.</td></tr>
+  <tr><td>OAuth2 token addresses (<code>ai.oauth.token_url</code>, <code>"auth"</code> of MCP servers)</td><td>Only the client ID, the client secret and the scope, to get a token; no content of the model or the conversation.</td></tr>
+  <tr><td>MCP servers, Jira, Confluence, the team hub</td><td>As before: what the assistant sends to their tools, issues, pages and the audit trail (chapters 7, 13 and 22).</td></tr>
+</table>
 <div class="note"><b>Before you use the application on a company model</b>, check whether your organization's rules and your agreements with customers allow the content of the model to be passed to an external AI service, and which data processing terms apply to your account with the chosen provider (Anthropic or OpenAI).</div>
 <h3>The assistant's permissions</h3>
 <ul>
   <li>The assistant reads the database in a read-only session, and a model file read-only, with a time limit for each query; server functions that read files or affect other sessions are blocked. All changes go through Enterprise Architect, under the model's EA account (from the Model card or from the model of the conversation), so the permissions and locks of that account apply to them. Compass in EA reads and writes the model through the EA window it is open in, under the account you logged in to EA with.</li>
   <li>In Confluence, the assistant works with the permissions of the token from the “Confluence” card and publishes only after your approval.</li>
   <li>The assistant has no access to files on disk other than those you attach to it yourself and its own memory and templates folders; it reads any other file (a requirements document, a source folder) only after asking you. Images drawn by the assistant cannot read files from disk or from the network.</li>
-  <li>The assistant treats the content of attachments, documents and the model as data, not as instructions.</li>
+  <li><b>Protection against hidden instructions</b> (prompt injection). A document, an issue, a page or a model note can contain text written to steer the assistant. The assistant gets safety rules in every request; the results of documents, Jira, Confluence, MCP servers, the CMDB and code are marked as data, not as instructions; and an answer that repeats the assistant's internal instructions word for word is withheld (“The answer repeated the assistant's internal instructions and was withheld.”). Saves still go through your approval (chapter 16).</li>
   <li>The connection string of your open EA window, with its login details, is never sent to the model.</li>
 </ul>
 <h3>Connections and encryption</h3>
 <ul>
-  <li>The AI model API (Anthropic or OpenAI), Confluence and Miro are used over HTTPS only.</li>
+  <li>The AI model API (Anthropic or OpenAI, or the address in <code>claude.url</code>), Confluence, Jira, SharePoint, Miro and OAuth2 token addresses are used over HTTPS only (<code>http://</code> only for a server on the same computer).</li>
   <li>The connection to the model database supports TLS (Model card, see “Database connection encryption” in chapter 5). Tip: administrators can enforce TLS for all clients with <code>hostssl</code> entries in <code>pg_hba.conf</code>. Enterprise Architect's own connection to the database follows EA's settings.</li>
   <li>The application uses the proxy from the Windows Internet settings and the HTTPS_PROXY and ALL_PROXY variables. Proxies with a PAC script and NTLM/Kerberos proxy authentication are not supported.</li>
   <li>Temporary errors of the AI model API (overload 529 or other 5xx errors, rate limit 429) are retried automatically.</li>
@@ -874,6 +1050,10 @@
   <tr><td><code>LoonarCompass.exe --check</code> shows nothing in PowerShell, or <code>$LASTEXITCODE</code> is empty</td><td>Compass is a window program, so PowerShell does not wait for it. Pipe its output: <code>… | Out-Host</code> (chapter 23).</td></tr>
   <tr><td>A ready-made MCP server started with <code>npx</code> does not start</td><td>Install Node.js (it brings npx) and restart Compass. Check the organization or the folder in the server's entry.</td></tr>
   <tr><td>You cannot sign in to the web view of the hub</td><td>Check the user name and the password. After 20 wrong attempts from one address, the hub refuses it for 10 minutes. An admin can set a new password in the <b>Users</b> tab (chapter 22).</td></tr>
+  <tr><td>“no ODBC driver for sqlserver (or mysql, oracle) is installed on this computer”</td><td>Install the 64-bit ODBC driver of the database vendor (for SQL Server: “ODBC Driver 18 for SQL Server”) and test the Model card again. The message lists the drivers that are installed. Alternatively give the full connection string in <code>db.odbc</code> (chapter 5).</td></tr>
+  <tr><td>“Word is not installed on this computer” or “PowerPoint is not installed on this computer” when a PDF is made</td><td>The PDF is made by Microsoft Office. The DOCX or PPTX file is still there: open it and save it as PDF yourself, or install Office.</td></tr>
+  <tr><td>Company sign-in to the hub: “Sign-in did not work”</td><td>“… is not in any group of the hub”: ask the administrator to add you to one of the hub's groups. “A local user of the hub has the same name”: the administrator renames or removes that local user. “The sign-in expired or was not started here”: start again from the sign-in page. “The company sign-in is not available right now”: the hub cannot reach the provider; the administrator checks <code>issuer</code> and <code>hub.log</code> (chapter 22).</td></tr>
+  <tr><td>SharePoint: “Microsoft Graph answered 403: …”</td><td>The app registration has no permission for this site: the administrator grants <code>Sites.Selected</code> for the site (or <code>Sites.ReadWrite.All</code>) as an application permission, with admin consent. 401: check the tenant, the client ID and the client secret (it may have expired).</td></tr>
   <tr><td>Windows SmartScreen warns when the installer starts</td><td>The installer is not digitally signed yet. Click “More info” and then “Run anyway”. With Smart App Control turned on, Windows blocks unsigned applications; wait for the signed version.</td></tr>
 </table>
 
@@ -901,7 +1081,7 @@
 <p>In an installation for all users, only your own data is removed; the data of other users stays in their profiles.</p>
 
 <h2 id="s22" class="break">22. Compass Hub (team service)</h2>
-<p>Compass Hub is an optional team service, run on a team computer or server. It provides a shared policy (model check rules and the minimum approval mode), a central audit trail of changes from all workstations, shared notes, change sets for review, a web view of the models for people without Enterprise Architect, Jira issues and Confluence pages created from the web view, and an MCP server (read-only) for other AI tools. Without a hub Compass works on its own, as before.</p>
+<p>Compass Hub is an optional team service, run on a team computer or server. It provides a shared policy (model check rules and the minimum approval mode), a central audit trail of changes from all workstations, shared notes, change sets for review, a web view of the models for people without Enterprise Architect, Jira issues and Confluence pages created from the web view, Word and Excel reports of packages, sign-in with the company account (OpenID Connect), event agents for the whole team, a read-only GraphQL API and tables for Power BI, and an MCP server (read-only) for other AI tools. Without a hub Compass works on its own, as before.</p>
 <h3>For the user</h3>
 <p>You get the hub address and your API token from the administrator (the <b>Users</b> tab of the web view). Enter them in the <b>“Team (Compass Hub)”</b> card in the Settings view: <b>Hub address</b> (it must start with <code>https://</code>; <code>http://</code> only on this computer), <b>Token</b> and optionally <b>This model in the hub</b> (the source id, that is the hub's model that matches yours), then click <b>Save and test hub connection</b>. The test shows your account, role and the team policy. With a hub:</p>
 <ul>
@@ -910,10 +1090,10 @@
   <li>every saved change goes to the team audit trail; it is sent in the background, so a hub that is down does not stop your work, and the last problem is shown on the card.</li>
 </ul>
 <h3>Installing the hub</h3>
-<p>The hub is a program of its own, <code>compass-hub</code>, for Windows and Linux. It reads the models directly (a PostgreSQL database or .qea/.qeax files), so the server needs no Enterprise Architect. Downloads:</p>
+<p>The hub is a program of its own, <code>compass-hub</code>, for Windows and Linux. It reads the models directly (a PostgreSQL, SQL Server, MySQL/MariaDB or Oracle database, or .qea/.qeax files), so the server needs no Enterprise Architect. Downloads:</p>
 <ul>
-  <li><b>Windows:</b> <code>CompassHub-0.8.2-windows-x64.zip</code> with <code>compass-hub.exe</code>, an example <code>hub.json</code> and a README.</li>
-  <li><b>Docker:</b> the image <code>ghcr.io/loonar-eu/compass-hub:0.8.2</code>, or build it yourself in the root folder of the repository: <code>docker build -f hub/Dockerfile -t compass-hub .</code></li>
+  <li><b>Windows:</b> <code>CompassHub-0.9.0-windows-x64.zip</code> with <code>compass-hub.exe</code>, an example <code>hub.json</code> and a README.</li>
+  <li><b>Docker:</b> the image <code>ghcr.io/loonar-eu/compass-hub:0.9.0</code>, or build it yourself in the root folder of the repository: <code>docker build -f hub/Dockerfile -t compass-hub .</code></li>
 </ul>
 <p><b>In a console</b> (Windows or Linux). The hub runs until you close the console:</p>
 <pre>compass-hub hub.json</pre>
@@ -922,10 +1102,10 @@
 compass-hub --service-uninstall</pre>
 <p><b>In Docker.</b> Put <code>hub.json</code> with <code>"listen": "0.0.0.0:8730"</code> in the data folder, which the container sees as <code>/data</code>:</p>
 <pre>docker run -d --name compass-hub -p 8730:8730 -v /srv/compass-hub:/data \
-  -e LOONAR_SECRET_CLAUDE_API_KEY=... ghcr.io/loonar-eu/compass-hub:0.8.2</pre>
+  -e LOONAR_SECRET_CLAUDE_API_KEY=... ghcr.io/loonar-eu/compass-hub:0.9.0</pre>
 <ul>
   <li>The container runs as the user with id 10001: the data folder must be writable by it, because the hub writes <code>hub.json</code>, the audit trail, notes, change sets and <code>hub.log</code> there.</li>
-  <li>Models: .qea/.qeax files in the data folder, with paths as the container sees them (for example <code>model.file=/data/models/shop.qea</code> in the source's <code>app.properties</code>), or a PostgreSQL database.</li>
+  <li>Models: .qea/.qeax files in the data folder, with paths as the container sees them (for example <code>model.file=/data/models/shop.qea</code> in the source's <code>app.properties</code>), or a database. The image has unixODBC for SQL Server, MySQL and Oracle; the vendor's Linux ODBC driver (for example Microsoft's <code>msodbcsql18</code> package) must be added in an image built on this one. PostgreSQL and EA files need nothing more.</li>
 </ul>
 <p><code>LoonarCompass.exe --hub C:\Hub\hub.json</code> still works: the desktop application then runs the hub without a window. The hub writes its log to <code>hub.log</code> next to <code>hub.json</code>. <code>compass-hub --version</code> prints the version.</p>
 <h3>Secrets of the hub</h3>
@@ -935,7 +1115,8 @@ compass-hub --service-uninstall</pre>
   <tr><td><code>LOONAR_SECRET_CLAUDE_API_KEY</code> or <code>LOONAR_SECRET_OPENAI_API_KEY</code></td><td>The AI model for the <b>Ask</b> tab</td></tr>
   <tr><td><code>LOONAR_SECRET_JIRA_TOKEN</code></td><td>The team's Jira (<code>integrations</code>)</td></tr>
   <tr><td><code>LOONAR_SECRET_CONFLUENCE_TOKEN</code></td><td>The team's Confluence (<code>integrations</code>)</td></tr>
-  <tr><td><code>LOONAR_SECRET_DB_PASSWORD</code></td><td>The password of a PostgreSQL model database</td></tr>
+  <tr><td><code>LOONAR_SECRET_DB_PASSWORD</code></td><td>The password of a model database (PostgreSQL, SQL Server, MySQL or Oracle)</td></tr>
+  <tr><td><code>LOONAR_SECRET_OIDC_CLIENT_SECRET</code></td><td>The client secret of the hub at the company sign-in provider (<code>oidc</code>)</td></tr>
 </table>
 <h3>Accounts and sign-in</h3>
 <p>People sign in to the web view (<code>https://&lt;hub&gt;/</code>; <code>http://</code> only on the same computer) with a user name and a password. Compass and MCP clients use an API token.</p>
@@ -955,6 +1136,24 @@ compass-hub --service-uninstall</pre>
   <li><b>Remove:</b> removes the user. The hub always keeps at least one admin, and you cannot remove yourself.</li>
 </ul>
 <p>Changing or removing a user ends their sign-ins. Every change of the users goes to the audit trail.</p>
+<h3>Company sign-in (OpenID Connect)</h3>
+<p>People can sign in to the web view with their company account: AD FS, Microsoft Entra ID, Keycloak, Okta and other OpenID Connect providers. The sign-in page then shows the button <b>Sign in with your company account</b>. Add to <code>hub.json</code>:</p>
+<pre>"oidc": {
+  "issuer": "https://adfs.example.com/adfs",
+  "client_id": "&lt;the client id from the provider&gt;",
+  "redirect_uri": "https://hub.example.com/auth/callback",
+  "groups_claim": "groups",
+  "roles": { "admin": ["Compass-Admins"], "architect": ["Compass-Architects"], "viewer": ["Compass-Viewers"] },
+  "password_login": true
+}</pre>
+<ul>
+  <li><b>At the provider:</b> register the hub as a confidential web application with the flow <i>authorization code</i>, the redirect URI above (the hub address with <code>/auth/callback</code>), the scopes <code>openid profile email</code> (AD FS: also <code>allatclaims</code>; the key <code>scopes</code> changes them) and a <code>groups</code> claim with the group names in the ID token. The client secret is the hub secret <code>OIDC_CLIENT_SECRET</code> (<code>LOONAR_SECRET_OIDC_CLIENT_SECRET</code>).</li>
+  <li><b>Checks:</b> the sign-in uses PKCE and a one-time state; the hub checks the ID token itself: the RS256 signature against the provider's keys, the issuer, the audience, the expiry and the nonce.</li>
+  <li><b>Roles from groups:</b> <code>roles</code> lists the groups that give each role (by default Compass-Admins, Compass-Architects and Compass-Viewers); <code>groups_claim</code> names the claim with the groups (default <code>groups</code>). The role is set again at every sign-in, and the highest one wins. A person in none of the groups gets no access.</li>
+  <li><b>User name:</b> <code>name_claim</code> chooses the claim (by default <code>upn</code>, then <code>preferred_username</code>, <code>email</code>). If a local user of the hub has the same name, the company sign-in is refused until the administrator renames or removes that user.</li>
+  <li><b>Only company sign-in:</b> <code>"password_login": false</code> turns off sign-in with a name and a password. API tokens for Compass and MCP clients still work. <code>button</code> changes the text of the button.</li>
+  <li>Every company sign-in goes to the audit trail.</li>
+</ul>
 <h3>Configuration (hub.json)</h3>
 <pre>{"listen":"127.0.0.1:8730",
  "sources":[
@@ -967,13 +1166,16 @@ compass-hub --service-uninstall</pre>
   "jira":{"url":"https://company.atlassian.net","user":"hub@company.com","project":"ARCH","issue_type":"Task"},
   "confluence":{"url":"https://company.atlassian.net/wiki","user":"hub@company.com","space":"ARCH","parent":"65818"}},
  "policy":{"min_approval":"ask","ask_min_role":"viewer","ask_per_hour":20,
-  "governance":{ ... governance.json ... }}}</pre>
+  "governance":{ ... governance.json ... },
+  "event_agents":[{"name":"Keep approved","event":"element_deleting","mode":"guard","applies_to":"Requirement",
+    "prompt":"Block deleting a requirement whose status is Approved."}]}}</pre>
 <ul>
   <li><b>listen</b>: the address and port; <code>127.0.0.1:8730</code> by default, <code>0.0.0.0:8730</code> in Docker. Beyond a single computer, put the hub behind HTTPS (see “Security of the hub”).</li>
-  <li><b>sources</b>: the team's models. <code>properties</code> is the <code>app.properties</code> of the given model (the same format as Compass's own settings file), relative to <code>hub.json</code>.</li>
+  <li><b>sources</b>: the team's models. <code>properties</code> is the <code>app.properties</code> of the given model (the same format as Compass's own settings file), relative to <code>hub.json</code>. A model on SQL Server, MySQL or Oracle has <code>model.source=sqlserver</code>, <code>mysql</code> or <code>oracle</code> there (chapter 5), with the password from the secret <code>DB_PASSWORD</code>; the server needs the vendor's ODBC driver.</li>
   <li><b>users</b>: you do not have to write them. Leave <code>users</code> out to get the default admin, and manage the users in the <b>Users</b> tab: the hub writes them back to <code>hub.json</code> with hashes only (<code>password_pbkdf2</code>, <code>token_sha256</code>). An entry with a plain <code>"token"</code> (at least 16 random characters) is still accepted and is turned into <code>token_sha256</code> when the hub saves the users. <code>compass-hub --hub-token</code> (or <code>LoonarCompass.exe --hub-token</code>) prints a new random token and its hash. Names and tokens must be unique.</li>
   <li><b>integrations</b>: the team's Jira and Confluence (described below); the tokens come from the secrets of the hub.</li>
-  <li><b>policy</b>: <code>min_approval</code> (ask, plan or auto), <code>ask_min_role</code> (who may use <b>Ask</b> in the web view; viewer by default), <code>ask_per_hour</code> (questions per user and hour; 20 by default) and <code>governance</code> in the <code>governance.json</code> format.</li>
+  <li><b>policy</b>: <code>min_approval</code> (ask, plan or auto), <code>ask_min_role</code> (who may use <b>Ask</b> in the web view; viewer by default), <code>ask_per_hour</code> (questions per user and hour; 20 by default), <code>governance</code> in the <code>governance.json</code> format and <code>event_agents</code>: the team's event agents, in the format of the <code>"agents"</code> list of <code>event_agents.json</code>, guards too (chapter 10). They work in everybody's Compass in EA, marked “(team)”. Admins edit the policy in the <b>Team policy</b> tab of the web view.</li>
+  <li><b>oidc</b>: the company sign-in (described above).</li>
 </ul>
 <table>
   <tr><th style="width: 18%;">Role</th><th>Permissions</th></tr>
@@ -990,12 +1192,22 @@ compass-hub --service-uninstall</pre>
   <li><b>Publish this package to Confluence</b> in the <b>Model check</b> of a package: a text page in the <code>space</code> (under the page <code>parent</code>, if given) with the elements, their descriptions and the relationships. It has no diagram pictures, because the hub has no EA. The next publication of the package replaces the page.</li>
 </ul>
 <p>Every such action goes to the audit trail. The assistant in <b>Ask</b> stays read-only: it cannot create issues or pages.</p>
+<h3>Word and Excel reports</h3>
+<p>Pick a package in the tree and open <b>Model check</b>: the buttons <b>Word report of the package</b> and <b>Excel report of the package</b> download a report of the package with its subpackages: the description, the elements and the relationships. The reports have no diagram pictures, because the hub has no EA. Every download goes to the audit trail.</p>
 <h3>Web view</h3>
-<p>At <code>https://&lt;hub&gt;/</code> (<code>http://</code> only on the same computer) you sign in with your user name and password. The view shows the package tree, search, element details with impact, the model check by the team rules, gaps, the audit trail, team notes and change sets, and for admins the users. In the <b>Ask</b> tab the assistant answers questions about the model. It only reads the model: it has no access to files, Jira, Confluence or MCP servers and cannot propose or save anything; it answers one question at a time.</p>
+<p>At <code>https://&lt;hub&gt;/</code> (<code>http://</code> only on the same computer) you sign in with your user name and password, or with <b>Sign in with your company account</b> when the company sign-in is set up. The view shows the package tree, search, element details with impact, the model check by the team rules, gaps, the audit trail, team notes and change sets, and for admins the users and the <b>Team policy</b> tab: a JSON editor of the policy (<code>min_approval</code>, <code>governance</code>, <code>event_agents</code>, <code>ask_min_role</code>, <code>ask_per_hour</code>), saved into <code>hub.json</code>. In the <b>Ask</b> tab the assistant answers questions about the model. It only reads the model: it has no access to files, Jira, Confluence or MCP servers and cannot propose or save anything; it answers one question at a time.</p>
 <h3>Security of the hub</h3>
 <p>The hub speaks plain HTTP. For access from other computers, put it behind an HTTPS reverse proxy (for example IIS or nginx) and give people the <code>https://</code> address. Change the password of the default account at once. Protect <code>hub.json</code> and the data folder with file permissions. Requests are limited in size and time. After 20 wrong passwords or tokens from one address, that address is refused for 10 minutes; a valid token still works. Internal errors are shown only as an id; the details are in <code>hub.log</code>. The web view keeps the sign-in only for the browser session and has a <b>Sign out</b> button.</p>
 <h3>MCP server</h3>
 <p>The MCP server (read-only) works as JSON-RPC over HTTP POST at <code>/mcp</code>, with the header <code>Authorization: Bearer &lt;token&gt;</code>. Tools: <code>list_sources</code>, <code>list_packages</code>, <code>search_elements</code>, <code>element_details</code>, <code>impact_analysis</code>, <code>model_lint</code>, <code>gap_analysis</code>.</p>
+<h3>GraphQL and tables for Power BI</h3>
+<p>Other tools read the models of the hub with an API token (the <b>Users</b> tab, header <code>Authorization: Bearer &lt;token&gt;</code>); any role may read, and nothing can be changed.</p>
+<ul>
+  <li><b>GraphQL:</b> <code>POST /api/sources/{sourceId}/graphql</code> with <code>{"query": "…"}</code>. Queries: <code>packages</code>, <code>package</code>, <code>elements(name, type, stereotype, package, limit)</code>, <code>element</code>, <code>diagrams</code>, <code>diagram</code>. Elements have <code>attributes</code>, <code>operations</code>, <code>taggedValues</code>, <code>connectors</code> (with <code>source</code> and <code>target</code>) and <code>package</code>. The schema in SDL is at <code>GET /api/graphql/schema</code>.</li>
+  <li><b>Tables:</b> <code>GET /api/sources/{sourceId}/table/{table}</code> gives a flat table as JSON, for <code>elements</code>, <code>connectors</code>, <code>packages</code>, <code>diagrams</code>, <code>attributes</code> or <code>tagged_values</code>.</li>
+  <li><b>Power BI:</b> <b>Get Data</b> → <b>Web</b> → <b>Advanced</b>; the address of a table, and in the HTTP request headers <code>Authorization</code> with the value <code>Bearer &lt;API token&gt;</code>. Excel and other tools work the same way.</li>
+</ul>
+<pre>{ elements(type: "Component", limit: 20) { name stereotype taggedValues { name value } connectors { type target { name } } } }</pre>
 
 <h2 id="s23" class="break">23. Check mode for CI pipelines</h2>
 <p>With <code>--check</code>, Loonar Compass checks the model without the window and without the AI model, for example in a CI pipeline after every change of the model or the code. The checks are done by the program, so the same model always gives the same result, and nothing is written to the model.</p>
@@ -1005,11 +1217,11 @@ compass-hub --service-uninstall</pre>
   [--junit junit.xml] [--fail-on error|warning|info|never] [--lang en|pl|de|fr]</pre>
 <table>
   <tr><th style="width: 22%;">Option</th><th>Meaning</th></tr>
-  <tr><td><code>--model</code></td><td>An EA file .qea or .qeax, read directly and read-only (Enterprise Architect is not needed), or the <code>app.properties</code> of a Compass installation, for example of a PostgreSQL model. Without it: the settings of the Windows user who runs the command.</td></tr>
+  <tr><td><code>--model</code></td><td>An EA file .qea or .qeax, read directly and read-only (Enterprise Architect is not needed), or the <code>app.properties</code> of a Compass installation, for example of a PostgreSQL, SQL Server, MySQL or Oracle model. Without it: the settings of the Windows user who runs the command.</td></tr>
   <tr><td><code>--package</code></td><td>The package to check (id or name), with its subpackages. Without it: all root packages of the model.</td></tr>
   <tr><td><code>--rules</code></td><td>A <code>governance.json</code> with the team rules (chapter 7). Without it: the <code>governance.json</code> next to the given <code>app.properties</code> or the policy of its hub; for a model file, only the built-in rules.</td></tr>
   <tr><td><code>--code</code></td><td>A source folder: the model is compared with the code (section 8.6); with <code>--requirements</code>, every requirement is also followed to the code and tests (chapter 7, “Requirements chain”).</td></tr>
-  <tr><td><code>--requirements</code></td><td>A requirements document: .docx, .md, .txt or .html (section 8.5).</td></tr>
+  <tr><td><code>--requirements</code></td><td>A requirements document: .docx, .pdf, .pptx, .vsdx, .xlsx, .md, .txt or .html (section 8.5).</td></tr>
   <tr><td><code>--cmdb</code></td><td>A CMDB export, CSV or JSON (chapter 7, “CMDB and the model”).</td></tr>
   <tr><td><code>--report</code></td><td>Also saves the Markdown report to this file.</td></tr>
   <tr><td><code>--junit</code></td><td>Saves a JUnit XML file for the pipeline.</td></tr>
@@ -1030,7 +1242,7 @@ compass-hub --service-uninstall</pre>
   <li><b>JUnit:</b> a test suite for each part and a test case for each group of findings. Groups at or above <code>--fail-on</code> are failures, so the pipeline shows them as failed tests.</li>
   <li><b>Exit code:</b> <code>0</code> passed; <code>1</code> findings at or above <code>--fail-on</code>; <code>2</code> wrong arguments, a model that cannot be read or a file that cannot be written (the cause goes to the error output).</li>
 </ul>
-<div class="note"><b>A window program in PowerShell.</b> <code>LoonarCompass.exe</code> is a window program, so PowerShell does not wait for it. Pipe its output, for example <code>… | Out-Host</code>: PowerShell then waits, shows the report and sets <code>$LASTEXITCODE</code>. The password of a PostgreSQL model comes from the environment variable <code>LOONAR_DB_PASSWORD</code> (a secret variable of the pipeline) and takes precedence over Credential Manager.</div>
+<div class="note"><b>A window program in PowerShell.</b> <code>LoonarCompass.exe</code> is a window program, so PowerShell does not wait for it. Pipe its output, for example <code>… | Out-Host</code>: PowerShell then waits, shows the report and sets <code>$LASTEXITCODE</code>. The password of a database model comes from the environment variable <code>LOONAR_DB_PASSWORD</code> (a secret variable of the pipeline) and takes precedence over Credential Manager.</div>
 <h3>GitLab CI</h3>
 <p>A job on a Windows runner (PowerShell) with Loonar Compass installed for all users. The job runs the check and publishes <code>junit.xml</code> as the test report:</p>
 <pre>compass-check:
@@ -1071,7 +1283,7 @@ compass-hub --service-uninstall</pre>
 <p><b>Open-source components.</b> The application includes open-source libraries and fonts; each keeps its own license. The list and the license texts are in the <code>THIRD-PARTY-NOTICES.txt</code> file in the installation folder; in the <b>About</b> view, click <b>Show licenses of the components</b>.</p>
 <p><b>Support.</b> The application is free and will stay free. If you want to support its development, use the <b>Support the project</b> view or go to <a href="https://suppi.pl/loonar">suppi.pl/loonar</a>. The source code is at <a href="https://github.com/loonar-eu/loonar-compass">github.com/loonar-eu/loonar-compass</a>.</p>
 <p>Application owner: Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard.<br>Contact: mariusz@loonar.eu, <a href="https://loonar.eu">loonar.eu</a>. The most convenient way to report bugs is the <b>Report a bug</b> view.</p>
-<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.8.2. Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. OpenAI and GPT are trademarks of OpenAI. Atlassian, Confluence and Jira are trademarks of Atlassian. Microsoft, Windows, Word, Excel, Azure DevOps and GitHub are trademarks of the Microsoft group of companies. GitLab is a trademark of GitLab Inc., ServiceNow of ServiceNow, Inc., and Docker of Docker, Inc. PostgreSQL is a registered trademark of the PostgreSQL Community Association. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.</p>
+<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.9. Sparx Systems and Enterprise Architect are registered trademarks of Sparx Systems Pty Ltd. Claude and Anthropic are trademarks of Anthropic, PBC. OpenAI and GPT are trademarks of OpenAI. Atlassian, Confluence and Jira are trademarks of Atlassian. Microsoft, Windows, Word, Excel, PowerPoint, Visio, SharePoint, SQL Server, Entra ID, Power BI, Azure, Azure DevOps and GitHub are trademarks of the Microsoft group of companies. Oracle and MySQL are registered trademarks of Oracle and/or its affiliates; MariaDB is a trademark of MariaDB plc; Okta is a trademark of Okta, Inc. GitLab is a trademark of GitLab Inc., ServiceNow of ServiceNow, Inc., and Docker of Docker, Inc. PostgreSQL is a registered trademark of the PostgreSQL Community Association. Loonar Compass is an independent product and is not affiliated with, endorsed or sponsored by these companies.</p>
 
 </body>
 </html>

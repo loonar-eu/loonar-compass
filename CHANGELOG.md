@@ -2,6 +2,74 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
+## Wersja 0.9 (2026-10-25)
+
+Logowanie kontem firmowym do huba, modele w SQL Server, MySQL i Oracle, instrukcje modelowania zespołu w repozytorium, dokumenty PDF, PowerPoint, Visio i Excel, prezentacje, SharePoint, strażnicy zatrzymujący usuwanie oraz uważniejszy asystent: pytania, plan, podagenci i ochrona przed ukrytymi instrukcjami.
+
+### Compass Hub
+
+- **Logowanie kontem firmowym (OpenID Connect):** AD FS, Microsoft Entra ID, Keycloak, Okta i inni dostawcy, ustawiani w sekcji `"oidc"` pliku `hub.json`. Widok webowy pokazuje „Sign in with your company account”.
+  - Authorization code z PKCE; hub sam sprawdza token ID (podpis RS256 kluczami dostawcy, wystawca, odbiorca, ważność, nonce).
+  - Role z grup (`roles`, domyślnie Compass-Admins, Compass-Architects, Compass-Viewers): wygrywa najwyższa rola, brak grupy to brak dostępu. Lokalny użytkownik o tej samej nazwie jest odrzucany.
+  - Klucz tajny klienta to sekret huba `OIDC_CLIENT_SECRET`. `"password_login": false` zostawia tylko logowanie firmowe; tokeny API działają dalej. Każde logowanie trafia do dziennika zmian.
+- **Agenci zdarzeń dla zespołu:** klucz polityki `"event_agents"` (ten sam format co `event_agents.json`, także strażnicy). Agenci działają w Compassie w EA u każdego, z dopiskiem „(team)”.
+- **Zakładka „Team policy” (admin):** edytor JSON polityki (min_approval, governance, event_agents, ask_min_role, ask_per_hour).
+- **Raporty Word i Excel:** „Word report of the package” i „Excel report of the package” w zakładce Model check: opis, elementy, relacje (bez obrazków diagramów). Każde pobranie trafia do dziennika.
+- **GraphQL i Power BI:** `POST /api/sources/{id}/graphql` tylko do odczytu (pakiety, elementy z atrybutami, operacjami, wartościami tagów i relacjami, diagramy; schemat pod `GET /api/graphql/schema`) oraz płaskie tabele `GET /api/sources/{id}/table/{elements|connectors|packages|diagrams|attributes|tagged_values}` dla Power BI (Pobierz dane → Sieć Web → Zaawansowane, nagłówek `Authorization: Bearer <token API>`). Każda rola.
+
+### Modele w SQL Server, MySQL i Oracle
+
+- **Nowe repozytoria:** oprócz PostgreSQL i plików .qea Compass czyta repozytoria EA w SQL Server, MySQL/MariaDB i Oracle: w osobnym oknie, w hubie i w trybie sprawdzania. Ustawienia → Model mają wybór SQL Server, MySQL i Oracle.
+- **Sterownik ODBC:** 64-bitowy sterownik ODBC producenta jest wyszukiwany automatycznie (SQL Server: ODBC Driver 18 albo 17 albo własny sterownik Windows „SQL Server”). Pełny ciąg połączenia bez hasła można podać w `db.odbc` (na przykład dla Oracle).
+- **Tylko odczyt:** każdy odczyt jest wycofywany.
+- **Zapis przez EA** (edycja EA musi obsługiwać repozytoria DBMS):
+  - SQL Server: Compass sam buduje połączenie EA (dostawca OLE DB SQLOLEDB), tak jak dla PostgreSQL.
+  - MySQL i Oracle: połączenie EA pochodzi z nowego ustawienia `ea.conn` w app.properties, czyli tekstu skrótu połączenia EA przez źródło danych ODBC (np. `ea_lab --- DBType=0;Connect=Provider=MSDASQL.1;Data Source=<DSN ODBC>;…`). Bez niego zmiany idą przez Compassa w EA, który jak dotąd działa z każdym repozytorium otwartym w EA.
+- **Docker:** obraz huba ma unixODBC; linuksowy sterownik ODBC producenta dodaj w obrazie zbudowanym na nim.
+
+### Instrukcje modelowania w repozytorium
+
+- **Zasady zespołu w EA:** Artifact «CompassInstructions» („Loonar Compass – modelling instructions”), którego notatki są zasadami repozytorium (nazewnictwo, typy i stereotypy, pakiety, diagramy, wartości tagów, kontrole). Asystent stosuje je w każdej odpowiedzi, u każdego, kto otwiera repozytorium.
+- **Kreator na start:** asystent analizuje repozytorium i szkicuje zasady; zapis i dopisanie zasady to zmiany modelu pokazywane do zatwierdzenia.
+  - Przykład: „Przygotuj instrukcje modelowania dla tego repozytorium”.
+  - Przykład: „Dopisz do instrukcji: aktywności zaczynają się od czasownika”.
+
+### Rozmowa
+
+- **Pytania doprecyzowujące jako formularz:** gdy coś ważnego jest niejasne, asystent pokazuje „Pytania do Ciebie” z wyborem albo krótką odpowiedzią („Coś innego…”); „Wyślij odpowiedzi” wysyła je jako kolejną wiadomość („Moje odpowiedzi:”).
+- **Plan większej pracy:** „📋 Plan: 1 z 4 zrobione” ze znakami ✓ ▶ ○ w krokach (i w System Output EA), aktualizowany w trakcie pracy.
+- **Podagenci:** przy większych analizach asystent przekazuje zadanie podagentowi z rolą impact, review albo document, który czyta model we własnym kontekście i zwraca zwięzły wynik („Podagent (impact): …”).
+- **Wybierz z modelu:** przycisk ⌖ obok Wklej wyszukuje elementy, pakiety i diagramy po nazwie (puste = główne pakiety) i dodaje je do wiadomości jako odwołania, na przykład «Element: Zamówienie (Class, id 26)».
+- **Rozumowanie asystenta:** przycisk 💭 obok Wklej pokazuje streszczenie rozumowania jako krok „💭 Rozumowanie asystenta” (tylko Claude; poziom wysiłku zostaje w Ustawieniach).
+- **Kod w piaskownicy Anthropic:** przycisk ∑ obok Wklej (domyślnie wyłączony; tylko Claude) pozwala asystentowi uruchamiać kod do obliczeń i analizy danych; wynik to krok „Kod w piaskownicy”. Przekazane tam dane trafiają do Anthropic, tak jak rozmowa.
+- **Długie rozmowy:** powyżej około 100 000 tokenów wcześniejsza część jest na potrzeby kolejnych odpowiedzi zastępowana streszczeniem („Rozmowa jest długa: streszczam jej wcześniejszą część”); najnowsze wiadomości zostają.
+- **Usuwanie rozmowy:** prawy przycisk myszy na rozmowie → „Usuń rozmowę”. Rozmowa trafia do `history\bin` i można ją przywrócić; nie w trakcie pracy asystenta w niej.
+
+### Dokumenty, prezentacje i SharePoint
+
+- **Czytanie dokumentów:** narzędzie `read_document` i załączniki czytają PDF (każda strona; skan bez warstwy tekstu dołącz, a model przeczyta obrazy stron), PowerPoint .pptx (slajdy z notatkami), Visio .vsdx (strony, kształty z tekstem, połączenia A → B), Excel .xlsx (arkusze, komórki) i Word. Stare pliki .doc, .ppt, .xls i .vsd trzeba zapisać w nowym formacie.
+  - Wymagania dla `trace_requirements` i `--requirements` mogą pochodzić z tych formatów.
+- **Prezentacje PowerPoint:** `create_presentation` tworzy prezentację 16:9: slajd tytułowy, slajdy z punktami na dwóch poziomach i/lub diagramem albo obrazkiem, opcjonalnie także jako PDF (przez Microsoft PowerPoint).
+- **Dokumenty PDF:** `create_document` z formatem pdf albo both (przez Microsoft Word). PDF wymaga Microsoft Office na komputerze.
+- **SharePoint:** nowa karta Ustawienia → SharePoint (adres witryny, biblioteka dokumentów, identyfikator dzierżawy, identyfikator aplikacji (klienta), klucz tajny klienta; „Zapisz i sprawdź połączenie z SharePoint”). Wymaga rejestracji aplikacji w Entra ID z uprawnieniem aplikacji Microsoft Graph Sites.Selected (nadanym dla witryny) albo Sites.ReadWrite.All.
+  - Asystent pokazuje zawartość folderu, czyta tekst dokumentu i wysyła przygotowany przez siebie plik; każde wysłanie wymaga zgody.
+
+### Enterprise Architect
+
+- **Agenci zdarzeń dla 18 zdarzeń:** utworzenie, zmiana i usuwanie elementów, połączeń, diagramów i pakietów; utworzenie i usuwanie atrybutów, metod i pojęć słownika.
+- **Strażnicy:** `"mode": "guard"` przy zdarzeniu `*_deleting`. EA pyta Compass przed usunięciem; strażnik odpowiada ALLOW albo BLOCK z przyczyną, a EA pokazuje „Loonar Compass zatrzymał to usunięcie:” i anuluje usunięcie. Bez odpowiedzi w ciągu 40 s usunięcie zostaje wykonane.
+  - Przykład: `{"name": "Zatwierdzone zostają", "event": "element_deleting", "mode": "guard", "applies_to": "Requirement", "prompt": "Zablokuj usunięcie wymagania, którego status to Approved."}`.
+- **Technologie MDG:** narzędzie `mdg_technologies`: profile używane w modelu (z liczbą użyć), pliki technologii EA i Twoje, technologie zaimportowane do modelu, stereotypy z metatypem i tym, do czego się stosują, oraz ich wartości tagów z typem, wartościami i wartością domyślną.
+- **API EA:** narzędzie `ea_api` czyta interfejs automatyzacji z EA.tlb zainstalowanego EA (klasy, właściwości do odczytu albo odczytu i zapisu, metody z parametrami, wyliczenia); asystent korzysta z niego przed pisaniem skryptów EA.
+- **Kontrola wersji pakietów:** narzędzie `version_control_status` (pakiety pod kontrolą wersji, konfiguracja, plik, kto je ma pobrane do edycji) i operacja modelu `version_control` (check_out, check_in, get_latest, put_latest, resync, z komentarzem). Zawsze z pytaniem; pakiet musi już być pod kontrolą wersji w EA.
+
+### Bezpieczeństwo i logowanie
+
+- **Ochrona przed ukrytymi instrukcjami (prompt injection):** zasady bezpieczeństwa w każdym zapytaniu; wyniki z dokumentów, Jiry, Confluence, MCP, CMDB i kodu są oznaczone jako dane; odpowiedź, która powtarza słowo w słowo wewnętrzne instrukcje, jest wstrzymywana.
+- **Serwery MCP przez HTTP:** `"auth": {"type": "basic", "user", "password"}` albo `{"type": "oauth2", "token_url", "client_id", "client_secret", "scope"}` w `mcp_servers.json` (sekrety jako `${secret:mcp_…}`).
+- **Usługa AI z OAuth2:** nowe pola w karcie Model AI: „Adres tokenu OAuth2” (opcjonalnie, zamiast klucza API), a potem „Identyfikator klienta OAuth2”, „Zakres OAuth2 (scope)” i „Klucz tajny klienta OAuth2” (w Menedżerze poświadczeń). Na przykład Entra ID z zakresem `https://cognitiveservices.azure.com/.default`. Zapisywane jako `ai.oauth.*`.
+- **Claude pod innym adresem:** pole „Adres Claude” (tylko Claude; puste = Anthropic), na przykład Azure AI Foundry `https://<zasób>.services.ai.azure.com/anthropic` albo firmowa bramka. Zapisywane jako `claude.url`.
+
 ## Wersja 0.8.2 (2026-10-23)
 
 Compass Hub jako osobny program (Windows, Linux, Docker) z kontami użytkowników, kontrola modelu w potokach CI, reguły ArchiMate, pełny łańcuch śledzenia, porównanie z CMDB i gotowe serwery MCP.
