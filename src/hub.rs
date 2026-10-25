@@ -471,6 +471,11 @@ fn respond_file(mut stream: &TcpStream, content_type: &str, name: &str, body: &[
     Ok(())
 }
 
+/// The return address of a sign-in started by Compass: http on this computer's loopback, the fixed path.
+fn compass_return(url: &str) -> bool {
+    reqwest::Url::parse(url).is_ok_and(|u| u.scheme() == "http" && matches!(u.host_str(), Some("127.0.0.1") | Some("localhost")) && u.path() == "/compass-callback" && u.query().is_none())
+}
+
 /// A redirect (the company sign-in): to the provider, or back to the page.
 fn redirect(mut stream: &TcpStream, location: &str) -> Result<()> {
     write!(
@@ -547,7 +552,13 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
             }
             "/auth/login" => {
                 let Some(provider) = &hub.oidc else { return respond(&stream, 404, "text/plain", b"not found") };
-                return match provider.start() {
+                // Compass signs in through the browser and gets the session back on its own computer only.
+                let return_to = match query.get("return") {
+                    Some(r) if compass_return(r) => Some(r.clone()),
+                    Some(_) => return sign_in_problem(&stream, &crate::i18n::tr("The return address of the sign-in is not allowed.")),
+                    None => None,
+                };
+                return match provider.start(return_to) {
                     Ok(url) => redirect(&stream, &url),
                     Err(e) => {
                         log(&hub.dir, &format!("company sign-in could not start: {e:#}"));
@@ -578,6 +589,10 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
                         hub.sessions.lock().unwrap_or_else(|p| p.into_inner()).insert(token_hash(&session), (who.name.clone(), Instant::now() + Duration::from_secs(SESSION_HOURS * 3600)));
                         log(&hub.dir, &format!("{} signed in with a company account as {}", who.name, role.name()));
                         let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": who.name, "source": "", "summary": crate::i18n::fmt("signed in with a company account ({0})", &[role.name().to_string()]), "ok": true }));
+                        // Compass: the session goes to its own address on the user's computer (never through a proxy).
+                        if let Some(back) = &who.return_to {
+                            return redirect(&stream, &format!("{back}?session={session}&name={}&role={}", encode(&who.name), role.name()));
+                        }
                         // The session goes to the page in the fragment: it never reaches a server log or a proxy.
                         redirect(&stream, &format!("/#session={session}"))
                     }
@@ -1610,6 +1625,20 @@ static LAST_FAILURE: Mutex<Option<String>> = Mutex::new(None);
 /// The team policy read from the hub, with the time it was read (read again after 5 minutes).
 static POLICY: Mutex<Option<(std::time::Instant, String, Value)>> = Mutex::new(None);
 
+/// After a new sign-in: the next question asks the hub again.
+pub fn forget_policy() {
+    *POLICY.lock().unwrap_or_else(|p| p.into_inner()) = None;
+}
+
+/// URL encoding and decoding of one value, for the sign-in of Compass.
+pub fn encode_value(text: &str) -> String {
+    encode(text)
+}
+
+pub fn url_decode_value(text: &str) -> String {
+    url_decode(text)
+}
+
 pub fn note_failure(message: &str) {
     *LAST_FAILURE.lock().unwrap() = Some(message.to_string());
 }
@@ -1644,17 +1673,44 @@ pub fn team_policy(cfg: &AppConfig) -> Option<Value> {
     match client.policy() {
         Ok(policy) => {
             *POLICY.lock().unwrap() = Some((std::time::Instant::now(), client.url.clone(), policy.clone()));
+            let _ = std::fs::write(cfg.base_dir.join("hub_policy_cache.json"), json!({ "url": client.url, "time": chrono::Utc::now().to_rfc3339(), "policy": policy }).to_string());
             Some(policy)
         }
         Err(e) => {
             note_failure(&format!("{e:#}"));
-            None
+            cached_policy(cfg, &client.url)
         }
+    }
+}
+
+/// The last policy received from this hub, for at most a week (the hub may be down for a while).
+fn cached_policy(cfg: &AppConfig, url: &str) -> Option<Value> {
+    let cache: Value = serde_json::from_str(&std::fs::read_to_string(cfg.base_dir.join("hub_policy_cache.json")).ok()?).ok()?;
+    let time = chrono::DateTime::parse_from_rfc3339(cache["time"].as_str()?).ok()?;
+    (cache["url"] == url && chrono::Utc::now().signed_duration_since(time).num_days() < 7).then(|| cache["policy"].clone())
+}
+
+/// With the computer rule RequireHub: the assistant works only connected to the hub and with its policy.
+/// Err is the message for the user (what to do).
+pub fn required(cfg: &AppConfig) -> Result<(), String> {
+    if !cfg.policy.require_hub {
+        return Ok(());
+    }
+    if cfg.hub_url.trim().is_empty() {
+        return Err(crate::i18n::tr("Your organisation requires the team hub, but no hub address is set: ask IT for the address of the hub.").into());
+    }
+    if !crate::config::secrets::exists(crate::config::secrets::HUB_TOKEN) {
+        return Err(crate::i18n::tr("Your organisation requires the team hub: sign in to it in Settings → Team (Compass Hub) → Sign in with your company account.").into());
+    }
+    match team_policy(cfg) {
+        Some(_) => Ok(()),
+        None => Err(crate::i18n::fmt("Your organisation requires the team hub, and it cannot be reached or your sign-in has expired: sign in again in Settings → Team (Compass Hub). Problem: {0}", &[last_failure().unwrap_or_default()])),
     }
 }
 
 /// The approval mode in force: the one from the settings, made stricter by the team policy ("min_approval").
 pub fn effective_mode(cfg: &AppConfig) -> crate::config::ApprovalMode {
+    // The settings already carry the computer's minimum (MachinePolicy::apply).
     let local = cfg.approval_mode;
     let team = team_policy(cfg).and_then(|p| p["min_approval"].as_str().and_then(|m| crate::config::ApprovalMode::parse(m).ok()));
     match team {
@@ -1819,6 +1875,16 @@ mod tests {
         assert_eq!(forwarded_address("[2001:db8::1]:51234"), Some("2001:db8::1".parse().unwrap()));
         assert_eq!(forwarded_address("2001:db8::1"), Some("2001:db8::1".parse().unwrap()));
         assert_eq!(forwarded_address("unknown"), None);
+    }
+
+    /// Compass's sign-in may return only to its own one-time address on the loopback.
+    #[test]
+    fn compass_return_address() {
+        assert!(compass_return("http://127.0.0.1:53211/compass-callback"));
+        assert!(compass_return("http://localhost:53211/compass-callback"));
+        for bad in ["https://127.0.0.1:1/compass-callback", "http://evil.example/compass-callback", "http://127.0.0.1:1/other", "http://127.0.0.1:1/compass-callback?x=1", "http://127.0.0.1.evil.example/compass-callback"] {
+            assert!(!compass_return(bad), "{bad}");
+        }
     }
 
     /// A new hub gets the default account admin / passw0rd, which can do nothing until its password is changed; the
@@ -1989,8 +2055,8 @@ mod tests {
         assert_eq!(http.get(format!("{base}/api/auth")).send().unwrap().json::<Value>().unwrap()["oidc"], true);
 
         // A browser: the hub sends it to Keycloak, the login form is filled in, Keycloak sends it back with a code.
-        let sign_in = |user: &str, password: &str| -> reqwest::blocking::Response {
-            let to_provider = http.get(format!("{base}/auth/login")).send().unwrap();
+        let sign_in_at = |login: &str, user: &str, password: &str| -> reqwest::blocking::Response {
+            let to_provider = http.get(format!("{base}{login}")).send().unwrap();
             assert_eq!(to_provider.status(), 302);
             let url = to_provider.headers()["location"].to_str().unwrap().to_string();
             assert!(url.contains("code_challenge_method=S256") && url.contains("nonce="));
@@ -2004,6 +2070,15 @@ mod tests {
             assert!(callback.starts_with(&format!("{base}/auth/callback?")), "{callback}");
             http.get(&callback).send().unwrap()
         };
+        let sign_in = |user: &str, password: &str| sign_in_at("/auth/login", user, password);
+        // Compass: the session goes back to its one-time address on this computer; any other return is refused.
+        let compass = sign_in_at("/auth/login?return=http%3A%2F%2F127.0.0.1%3A55123%2Fcompass-callback", "anna", "Lab-Test-anna-7Q2");
+        assert_eq!(compass.status(), 302);
+        let back = compass.headers()["location"].to_str().unwrap().to_string();
+        assert!(back.starts_with("http://127.0.0.1:55123/compass-callback?session=lcs_") && back.contains("&role=architect"), "{back}");
+        let session = back.split("session=").nth(1).unwrap().split('&').next().unwrap();
+        assert_eq!(http.get(format!("{base}/api/me")).bearer_auth(session).send().unwrap().json::<Value>().unwrap()["name"], "anna");
+        assert_eq!(http.get(format!("{base}/auth/login?return=https%3A%2F%2Fevil.example%2Fcompass-callback")).send().unwrap().status(), 403);
         let anna = sign_in("anna", "Lab-Test-anna-7Q2");
         assert_eq!(anna.status(), 302);
         let location = anna.headers()["location"].to_str().unwrap().to_string();

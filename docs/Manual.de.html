@@ -1218,6 +1218,17 @@ compass-hub --service-uninstall</pre>
 </ul>
 <pre>{ elements(type: "Component", limit: 20) { name stereotype taggedValues { name value } connectors { type target { name } } } }</pre>
 
+<h3>Richtlinie des Computers: den Hub erzwingen (Gruppenrichtlinie, Intune)</h3>
+<p>Die Teamrichtlinie des Hubs gilt für alle, die mit ihm verbunden sind. Damit sie für alle gilt, setzt die IT die <b>Richtlinie des Computers</b> in <code>HKLM\SOFTWARE\Policies\Loonar\Compass</code> (für den Computer) oder <code>HKCU\SOFTWARE\Policies\Loonar\Compass</code> (für den Benutzer), über Gruppenrichtlinien oder Intune. Ein normaler Benutzer kann sie nicht ändern. Die Regeln machen die Einstellungen nur strenger:</p>
+<ul>
+  <li><b>HubUrl</b> – die Adresse des Team-Hubs; das Feld in den Einstellungen ist gesperrt.</li>
+  <li><b>RequireHub</b> = 1 – der Assistent arbeitet nur, wenn er beim Hub angemeldet ist und dessen Richtlinie hat. Antwortet der Hub eine Weile nicht, nutzt Compass die zuletzt erhaltene Richtlinie (höchstens eine Woche alt); ohne sie arbeitet der Assistent nicht.</li>
+  <li><b>WebAccess</b> = 0 – kein Webzugriff (die Schaltfläche 🌐 ist gesperrt).</li>
+  <li><b>UpdateCheck</b> = 0 – keine tägliche Prüfung auf eine neue Version.</li>
+  <li><b>MinApproval</b> = ask, plan oder auto – der am wenigsten strenge Genehmigungsmodus.</li>
+  <li><b>AllowedProviders</b> – die erlaubten KI-Anbieter, z. B. <code>anthropic</code> oder <code>anthropic,openai</code>.</li>
+</ul>
+<p><b>Anmeldung mit dem Firmenkonto:</b> unter Einstellungen → Team (Compass Hub) öffnet die Schaltfläche <b>Mit dem Firmenkonto anmelden</b> die Anmeldung des Hubs im Browser (AD FS, Entra ID, Keycloak …); danach gibt der Hub die Sitzung an eine einmalige Adresse auf diesem Computer (127.0.0.1) zurück, und Compass speichert sie statt eines Tokens in der Anmeldeinformationsverwaltung. Eine Sitzung dauert 12 Stunden; danach einfach erneut anmelden. Die Vorlagen für Gruppenrichtlinien (<code>LoonarCompass.admx</code> und die Sprachdateien <code>.adml</code>) liegen im Ordner <code>deploy\policies</code> des Repositorys: Kopieren Sie sie nach <code>C:\Windows\PolicyDefinitions</code> oder in den zentralen Speicher der Domäne. Wer auf dem Computer Administratorrechte hat, kann die Richtlinie umgehen, wie bei jeder Anwendung.</p>
 <h2 id="s23" class="break">23. Prüfmodus für CI-Pipelines</h2>
 <p>Mit <code>--check</code> prüft Loonar Compass das Modell ohne Fenster und ohne KI-Modell, zum Beispiel in einer CI-Pipeline nach jeder Änderung des Modells oder des Codes. Die Prüfungen führt das Programm aus, daher liefert dasselbe Modell immer dasselbe Ergebnis, und ins Modell wird nichts geschrieben.</p>
 <pre>LoonarCompass.exe --check --model &lt;datei.qea|app.properties&gt;

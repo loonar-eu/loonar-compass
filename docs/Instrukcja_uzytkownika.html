@@ -1227,6 +1227,17 @@ compass-hub --service-uninstall</pre>
 </ul>
 <pre>{ elements(type: "Component", limit: 20) { name stereotype taggedValues { name value } connectors { type target { name } } } }</pre>
 
+<h3>Zasady komputera: wymuszenie huba (GPO, Intune)</h3>
+<p>Polityka zespołu w hubie działa u tych, którzy są do niego podłączeni. Żeby obowiązywała wszystkich, dział IT ustawia <b>zasady komputera</b> w kluczu <code>HKLM\SOFTWARE\Policies\Loonar\Compass</code> (dla komputera) albo <code>HKCU\SOFTWARE\Policies\Loonar\Compass</code> (dla użytkownika), przez zasady grupy (GPO) albo Intune. Zwykły użytkownik nie może ich zmienić. Zasady tylko zaostrzają ustawienia:</p>
+<ul>
+  <li><b>HubUrl</b> – adres huba zespołu; pole w ustawieniach jest zablokowane.</li>
+  <li><b>RequireHub</b> = 1 – asystent działa tylko po zalogowaniu do huba i z jego polityką. Gdy hub chwilowo nie odpowiada, Compass używa ostatniej otrzymanej polityki (najwyżej sprzed tygodnia); bez niej asystent nie działa.</li>
+  <li><b>WebAccess</b> = 0 – bez internetu (przycisk 🌐 zablokowany).</li>
+  <li><b>UpdateCheck</b> = 0 – bez codziennego sprawdzania nowej wersji.</li>
+  <li><b>MinApproval</b> = ask, plan albo auto – najmniej surowy tryb zatwierdzania.</li>
+  <li><b>AllowedProviders</b> – dozwoleni dostawcy AI, np. <code>anthropic</code> albo <code>anthropic,openai</code>.</li>
+</ul>
+<p><b>Logowanie kontem firmowym:</b> w Ustawienia → Zespół (Compass Hub) przycisk <b>Zaloguj się kontem firmowym</b> otwiera logowanie huba w przeglądarce (AD FS, Entra ID, Keycloak…); po zalogowaniu hub oddaje sesję jednorazowym adresem na tym komputerze (127.0.0.1) i Compass zapisuje ją w Menedżerze poświadczeń zamiast tokenu. Sesja trwa 12 godzin; potem wystarczy zalogować się ponownie. Szablony zasad grupy (<code>LoonarCompass.admx</code> i pliki językowe <code>.adml</code>) są w folderze <code>deploy\policies</code> repozytorium: skopiuj je do <code>C:\Windows\PolicyDefinitions</code> albo do magazynu centralnego domeny. Kto ma na komputerze uprawnienia administratora, może zasady obejść, tak jak w każdej aplikacji.</p>
 <h2 id="s23" class="break">23. Tryb sprawdzania w potokach CI</h2>
 <p>Z opcją <code>--check</code> Loonar Compass sprawdza model bez okna i bez modelu AI, na przykład w potoku CI po każdej zmianie modelu albo kodu. Sprawdzenia wykonuje program, więc ten sam model zawsze daje ten sam wynik, a w modelu nic nie jest zapisywane.</p>
 <pre>LoonarCompass.exe --check --model &lt;plik.qea|app.properties&gt;

@@ -172,6 +172,8 @@ pub struct AppConfig {
     pub web_access: bool,
     /// Checking once a day whether a newer release exists (`app.update_check`, on by default).
     pub update_check: bool,
+    /// The rules of the computer set by IT (Group Policy, Intune): they win over the settings.
+    pub policy: MachinePolicy,
     /// The only domains the assistant may search and read (`claude.web_domains`, comma-separated; empty = any).
     pub web_domains: Vec<String>,
     /// EA's own connection string for saving through a background EA (`ea.conn`, the text of an EA shortcut): needed
@@ -296,6 +298,100 @@ pub fn parse_properties(text: &str) -> HashMap<String, String> {
         .collect()
 }
 
+/// The rules of the computer that IT sets centrally (Group Policy or Intune), in
+/// `HKLM\SOFTWARE\Policies\Loonar\Compass` (for the computer) or `HKCU\SOFTWARE\Policies\Loonar\Compass` (for the
+/// user; a normal user cannot change either). The computer's value wins. They only make the settings stricter.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct MachinePolicy {
+    /// HubUrl: the team hub, fixed (the field in the settings is locked).
+    pub hub_url: Option<String>,
+    /// RequireHub=1: the assistant works only with the hub and its policy (signed in).
+    pub require_hub: bool,
+    /// WebAccess=0: no web search and no reading web pages.
+    pub web_access: Option<bool>,
+    /// UpdateCheck=0: no daily check for a new version.
+    pub update_check: Option<bool>,
+    /// MinApproval (plan, ask, auto): the least strict approval mode allowed.
+    pub min_approval: Option<ApprovalMode>,
+    /// AllowedProviders (e.g. "anthropic,openai"): the AI providers allowed.
+    pub allowed_providers: Vec<String>,
+}
+
+impl MachinePolicy {
+    /// Read from the registry (Windows); nothing elsewhere.
+    pub fn read() -> Self {
+        let text = |name: &str| registry_policy(name).map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+        let flag = |name: &str| text(name).map(|v| v != "0" && !v.eq_ignore_ascii_case("false"));
+        Self {
+            hub_url: text("HubUrl").map(|u| u.trim_end_matches('/').to_string()),
+            require_hub: flag("RequireHub").unwrap_or(false),
+            web_access: flag("WebAccess"),
+            update_check: flag("UpdateCheck"),
+            min_approval: text("MinApproval").and_then(|m| ApprovalMode::parse(&m.to_lowercase()).ok()),
+            allowed_providers: text("AllowedProviders").map(|p| p.split([',', ';']).map(|x| x.trim().to_lowercase()).filter(|x| !x.is_empty()).collect()).unwrap_or_default(),
+        }
+    }
+
+    /// The settings with the rules applied (the rules only switch things off or fix them).
+    pub fn apply(&self, cfg: &mut AppConfig) {
+        if let Some(url) = &self.hub_url {
+            cfg.hub_url = url.clone();
+        }
+        if self.web_access == Some(false) {
+            cfg.web_access = false;
+        }
+        if self.update_check == Some(false) {
+            cfg.update_check = false;
+        }
+        if let Some(min) = self.min_approval {
+            if min.strictness() > cfg.approval_mode.strictness() {
+                cfg.approval_mode = min;
+            }
+        }
+        cfg.policy = self.clone();
+    }
+
+    /// Whether the AI provider of the settings is allowed (no list = any).
+    pub fn provider_allowed(&self, provider: &str) -> bool {
+        self.allowed_providers.is_empty() || self.allowed_providers.iter().any(|p| p == provider)
+    }
+}
+
+/// One value of the policy key: the computer's (HKLM) first, then the user's (HKCU). Text or a number.
+#[cfg(windows)]
+fn registry_policy(name: &str) -> Option<String> {
+    #[link(name = "advapi32")]
+    extern "system" {
+        fn RegGetValueW(key: isize, sub_key: *const u16, value: *const u16, flags: u32, kind: *mut u32, data: *mut u8, size: *mut u32) -> i32;
+    }
+    const HKEY_CURRENT_USER: isize = 0x8000_0001u32 as i32 as isize;
+    const HKEY_LOCAL_MACHINE: isize = 0x8000_0002u32 as i32 as isize;
+    const RRF_RT_REG_SZ: u32 = 0x0002;
+    const RRF_RT_REG_DWORD: u32 = 0x0010;
+    let wide = |s: &str| s.encode_utf16().chain(std::iter::once(0)).collect::<Vec<u16>>();
+    let (key, value) = (wide(r"SOFTWARE\Policies\Loonar\Compass"), wide(name));
+    for root in [HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER] {
+        let mut buffer = vec![0u16; 2048];
+        let mut size = (buffer.len() * 2) as u32;
+        let mut kind = 0u32;
+        // SAFETY: valid null-terminated names and a buffer of the size given.
+        if unsafe { RegGetValueW(root, key.as_ptr(), value.as_ptr(), RRF_RT_REG_SZ | RRF_RT_REG_DWORD, &mut kind, buffer.as_mut_ptr() as *mut u8, &mut size) } == 0 {
+            return Some(if kind == 4 {
+                let bytes: [u8; 4] = [buffer[0] as u8, (buffer[0] >> 8) as u8, buffer[1] as u8, (buffer[1] >> 8) as u8];
+                u32::from_le_bytes(bytes).to_string()
+            } else {
+                String::from_utf16_lossy(&buffer[..(size as usize / 2)]).trim_end_matches('\0').to_string()
+            });
+        }
+    }
+    None
+}
+
+#[cfg(not(windows))]
+fn registry_policy(_name: &str) -> Option<String> {
+    None
+}
+
 /// Looks for `app.properties` next to the executable (a portable copy keeps its data there).
 /// Development and test builds also look in the parent folders (running from `target\debug` finds the
 /// file in the project folder); a release build never does, so a stray `app.properties` in a parent
@@ -347,7 +443,7 @@ impl AppConfig {
             _ => renamed(&base_dir, legacy, current),
         };
 
-        Ok(Self {
+        let mut cfg = Self {
             // The model is fixed: the `claude.model` entry in the file is informational only and does not change the model.
             claude_model: get_or("claude.model", CLAUDE_MODEL),
             claude_effort: get_or("claude.effort", ""),
@@ -360,6 +456,7 @@ impl AppConfig {
             code_execution: get_or("claude.code_execution", "false") == "true",
             web_access: get_or("claude.web_access", "false") == "true",
             update_check: get_or("app.update_check", "true") == "true",
+            policy: MachinePolicy::default(),
             web_domains: get_or("claude.web_domains", "").split(',').map(|d| d.trim().to_lowercase()).filter(|d| !d.is_empty()).collect(),
             claude_url: get_or("claude.url", ""),
             ai_oauth_token_url: get_or("ai.oauth.token_url", ""),
@@ -411,7 +508,9 @@ impl AppConfig {
             miro_board: get_or("miro.board", ""),
             confluence_pages_file: renamed(&base_dir, "confluence_strony.json", "confluence_pages.json"),
             base_dir,
-        })
+        };
+        MachinePolicy::read().apply(&mut cfg);
+        Ok(cfg)
     }
 }
 
@@ -585,5 +684,33 @@ pub mod secrets {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod policy_tests {
+    use super::*;
+
+    /// The computer's rules only make the settings stricter, and fix the hub address.
+    #[test]
+    fn machine_policy_makes_settings_stricter() {
+        let dir = std::env::temp_dir().join(format!("loonar-policy-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("app.properties"), "approval.mode=auto
+claude.web_access=true
+hub.url=https://my.example
+").unwrap();
+        let mut cfg = AppConfig::load(&dir.join("app.properties")).unwrap();
+        let policy = MachinePolicy { hub_url: Some("https://hub.lab.local".into()), require_hub: true, web_access: Some(false), update_check: Some(false),
+            min_approval: Some(ApprovalMode::Ask), allowed_providers: vec!["anthropic".into()] };
+        policy.apply(&mut cfg);
+        assert_eq!(cfg.hub_url, "https://hub.lab.local");
+        assert!(!cfg.web_access && !cfg.update_check && cfg.policy.require_hub);
+        assert_eq!(cfg.approval_mode, ApprovalMode::Ask, "auto is raised to the minimum");
+        assert!(cfg.policy.provider_allowed("anthropic") && !cfg.policy.provider_allowed("openai"));
+        let mut strict = cfg.clone();
+        strict.approval_mode = ApprovalMode::Ask;
+        MachinePolicy { min_approval: Some(ApprovalMode::Plan), ..Default::default() }.apply(&mut strict);
+        assert_eq!(strict.approval_mode, ApprovalMode::Ask, "a stricter own setting stays (auto < plan < ask)");
     }
 }

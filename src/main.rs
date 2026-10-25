@@ -52,6 +52,7 @@ mod code_drift;
 mod undo;
 mod web;
 mod update;
+mod hub_signin;
 mod estimate;
 mod templates;
 mod tools;
@@ -1186,6 +1187,9 @@ struct App {
     update_rx: Option<mpsc::Receiver<Option<update::Release>>>,
     update_started: bool,
     update: Option<update::Release>,
+    /// Signing in to the hub with the company account (in the background) and its last result.
+    hub_signin_rx: Option<mpsc::Receiver<Result<(String, String), String>>>,
+    hub_signin_status: String,
     /// Moving memory and templates to the new language: whether it is pending, the result in progress, the last message.
     relang_pending: bool,
     relang_rx: Option<mpsc::Receiver<Result<String, String>>>,
@@ -1403,6 +1407,8 @@ impl App {
             update_rx: None,
             update_started: false,
             update: None,
+            hub_signin_rx: None,
+            hub_signin_status: String::new(),
             contact: Contact { technical: true, ..Default::default() },
             relang_pending: false,
             relang_rx: None,
@@ -2669,7 +2675,7 @@ impl App {
                 mcp_client::shutdown();
             }
             GROUP_HUB => {
-                let url = f.hub_url.trim().trim_end_matches('/').to_string();
+                let url = self.cfg.as_ref().and_then(|c| c.policy.hub_url.clone()).unwrap_or_else(|| f.hub_url.trim().trim_end_matches('/').to_string());
                 if !url.is_empty() {
                     jira::check_base_url(&url).map_err(|_| anyhow::anyhow!("{}", crate::i18n::tr("The hub address must start with https:// (http:// only on this computer)")))?;
                 }
@@ -3532,14 +3538,51 @@ impl App {
                 .color(theme::MUTED),
             ).wrap());
             ui.add_space(6.0);
+            let fixed_hub = self.cfg.as_ref().and_then(|c| c.policy.hub_url.clone());
+            if let Some(url) = &fixed_hub {
+                self.form.hub_url = url.clone();
+                ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("The hub address is set by your organisation (the computer's policy) and cannot be changed here.")).small().color(theme::MUTED)).wrap());
+            }
+            if self.cfg.as_ref().is_some_and(|c| c.policy.require_hub) {
+                ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Your organisation requires the hub: the assistant works only when you are signed in to it.")).small().color(theme::MUTED)).wrap());
+            }
             egui::Grid::new("settings_hub").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
-                row_hint(ui, crate::i18n::tr("Hub address"), &mut self.form.hub_url, crate::i18n::tr("e.g. https://compass-hub.example.com"));
+                ui.add_enabled_ui(fixed_hub.is_none(), |ui| row_hint(ui, crate::i18n::tr("Hub address"), &mut self.form.hub_url, crate::i18n::tr("e.g. https://compass-hub.example.com")));
+                if fixed_hub.is_some() {
+                    ui.end_row();
+                }
                 row_secret(ui, crate::i18n::tr("Token"), &mut self.form.hub_token, secrets::exists(secrets::HUB_TOKEN));
                 row_hint(ui, crate::i18n::tr("This model in the hub"), &mut self.form.hub_source, crate::i18n::tr("source id, e.g. shop-db (optional)"));
             });
             if let Some(failure) = hub::last_failure() {
                 ui.add(egui::Label::new(egui::RichText::new(crate::i18n::fmt("Last problem with the hub: {0}", &[failure])).small().color(theme::MUTED)).wrap());
             }
+            // The company sign-in instead of a token pasted by hand: the browser, then back to Compass.
+            if let Some(rx) = &self.hub_signin_rx {
+                if let Ok(result) = rx.try_recv() {
+                    self.hub_signin_status = match result {
+                        Ok((name, role)) => crate::i18n::fmt("Signed in to the hub as {0} ({1}).", &[name, role]),
+                        Err(e) => e,
+                    };
+                    self.hub_signin_rx = None;
+                } else {
+                    ui.ctx().request_repaint_after(std::time::Duration::from_millis(300));
+                }
+            }
+            ui.horizontal(|ui| {
+                if ui.add_enabled(self.hub_signin_rx.is_none(), egui::Button::new(crate::i18n::tr("Sign in with your company account"))).on_hover_text(crate::i18n::tr("Opens the hub's company sign-in in the browser; the session is kept in Windows Credential Manager instead of a token.")).clicked() {
+                    let url = self.form.hub_url.trim().to_string();
+                    let (tx, rx) = mpsc::channel();
+                    self.hub_signin_rx = Some(rx);
+                    self.hub_signin_status = crate::i18n::tr("Finish the sign-in in the browser…").into();
+                    std::thread::spawn(move || {
+                        let _ = tx.send(hub_signin::sign_in(&url).map_err(|e| format!("{e:#}")));
+                    });
+                }
+                if !self.hub_signin_status.is_empty() {
+                    ui.add(egui::Label::new(egui::RichText::new(&self.hub_signin_status).small().color(theme::MUTED)).wrap());
+                }
+            });
             self.group_footer(ui, &ctx2, GROUP_HUB, crate::i18n::tr("Save and test hub connection"));
         });
         ui.add_space(12.0);
@@ -3766,8 +3809,8 @@ impl App {
                 ui.checkbox(&mut c.newsletter_on, crate::i18n::tr("I want to receive news about new releases"));
                 ui.end_row();
                 ui.label(crate::i18n::tr("In the application"));
-                let mut check = c.update_check;
-                if ui.checkbox(&mut check, crate::i18n::tr("Check once a day whether a new version is available")).on_hover_text(crate::i18n::tr("A plain request to GitHub, without any identifier of this installation; nothing is downloaded or installed by itself. The team hub can switch it off for everybody.")).changed() {
+                let mut check = c.update_check && !self.cfg.as_ref().is_some_and(|x| x.policy.update_check == Some(false));
+                if ui.add_enabled(!self.cfg.as_ref().is_some_and(|x| x.policy.update_check == Some(false)), egui::Checkbox::new(&mut check, crate::i18n::tr("Check once a day whether a new version is available"))).on_hover_text(crate::i18n::tr("A plain request to GitHub, without any identifier of this installation; nothing is downloaded or installed by itself. The team hub can switch it off for everybody.")).changed() {
                     c.update_check = check;
                     let _ = config::save_properties(&props_path, &[("app.update_check", check.to_string())]);
                 }
@@ -4832,6 +4875,13 @@ fn run_turn_with(
     emit: &dyn Fn(WorkerEvent),
     allowed: Option<&[&str]>,
 ) -> anyhow::Result<()> {
+    // The computer's policy set by IT: the AI providers allowed, and the team hub when it is required.
+    if !cfg.policy.provider_allowed(&cfg.ai_provider) {
+        bail!("{}", crate::i18n::fmt("Your organisation does not allow the AI provider {0} (the computer's policy allows: {1}).", &[cfg.ai_provider.clone(), cfg.policy.allowed_providers.join(", ")]));
+    }
+    if let Err(message) = hub::required(cfg) {
+        bail!("{message}");
+    }
     let tool_ctx = tools::ToolContext { cfg, approver };
     let client = claude::ClaudeClient::from_config(cfg, cfg.claude_max_tokens)?;
     let mut msgs = history_to_api(messages, &cfg.attachments_dir)?;
@@ -6343,9 +6393,11 @@ impl eframe::App for App {
                             // The web (search and reading pages through Anthropic): off unless switched on; the team
                             // policy of the hub can switch it off for everybody (the step of the answer then says so).
                             let on = cfg.web_access;
+                            let blocked = cfg.policy.web_access == Some(false);
                             let label = egui::RichText::new("🌐").color(if on { theme::NAV } else { theme::HINT });
                             let tip = if on { crate::i18n::tr("The assistant may search the web and read pages (click to switch off)") } else { crate::i18n::tr("Let the assistant search the web and read pages (the searches go through Anthropic; the team policy of the hub can switch this off)") };
-                            if ui.add(egui::Button::new(label).selected(on).frame(false)).on_hover_text(tip).clicked() {
+                            let tip = if blocked { crate::i18n::tr("Web access is switched off by your organisation (the computer's policy).") } else { tip };
+                            if ui.add_enabled(!blocked, egui::Button::new(label).selected(on).frame(false)).on_hover_text(tip).on_disabled_hover_text(tip).clicked() {
                                 cfg.web_access = !on;
                                 let _ = config::save_properties(&self.props_path, &[("claude.web_access", (!on).to_string())]);
                             }

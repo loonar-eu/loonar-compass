@@ -1212,6 +1212,17 @@ compass-hub --service-uninstall</pre>
 </ul>
 <pre>{ elements(type: "Component", limit: 20) { name stereotype taggedValues { name value } connectors { type target { name } } } }</pre>
 
+<h3>Computer policy: enforcing the hub (Group Policy, Intune)</h3>
+<p>The team policy of the hub applies to those connected to it. To make it apply to everyone, IT sets the <b>computer policy</b> in <code>HKLM\SOFTWARE\Policies\Loonar\Compass</code> (for the computer) or <code>HKCU\SOFTWARE\Policies\Loonar\Compass</code> (for the user), through Group Policy or Intune. A normal user cannot change it. The rules only make the settings stricter:</p>
+<ul>
+  <li><b>HubUrl</b> – the address of the team hub; the field in the settings is locked.</li>
+  <li><b>RequireHub</b> = 1 – the assistant works only when signed in to the hub and with its policy. If the hub does not answer for a while, Compass uses the last policy received (at most a week old); without it the assistant does not work.</li>
+  <li><b>WebAccess</b> = 0 – no web access (the 🌐 button is locked).</li>
+  <li><b>UpdateCheck</b> = 0 – no daily check for a new version.</li>
+  <li><b>MinApproval</b> = ask, plan or auto – the least strict approval mode.</li>
+  <li><b>AllowedProviders</b> – the AI providers allowed, e.g. <code>anthropic</code> or <code>anthropic,openai</code>.</li>
+</ul>
+<p><b>Company sign-in:</b> in Settings → Team (Compass Hub) the <b>Sign in with your company account</b> button opens the hub's sign-in in the browser (AD FS, Entra ID, Keycloak…); after the sign-in the hub hands the session back to a one-time address on this computer (127.0.0.1) and Compass keeps it in Credential Manager instead of a token. A session lasts 12 hours; then simply sign in again. The Group Policy templates (<code>LoonarCompass.admx</code> and the <code>.adml</code> language files) are in the repository's <code>deploy\policies</code> folder: copy them to <code>C:\Windows\PolicyDefinitions</code> or to the domain's central store. Anyone with administrator rights on the computer can get around the policy, as with any application.</p>
 <h2 id="s23" class="break">23. Check mode for CI pipelines</h2>
 <p>With <code>--check</code>, Loonar Compass checks the model without the window and without the AI model, for example in a CI pipeline after every change of the model or the code. The checks are done by the program, so the same model always gives the same result, and nothing is written to the model.</p>
 <pre>LoonarCompass.exe --check --model &lt;file.qea|app.properties&gt;

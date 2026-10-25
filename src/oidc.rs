@@ -105,6 +105,8 @@ struct Pending {
     verifier: String,
     nonce: String,
     started: Instant,
+    /// Where the session goes after the sign-in when Compass started it (an address on the user's computer).
+    return_to: Option<String>,
 }
 
 /// The signed-in person: name, e-mail (if given) and role name.
@@ -114,6 +116,8 @@ pub struct Identity {
     pub email: String,
     pub role: String,
     pub groups: Vec<String>,
+    /// The return address of a sign-in started by Compass.
+    pub return_to: Option<String>,
 }
 
 pub struct Provider {
@@ -195,7 +199,7 @@ impl Provider {
     }
 
     /// The address of the provider's sign-in page for a new sign-in.
-    pub fn start(&self) -> Result<String> {
+    pub fn start(&self, return_to: Option<String>) -> Result<String> {
         let m = self.metadata(false)?;
         let (state, verifier, nonce) = (random(), random(), random());
         let challenge = b64url(&sha2::Sha256::digest(verifier.as_bytes()));
@@ -205,7 +209,7 @@ impl Provider {
             if pending.len() > 2000 {
                 bail!("too many sign-ins in progress, try again in a few minutes");
             }
-            pending.insert(state.clone(), Pending { verifier, nonce: nonce.clone(), started: Instant::now() });
+            pending.insert(state.clone(), Pending { verifier, nonce: nonce.clone(), started: Instant::now(), return_to });
         }
         let separator = if m.authorization_endpoint.contains('?') { '&' } else { '?' };
         Ok(format!(
@@ -242,7 +246,10 @@ impl Provider {
         }
         let id_token = tokens["id_token"].as_str().context("no id_token in the answer of the provider")?;
         let claims = self.verify(id_token, &pending.nonce)?;
-        self.identity(&claims)
+        self.identity(&claims).map(|mut who| {
+            who.return_to = pending.return_to.clone();
+            who
+        })
     }
 
     /// Checks the signature and the claims of an ID token; returns the claims.
@@ -329,7 +336,7 @@ pub fn identity_of(config: &Config, claims: &Value) -> Result<Identity> {
     let mine: Vec<String> = groups.iter().map(|g| short(g)).collect();
     for (role, wanted) in &config.roles {
         if wanted.iter().any(|w| mine.contains(&short(w))) {
-            return Ok(Identity { name, email, role: role.clone(), groups });
+            return Ok(Identity { name, email, role: role.clone(), groups, return_to: None });
         }
     }
     let message = crate::i18n::fmt("{0} is not in any group of the hub ({1}): ask the administrator for access", &[name.clone(), config.roles.iter().flat_map(|(_, g)| g.clone()).collect::<Vec<_>>().join(", ")]);

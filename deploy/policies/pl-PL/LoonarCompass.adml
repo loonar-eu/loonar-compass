@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<policyDefinitionResources xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <displayName>Loonar Compass</displayName>
+  <description>Zasady Loonar Compass – asystenta AI do Sparx Enterprise Architect.</description>
+  <resources>
+    <stringTable>
+      <string id="Loonar">Loonar</string>
+      <string id="Compass">Loonar Compass</string>
+      <string id="SUPPORTED_Compass09">Loonar Compass 0.9 lub nowszy</string>
+      <string id="HubUrl">Adres huba zespołu</string>
+      <string id="HubUrl_Help">Adres huba zespołu (Compass Hub), na przykład https://compass-hub.example.com. Compass używa go zamiast adresu z ustawień, a pole w ustawieniach jest zablokowane. Polityka zespołu z huba (reguły kontroli modelu, minimalny tryb zatwierdzania, dostęp do internetu, agenci zdarzeń) obowiązuje wtedy wszystkich. Użytkownicy logują się kontem firmowym w Ustawienia → Zespół (Compass Hub).</string>
+      <string id="RequireHub">Wymagaj huba zespołu</string>
+      <string id="RequireHub_Help">Włączone: asystent działa tylko, gdy Compass jest zalogowany do huba zespołu i ma jego politykę. Gdy hub nie odpowiada, używana jest ostatnia otrzymana polityka (najwyżej sprzed tygodnia); bez niej asystent nie działa. Używaj razem z „Adres huba zespołu”.</string>
+      <string id="WebAccess">Zezwalaj na dostęp do internetu</string>
+      <string id="WebAccess_Help">Wyłączone: asystent nie może szukać w internecie ani czytać stron, a przycisk 🌐 jest zablokowany. Włączone albo nieskonfigurowane: decyduje użytkownik (domyślnie wyłączone), a hub zespołu nadal może to wyłączyć.</string>
+      <string id="UpdateCheck">Sprawdzaj nowe wersje</string>
+      <string id="UpdateCheck_Help">Wyłączone: Compass nie sprawdza raz dziennie na GitHubie, czy jest nowsze wydanie (gdy IT aktualizuje Compass centralnie). Compass nigdy sam niczego nie pobiera ani nie instaluje.</string>
+      <string id="MinApproval">Minimalny tryb zatwierdzania</string>
+      <string id="MinApproval_Help">Najmniej surowy tryb zatwierdzania zapisów do modelu: „ask” (każdy zapis zatwierdzany), „plan” (zatwierdzany pierwszy zapis odpowiedzi), „auto” (bez zatwierdzania). Surowszy tryb ustawiony przez użytkownika zostaje.</string>
+      <string id="MinApproval_Ask">ask – zatwierdzaj każdy zapis</string>
+      <string id="MinApproval_Plan">plan – zatwierdzaj plan odpowiedzi</string>
+      <string id="MinApproval_Auto">auto – bez zatwierdzania</string>
+      <string id="AllowedProviders">Dozwoleni dostawcy AI</string>
+      <string id="AllowedProviders_Help">Dostawcy AI, z których Compass może korzystać, rozdzieleni przecinkami: anthropic, openai. Inny dostawca w ustawieniach jest odrzucany z komunikatem.</string>
+    </stringTable>
+    <presentationTable>
+      <presentation id="HubUrl"><textBox refId="HubUrl"><label>Adres huba:</label></textBox></presentation>
+      <presentation id="MinApproval"><dropdownList refId="MinApproval" defaultItem="0">Tryb:</dropdownList></presentation>
+      <presentation id="AllowedProviders"><textBox refId="AllowedProviders"><label>Dostawcy (np. anthropic,openai):</label><defaultValue>anthropic</defaultValue></textBox></presentation>
+    </presentationTable>
+  </resources>
+</policyDefinitionResources>

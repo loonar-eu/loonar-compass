@@ -1209,6 +1209,17 @@ compass-hub --service-uninstall</pre>
 </ul>
 <pre>{ elements(type: "Component", limit: 20) { name stereotype taggedValues { name value } connectors { type target { name } } } }</pre>
 
+<h3>Stratégie de l'ordinateur : imposer le hub (stratégie de groupe, Intune)</h3>
+<p>La politique d'équipe du hub s'applique à ceux qui y sont connectés. Pour qu'elle s'applique à tous, le service informatique définit la <b>stratégie de l'ordinateur</b> dans <code>HKLM\SOFTWARE\Policies\Loonar\Compass</code> (pour l'ordinateur) ou <code>HKCU\SOFTWARE\Policies\Loonar\Compass</code> (pour l'utilisateur), par stratégie de groupe ou Intune. Un utilisateur standard ne peut pas la modifier. Les règles ne font que durcir les paramètres :</p>
+<ul>
+  <li><b>HubUrl</b> – l'adresse du hub d'équipe ; le champ des paramètres est verrouillé.</li>
+  <li><b>RequireHub</b> = 1 – l'assistant ne fonctionne que connecté au hub et avec sa politique. Si le hub ne répond pas pendant un moment, Compass utilise la dernière politique reçue (au plus une semaine) ; sans elle, l'assistant ne fonctionne pas.</li>
+  <li><b>WebAccess</b> = 0 – pas d'accès au web (le bouton 🌐 est verrouillé).</li>
+  <li><b>UpdateCheck</b> = 0 – pas de vérification quotidienne d'une nouvelle version.</li>
+  <li><b>MinApproval</b> = ask, plan ou auto – le mode d'approbation le moins strict.</li>
+  <li><b>AllowedProviders</b> – les fournisseurs d'IA autorisés, p. ex. <code>anthropic</code> ou <code>anthropic,openai</code>.</li>
+</ul>
+<p><b>Connexion avec le compte d'entreprise :</b> dans Paramètres → Équipe (Compass Hub), le bouton <b>Se connecter avec le compte d'entreprise</b> ouvre la connexion du hub dans le navigateur (AD FS, Entra ID, Keycloak…) ; ensuite le hub renvoie la session à une adresse à usage unique sur cet ordinateur (127.0.0.1) et Compass la conserve dans le Gestionnaire d'identification à la place d'un jeton. Une session dure 12 heures ; il suffit ensuite de se reconnecter. Les modèles de stratégie de groupe (<code>LoonarCompass.admx</code> et les fichiers de langue <code>.adml</code>) se trouvent dans le dossier <code>deploy\policies</code> du dépôt : copiez-les dans <code>C:\Windows\PolicyDefinitions</code> ou dans le magasin central du domaine. Toute personne ayant les droits d'administrateur sur l'ordinateur peut contourner la stratégie, comme pour toute application.</p>
 <h2 id="s23" class="break">23. Mode de contrôle pour les pipelines CI</h2>
 <p>Avec <code>--check</code>, Loonar Compass contrôle le modèle sans fenêtre et sans modèle d'IA, par exemple dans un pipeline CI après chaque modification du modèle ou du code. Les contrôles sont effectués par le programme : le même modèle donne donc toujours le même résultat, et rien n'est écrit dans le modèle.</p>
 <pre>LoonarCompass.exe --check --model &lt;fichier.qea|app.properties&gt;
