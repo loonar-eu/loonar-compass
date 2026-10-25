@@ -2002,7 +2002,7 @@ impl App {
                         if editor.source == "file" {
                             label_cell(ui, crate::i18n::tr("Model file"));
                             ui.horizontal(|ui| {
-                                ui.add(egui::TextEdit::singleline(&mut editor.file).desired_width(SETTINGS_FIELD_WIDTH - 44.0));
+                                ui.add(egui::TextEdit::singleline(&mut editor.file).desired_width(settings_field_width(ui) - 44.0));
                                 if ui.button("…").on_hover_text(crate::i18n::tr("Choose the model file")).clicked() {
                                     if let Some(file) = rfd::FileDialog::new()
                                         .set_title(crate::i18n::tr("Choose the model file"))
@@ -3203,7 +3203,7 @@ impl App {
                         label_cell(ui, crate::i18n::tr("Model"));
                         ui.horizontal(|ui| {
                             let (field, list): (&mut String, &[&str]) = if openai { (&mut self.form.openai_model, &config::OPENAI_MODELS) } else { (&mut self.form.claude_model, &config::CLAUDE_MODELS) };
-                            ui.add(egui::TextEdit::singleline(field).desired_width(SETTINGS_FIELD_WIDTH - 44.0));
+                            ui.add(egui::TextEdit::singleline(field).desired_width(settings_field_width(ui) - 44.0));
                             ui.menu_button("▾", |ui| {
                                 for model in list {
                                     if ui.button(*model).clicked() {
@@ -3316,7 +3316,7 @@ impl App {
                                 ui.add(
                                     egui::TextEdit::singleline(&mut self.form.model_file)
                                         .hint_text(egui::RichText::new(crate::i18n::fmt("e.g. {0}", &[r"C:\Models\Shop.qea".to_string()])).color(theme::HINT))
-                                        .desired_width(SETTINGS_FIELD_WIDTH - 44.0),
+                                        .desired_width(settings_field_width(ui) - 44.0),
                                 );
                                 if ui.button("…").on_hover_text(crate::i18n::tr("Choose the model file")).clicked() {
                                     if let Some(file) = rfd::FileDialog::new()
@@ -3384,7 +3384,7 @@ impl App {
                     egui::Grid::new("settings_ea").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
                         label_cell(ui, crate::i18n::tr("Path to EA.exe"));
                         ui.horizontal(|ui| {
-                            ui.add(egui::TextEdit::singleline(&mut self.form.ea_path).desired_width(SETTINGS_FIELD_WIDTH - 44.0));
+                            ui.add(egui::TextEdit::singleline(&mut self.form.ea_path).desired_width(settings_field_width(ui) - 44.0));
                             if ui.button("…").on_hover_text(crate::i18n::tr("Choose EA.exe")).clicked() {
                                 if let Some(file) = rfd::FileDialog::new().set_title(crate::i18n::tr("Choose EA.exe")).add_filter("EA.exe", &["exe"]).pick_file() {
                                     self.form.ea_path = file.display().to_string();
@@ -3737,7 +3737,7 @@ impl App {
             ui.add_space(6.0);
             egui::Grid::new("settings_newsletter").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
                 ui.label(crate::i18n::tr("Email address"));
-                ui.add(egui::TextEdit::singleline(&mut c.newsletter_email).hint_text(egui::RichText::new(crate::i18n::tr("e.g. john.smith@example.com")).color(theme::HINT)).desired_width(SETTINGS_FIELD_WIDTH));
+                ui.add(egui::TextEdit::singleline(&mut c.newsletter_email).hint_text(egui::RichText::new(crate::i18n::tr("e.g. john.smith@example.com")).color(theme::HINT)).desired_width(settings_field_width(ui)));
                 ui.end_row();
                 ui.label(crate::i18n::tr("Subscribe"));
                 ui.checkbox(&mut c.newsletter_on, crate::i18n::tr("I want to receive news about new releases"));
@@ -4357,14 +4357,14 @@ fn check_write(cfg: &AppConfig) -> anyhow::Result<String> {
 fn ea_account_rows(ui: &mut egui::Ui, user: &mut String, password: &mut String, stored: bool, enabled: bool) {
     label_cell(ui, crate::i18n::tr("EA user account"));
     if enabled {
-        ui.add(egui::TextEdit::singleline(user).desired_width(SETTINGS_FIELD_WIDTH));
+        ui.add(egui::TextEdit::singleline(user).desired_width(settings_field_width(ui)));
         ui.end_row();
         row_secret(ui, crate::i18n::tr("EA account password"), password, stored);
     } else {
-        ui.add_enabled(false, egui::TextEdit::singleline(&mut String::new()).desired_width(SETTINGS_FIELD_WIDTH));
+        ui.add_enabled(false, egui::TextEdit::singleline(&mut String::new()).desired_width(settings_field_width(ui)));
         ui.end_row();
         label_cell(ui, crate::i18n::tr("EA account password"));
-        ui.add_enabled(false, egui::TextEdit::singleline(&mut String::new()).desired_width(SETTINGS_FIELD_WIDTH));
+        ui.add_enabled(false, egui::TextEdit::singleline(&mut String::new()).desired_width(settings_field_width(ui)));
         ui.end_row();
     }
 }
@@ -5313,15 +5313,20 @@ fn label_cell(ui: &mut egui::Ui, label: &str) {
     }
 }
 
+/// Settings fields grow with the window (addresses and paths stay readable), at least the old fixed width.
+fn settings_field_width(ui: &egui::Ui) -> f32 {
+    (ui.available_width() - 16.0).clamp(SETTINGS_FIELD_WIDTH, 640.0)
+}
+
 fn row(ui: &mut egui::Ui, label: &str, value: &mut String) {
     label_cell(ui, label);
-    ui.add(egui::TextEdit::singleline(value).desired_width(SETTINGS_FIELD_WIDTH));
+    ui.add(egui::TextEdit::singleline(value).desired_width(settings_field_width(ui)));
     ui.end_row();
 }
 
 fn row_hint(ui: &mut egui::Ui, label: &str, value: &mut String, hint: &str) {
     label_cell(ui, label);
-    ui.add(egui::TextEdit::singleline(value).hint_text(egui::RichText::new(hint).color(theme::HINT)).desired_width(SETTINGS_FIELD_WIDTH));
+    ui.add(egui::TextEdit::singleline(value).hint_text(egui::RichText::new(hint).color(theme::HINT)).desired_width(settings_field_width(ui)));
     ui.end_row();
 }
 
@@ -5333,7 +5338,7 @@ fn row_secret(ui: &mut egui::Ui, label: &str, value: &mut String, stored: bool) 
         egui::TextEdit::singleline(value)
             .password(true)
             .hint_text(egui::RichText::new(format!("•••• {hint}")).color(color))
-            .desired_width(SETTINGS_FIELD_WIDTH),
+            .desired_width(settings_field_width(ui)),
     );
     ui.end_row();
 }
