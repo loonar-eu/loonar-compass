@@ -17,7 +17,7 @@ import urllib.request
 
 KEY = re.compile(r"\b(LC-\d+)\b")
 REPO_URL = f"{os.environ.get('GITHUB_SERVER_URL', 'https://github.com')}/{os.environ.get('GITHUB_REPOSITORY', 'loonar-eu/loonar-compass')}"
-CLOUD = os.environ["JIRA_CLOUD_ID"]
+CLOUD = os.environ.get("JIRA_CLOUD_ID", "")
 SEQ = int(time.time() * 1000)
 
 
@@ -34,9 +34,12 @@ def token():
 
 
 def send(api, body):
-    req = urllib.request.Request(f"https://api.atlassian.com/jira/{api}/0.1/cloud/{CLOUD}/bulk", data=json.dumps(body).encode(), method="POST",
-                                 headers={"Authorization": "Bearer " + token(), "Content-Type": "application/json"})
+    if not (CLOUD and os.environ.get("JIRA_CLIENT_ID") and os.environ.get("JIRA_CLIENT_SECRET")):
+        print("::warning::Jira is not configured (secrets JIRA_CLIENT_ID / JIRA_CLIENT_SECRET, variable JIRA_CLOUD_ID)")
+        return
     try:
+        req = urllib.request.Request(f"https://api.atlassian.com/jira/{api}/0.1/cloud/{CLOUD}/bulk", data=json.dumps(body).encode(), method="POST",
+                                     headers={"Authorization": "Bearer " + token(), "Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=60) as r:
             print(api, r.status, r.read().decode()[:300])
     except urllib.error.HTTPError as e:
