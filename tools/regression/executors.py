@@ -48,12 +48,12 @@ def compass_in(work: Path):
 def check_sqlserver(out: Path, work: Path):
     sqlserver_properties(work)
     compass_in(work)
-    powershell(".\\LoonarCompass.exe --check --model app.properties --report raport.md | Out-Host", out, "1_polecenie", work)
-    shutil.copy2(work / "raport.md", out / "raport.md")
+    powershell(".\\LoonarCompass.exe --check --model app.properties --report report.md | Out-Host", out, "1_command", work)
+    shutil.copy2(work / "report.md", out / "report.md")
     # The same check on the file model, for the comparison in step 2 ("as for a file").
     shutil.copy2(CONFIG["test_model"], work / "Sklep.qea")
-    powershell(".\\LoonarCompass.exe --check --model Sklep.qea --report raport_plik_qea.md | Out-Host", out, "2_porownanie_plik_qea", work)
-    shutil.copy2(work / "raport_plik_qea.md", out / "raport_plik_qea.md")
+    powershell(".\\LoonarCompass.exe --check --model Sklep.qea --report report_qea_file.md | Out-Host", out, "2_comparison_qea_file", work)
+    shutil.copy2(work / "report_qea_file.md", out / "report_qea_file.md")
 
 
 # A. Conversation: new buttons and behaviour (the real window) ---------------------------------------------------
@@ -67,7 +67,7 @@ def window_test(fn):
         try:
             fn(c)
         except Exception:
-            c.evidence("stan_przy_bledzie")
+            c.evidence("state_at_error")
             raise
         finally:
             c.close()
@@ -79,16 +79,16 @@ def window_test(fn):
 def picker(c):
     from pywinauto import keyboard
     c.start_conversation()
-    c.evidence("pasek_pod_polem_wiadomosci")
+    c.evidence("bar_under_message_field")
     # The search window has its own text field (its title is painted, not exposed to UI Automation).
     c.click("⌖", expect=lambda: len(c.win.descendants(control_type="Edit")) >= 3)
-    c.evidence("okno_wyszukiwania")
+    c.evidence("search_window")
     keyboard.send_keys("ord", pause=0.05)
     import time
     time.sleep(2)
-    c.evidence("podpowiedzi_dla_ord")
+    c.evidence("suggestions_for_ord")
     c.click("Order  ·  Class", contains=True)
-    c.evidence("wiadomosc_po_wyborze")
+    c.evidence("message_after_pick")
 
 
 @executor("Rozumowanie asystenta (💭)")
@@ -96,13 +96,13 @@ def picker(c):
 def reasoning(c):
     c.start_conversation()
     c.click("💭")
-    c.evidence("rozumowanie_wlaczone")
+    c.evidence("reasoning_on")
     c.say("Przeanalizuj, które klasy w pakiecie Shop domain nie mają opisu i co z tym zrobić.")
-    c.evidence("odpowiedz")
+    c.evidence("answer")
     c.steps()
-    c.evidence("kroki_odpowiedzi")
+    c.evidence("answer_steps")
     c.click("💭")
-    c.evidence("rozumowanie_wylaczone")
+    c.evidence("reasoning_off")
 
 
 @executor("Pytania doprecyzowujące (formularz)")
@@ -111,21 +111,21 @@ def questions(c):
     c.start_conversation()
     if c.say("Dodaj nową klasę płatności do modelu.") == "approval":
         # The assistant went straight to a change instead of asking: that is the evidence; the change is refused.
-        c.evidence("od_razu_prosba_o_zapis_zamiast_pytan")
+        c.evidence("write_request_instead_of_questions")
         c.click("Odrzuć")
         c.wait_idle()
-        c.evidence("zmiana_odrzucona")
+        c.evidence("change_refused")
         return
-    c.evidence("formularz_pytan")
+    c.evidence("question_form")
     c.answer_form()
-    c.evidence("formularz_wypelniony")
+    c.evidence("form_filled")
     c.click("Wyślij odpowiedzi", timeout=10)
     state = c.wait_idle()
-    c.evidence("po_wyslaniu_odpowiedzi")
+    c.evidence("after_sending_answers")
     if state == "approval":
         c.click("Odrzuć")
         c.wait_idle()
-        c.evidence("zmiana_odrzucona")
+        c.evidence("change_refused")
 
 
 @executor("Lista zadań asystenta (📋 Plan)")
@@ -134,7 +134,7 @@ def plan(c):
     c.start_conversation()
     c.say("Przejrzyj pakiet Shop domain w 4 krokach: klasy, relacje, kontrola modelu, 3 najważniejsze problemy.", watch="plan")
     c.steps()
-    c.evidence("plan_po_zakonczeniu")
+    c.evidence("plan_at_end")
 
 
 @executor("Wykonywanie kodu w piaskownicy (∑)")
@@ -142,10 +142,10 @@ def plan(c):
 def sandbox(c):
     c.start_conversation()
     c.click("∑")
-    c.evidence("kod_wlaczony")
+    c.evidence("code_on")
     c.say("Policz w Pythonie średnią liczbę atrybutów na klasę w pakiecie Shop domain.")
-    c.evidence("odpowiedz")
+    c.evidence("answer")
     c.steps()
-    c.evidence("kroki_z_kodem")
+    c.evidence("steps_with_code")
     c.click("∑")
-    c.evidence("kod_wylaczony")
+    c.evidence("code_off")

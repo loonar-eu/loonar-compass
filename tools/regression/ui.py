@@ -47,7 +47,7 @@ class Compass:
                 if (name in text) if contains else (text == name):
                     return c
             time.sleep(0.5)
-        raise RuntimeError(f"nie znaleziono w oknie: {control_type} „{name}”")
+        raise RuntimeError(f"not found in the window: {control_type} \"{name}\"")
 
     def click(self, name, control_type="Button", contains=False, timeout=20, expect=None):
         """Clicks like a person: the pointer first rests on the control (egui reacts to a hovered control), then
@@ -61,7 +61,7 @@ class Compass:
             time.sleep(1.0)
             if not expect or (expect() if callable(expect) else self.shows(expect)):
                 return
-        raise RuntimeError(f"po kliknięciu „{name}” nie pojawiło się „{expect}”")
+        raise RuntimeError(f"after clicking \"{name}\", \"{expect}\" did not appear")
 
     def shows(self, text):
         """Whether any part of the window (also a title of an inner window) shows this text."""
@@ -105,7 +105,7 @@ class Compass:
         edits = [c for c in self.win.descendants(control_type="Edit")]
         return max(edits, key=lambda c: c.element_info.rectangle.width())  # the wide field under the conversation
 
-    APPROVAL = ("Zatwierdź", "Odrzuć")
+    APPROVAL = ("Zatwierdź", "Odrzuć")  # the approval buttons of the Polish UI the tests run in
 
     def wait_idle(self, timeout=600, watch=None):
         """Waits until the assistant has finished: the send button is back and no status says it is working ("…"),
@@ -124,10 +124,10 @@ class Compass:
             if calm >= 3:
                 return "done"
             if watch and time.time() - last_watch > 15:
-                self.evidence(f"{watch}_w_trakcie_{int(time.time() - started)}s")
+                self.evidence(f"{watch}_during_{int(time.time() - started)}s")
                 last_watch = time.time()
             time.sleep(1)
-        raise RuntimeError("asystent nie skończył pracy w czasie")
+        raise RuntimeError("the assistant did not finish in time")
 
     def answer_form(self):
         """Fills a question form like a person in a hurry: the first option of every question."""
@@ -167,7 +167,7 @@ class Compass:
         self.click("Zatwierdź" if yes else "Odrzuć")
         return self.wait_idle()
 
-    def say_approving(self, message, yes=True, label="zgoda"):
+    def say_approving(self, message, yes=True, label="approval"):
         """Sends a message and answers every approval it asks for (with evidence of each approval)."""
         state, n = self.say(message), 0
         while state == "approval" and n < 6:

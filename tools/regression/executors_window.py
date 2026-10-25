@@ -14,7 +14,7 @@ from ui import Compass
 def delete_conversation(c):
     c.start_conversation()
     c.say("Ile pakietów ma model? Odpowiedz jednym zdaniem.")
-    c.evidence("stara_rozmowa_na_liscie")
+    c.evidence("old_conversation_in_list")
     # The conversation in the list on the left (the same text is also in the conversation itself).
     left = c.win.rectangle().left + 450
     item = next(t for t in c.win.descendants(control_type="Text")
@@ -22,16 +22,16 @@ def delete_conversation(c):
     r = item.element_info.rectangle
     mouse.right_click(coords=((r.left + r.right) // 2, (r.top + r.bottom) // 2))
     time.sleep(1)
-    c.evidence("menu_kontekstowe")
+    c.evidence("context_menu")
     c.click("Usuń rozmowę", contains=True)
     try:
         c.click("Usuń", timeout=3)  # a confirmation, if the window asks
     except RuntimeError:
         pass
-    c.evidence("lista_po_usunieciu")
+    c.evidence("list_after_delete")
     bin_folder = c.work / "history" / "bin"
     files = sorted(p.name for p in bin_folder.iterdir()) if bin_folder.exists() else []
-    (c.out / "folder_history_bin.txt").write_text(f"{bin_folder}:\n" + ("\n".join(files) or "(pusty albo nie istnieje)"), encoding="utf-8")
+    (c.out / "folder_history_bin.txt").write_text(f"{bin_folder}:\n" + ("\n".join(files) or "(empty or missing)"), encoding="utf-8")
 
 
 # B. Documents --------------------------------------------------------------------------------------------------
@@ -39,7 +39,7 @@ def sample_xlsx(path: Path):
     import openpyxl
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Zamowienia"
+    ws.title = "Orders"
     ws.append(["Zamówienie", "Klient", "Kwota"])
     for row in (["Z-1", "Anna", 120], ["Z-2", "Bartek", 80], ["Z-3", "Celina", 200]):
         ws.append(row)
@@ -70,7 +70,7 @@ def open_files(c, pages=4):
             (c.out / f"otwarcie_{f.name}_blad.txt").write_text(str(e), encoding="utf-8")
 
 
-def files_report(c, name="pliki_w_rozmowie"):
+def files_report(c, name="files_in_conversation"):
     """What the created files contain: slides of a PPTX, pages of a PDF, size of other files."""
     lines = []
     for f in c.files():
@@ -81,35 +81,35 @@ def files_report(c, name="pliki_w_rozmowie"):
                 prs = Presentation(f)
                 titles = [next((s.text_frame.text for s in slide.shapes if s.has_text_frame and s.text_frame.text.strip()), "") for slide in prs.slides]
                 pictures = sum(1 for slide in prs.slides for s in slide.shapes if s.shape_type == 13)
-                line += f": {len(prs.slides)} slajdów, obrazów: {pictures}, tytuły: {titles}"
+                line += f": {len(prs.slides)} slides, pictures: {pictures}, titles: {titles}"
             elif f.suffix.lower() == ".pdf":
                 from pypdf import PdfReader
                 pdf = PdfReader(f)
-                line += f": {len(pdf.pages)} stron; początek: {(pdf.pages[0].extract_text() or '')[:300]!r}"
+                line += f": {len(pdf.pages)} pages; beginning: {(pdf.pages[0].extract_text() or '')[:300]!r}"
         except Exception as e:
-            line += f": nie udało się odczytać ({e})"
+            line += f": could not be read ({e})"
         lines.append(line)
-    (c.out / f"{name}.txt").write_text("\n".join(lines) or "(brak plików)", encoding="utf-8")
+    (c.out / f"{name}.txt").write_text("\n".join(lines) or "(no files)", encoding="utf-8")
 
 
 @executor("Odczyt PPTX / VSDX / XLSX")
 @window_test
 def read_office(c):
     c.start_conversation()
-    sample = c.work / "zamowienia_test.xlsx"
+    sample = c.work / "orders_test.xlsx"
     sample_xlsx(sample)
     c.attach(sample)
-    c.evidence("plik_dolaczony")
+    c.evidence("file_attached")
     c.say_approving("Streść ten plik.")
-    c.evidence("streszczenie")
+    c.evidence("summary")
 
 
 @executor("Odczyt PDF z dysku")
 @window_test
 def read_pdf(c):
     c.start_conversation()
-    c.say_approving("Przeczytaj C:\\in_progress\\Claude\\Loonar_Compass_0.8.2_plan_testow.pdf i powiedz, ile ma części.", label="zgoda_na_odczyt")
-    c.evidence("odpowiedz")
+    c.say_approving("Przeczytaj C:\\in_progress\\Claude\\Loonar_Compass_0.8.2_plan_testow.pdf i powiedz, ile ma części.", label="read_approval")
+    c.evidence("answer")
 
 
 @executor("Tworzenie prezentacji PowerPoint i PDF")
@@ -117,7 +117,7 @@ def read_pdf(c):
 def make_slides(c):
     c.start_conversation()
     c.say_approving("Zrób 4-slajdową prezentację PowerPoint o pakiecie Shop domain z diagramem klas, także jako PDF.")
-    c.evidence("pliki_w_rozmowie")
+    c.evidence("files_in_conversation")
     files_report(c)
     open_files(c)
 
@@ -127,7 +127,7 @@ def make_slides(c):
 def make_pdf(c):
     c.start_conversation()
     c.say_approving("Przygotuj dokument PDF z listą klas pakietu Shop domain.")
-    c.evidence("plik_pdf_w_rozmowie")
+    c.evidence("pdf_in_conversation")
     files_report(c)
     open_files(c)
     model_classes(c)
@@ -141,7 +141,7 @@ def model_classes(c):
                           union all select p.package_id from t_package p join pk on p.parent_id = pk.id)
                           select name from t_object where object_type = 'Class' and package_id in (select id from pk) order by name""").fetchall()
     con.close()
-    (c.out / "model_klasy_shop_domain.txt").write_text("Klasy pakietu Shop domain w modelu:\n" + "\n".join(r[0] for r in rows), encoding="utf-8")
+    (c.out / "model_classes_shop_domain.txt").write_text("Klasy pakietu Shop domain w modelu:\n" + "\n".join(r[0] for r in rows), encoding="utf-8")
 
 
 # C. Model: instructions, MDG, EA API, sub-agent ------------------------------------------------------------------
@@ -151,7 +151,7 @@ def model_objects(c, where, name):
     con = sqlite3.connect(model)
     rows = con.execute(f"select name, object_type, stereotype, note from t_object where {where}").fetchall()
     con.close()
-    (c.out / f"{name}.txt").write_text(f"{model.name}: {where}\n" + ("\n".join(map(str, rows)) or "(brak)"), encoding="utf-8")
+    (c.out / f"{name}.txt").write_text(f"{model.name}: {where}\n" + ("\n".join(map(str, rows)) or "(none)"), encoding="utf-8")
 
 
 INSTRUCTIONS = "stereotype = 'CompassInstructions' or name like '%Compass%Instruct%'"
@@ -162,10 +162,10 @@ INSTRUCTIONS = "stereotype = 'CompassInstructions' or name like '%Compass%Instru
 def instructions(c):
     c.start_conversation()
     c.say_approving("Przygotuj instrukcje modelowania dla tego repozytorium.")
-    c.evidence("propozycja")
+    c.evidence("proposal")
     # A person accepts the proposal; the assistant then asks to write it (approved).
     c.say_approving("Tak, projekt jest dobry. Zapisz instrukcje w modelu.")
-    c.evidence("zapis")
+    c.evidence("write")
     model_objects(c, INSTRUCTIONS, "model_CompassInstructions")
 
 
@@ -176,12 +176,12 @@ def instructions_rule(c):
     c.say_approving("Przygotuj instrukcje modelowania dla tego repozytorium.")  # the precondition: instructions exist
     c.say_approving("Tak, projekt jest dobry. Zapisz instrukcje w modelu.")
     c.say_approving("Dopisz do instrukcji: aktywności zaczynają się od czasownika.")
-    c.evidence("regula_dopisana")
+    c.evidence("rule_added")
     model_objects(c, INSTRUCTIONS, "model_CompassInstructions")
     c.click("\ue710")  # new conversation
     c.start_conversation()
     c.say("Jakie mamy zasady nazewnictwa?")
-    c.evidence("nowa_rozmowa_zna_zasady")
+    c.evidence("new_conversation_knows_rules")
 
 
 @executor("Technologie MDG (ArchiMate)")
@@ -190,7 +190,7 @@ def mdg(c):
     c.start_conversation()
     c.say("Jakie stereotypy ma ArchiMate dla komponentu aplikacji i jakie wartości tagowane?")
     c.steps()
-    c.evidence("odpowiedz_i_kroki")
+    c.evidence("answer_and_steps")
 
 
 @executor("Skrypt EA z weryfikacją API EA")
@@ -210,10 +210,10 @@ def subagent(c):
     c.start_conversation()
     state = c.say("Użyj podagenta wpływu: co się stanie po zmianie nazwy Order na PurchaseOrder?")
     c.steps()
-    c.evidence("odpowiedz_i_kroki")
+    c.evidence("answer_and_steps")
     if state == "approval":
         c.approve(False)
-    model_objects(c, "name in ('Order', 'PurchaseOrder')", "model_bez_zmian")
+    model_objects(c, "name in ('Order', 'PurchaseOrder')", "model_unchanged")
 
 
 @executor("Status kontroli wersji pakietów")
@@ -222,7 +222,7 @@ def version_control(c):
     c.start_conversation()
     c.say("Które pakiety są pod kontrolą wersji?")
     c.steps()
-    c.evidence("odpowiedz_i_kroki")
+    c.evidence("answer_and_steps")
 
 
 # E. SQL Server in the real window ----------------------------------------------------------------------------------
@@ -232,12 +232,12 @@ def sqlserver_questions(out: Path, work: Path):
     try:
         c.start_conversation()
         c.say("Ile jest klas i jakie są relacje klasy Order?")
-        c.evidence("klasy_i_relacje")
+        c.evidence("classes_and_relations")
         c.say("Sprawdź jakość pakietu Shop domain.")
         c.steps()
-        c.evidence("kontrola_jakosci")
+        c.evidence("quality_check")
     except Exception:
-        c.evidence("stan_przy_bledzie")
+        c.evidence("state_at_error")
         raise
     finally:
         c.close()
@@ -248,7 +248,7 @@ def sqlserver_questions(out: Path, work: Path):
     try:
         c.start_conversation()
         c.say("Ile jest klas i jakie są relacje klasy Order?")
-        c.evidence("dla_porownania_plik_qea")
+        c.evidence("for_comparison_qea_file")
     finally:
         c.close()
 
@@ -256,12 +256,12 @@ def sqlserver_questions(out: Path, work: Path):
 @executor("Model testowy działa jak w 0.8.2")
 @window_test
 def test_model(c):
-    c.evidence("compass_z_kopia_modelu")
+    c.evidence("compass_with_model_copy")
     c.start_conversation()
     c.say("Jakie pakiety są w modelu?")
-    c.evidence("pakiety_modelu")
+    c.evidence("model_packages")
     model = next(c.work.glob("*.qea"))
     con = sqlite3.connect(model)
     rows = con.execute("select name from t_package order by name").fetchall()
     con.close()
-    (c.out / "model_pakiety.txt").write_text("Pakiety w kopii modelu:\n" + "\n".join(r[0] for r in rows), encoding="utf-8")
+    (c.out / "model_packages.txt").write_text("Pakiety w kopii modelu:\n" + "\n".join(r[0] for r in rows), encoding="utf-8")

@@ -17,10 +17,10 @@ def main(cycle, key, report, who="Compass Lab (serwer LAB-DC1)"):
     folder = Path(tempfile.mkdtemp(prefix=f"report-{key}-"))
     (folder / Path(report).name).write_bytes(Path(report).read_bytes())
     result, _ = judge.judge(case, folder, secret(CONFIG["claude_credential"]))
-    issue = jira.evidence_issue(f"Regresja {cycle} – dowody", CONFIG["evidence_parent"])
+    issue = jira.evidence_issue(f"Regression {cycle} – evidence", CONFIG["evidence_parent"])
     link = jira.attach(issue, folder / Path(report).name)
-    comment = (f"Wykonał: {who}. Ocenił: {judge.MODEL} (niezależny sędzia) na podstawie raportu z wykonania.<br>{result['reason']}<br>"
-               f"Dowody: {CONFIG['site']}/browse/{issue}<br>{Path(report).name}: {link}")
+    comment = (f"Executed by: {who}. Judged by: {judge.MODEL} (independent judge) from the execution report.<br>{result['reason']}<br>"
+               f"Evidence: {CONFIG['site']}/browse/{issue}<br>{Path(report).name}: {link}")
     zephyr.record(execution["id"], result["verdict"], comment, result["steps"], 0)
     print(key, result["verdict"], result["reason"])
 

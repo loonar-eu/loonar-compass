@@ -36,12 +36,12 @@ def main(argv):
         out = run_dir / key
         out.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix=f"regression-{key}-"))
-        print(f"{key} {case['name']}: wykonanie…", flush=True)
+        print(f"{key} {case['name']}: running…", flush=True)
         started = time.time()
         try:
             fn(out, work)
         except Exception as e:  # a broken executor is evidence too: the judge sees it and blocks the test
-            (out / "blad_wykonania.txt").write_text(f"{type(e).__name__}: {e}", encoding="utf-8")
+            (out / "executor_error.txt").write_text(f"{type(e).__name__}: {e}", encoding="utf-8")
         finally:
             shutil.rmtree(work, ignore_errors=True)
         result, usage = judge.judge(case, out, api_key)
@@ -49,15 +49,15 @@ def main(argv):
         print(f"  {result['verdict']}: {result['reason']}", flush=True)
         links = []
         if not dry:
-            evidence_issue = evidence_issue or jira.evidence_issue(f"Regresja {cycle} – dowody", CONFIG["evidence_parent"])
+            evidence_issue = evidence_issue or jira.evidence_issue(f"Regression {cycle} – evidence", CONFIG["evidence_parent"])
             links = [f"{p.name}: {jira.attach(evidence_issue, p)}" for p in sorted(out.iterdir()) if p.is_file()]
-            comment = (f"Wykonał: Claude (automat). Ocenił: {judge.MODEL} (niezależny sędzia).<br>{result['reason']}<br>"
-                       f"Dowody: {CONFIG['site']}/browse/{evidence_issue}<br>" + "<br>".join(links))
+            comment = (f"Executed by: Claude (automated). Judged by: {judge.MODEL} (independent judge).<br>{result['reason']}<br>"
+                       f"Evidence: {CONFIG['site']}/browse/{evidence_issue}<br>" + "<br>".join(links))
             zephyr.record(execution["id"], result["verdict"], comment, result["steps"], time.time() - started)
         summary.append((key, case["name"], result["verdict"]))
     cost = tokens_in / 1e6 * PRICE_IN + tokens_out / 1e6 * PRICE_OUT
-    print(f"\n{len(summary)} testów: " + ", ".join(f"{v} {sum(1 for s in summary if s[2] == v)}" for v in ("PASS", "FAIL", "BLOCKED")))
-    print(f"Sędzia: {tokens_in} tokenów wejścia, {tokens_out} wyjścia, ok. {cost:.4f} USD. Dowody: {run_dir}")
+    print(f"\n{len(summary)} tests: " + ", ".join(f"{v} {sum(1 for s in summary if s[2] == v)}" for v in ("PASS", "FAIL", "BLOCKED")))
+    print(f"Judge: {tokens_in} input tokens, {tokens_out} output tokens, about {cost:.4f} USD. Evidence: {run_dir}")
 
 
 if __name__ == "__main__":

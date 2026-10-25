@@ -1373,7 +1373,7 @@ impl Job<'_> {
                 // Project glossary (Glossary window: Term / Type / Meaning). EA highlights a term in notes only in exactly
                 // the form written in the glossary, so every inflected form is its own entry with the same meaning.
                 let terms = self.repo.obj("Terms")?;
-                let kind = { let k = text_field(op, "type"); if k.is_empty() { "Slownik".to_string() } else { k } };
+                let kind = { let k = text_field(op, "type"); if k.is_empty() { "Glossary".to_string() } else { k } };
                 let meaning = text_field(op, "meaning");
                 let mut forms: Vec<String> = vec![text_field(op, "term")];
                 forms.extend(op["forms"].as_array().into_iter().flatten().filter_map(|f| f.as_str()).map(|f| f.trim().to_string()));

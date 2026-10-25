@@ -4799,18 +4799,18 @@ fn ask_from_command_line(args: &[String], default_props: &Path) -> anyhow::Resul
     let approvals = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
     let log = approvals.clone();
     let approver = tools::Approver::new(ApprovalMode::Ask, Box::new(move |summary| {
-        log.lock().unwrap().push(format!("{} — {summary}", if approve { "zatwierdzono" } else { "odrzucono" }));
+        log.lock().unwrap().push(format!("{} — {summary}", if approve { "approved" } else { "refused" }));
         approve
     }));
-    let mut md = format!("# Rozmowa bez okna (Loonar Compass {})\n\nModel: {}\nRozumowanie: {reasoning}, wykonywanie kodu: {code}, zapisy: {}\n",
-        env!("CARGO_PKG_VERSION"), props.display(), if approve { "zatwierdzane" } else { "odrzucane" });
+    let mut md = format!("# Conversation without a window (Loonar Compass {})\n\nSettings: {}\nReasoning: {reasoning}, code execution: {code}, writes: {}\n",
+        env!("CARGO_PKG_VERSION"), props.display(), if approve { "approved" } else { "refused" });
     let mut history: Vec<Message> = Vec::new();
     let mut failed = false;
     for (n, text) in said.iter().enumerate() {
         history.push(Message { role: "user".into(), text: text.clone(), attachments: if n == 0 { stored.clone() } else { vec![] }, created: chrono::Utc::now().to_rfc3339() });
-        md += &format!("\n## Wiadomość {}\n\n> {}\n", n + 1, text.replace('\n', "\n> "));
+        md += &format!("\n## Message {}\n\n> {}\n", n + 1, text.replace('\n', "\n> "));
         if n == 0 && !stored.is_empty() {
-            md += &format!("\nZałączniki: {}\n", stored.join(", "));
+            md += &format!("\nAttachments: {}\n", stored.join(", "));
         }
         let lines = std::sync::Mutex::new(Vec::<String>::new());
         let answers = std::sync::Mutex::new(Vec::<String>::new());
@@ -4819,36 +4819,36 @@ fn ask_from_command_line(args: &[String], default_props: &Path) -> anyhow::Resul
             WorkerEvent::StepStart(t) => lines.lock().unwrap().push(format!("- ▶ {t}")),
             WorkerEvent::StepEnd { ok, detail } => lines.lock().unwrap().push(format!("  - {} {}", if ok { "✓" } else { "✗" }, detail.replace('\n', "\n    "))),
             WorkerEvent::Text(t) => answers.lock().unwrap().push(t),
-            WorkerEvent::Images(names) => lines.lock().unwrap().push(format!("  - obrazy: {}", names.join(", "))),
-            WorkerEvent::Failed(e) => lines.lock().unwrap().push(format!("- ✗ błąd: {e}")),
+            WorkerEvent::Images(names) => lines.lock().unwrap().push(format!("  - images: {}", names.join(", "))),
+            WorkerEvent::Failed(e) => lines.lock().unwrap().push(format!("- ✗ error: {e}")),
             _ => {}
         });
-        md += &format!("\n### Kroki\n\n{}\n", lines.into_inner().unwrap().join("\n"));
+        md += &format!("\n### Steps\n\n{}\n", lines.into_inner().unwrap().join("\n"));
         let answers = answers.into_inner().unwrap();
-        md += "\n### Odpowiedź\n\n";
+        md += "\n### Answer\n\n";
         for answer in &answers {
             match split_questions(answer) {
                 Some((intro, questions)) => {
-                    md += &format!("{intro}\n\nFormularz pytań:\n");
+                    md += &format!("{intro}\n\nQuestion form:\n");
                     for (question, options) in questions {
-                        md += &format!("- {question}{}\n", if options.is_empty() { String::new() } else { format!(" (opcje: {})", options.join(" / ")) });
+                        md += &format!("- {question}{}\n", if options.is_empty() { String::new() } else { format!(" (options: {})", options.join(" / ")) });
                     }
                 }
                 None => md += &format!("{answer}\n\n"),
             }
         }
         if let Err(e) = result {
-            md += &format!("\n### Błąd\n\n{e:#}\n");
+            md += &format!("\n### Error\n\n{e:#}\n");
             failed = true;
         }
         history.push(Message { role: "assistant".into(), text: answers.join("\n\n"), attachments: vec![], created: chrono::Utc::now().to_rfc3339() });
     }
     let approvals = approvals.lock().unwrap().clone();
     if !approvals.is_empty() {
-        md += &format!("\n## Prośby o zgodę na zapis\n\n{}\n", approvals.iter().map(|a| format!("- {a}")).collect::<Vec<_>>().join("\n"));
+        md += &format!("\n## Write approvals\n\n{}\n", approvals.iter().map(|a| format!("- {a}")).collect::<Vec<_>>().join("\n"));
     }
     let created: Vec<String> = std::fs::read_dir(&cfg.attachments_dir)?.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().to_string()).filter(|n| !stored.contains(n)).collect();
-    md += &format!("\n## Pliki utworzone w rozmowie\n\n{}\n", if created.is_empty() { "(brak)".to_string() } else { created.iter().map(|f| format!("- files/{f}")).collect::<Vec<_>>().join("\n") });
+    md += &format!("\n## Files created in the conversation\n\n{}\n", if created.is_empty() { "(none)".to_string() } else { created.iter().map(|f| format!("- files/{f}")).collect::<Vec<_>>().join("\n") });
     std::fs::write(out.join("transcript.md"), &md)?;
     println!("{md}");
     Ok(if failed { 1 } else { 0 })

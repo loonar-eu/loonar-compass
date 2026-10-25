@@ -20,7 +20,7 @@ Be strict about facts in the expected result (numbers, names, messages), lenient
 "…" in an expected result stands for any value (an id, a count, a name). Something extra on the screen that the
 expected result does not mention (another window still open, more items) does not fail a step.
 The overall verdict is FAIL if any step fails, otherwise BLOCKED if any step is blocked, otherwise PASS.
-Write reasons in Polish, one or two short sentences, naming what the evidence shows."""
+Write the reasons in the language of the test case, one or two short sentences, naming what the evidence shows."""
 
 SCHEMA = {
     "type": "object",
@@ -61,7 +61,7 @@ def _evidence_blocks(evidence_dir):
         elif path.is_file():
             text = path.read_text(encoding="utf-8", errors="replace")
             if len(text) > TEXT_LIMIT:
-                text = "[…początek pominięty…]\n" + text[-TEXT_LIMIT:]
+                text = "[…beginning left out…]\n" + text[-TEXT_LIMIT:]
             blocks.append({"type": "text", "text": f"Evidence ({path.name}):\n{text}"})
     return blocks or [{"type": "text", "text": "No evidence was collected."}]
 
@@ -76,7 +76,7 @@ def judge(case, evidence_dir, api_key):
         messages=[{"role": "user", "content": content}],
     )
     if response.stop_reason in ("refusal", "max_tokens"):
-        return {"verdict": "BLOCKED", "reason": f"Sędzia nie dał wyniku ({response.stop_reason}).", "steps": []}, response.usage
+        return {"verdict": "BLOCKED", "reason": f"The judge gave no result ({response.stop_reason}).", "steps": []}, response.usage
     text = next(b.text for b in response.content if b.type == "text")
     result = json.loads(text)
     # The overall verdict follows from the steps, so a reason and a verdict can never contradict each other.
