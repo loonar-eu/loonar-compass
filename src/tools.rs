@@ -1367,8 +1367,16 @@ mod tests {
     use super::*;
     use std::path::Path;
 
+    /// The developer's app.properties; without it (CI) the default settings, enough for the tests that refuse before touching a model.
     fn test_config() -> AppConfig {
-        AppConfig::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("app.properties")).expect("app.properties")
+        let props = Path::new(env!("CARGO_MANIFEST_DIR")).join("app.properties");
+        if props.exists() {
+            return AppConfig::load(&props).expect("app.properties");
+        }
+        let dir = std::env::temp_dir().join(format!("loonar-tools-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("app.properties"), "").unwrap();
+        AppConfig::load(&dir.join("app.properties")).unwrap()
     }
 
     /// Persistent EA session: the first call starts EA (tens of seconds), the following ones reuse the open session.
