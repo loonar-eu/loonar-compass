@@ -17,6 +17,8 @@ const NAME: &str = "CompassHub";
 const DISPLAY: &str = "Compass Hub (Loonar Compass team service)";
 
 static FILE: OnceLock<String> = OnceLock::new();
+/// The status handle, so the control handler can report the stop before the process ends.
+static STATUS: OnceLock<service_control_handler::ServiceStatusHandle> = OnceLock::new();
 
 pub fn install(file: &str) -> Result<()> {
     let file = std::fs::canonicalize(file).with_context(|| format!("{file} does not exist"))?;
@@ -66,10 +68,27 @@ pub fn run(file: String) {
     }
 }
 
+fn status(state: ServiceState, code: u32) -> ServiceStatus {
+    ServiceStatus {
+        service_type: ServiceType::OWN_PROCESS,
+        current_state: state,
+        controls_accepted: if state == ServiceState::Running { ServiceControlAccept::STOP | ServiceControlAccept::SHUTDOWN } else { ServiceControlAccept::empty() },
+        exit_code: ServiceExitCode::Win32(code),
+        checkpoint: 0,
+        wait_hint: Duration::from_secs(5),
+        process_id: None,
+    }
+}
+
 fn service_main(_: Vec<OsString>) {
     let status_handle = match service_control_handler::register(NAME, |control| match control {
         ServiceControl::Stop | ServiceControl::Shutdown => {
-            // The hub keeps no state in memory that is not on disk: stopping ends the process.
+            // The hub keeps no state in memory that is not on disk: stopping ends the process. The service manager
+            // is told first (stop pending, then stopped), so a stop or a restart is a normal stop and not a crash.
+            if let Some(handle) = STATUS.get() {
+                let _ = handle.set_service_status(status(ServiceState::StopPending, 0));
+                let _ = handle.set_service_status(status(ServiceState::Stopped, 0));
+            }
             std::process::exit(0);
         }
         ServiceControl::Interrogate => ServiceControlHandlerResult::NoError,
@@ -78,15 +97,7 @@ fn service_main(_: Vec<OsString>) {
         Ok(handle) => handle,
         Err(_) => return,
     };
-    let status = |state: ServiceState, code: u32| ServiceStatus {
-        service_type: ServiceType::OWN_PROCESS,
-        current_state: state,
-        controls_accepted: if state == ServiceState::Running { ServiceControlAccept::STOP | ServiceControlAccept::SHUTDOWN } else { ServiceControlAccept::empty() },
-        exit_code: ServiceExitCode::Win32(code),
-        checkpoint: 0,
-        wait_hint: Duration::from_secs(5),
-        process_id: None,
-    };
+    let _ = STATUS.set(status_handle);
     let _ = status_handle.set_service_status(status(ServiceState::Running, 0));
     let file = FILE.get().cloned().unwrap_or_default();
     let result = crate::run(&file);
