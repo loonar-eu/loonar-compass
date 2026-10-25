@@ -63,7 +63,7 @@ OpenID Connect providers). Add to `hub.json`:
 ```
 
 - Register the hub at the provider as a confidential web application, flow *authorization code*, with the redirect URI
-  above, the scopes `openid profile email` (AD FS: also `allatclaims`; `"scopes"` changes them) and a `groups` claim in
+  above, the scopes `openid profile email` (AD FS: the hub adds `allatclaims` itself; `"scopes"` changes them) and a `groups` claim in
   the ID token with group names. The client secret is the hub secret `OIDC_CLIENT_SECRET` (`LOONAR_SECRET_OIDC_CLIENT_SECRET`).
 - The hub checks the ID token itself: RS256 signature with the provider's keys, issuer, audience, expiry, nonce; the
   sign-in uses PKCE (S256) and a one-time state.
@@ -97,6 +97,13 @@ in the format of the `"agents"` list of `event_agents.json`, guards too; marked 
 ## Security
 
 - **HTTPS:** the hub speaks plain HTTP. For access from other computers, put it behind an HTTPS reverse proxy (IIS, nginx).
+- **IIS with ARR:** listen on `127.0.0.1:8730`, rewrite the IIS site to `http://127.0.0.1:8730/{R:1}`, and turn off
+  `reverseRewriteHostInResponseHeaders` in the ARR proxy settings (otherwise ARR rewrites the redirect to the identity
+  provider to the hub's own address and the company sign-in fails). Keep the `Authorization` header (the default).
+- **Client address behind a proxy:** `X-Forwarded-For` is trusted only from a proxy on the same computer (its last address
+  is the client); the lockout and the audit trail use that address.
+- **Sign-ins in the audit trail:** failed and refused sign-ins (password and company account) are recorded with result ✗
+  and the client address. The **Users** tab also lists company accounts with their role and last sign-in (read only).
 - **hub.json:** protect it with file permissions. Passwords and tokens are kept in it only as hashes.
 - **Default account:** it can do nothing until its password is changed.
 - **Lockout:** after 20 wrong passwords or tokens, an address is refused for 10 minutes.

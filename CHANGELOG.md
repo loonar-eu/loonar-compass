@@ -12,6 +12,7 @@ Logowanie kontem firmowym do huba, modele w SQL Server, MySQL i Oracle, instrukc
   - Authorization code z PKCE; hub sam sprawdza token ID (podpis RS256 kluczami dostawcy, wystawca, odbiorca, ważność, nonce).
   - Role z grup (`roles`, domyślnie Compass-Admins, Compass-Architects, Compass-Viewers): wygrywa najwyższa rola, brak grupy to brak dostępu. Lokalny użytkownik o tej samej nazwie jest odrzucany.
   - Klucz tajny klienta to sekret huba `OIDC_CLIENT_SECRET`. `"password_login": false` zostawia tylko logowanie firmowe; tokeny API działają dalej. Każde logowanie trafia do dziennika zmian.
+- **Hub za IIS/ARR i audyt logowań:** `allatclaims` dodawany sam dla AD FS; blokada po błędnych hasłach według adresu klienta z `X-Forwarded-For` (tylko od proxy na tym samym komputerze); nieudane i odrzucone logowania w „Audit trail” z ✗; w „Users” lista kont firmowych z rolą i ostatnim logowaniem (tylko odczyt); usługa Windows zatrzymuje się i restartuje poprawnie. Instrukcja: ustawienie ARR `reverseRewriteHostInResponseHeaders="false"`.
 - **Agenci zdarzeń dla zespołu:** klucz polityki `"event_agents"` (ten sam format co `event_agents.json`, także strażnicy). Agenci działają w Compassie w EA u każdego, z dopiskiem „(team)”.
 - **Zakładka „Team policy” (admin):** edytor JSON polityki (min_approval, governance, event_agents, ask_min_role, ask_per_hour).
 - **Raporty Word i Excel:** „Word report of the package” i „Excel report of the package” w zakładce Model check: opis, elementy, relacje (bez obrazków diagramów). Każde pobranie trafia do dziennika.
