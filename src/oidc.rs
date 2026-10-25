@@ -300,6 +300,21 @@ pub fn check_claims(claims: &Value, issuer: &str, client_id: &str, nonce: &str, 
     Ok(())
 }
 
+/// A person the provider signed in but who is in no group of the hub (the hub knows who it was, for the audit trail).
+#[derive(Debug)]
+pub struct NoGroup {
+    pub name: String,
+    message: String,
+}
+
+impl std::fmt::Display for NoGroup {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for NoGroup {}
+
 /// Name, e-mail and role from the claims. Groups: a list or one string; "/Compass-Admins" (Keycloak's full path)
 /// and "LAB\\Compass-Admins" count as "Compass-Admins". No group of the hub = no access.
 pub fn identity_of(config: &Config, claims: &Value) -> Result<Identity> {
@@ -317,7 +332,8 @@ pub fn identity_of(config: &Config, claims: &Value) -> Result<Identity> {
             return Ok(Identity { name, email, role: role.clone(), groups });
         }
     }
-    bail!("{}", crate::i18n::fmt("{0} is not in any group of the hub ({1}): ask the administrator for access", &[name, config.roles.iter().flat_map(|(_, g)| g.clone()).collect::<Vec<_>>().join(", ")]))
+    let message = crate::i18n::fmt("{0} is not in any group of the hub ({1}): ask the administrator for access", &[name.clone(), config.roles.iter().flat_map(|(_, g)| g.clone()).collect::<Vec<_>>().join(", ")]);
+    Err(NoGroup { name, message }.into())
 }
 
 #[cfg(test)]

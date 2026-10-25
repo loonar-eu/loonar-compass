@@ -378,7 +378,7 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
                 "content-length" => length = value.trim().parse().map_err(|_| deny(400, "Content-Length"))?,
                 "transfer-encoding" => return Err(deny(501, "Transfer-Encoding is not supported")),
                 "authorization" => token = value.trim().strip_prefix("Bearer ").unwrap_or("").trim().to_string(),
-                "x-forwarded-for" => forwarded = value.split(',').next_back().and_then(|a| a.trim().parse().ok()),
+                "x-forwarded-for" => forwarded = value.split(',').next_back().and_then(|a| forwarded_address(a.trim())),
                 _ => {}
             }
         }
@@ -387,6 +387,12 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
         return Err(deny(413, "request body too large"));
     }
     Ok(Head { method, target, length, token, forwarded })
+}
+
+/// An address of X-Forwarded-For: "10.1.2.3", "2001:db8::1", or with a port as IIS/ARR sends it by default
+/// ("10.1.2.3:51234", "[2001:db8::1]:51234").
+fn forwarded_address(text: &str) -> Option<IpAddr> {
+    text.parse::<IpAddr>().ok().or_else(|| text.parse::<std::net::SocketAddr>().ok().map(|a| a.ip()))
 }
 
 fn read_body(reader: &mut BufReader<&TcpStream>, length: usize, started: Instant) -> Result<Vec<u8>, HttpError> {
@@ -577,7 +583,8 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
                     }
                     Err(e) => {
                         log(&hub.dir, &format!("company sign-in failed: {e:#}"));
-                        hub.audit_sign_in("", &crate::i18n::fmt("company sign-in failed: {0}", &[format!("{e:#}")]), peer);
+                        let who = e.downcast_ref::<crate::oidc::NoGroup>().map(|n| n.name.clone()).unwrap_or_default();
+                        hub.audit_sign_in(&who, &crate::i18n::fmt("company sign-in failed: {0}", &[format!("{e:#}")]), peer);
                         sign_in_problem(&stream, &format!("{e:#}"))
                     }
                 };
@@ -1793,6 +1800,10 @@ mod tests {
         let failed: Vec<Value> = audit.lines().filter_map(|l| serde_json::from_str(l).ok()).filter(|e: &Value| e["ok"] == false).collect();
         assert!(failed.len() > MAX_FAILURES, "wrong sign-ins and the lock-out are in the audit trail: {audit}");
         assert!(failed.iter().all(|e| e["user"] == "admin" && e["error"].as_str().unwrap().contains("(10.0.0.1)")), "{audit}");
+        assert_eq!(forwarded_address("10.1.2.3:51234"), Some("10.1.2.3".parse().unwrap()), "IIS/ARR adds the port by default");
+        assert_eq!(forwarded_address("[2001:db8::1]:51234"), Some("2001:db8::1".parse().unwrap()));
+        assert_eq!(forwarded_address("2001:db8::1"), Some("2001:db8::1".parse().unwrap()));
+        assert_eq!(forwarded_address("unknown"), None);
     }
 
     /// A new hub gets the default account admin / passw0rd, which can do nothing until its password is changed; the
