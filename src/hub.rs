@@ -327,6 +327,8 @@ struct Head {
     target: String,
     length: usize,
     token: String,
+    /// The last address of X-Forwarded-For (the one the proxy in front of the hub added).
+    forwarded: Option<IpAddr>,
 }
 
 fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Head, HttpError> {
@@ -362,7 +364,7 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
     let mut parts = first.split_whitespace();
     let method = parts.next().unwrap_or("").to_string();
     let target = parts.next().unwrap_or("/").to_string();
-    let (mut length, mut token) = (0usize, String::new());
+    let (mut length, mut token, mut forwarded) = (0usize, String::new(), None);
     for count in 0.. {
         if count > MAX_HEADERS {
             return Err(deny(431, "too many headers"));
@@ -376,6 +378,7 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
                 "content-length" => length = value.trim().parse().map_err(|_| deny(400, "Content-Length"))?,
                 "transfer-encoding" => return Err(deny(501, "Transfer-Encoding is not supported")),
                 "authorization" => token = value.trim().strip_prefix("Bearer ").unwrap_or("").trim().to_string(),
+                "x-forwarded-for" => forwarded = value.split(',').next_back().and_then(|a| a.trim().parse().ok()),
                 _ => {}
             }
         }
@@ -383,7 +386,7 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
     if length > MAX_BODY {
         return Err(deny(413, "request body too large"));
     }
-    Ok(Head { method, target, length, token })
+    Ok(Head { method, target, length, token, forwarded })
 }
 
 fn read_body(reader: &mut BufReader<&TcpStream>, length: usize, started: Instant) -> Result<Vec<u8>, HttpError> {
@@ -516,6 +519,12 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
         Ok(head) => head,
         Err(HttpError(status, message)) => return respond(&stream, status, "application/json; charset=utf-8", json!({ "error": message }).to_string().as_bytes()),
     };
+    // Behind a proxy on this computer (IIS/ARR, nginx) every request comes from the loopback address: the client is
+    // the address the proxy added to X-Forwarded-For. From any other address the header is not trusted.
+    let peer = match (peer, head.forwarded) {
+        (Some(ip), Some(client)) if ip.is_loopback() => Some(client),
+        (peer, _) => peer,
+    };
     let (path, query) = split_target(&head.target);
     if head.method == "GET" {
         match path.as_str() {
@@ -545,6 +554,7 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
                 if let Some(error) = query.get("error") {
                     let detail = query.get("error_description").cloned().unwrap_or_default();
                     log(&hub.dir, &format!("company sign-in refused by the provider: {error} {detail}"));
+                    hub.audit_sign_in("", &crate::i18n::fmt("company sign-in refused by the provider: {0}", &[format!("{error} {detail}").trim().to_string()]), peer);
                     return sign_in_problem(&stream, &crate::i18n::fmt("The sign-in was refused: {0}", &[if detail.is_empty() { error.clone() } else { detail }]));
                 }
                 let (code, state) = (query.get("code").cloned().unwrap_or_default(), query.get("state").cloned().unwrap_or_default());
@@ -552,10 +562,12 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
                     Ok(who) => {
                         if hub.users.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|u| u.name.eq_ignore_ascii_case(&who.name)) {
                             log(&hub.dir, &format!("company sign-in of {} refused: a local user has the same name", who.name));
+                            hub.audit_sign_in(&who.name, &crate::i18n::tr("company sign-in refused: a local user has the same name"), peer);
                             return sign_in_problem(&stream, &crate::i18n::tr("A local user of the hub has the same name: the administrator has to rename or remove it first."));
                         }
                         let role = Role::parse(&who.role);
                         hub.external.lock().unwrap_or_else(|p| p.into_inner()).insert(who.name.clone(), role);
+                        hub.remember_company_account(&who.name, role);
                         let session = format!("lcs_{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
                         hub.sessions.lock().unwrap_or_else(|p| p.into_inner()).insert(token_hash(&session), (who.name.clone(), Instant::now() + Duration::from_secs(SESSION_HOURS * 3600)));
                         log(&hub.dir, &format!("{} signed in with a company account as {}", who.name, role.name()));
@@ -565,6 +577,7 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
                     }
                     Err(e) => {
                         log(&hub.dir, &format!("company sign-in failed: {e:#}"));
+                        hub.audit_sign_in("", &crate::i18n::fmt("company sign-in failed: {0}", &[format!("{e:#}")]), peer);
                         sign_in_problem(&stream, &format!("{e:#}"))
                     }
                 };
@@ -697,6 +710,8 @@ impl Hub {
             let list = failures.entry(ip).or_default();
             list.retain(|t| t.elapsed() < FAILURE_WINDOW);
             if list.len() >= MAX_FAILURES {
+                drop(failures);
+                self.audit_sign_in(&name, &crate::i18n::tr("sign-in blocked: too many wrong sign-ins from this address"), peer);
                 return (429, json!({ "error": "too many wrong sign-ins, try again later" }));
             }
         }
@@ -708,6 +723,7 @@ impl Hub {
                 failures.entry(ip).or_default().push(Instant::now());
             }
             log(&self.dir, &format!("failed sign-in as {name:?}"));
+            self.audit_sign_in(&name, &crate::i18n::tr("wrong user name or password"), peer);
             return (401, json!({ "error": crate::i18n::tr("wrong user name or password") }));
         };
         let session = format!("lcs_{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
@@ -746,6 +762,29 @@ impl Hub {
     fn rules(&self) -> Value {
         let policy = self.policy.lock().unwrap();
         if policy["governance"].is_object() { policy["governance"].clone() } else { json!({}) }
+    }
+
+    /// A refused or failed sign-in in the audit trail (result ✗), with the client address.
+    fn audit_sign_in(&self, user: &str, reason: &str, peer: Option<IpAddr>) {
+        let _ = self.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": if user.is_empty() { "?" } else { user },
+            "source": "", "summary": crate::i18n::tr("sign-in"), "ok": false,
+            "error": match peer { Some(ip) => format!("{reason} ({ip})"), None => reason.to_string() } }));
+    }
+
+    /// Company accounts are not users of the hub (their role comes from the provider at every sign-in); the last
+    /// sign-in of each is kept in company_accounts.json only to show the administrator who uses the hub.
+    fn remember_company_account(&self, name: &str, role: Role) {
+        let file = self.dir.join("company_accounts.json");
+        let mut all: Value = std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| json!({}));
+        all[name] = json!({ "role": role.name(), "last_sign_in": chrono::Local::now().to_rfc3339() });
+        let _ = std::fs::write(&file, serde_json::to_string_pretty(&all).unwrap_or_default());
+    }
+
+    fn company_accounts(&self) -> Vec<Value> {
+        let all: Value = std::fs::read_to_string(self.dir.join("company_accounts.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| json!({}));
+        let mut list: Vec<Value> = all.as_object().into_iter().flatten().map(|(name, v)| json!({ "name": name, "role": v["role"], "last_sign_in": v["last_sign_in"] })).collect();
+        list.sort_by(|a, b| b["last_sign_in"].as_str().cmp(&a["last_sign_in"].as_str()));
+        list
     }
 
     fn append_audit(&self, entry: &Value) -> Result<()> {
@@ -857,6 +896,10 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
             hub.save_users().map_err(|e| deny(500, format!("{e:#}")))?;
             let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": "", "summary": "password changed", "ok": true }));
             Ok((200, json!({ "ok": true })))
+        }
+        ("GET", ["api", "users", "company"]) => {
+            require(role, Role::Admin)?;
+            Ok((200, json!(hub.company_accounts())))
         }
         ("GET", ["api", "users"]) => {
             require(role, Role::Admin)?;
@@ -1723,6 +1766,35 @@ mod tests {
     /// The hub with two data sources (a PostgreSQL database and an EA project file, from LOONAR_HUB_DB_PROPS and
     /// LOONAR_HUB_FILE_PROPS): roles, policy, audit, notes, the web page, the REST API and MCP on both sources.
     /// Run with: `cargo test hub_two_sources -- --ignored --nocapture`.
+    /// Behind a proxy on this computer the client is the last X-Forwarded-For address (wrong sign-ins of one client do
+    /// not lock out the others), and a wrong sign-in is in the audit trail with ✗ and that address. The header from
+    /// another computer is not trusted (the test can only connect from loopback, so it checks the trusted case).
+    #[test]
+    fn sign_in_failures_behind_proxy() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        let dir = std::env::temp_dir().join(format!("loonar-hub-proxy-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0", "sources": [] }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let base = format!("http://{}", rx.recv().unwrap());
+        let http = reqwest::blocking::Client::new();
+        let login = |client: &str, password: &str| {
+            http.post(format!("{base}/api/login")).header("X-Forwarded-For", format!("203.0.113.9, {client}"))
+                .json(&json!({ "name": "admin", "password": password })).send().unwrap().status().as_u16()
+        };
+        for _ in 0..MAX_FAILURES {
+            assert_eq!(login("10.0.0.1", "wrong"), 401);
+        }
+        assert_eq!(login("10.0.0.1", "wrong"), 429, "the client that guessed is locked out");
+        assert_eq!(login("10.0.0.2", "passw0rd"), 200, "another client behind the same proxy is not");
+        let audit = std::fs::read_to_string(dir.join("audit.jsonl")).unwrap();
+        let failed: Vec<Value> = audit.lines().filter_map(|l| serde_json::from_str(l).ok()).filter(|e: &Value| e["ok"] == false).collect();
+        assert!(failed.len() > MAX_FAILURES, "wrong sign-ins and the lock-out are in the audit trail: {audit}");
+        assert!(failed.iter().all(|e| e["user"] == "admin" && e["error"].as_str().unwrap().contains("(10.0.0.1)")), "{audit}");
+    }
+
     /// A new hub gets the default account admin / passw0rd, which can do nothing until its password is changed; the
     /// admin manages users and API tokens; wrong passwords are counted.
     #[test]

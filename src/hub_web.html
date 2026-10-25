@@ -202,7 +202,14 @@ async function loadUsers() {
     '<table><tr><th>User</th><th>Role</th><th>Sign-in</th><th></th></tr>' +
     list.map(u => '<tr><td>' + esc(u.name) + '</td><td>' + esc(u.role) + '</td><td>' + (u.password ? 'password' : '') + (u.password && u.token ? ' + ' : '') + (u.token ? 'API token' : '') + (u.must_change ? ' <span class="muted">(must change)</span>' : '') +
       '</td><td><button class="ghost" data-act="role" data-name="' + esc(u.name) + '">Role</button> <button class="ghost" data-act="reset" data-name="' + esc(u.name) + '">Reset password</button> <button class="ghost" data-act="token" data-name="' + esc(u.name) + '">New API token</button> <button class="ghost" data-act="del" data-name="' + esc(u.name) + '">Remove</button></td></tr>').join('') + '</table>' +
-    '<p class="muted small">An API token is for Compass (Settings → Team) and for MCP clients; it is shown once. A password set here must be changed at the next sign-in.</p>';
+    '<p class="muted small">An API token is for Compass (Settings → Team) and for MCP clients; it is shown once. A password set here must be changed at the next sign-in.</p>' +
+    '<h3>Company accounts</h3><div id="company"></div>';
+  api('/api/users/company').then(list => {
+    $('company').innerHTML = list.length ? '<table><tr><th>Account</th><th>Role at the last sign-in</th><th>Last sign-in</th></tr>' +
+      list.map(c => '<tr><td>' + esc(c.name) + '</td><td>' + esc(c.role) + '</td><td>' + esc((c.last_sign_in || '').slice(0, 19).replace('T', ' ')) + '</td></tr>').join('') + '</table>' +
+      '<p class="muted small">Read only: the role of a company account comes from its groups at the sign-in provider; change it there.</p>'
+      : '<p class="muted">No one has signed in with a company account yet.</p>';
+  }).catch(() => {});
   $('uadd').onclick = async () => {
     const name = prompt('User name:'); if (!name) return;
     const role = prompt('Role (viewer, architect or admin):', 'viewer'); if (!role) return;
