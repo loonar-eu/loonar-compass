@@ -26,8 +26,12 @@ def git(*args):
 
 
 def token():
-    body = {"audience": "api.atlassian.com", "grant_type": "client_credentials",
-            "client_id": os.environ["JIRA_CLIENT_ID"], "client_secret": os.environ["JIRA_CLIENT_SECRET"]}
+    # Pasted secrets may carry spaces or line breaks; "id:secret" pasted into the ID secret is accepted too.
+    client_id, secret = os.environ["JIRA_CLIENT_ID"].strip(), os.environ["JIRA_CLIENT_SECRET"].strip()
+    if ":" in client_id:
+        client_id, _, pasted = client_id.partition(":")
+        secret = secret or pasted.strip()
+    body = {"audience": "api.atlassian.com", "grant_type": "client_credentials", "client_id": client_id.strip(), "client_secret": secret}
     req = urllib.request.Request("https://api.atlassian.com/oauth/token", data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.loads(r.read())["access_token"]
