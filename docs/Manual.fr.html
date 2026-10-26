@@ -698,7 +698,7 @@
 <pre>{"agents":[{"name":"Keep approved","event":"element_deleting","mode":"guard","applies_to":"Requirement",
   "prompt":"Block deleting a requirement whose status is Approved."}]}</pre>
 <p><b>Ce que vous voyez :</b> lorsque vous supprimez une exigence approuvée dans EA, le message « Loonar Compass a arrêté cette suppression : » avec la raison, et l'exigence reste en place. Dans System Output, les lignes « 🛡 Keep approved : bloqué - … » ou « 🛡 Keep approved : autorisé ».</p>
-<p><b>Astuce :</b> un gardien répond en quelques secondes ; s'il ne répond pas dans les 40 secondes, la suppression a lieu, afin qu'EA ne se bloque jamais. Rédigez des demandes de gardien qui disent clairement quand bloquer.</p>
+<p><b>Astuce :</b> un gardien répond en quelques secondes ; s'il ne décide pas dans les 40 secondes (ou ne le peut pas, par exemple sans IA), la suppression est arrêtée, afin qu'un objet protégé ne soit jamais perdu par accident. Rédigez des demandes de gardien qui disent clairement quand bloquer.</p>
 
 <h3>8.23 Contrôle de version des paquetages</h3>
 <p>Pour les paquetages sous contrôle de version dans EA, l'assistant indique qui a extrait quoi, et il extrait et archive les paquetages (chapitre 7, « Contrôle de version des paquetages »).</p>
@@ -789,7 +789,7 @@
   <li>Le même agent réagit au même objet au plus une fois par minute.</li>
   <li>Le bouton <b>Enregistrer les agents d'événements</b> enregistre les règles et affiche le nombre d'agents.</li>
 </ul>
-<p><b>Gardiens.</b> Par défaut, un agent conseille après l'événement (<code>"mode": "advise"</code>). Avec <code>"mode": "guard"</code>, permis uniquement pour les événements <code>*_deleting</code>, EA consulte Compass avant de supprimer l'objet. Le gardien répond ALLOW ou BLOCK avec une raison. Avec BLOCK, EA affiche « Loonar Compass a arrêté cette suppression : » avec la raison et annule la suppression. Si le gardien ne répond pas dans les 40 secondes, la suppression a lieu, afin qu'EA ne se bloque jamais. System Output affiche « 🛡 … : autorisé » ou « 🛡 … : bloqué - … ».</p>
+<p><b>Gardiens.</b> Par défaut, un agent conseille après l'événement (<code>"mode": "advise"</code>). Avec <code>"mode": "guard"</code>, permis uniquement pour les événements <code>*_deleting</code>, EA consulte Compass avant de supprimer l'objet. Le gardien répond ALLOW ou BLOCK avec une raison. Avec BLOCK, EA affiche « Loonar Compass a arrêté cette suppression : » avec la raison et annule la suppression. Si le gardien ne décide pas dans les 40 secondes ou ne peut pas décider, la suppression est arrêtée avec un message. System Output affiche « 🛡 … : autorisé » ou « 🛡 … : bloqué - … ».</p>
 <pre>{"agents":[{"name":"Keep approved","event":"element_deleting","mode":"guard","applies_to":"Requirement",
   "prompt":"Block deleting a requirement whose status is Approved."}]}</pre>
 <p><b>Agents de l'équipe.</b> Avec un hub d'équipe (chapitre 22), les agents de la politique de l'équipe (<code>event_agents</code>) fonctionnent dans le Compass dans EA de chacun, à côté des agents de cet ordinateur. Leurs noms portent la mention « (team) ».</p>

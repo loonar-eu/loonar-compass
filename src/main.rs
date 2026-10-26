@@ -4695,7 +4695,12 @@ fn guard_requests_once(cfg: &AppConfig, rot: &str, agents: &[agents::Agent]) {
                                     }
                                     ea_ui::output(&crate::i18n::fmt("🛡 {0}: allowed", &[guard.name.clone()]));
                                 }
-                                Err(e) => ea_ui::output(&crate::i18n::fmt("🛡 {0}: no decision, the deletion goes ahead - {1}", &[guard.name.clone(), format!("{e:#}")])),
+                                Err(e) => {
+                                    // No decision (no AI, the hub down, a timeout): the deletion is stopped, as the user decided.
+                                    ea_ui::output(&crate::i18n::fmt("🛡 {0}: no decision, the deletion is stopped - {1}", &[guard.name.clone(), format!("{e:#}")]));
+                                    block = Some(crate::i18n::fmt("{0}: no decision ({1})", &[guard.name.clone(), format!("{e:#}")]));
+                                    break;
+                                }
                             }
                         }
                     }

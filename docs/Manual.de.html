@@ -699,7 +699,7 @@
 <pre>{"agents":[{"name":"Keep approved","event":"element_deleting","mode":"guard","applies_to":"Requirement",
   "prompt":"Block deleting a requirement whose status is Approved."}]}</pre>
 <p><b>Was Sie sehen:</b> Wenn Sie in EA eine freigegebene Anforderung löschen, die Meldung „Loonar Compass hat dieses Löschen gestoppt:“ mit dem Grund, und die Anforderung bleibt. In System Output die Zeilen „🛡 Keep approved: blockiert - …“ oder „🛡 Keep approved: erlaubt“.</p>
-<p><b>Tipp:</b> Ein Wächter antwortet innerhalb weniger Sekunden; antwortet er nicht innerhalb von 40 Sekunden, wird gelöscht, damit EA nie hängt. Formulieren Sie Wächter-Anweisungen, die klar sagen, wann blockiert wird.</p>
+<p><b>Tipp:</b> Ein Wächter antwortet innerhalb weniger Sekunden; entscheidet er nicht innerhalb von 40 Sekunden (oder kann er nicht, z. B. ohne KI), wird das Löschen gestoppt, damit ein geschütztes Objekt nie versehentlich verloren geht. Formulieren Sie Wächter-Anweisungen, die klar sagen, wann blockiert wird.</p>
 
 <h3>8.23 Versionskontrolle von Paketen</h3>
 <p>Bei Paketen unter Versionskontrolle in EA zeigt der Assistent, wer was ausgecheckt hat, und checkt Pakete aus und ein (Kapitel 7, „Versionskontrolle von Paketen“).</p>
@@ -790,7 +790,7 @@
   <li>Derselbe Agent reagiert auf dasselbe Objekt höchstens einmal pro Minute.</li>
   <li>Die Schaltfläche <b>Ereignis-Agenten speichern</b> speichert die Regeln und zeigt die Anzahl der Agenten.</li>
 </ul>
-<p><b>Wächter.</b> Standardmäßig berät ein Agent nach dem Ereignis (<code>"mode": "advise"</code>). Mit <code>"mode": "guard"</code>, erlaubt nur für die Ereignisse <code>*_deleting</code>, fragt EA Compass, bevor es das Objekt löscht. Der Wächter antwortet mit ALLOW oder BLOCK und einem Grund. Bei BLOCK zeigt EA „Loonar Compass hat dieses Löschen gestoppt:“ mit dem Grund und bricht das Löschen ab. Antwortet der Wächter nicht innerhalb von 40 Sekunden, wird gelöscht, damit EA nie hängt. System Output zeigt „🛡 …: erlaubt“ oder „🛡 …: blockiert - …“.</p>
+<p><b>Wächter.</b> Standardmäßig berät ein Agent nach dem Ereignis (<code>"mode": "advise"</code>). Mit <code>"mode": "guard"</code>, erlaubt nur für die Ereignisse <code>*_deleting</code>, fragt EA Compass, bevor es das Objekt löscht. Der Wächter antwortet mit ALLOW oder BLOCK und einem Grund. Bei BLOCK zeigt EA „Loonar Compass hat dieses Löschen gestoppt:“ mit dem Grund und bricht das Löschen ab. Entscheidet der Wächter nicht innerhalb von 40 Sekunden oder kann er nicht entscheiden, wird das Löschen mit einer Meldung gestoppt. System Output zeigt „🛡 …: erlaubt“ oder „🛡 …: blockiert - …“.</p>
 <pre>{"agents":[{"name":"Keep approved","event":"element_deleting","mode":"guard","applies_to":"Requirement",
   "prompt":"Block deleting a requirement whose status is Approved."}]}</pre>
 <p><b>Agenten des Teams.</b> Mit einem Team-Hub (Kapitel 22) arbeiten die Agenten der Teamrichtlinie (<code>event_agents</code>) im Compass in EA aller Teammitglieder, neben den Agenten dieses Computers. Ihre Namen sind mit „(team)“ gekennzeichnet.</p>

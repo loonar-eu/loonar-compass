@@ -37,7 +37,7 @@ pub const EVENTS: &[&str] = &[
     "glossary_term_deleting",
 ];
 
-/// How long EA waits for a guard's decision before the deletion goes ahead.
+/// How long EA waits for a guard's decision; without one the deletion is stopped.
 pub const GUARD_TIMEOUT_SECS: u64 = 40;
 
 #[derive(Clone, Debug)]

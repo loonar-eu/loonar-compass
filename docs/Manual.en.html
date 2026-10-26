@@ -698,7 +698,7 @@
 <pre>{"agents":[{"name":"Keep approved","event":"element_deleting","mode":"guard","applies_to":"Requirement",
   "prompt":"Block deleting a requirement whose status is Approved."}]}</pre>
 <p><b>What you see:</b> when you delete an approved requirement in EA, the message “Loonar Compass stopped this deletion:” with the reason, and the requirement stays. In System Output the lines “🛡 Keep approved: blocked - …” or “🛡 Keep approved: allowed”.</p>
-<p><b>Tip:</b> a guard answers within a few seconds; if it does not answer within 40 seconds, the deletion goes ahead, so that EA never hangs. Write guard prompts that say plainly when to block.</p>
+<p><b>Tip:</b> a guard answers within a few seconds; if it does not decide within 40 seconds (or cannot, e.g. without AI), the deletion is stopped, so a protected object is never lost by accident. Write guard prompts that say plainly when to block.</p>
 
 <h3>8.23 Version control of packages</h3>
 <p>For packages under version control in EA, the assistant shows who has what checked out and checks packages out and in (chapter 7, “Version control of packages”).</p>
@@ -789,7 +789,7 @@
   <li>The same agent reacts to the same object at most once a minute.</li>
   <li>The button <b>Save event agents</b> saves the rules and shows the number of agents.</li>
 </ul>
-<p><b>Guards.</b> By default an agent advises after the event (<code>"mode": "advise"</code>). With <code>"mode": "guard"</code>, allowed only for the <code>*_deleting</code> events, EA asks Compass before it deletes the object. The guard answers ALLOW or BLOCK with a reason. With BLOCK, EA shows “Loonar Compass stopped this deletion:” with the reason and cancels the deletion. If the guard does not answer within 40 seconds, the deletion goes ahead, so that EA never hangs. System Output shows “🛡 …: allowed” or “🛡 …: blocked - …”.</p>
+<p><b>Guards.</b> By default an agent advises after the event (<code>"mode": "advise"</code>). With <code>"mode": "guard"</code>, allowed only for the <code>*_deleting</code> events, EA asks Compass before it deletes the object. The guard answers ALLOW or BLOCK with a reason. With BLOCK, EA shows “Loonar Compass stopped this deletion:” with the reason and cancels the deletion. If the guard does not decide within 40 seconds, or cannot decide, the deletion is stopped with a message. System Output shows “🛡 …: allowed” or “🛡 …: blocked - …”.</p>
 <pre>{"agents":[{"name":"Keep approved","event":"element_deleting","mode":"guard","applies_to":"Requirement",
   "prompt":"Block deleting a requirement whose status is Approved."}]}</pre>
 <p><b>Team agents.</b> With a team hub (chapter 22), the agents of the team policy (<code>event_agents</code>) work in everybody's Compass in EA, next to the agents of this computer. Their names are marked “(team)”.</p>

@@ -701,7 +701,7 @@
 <pre>{"agents":[{"name":"Zatwierdzone zostają","event":"element_deleting","mode":"guard","applies_to":"Requirement",
   "prompt":"Zablokuj usunięcie wymagania, którego status to Approved."}]}</pre>
 <p><b>Co zobaczysz:</b> gdy w EA usuwasz zatwierdzone wymaganie, komunikat „Loonar Compass zatrzymał to usunięcie:” z przyczyną, a wymaganie zostaje. W System Output wiersze „🛡 Zatwierdzone zostają: zablokowane - …” albo „🛡 Zatwierdzone zostają: dozwolone”.</p>
-<p><b>Wskazówka:</b> strażnik odpowiada w kilka sekund; jeśli nie odpowie w ciągu 40 sekund, usunięcie zostaje wykonane, żeby EA nigdy się nie zawiesił. Pisz polecenia strażników tak, żeby jasno mówiły, kiedy blokować.</p>
+<p><b>Wskazówka:</b> strażnik odpowiada w kilka sekund; jeśli nie zdecyduje w ciągu 40 sekund (albo nie może, np. bez AI), usunięcie zostaje wstrzymane, żeby chroniony obiekt nie zniknął przypadkiem. Pisz polecenia strażników tak, żeby jasno mówiły, kiedy blokować.</p>
 
 <h3>8.23 Kontrola wersji pakietów</h3>
 <p>Dla pakietów pod kontrolą wersji w EA asystent pokazuje, kto co ma pobrane do edycji, i wykonuje check out oraz check in (rozdział 7, „Kontrola wersji pakietów”).</p>
@@ -792,7 +792,7 @@
   <li>Ten sam agent reaguje na ten sam obiekt najwyżej raz na minutę.</li>
   <li>Przycisk <b>Zapisz agentów zdarzeń</b> zapisuje reguły i podaje liczbę agentów.</li>
 </ul>
-<p><b>Strażnicy.</b> Domyślnie agent doradza po zdarzeniu (<code>"mode": "advise"</code>). Z <code>"mode": "guard"</code>, dozwolonym tylko dla zdarzeń <code>*_deleting</code>, EA pyta Compass, zanim usunie obiekt. Strażnik odpowiada ALLOW albo BLOCK z przyczyną. Przy BLOCK EA pokazuje „Loonar Compass zatrzymał to usunięcie:” z przyczyną i anuluje usunięcie. Jeśli strażnik nie odpowie w ciągu 40 sekund, usunięcie zostaje wykonane, żeby EA nigdy się nie zawiesił. System Output pokazuje „🛡 …: dozwolone” albo „🛡 …: zablokowane - …”.</p>
+<p><b>Strażnicy.</b> Domyślnie agent doradza po zdarzeniu (<code>"mode": "advise"</code>). Z <code>"mode": "guard"</code>, dozwolonym tylko dla zdarzeń <code>*_deleting</code>, EA pyta Compass, zanim usunie obiekt. Strażnik odpowiada ALLOW albo BLOCK z przyczyną. Przy BLOCK EA pokazuje „Loonar Compass zatrzymał to usunięcie:” z przyczyną i anuluje usunięcie. Jeśli strażnik nie zdecyduje w ciągu 40 sekund albo nie może zdecydować, usunięcie zostaje wstrzymane z komunikatem. System Output pokazuje „🛡 …: dozwolone” albo „🛡 …: zablokowane - …”.</p>
 <pre>{"agents":[{"name":"Zatwierdzone zostają","event":"element_deleting","mode":"guard","applies_to":"Requirement",
   "prompt":"Zablokuj usunięcie wymagania, którego status to Approved."}]}</pre>
 <p><b>Agenci zespołu.</b> Z hubem zespołu (rozdział 22) agenci z polityki zespołu (<code>event_agents</code>) działają w Compassie w EA u każdego, obok agentów tego komputera. Ich nazwy mają dopisek „(team)”.</p>

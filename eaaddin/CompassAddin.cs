@@ -467,7 +467,8 @@ namespace LoonarCompass
         }
 
         /// <summary>Asks Compass whether a deletion may go ahead: only when a guard watches this event (Compass lists them in
-        /// a file). Waits at most 40 seconds; no answer = the deletion goes ahead, so EA never hangs on Compass.</summary>
+        /// a file). Waits at most 40 seconds; no answer = the deletion is stopped, so a protected object is never lost
+        /// because Compass did not answer.</summary>
         public bool Guard(string kind, string line)
         {
             if (rotName == null || process == null)
@@ -511,8 +512,10 @@ namespace LoonarCompass
                     // while EA waits here; the calls of COM are served during the wait, the user's input is not.
                     System.Threading.Thread.CurrentThread.Join(100);
                 }
-                Out(DateTime.Now.ToString("HH:mm:ss") + "  " + L10n.Get("No decision of the guard in time: the deletion goes ahead."));
-                return true;
+                Out(DateTime.Now.ToString("HH:mm:ss") + "  " + L10n.Get("No decision of the guard in time: the deletion is stopped."));
+                Cursor.Current = previous;
+                MessageBox.Show(L10n.Get("No decision of the guard in time: the deletion is stopped.") + "\n\n" + L10n.Get("Try again in a moment. If it happens again, check Loonar Compass (it must be open in EA)."), "Loonar Compass", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
             }
             catch (Exception e)
             {
@@ -908,7 +911,8 @@ namespace LoonarCompass
                 case "Loonar Compass closed": return lang == "de" ? "Loonar Compass geschlossen" : lang == "fr" ? "Loonar Compass fermé" : "Loonar Compass zamknięty";
                 case "Loonar Compass was closed.": return lang == "de" ? "Loonar Compass wurde geschlossen." : lang == "fr" ? "Loonar Compass a été fermé." : "Loonar Compass został zamknięty.";
                 case "Loonar Compass stopped this deletion:": return lang == "de" ? "Loonar Compass hat dieses Löschen gestoppt:" : lang == "fr" ? "Loonar Compass a arrêté cette suppression :" : "Loonar Compass zatrzymał to usunięcie:";
-                case "No decision of the guard in time: the deletion goes ahead.": return lang == "de" ? "Keine Entscheidung des Wächters rechtzeitig: das Löschen wird ausgeführt." : lang == "fr" ? "Pas de décision du gardien à temps : la suppression a lieu." : "Strażnik nie zdecydował na czas: usunięcie zostaje wykonane.";
+                case "No decision of the guard in time: the deletion is stopped.": return lang == "de" ? "Keine Entscheidung des Wächters rechtzeitig: das Löschen wird gestoppt." : lang == "fr" ? "Pas de décision du gardien à temps : la suppression est arrêtée." : "Strażnik nie zdecydował na czas: usunięcie zostaje wstrzymane.";
+                case "Try again in a moment. If it happens again, check Loonar Compass (it must be open in EA).": return lang == "de" ? "Versuchen Sie es gleich noch einmal. Passiert es wieder, prüfen Sie Loonar Compass (es muss in EA geöffnet sein)." : lang == "fr" ? "Réessayez dans un instant. Si cela se reproduit, vérifiez Loonar Compass (il doit être ouvert dans EA)." : "Spróbuj za chwilę. Jeśli to się powtórzy, sprawdź Loonar Compass (musi być otwarty w EA).";
                 case "Loonar Compass did not open its window.": return lang == "de" ? "Loonar Compass hat sein Fenster nicht geöffnet." : lang == "fr" ? "Loonar Compass n'a pas ouvert sa fenêtre." : "Loonar Compass nie otworzył okna.";
             }
             return english;
