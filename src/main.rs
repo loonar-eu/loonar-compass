@@ -1970,6 +1970,10 @@ impl App {
         } else if let Some(choice) = ea::in_ea_tab().then(|| database_of_connection(connection)).flatten() {
             // Any other database open in EA: read and written through EA itself, so nothing else is needed.
             choice
+        } else if ea::in_ea_tab() {
+            // There is no model choice in a tab of EA: say what was not recognised instead of pointing to a button.
+            self.status = crate::i18n::tr("Compass does not recognise the repository open in this EA window. Report it with the Report a problem view (the connection type is enough).").into();
+            return;
         } else {
             self.status = crate::i18n::tr("The model open in EA is not the database from the settings: choose its connection in \"Choose another model…\".").into();
             return;
@@ -4475,7 +4479,12 @@ fn check_model(cfg: &AppConfig) -> anyhow::Result<String> {
 /// The database of an EA connection string (`name --- DBType=..;Connect=..;SRC=host[,port]@database;UID=user;..`).
 fn database_of_connection(connection: &str) -> Option<ModelChoice> {
     let field = |key: &str| connection.split(';').find_map(|part| part.trim().strip_prefix(key).map(str::to_string));
-    let src = field("SRC=")?;
+    // EA's own repository connection has "SRC=server@database"; one through an ODBC data source has only its name
+    // ("Data Source=<DSN>"): in a tab of EA the reads go through EA, so the name is enough to tell the project.
+    let src = field("SRC=").filter(|s| s.contains('@')).or_else(|| {
+        let dsn = field("Data Source=").or_else(|| field("DSN="))?;
+        Some(format!("@{dsn}"))
+    })?;
     let (server, name) = src.split_once('@')?;
     // EA's DBType: 0 MySQL, 1 SQL Server, 3 Oracle, 4 PostgreSQL.
     let engine = match connection.split(';').find_map(|part| part.trim().strip_prefix("DBType=").or_else(|| part.split("DBType=").nth(1))).map(str::trim) {
@@ -7070,6 +7079,15 @@ impl eframe::App for App {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn ea_connection_through_an_odbc_data_source() {
+        let choice = super::database_of_connection("ea_lab_my --- DBType=0;Connect=Provider=MSDASQL.1;Persist Security Info=False;Data Source=ea_lab_my;LazyLoad=1;");
+        match choice {
+            Some(super::ModelChoice::Database { name, engine, .. }) => assert_eq!((name.as_str(), engine.as_str()), ("ea_lab_my", "mysql")),
+            _ => panic!("an ODBC data source is a database project"),
+        }
+    }
+
     #[test]
     fn long_earlier_messages_are_shortened() {
         let huge = "x".repeat(240_000);
