@@ -43,17 +43,33 @@ fn odbc_value(value: &str) -> String {
 fn odbc_driver(source: crate::config::ModelSource) -> Result<String> {
     let env = odbc_api::environment().context("ODBC")?;
     let installed: Vec<String> = env.drivers().map(|list| list.into_iter().map(|d| d.description).collect()).unwrap_or_default();
-    let wanted: &[&str] = match source {
-        crate::config::ModelSource::SqlServer => &["ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server", "ODBC Driver 13 for SQL Server", "SQL Server Native Client 11.0", "SQL Server"],
-        crate::config::ModelSource::MySql => &["MySQL ODBC 9", "MySQL ODBC 8", "MariaDB ODBC"],
-        _ => &["Oracle in"],
-    };
-    for w in wanted {
-        if let Some(d) = installed.iter().find(|d| d.as_str() == *w).or_else(|| installed.iter().find(|d| d.starts_with(w) && (source != crate::config::ModelSource::MySql || d.contains("Unicode")))).or_else(|| installed.iter().find(|d| d.starts_with(w))) {
-            return Ok(d.clone());
-        }
+    if let Some(d) = pick_driver(source, &installed) {
+        return Ok(d);
     }
     bail!("{}", crate::i18n::fmt("no ODBC driver for {0} is installed on this computer (installed: {1}); install the database vendor's ODBC driver (64-bit) or give the full connection string in db.odbc", &[source.as_str().to_string(), installed.join(", ")]))
+}
+
+/// The driver for a database among the installed ones: the newest version of the vendor's driver (any version number,
+/// e.g. "ODBC Driver 18 for SQL Server", "MySQL ODBC 26.10 Unicode Driver"), the Unicode variant for MySQL.
+fn pick_driver(source: crate::config::ModelSource, installed: &[String]) -> Option<String> {
+    use crate::config::ModelSource;
+    let version = |d: &str| -> Vec<u32> {
+        d.split(|c: char| !c.is_ascii_digit() && c != '.').find(|part| part.chars().next().is_some_and(|c| c.is_ascii_digit()))
+            .map(|v| v.split('.').filter_map(|n| n.parse().ok()).collect()).unwrap_or_default()
+    };
+    let newest = |prefix: &str, unicode_first: bool| -> Option<String> {
+        let mut found: Vec<&String> = installed.iter().filter(|d| d.starts_with(prefix)).collect();
+        found.sort_by_key(|d| (version(d), unicode_first && d.contains("Unicode")));
+        found.last().map(|d| d.to_string())
+    };
+    match source {
+        ModelSource::SqlServer => newest("ODBC Driver ", false)
+            .filter(|d| d.ends_with("for SQL Server"))
+            .or_else(|| installed.iter().find(|d| d.starts_with("SQL Server Native Client")).cloned())
+            .or_else(|| installed.iter().find(|d| d.as_str() == "SQL Server").cloned()),
+        ModelSource::MySql => newest("MySQL ODBC", true).or_else(|| newest("MariaDB ODBC", false)),
+        _ => newest("Oracle in", false),
+    }
 }
 
 /// The ODBC connection string of a SQL Server, MySQL or Oracle model: `db.odbc` or built from the settings;
@@ -765,6 +781,13 @@ mod odbc_tests {
         assert_eq!(super::sqlserver_tls("ODBC Driver 17 for SQL Server", SslMode::Prefer), "", "Driver 17 does not know Encrypt=optional");
         assert_eq!(super::sqlserver_tls("ODBC Driver 18 for SQL Server", SslMode::Prefer), "Encrypt=optional;");
         assert_eq!(super::sqlserver_tls("SQL Server", SslMode::Require), "Encrypt=yes;TrustServerCertificate=yes;");
+        use crate::config::ModelSource;
+        let have = |list: &[&str]| list.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(super::pick_driver(ModelSource::MySql, &have(&["MySQL ODBC 26.10 ANSI Driver", "MySQL ODBC 26.10 Unicode Driver", "MySQL ODBC 8.0 Unicode Driver"])).as_deref(), Some("MySQL ODBC 26.10 Unicode Driver"));
+        assert_eq!(super::pick_driver(ModelSource::MySql, &have(&["MariaDB ODBC 3.2 Driver"])).as_deref(), Some("MariaDB ODBC 3.2 Driver"));
+        assert_eq!(super::pick_driver(ModelSource::SqlServer, &have(&["SQL Server", "ODBC Driver 17 for SQL Server", "ODBC Driver 18 for SQL Server"])).as_deref(), Some("ODBC Driver 18 for SQL Server"));
+        assert_eq!(super::pick_driver(ModelSource::SqlServer, &have(&["SQL Server"])).as_deref(), Some("SQL Server"));
+        assert_eq!(super::pick_driver(ModelSource::MySql, &have(&["SQL Server"])), None);
         assert_eq!(super::portable_sql(Oracle, "select count(*) limit 3"), "select count(*) fetch first 3 rows only from dual");
         assert_eq!(super::portable_sql(MySql, "select cast(x as varchar(10)) from t limit 2"), "select cast(x as char(10)) from t limit 2");
         assert_eq!(super::portable_sql(Postgres, "select 1 limit 2;"), "select 1 limit 2");
