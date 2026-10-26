@@ -3289,6 +3289,8 @@ impl App {
 
         // Inner width of a group frame: label, field and the gap between them.
         let inner_width = SETTINGS_LABEL_WIDTH + SETTINGS_FIELD_WIDTH + 12.0;
+        // The cards below span both columns; in a tab of EA there is only the left column, so they are as wide as it.
+        let full_width = if ea::in_ea_tab() { inner_width } else { inner_width * 2.0 + 44.0 };
         ui.horizontal_top(|ui| {
             ui.vertical(|ui| {
                 settings_group(ui, crate::i18n::tr("AI model"), inner_width, |ui| {
@@ -3509,10 +3511,10 @@ impl App {
         });
 
         ui.add_space(12.0);
-        self.newsletter_ui(ui, inner_width * 2.0 + 44.0);
+        self.newsletter_ui(ui, full_width);
         ui.add_space(12.0);
         let ctx2 = ui.ctx().clone();
-        settings_group(ui, crate::i18n::tr("Confluence"), inner_width * 2.0 + 44.0, |ui| {
+        settings_group(ui, crate::i18n::tr("Confluence"), full_width, |ui| {
             ui.add(egui::Label::new(
                 egui::RichText::new(crate::i18n::tr("For publishing pages through the assistant. Pages are created without these details too: you copy the code and paste it into the source editor. Confluence on your company's servers (Data Center): the address, e.g. https://confluence.company.com, and a personal access token (Profile → Personal Access Tokens), with the e-mail field left empty. Confluence Cloud: the address https://company.atlassian.net/wiki, the account e-mail and an API token."))
                 .color(theme::MUTED),
@@ -3528,7 +3530,7 @@ impl App {
             self.group_footer(ui, &ctx2, GROUP_CONFLUENCE, crate::i18n::tr("Save and test Confluence connection"));
         });
         ui.add_space(12.0);
-        settings_group(ui, crate::i18n::tr("Jira"), inner_width * 2.0 + 44.0, |ui| {
+        settings_group(ui, crate::i18n::tr("Jira"), full_width, |ui| {
             ui.add(egui::Label::new(
                 egui::RichText::new(crate::i18n::tr("For using Jira issues as context (the assistant reads issues by key or JQL search) and, with your consent each time, creating issues, comments and links to model elements. Jira Cloud: the address https://company.atlassian.net, the account e-mail and an API token. Jira on your company's servers (Data Center): the address and a personal access token, with the e-mail field left empty. The token is kept in Windows Credential Manager."))
                 .color(theme::MUTED),
@@ -3543,7 +3545,7 @@ impl App {
             self.group_footer(ui, &ctx2, GROUP_JIRA, crate::i18n::tr("Save and test Jira connection"));
         });
         ui.add_space(12.0);
-        settings_group(ui, "SharePoint", inner_width * 2.0 + 44.0, |ui| {
+        settings_group(ui, "SharePoint", full_width, |ui| {
             ui.add(egui::Label::new(
                 egui::RichText::new(crate::i18n::tr("For reading documents from the team's SharePoint library and uploading documents and presentations the assistant made (each upload with your consent). It needs an app registration in Microsoft Entra ID with the Microsoft Graph application permission Sites.Selected (granted to this site) or Sites.ReadWrite.All, and a client secret; ask your Microsoft 365 administrator."))
                     .color(theme::MUTED),
@@ -3559,7 +3561,7 @@ impl App {
             self.group_footer(ui, &ctx2, GROUP_SHAREPOINT, crate::i18n::tr("Save and test SharePoint connection"));
         });
         ui.add_space(12.0);
-        settings_group(ui, crate::i18n::tr("Event agents (Compass in EA)"), inner_width * 2.0 + 44.0, |ui| {
+        settings_group(ui, crate::i18n::tr("Event agents (Compass in EA)"), full_width, |ui| {
             ui.add(egui::Label::new(
                 egui::RichText::new(crate::i18n::tr("Rules for the assistant to react to what happens in EA while Compass is open in its tab: a new element, a changed element, a new relationship or diagram. The assistant reads the model and answers in the \"Loonar Compass\" tab of System Output; it does not change the model on its own. \"applies_to\": an element type, «stereotype» or * (wildcards * ?)."))
                 .color(theme::MUTED),
@@ -3573,7 +3575,7 @@ impl App {
             self.group_footer(ui, &ctx2, GROUP_AGENTS, crate::i18n::tr("Save event agents"));
         });
         ui.add_space(12.0);
-        settings_group(ui, crate::i18n::tr("MCP servers"), inner_width * 2.0 + 44.0, |ui| {
+        settings_group(ui, crate::i18n::tr("MCP servers"), full_width, |ui| {
             ui.add(egui::Label::new(
                 egui::RichText::new(crate::i18n::tr("Your own MCP servers give the assistant extra tools (e.g. a ticket system, a repository, a company knowledge base, a Compass Hub). A local program: \"command\" and \"args\"; a server over HTTP: \"url\" and \"headers\". Tokens can come from Credential Manager or the environment: ${secret:name}, ${env:NAME}. Every tool call asks for your consent, unless the server has \"trusted\": true (set it only for servers you trust). Compass's own keys and passwords cannot be used in ${secret:…} (except ${secret:hub_token} for the team hub's own /mcp address)."))
                 .color(theme::MUTED),
@@ -3612,7 +3614,7 @@ impl App {
             self.group_footer(ui, &ctx2, GROUP_MCP, crate::i18n::tr("Save and test MCP servers"));
         });
         ui.add_space(12.0);
-        settings_group(ui, crate::i18n::tr("Team (Compass Hub)"), inner_width * 2.0 + 44.0, |ui| {
+        settings_group(ui, crate::i18n::tr("Team (Compass Hub)"), full_width, |ui| {
             ui.add(egui::Label::new(
                 egui::RichText::new(crate::i18n::tr("Optional team service (LoonarCompass.exe --hub hub.json, on a team computer or server). With a hub, Compass takes the team policy (model check rules, the minimum approval mode) and sends every saved change to the team audit trail. People without EA see the models in the hub's web view; other AI tools read them through its MCP server. Ask the hub administrator for the address and your token."))
                 .color(theme::MUTED),
@@ -3666,7 +3668,7 @@ impl App {
             self.group_footer(ui, &ctx2, GROUP_HUB, crate::i18n::tr("Save and test hub connection"));
         });
         ui.add_space(12.0);
-        settings_group(ui, crate::i18n::tr("Miro"), inner_width * 2.0 + 44.0, |ui| {
+        settings_group(ui, crate::i18n::tr("Miro"), full_width, |ui| {
             ui.add(egui::Label::new(
                 egui::RichText::new(crate::i18n::tr("For sending diagrams from EA to a Miro board (\"Send to Miro\" under a diagram in the chat). In Miro: Settings of your profile → Your apps → Create new app, give it the boards:read and boards:write permissions, install it in your team and copy the access token here. The token is kept in Windows Credential Manager."))
                 .color(theme::MUTED),
