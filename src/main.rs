@@ -6133,7 +6133,7 @@ impl eframe::App for App {
 
                             // Rename pencil next to the selected conversation, on the right side of the row.
                             let width = ui.available_width();
-                            let row_width = if selected { width - 32.0 } else { width };
+                            let row_width = if selected { width - 64.0 } else { width };
                             ui.horizontal(|ui| {
                                 ui.spacing_mut().item_spacing.x = 2.0;
                                 let row = conversation_row(ui, shown_title(&s.title), dot, selected, row_width);
@@ -6154,6 +6154,10 @@ impl eframe::App for App {
                                 });
                                 if selected && icon_button(ui, icons::EDIT, "✎", crate::i18n::tr("Rename conversation")).clicked() {
                                     rename_start = Some((s.id.clone(), shown_title(&s.title).to_string()));
+                                }
+                                // Also without the right-click menu (keyboard, screen readers, UI Automation).
+                                if selected && !working_here && icon_button(ui, icons::DELETE, "🗑", crate::i18n::tr("Delete the conversation")).clicked() {
+                                    to_bin = Some(s.clone());
                                 }
                             });
                         }
