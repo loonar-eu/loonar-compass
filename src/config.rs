@@ -477,10 +477,12 @@ impl AppConfig {
                 f if f.is_empty() || Path::new(&f).is_absolute() => PathBuf::from(f),
                 f => base_dir.join(f),
             },
-            db_host: get_or("db.host", ""),
+            // "SERVER\\SQLEXPRESS" written as in Java .properties is "SERVER\SQLEXPRESS".
+            db_host: get_or("db.host", "").replace("\\\\", "\\"),
             db_port: get_or("db.port", &ModelSource::parse(&get_or("model.source", "postgres")).map(|s| s.default_port()).unwrap_or(5432).to_string()).parse().context("db.port")?,
             db_name: get_or("db.name", ""),
-            db_user: get_or("db.user", "postgres"),
+            // The PostgreSQL default user only for PostgreSQL: SQL Server without a user signs in with Windows.
+            db_user: get_or("db.user", if get_or("model.source", "postgres") == "postgres" { "postgres" } else { "" }),
             db_password: migrate_db_password(props_path, p.get("db.password").map(String::as_str).unwrap_or("")),
             db_sslmode: SslMode::parse(&get_or("db.sslmode", "prefer")).context("db.sslmode")?,
             db_odbc: get_or("db.odbc", ""),

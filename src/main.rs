@@ -2662,7 +2662,9 @@ impl App {
             GROUP_DB => {
                 updates.push(("model.source", config::ModelSource::parse(&f.model_source).map(|s| s.as_str()).unwrap_or("postgres").to_string()));
                 let port: u16 = f.db_port.trim().parse().context(crate::i18n::tr("Database port: enter a number"))?;
-                if f.db_name.trim().is_empty() || f.db_user.trim().is_empty() {
+                // SQL Server without a user: Windows authentication of the person signed in.
+                let windows_login = f.model_source == "sqlserver";
+                if f.db_name.trim().is_empty() || (f.db_user.trim().is_empty() && !windows_login) {
                     bail!("{}", crate::i18n::fmt("Database name and database user are required", &[]));
                 }
                 updates.push(("db.host", f.db_host.trim().to_string()));
