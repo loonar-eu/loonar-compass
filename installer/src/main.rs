@@ -544,9 +544,13 @@ mod ea_addin {
     const ADDINS: [&str; 2] = [r"Software\Sparx Systems\EAAddins64\LoonarCompass", r"Software\Sparx Systems\EAAddins\LoonarCompass"];
 
     pub fn register(dll: &Path) -> Result<()> {
+        register_in(Root::CurrentUser, dll)
+    }
+
+    /// The add-in for one user (HKCU) or, in a quiet installation for all users, for everybody (HKLM).
+    pub fn register_in(root: Root, dll: &Path) -> Result<()> {
         // Not URL-escaped: the .NET loader takes the path as written (with "%20" it does not find a folder with spaces).
         let code_base = format!("file:///{}", dll.display().to_string().replace('\\', "/"));
-        let root = Root::CurrentUser;
         for (prog_id, class, clsid) in CLASSES {
             reg::set_string(root, &format!(r"Software\Classes\{prog_id}"), "", class)?;
             reg::set_string(root, &format!(r"Software\Classes\{prog_id}\CLSID"), "", clsid)?;
@@ -571,7 +575,10 @@ mod ea_addin {
     }
 
     pub fn unregister() {
-        let root = Root::CurrentUser;
+        unregister_in(Root::CurrentUser)
+    }
+
+    pub fn unregister_in(root: Root) {
         for (prog_id, _, clsid) in CLASSES {
             let _ = reg::delete_key(root, &format!(r"Software\Classes\{prog_id}"));
             let _ = reg::delete_key(root, &format!(r"Software\Classes\CLSID\{clsid}"));
@@ -1171,6 +1178,9 @@ fn remove_program(scope: Scope, dir: &Path, progress: &Progress) -> Result<Vec<S
     }
     done.push(crate::i18n::tr("Shortcuts removed").to_string());
 
+    if scope == Scope::Machine {
+        ea_addin::unregister_in(reg::Root::LocalMachine);
+    }
     progress.set(0.85, crate::i18n::tr("Removing the \"Programs and Features\" entry…"));
     if registered_here || registered.is_none() {
         reg::delete_key(scope.root(), CURRENT.uninstall_key)?;
@@ -1463,6 +1473,53 @@ fn remove_legacy_machine(hwnd: isize) -> Result<()> {
 
 /// `--uninstall --quiet`: uninstallation without a window (user data and secrets stay). Exit code 0 = done,
 /// 1223 = administrator rights not granted, 1 = error.
+/// `--quiet`: installation without a window, for deployment tools (Intune, Configuration Manager, Group Policy
+/// scripts). Options: `--all-users` (Program Files, HKLM, the add-in for everybody; needs administrator rights:
+/// without them exit code 740 and no prompt), `--dir <folder>`, `--lang en|pl|de|fr`, `--no-desktop`,
+/// `--no-start-menu`, `--no-ea-addin`. The user settings are not touched. Exit code 0 = done, 1 = error; the result
+/// is written to %TEMP%\LoonarCompass-Setup.log.
+fn quiet_install(args: &[OsString]) -> i32 {
+    let has = |name: &str| args.iter().any(|a| a == name);
+    let value = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).map(|v| v.to_string_lossy().to_string());
+    let scope = if has("--all-users") { Scope::Machine } else { Scope::User };
+    let log = |text: &str| {
+        let _ = std::fs::write(std::env::temp_dir().join("LoonarCompass-Setup.log"), format!("{} {APP_NAME} {} --quiet: {text}\n", install_date(), app_version()));
+    };
+    if scope == Scope::Machine && !elevated() {
+        log("--all-users needs administrator rights (exit code 740)");
+        return 740;
+    }
+    let lang = value("--lang").map_or(i18n::current(), |code| Lang::parse(&code));
+    let existing = read_install(&CURRENT, scope);
+    let dir = value("--dir").map(PathBuf::from).unwrap_or_else(|| existing.as_ref().map_or_else(|| scope.default_dir(), |i| i.dir.clone()));
+    let program = ProgramPlan {
+        scope,
+        previous_dir: existing.map(|i| i.dir).filter(|previous| !same_path(previous, &dir)),
+        dir,
+        lang,
+        start_menu: !has("--no-start-menu"),
+        desktop: !has("--no-desktop"),
+    };
+    let result = check_folder(&program.dir.display().to_string(), scope).map_err(|m| anyhow!(m)).and_then(|_| install_program(&program, &Progress::default())).and_then(|done| {
+        if has("--no-ea-addin") {
+            ea_addin::unregister_in(scope.root());
+        } else {
+            ea_addin::register_in(scope.root(), &program.dir.join(ADDIN_DLL))?;
+        }
+        Ok(done)
+    });
+    match result {
+        Ok(_) => {
+            log(&format!("installed in {} ({})", program.dir.display(), scope.code()));
+            0
+        }
+        Err(e) => {
+            log(&format!("failed: {e:#}"));
+            1
+        }
+    }
+}
+
 fn quiet_uninstall() -> i32 {
     let target = uninstall_target();
     let progress = Progress::default();
@@ -1616,6 +1673,9 @@ fn main() -> eframe::Result {
     i18n::set(saved_language());
     if uninstall && args.iter().any(|a| a == QUIET_ARG) {
         std::process::exit(quiet_uninstall());
+    }
+    if args.iter().any(|a| a == QUIET_ARG) {
+        std::process::exit(quiet_install(&args));
     }
     let (size, position) = window_geometry();
     let options = move || {
