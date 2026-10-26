@@ -88,7 +88,7 @@
   <tr><th class="check">✓</th><th>Element</th><th>Uwagi</th></tr>
   <tr><td>☐</td><td>Windows Server 2019 lub 2022, x64</td><td>2 vCPU, 4 GB RAM i 2 GB dysku wystarczą dla zespołu; więcej dysku na duże pliki modeli. Bez Enterprise Architect.</td></tr>
   <tr><td>☐</td><td>Nazwa DNS, np. <code>hub.firma.pl</code></td><td>Rozwiązywalna ze stacji roboczych.</td></tr>
-  <tr><td>☐</td><td>Certyfikat TLS dla tej nazwy</td><td>Z firmowego CA albo publicznego. <b>Stacje muszą ufać jego głównemu urzędowi</b> (Compass sprawdza go w magazynie certyfikatów Windows).</td></tr>
+  <tr><td>☐</td><td>Certyfikat TLS dla tej nazwy</td><td>Z firmowego CA albo publicznego. <b>Stacje muszą ufać jego głównemu urzędowi</b> (Compass sprawdza go w magazynie certyfikatów Windows). Nazwa huba musi być w SAN certyfikatu; z AD CS konto, które o niego prosi, potrzebuje prawa Enroll do szablonu Web Server.</td></tr>
   <tr><td>☐</td><td>IIS z modułami URL Rewrite i Application Request Routing (ARR)</td><td>Do pobrania od Microsoft (iis.net).</td></tr>
   <tr><td>☐</td><td>AD FS (Windows Server) albo Microsoft Entra ID</td><td>Tylko do logowania kontem firmowym, które jest zalecane. Bez niego hub ma własnych użytkowników i hasła.</td></tr>
   <tr><td>☐</td><td>Grupy AD: <code>Compass-Admins</code>, <code>Compass-Architects</code>, <code>Compass-Viewers</code></td><td>Grupa daje rolę w hubie. Możliwe inne nazwy (krok 6).</td></tr>
@@ -135,7 +135,12 @@ model.file=C:/CompassHub/models/Architecture.qea
 # db.name=ea_repository
 # db.user=compass_reader
 # db.sslmode=verify-full</pre>
-<p>SQL Server, MySQL i Oracle są czytane przez 64-bitowy sterownik ODBC producenta, który musi być zainstalowany na serwerze (np. „ODBC Driver 18 for SQL Server”). PostgreSQL i pliki nie potrzebują niczego więcej. Każdy odczyt jest wycofywany, więc wystarczy konto bazy tylko do odczytu. SQL Server bez sekretu <code>DB_PASSWORD</code> używa uwierzytelniania Windows: usługa huba (LocalSystem) loguje się kontem komputera (<code>DOMENA\SERWER$</code>), które potrzebuje roli <code>db_datareader</code> w bazie modelu.</p>
+<p>SQL Server, MySQL i Oracle są czytane przez 64-bitowy sterownik ODBC producenta, który musi być zainstalowany na serwerze. Dla SQL Server wystarczy „ODBC Driver 17 for SQL Server” (instaluje się z SQL Server 2022) albo 18; zainstalowane sterowniki: <code>Get-OdbcDriver -Name '*SQL Server*' -Platform 64-bit</code>. PostgreSQL i pliki nie potrzebują niczego więcej. Każdy odczyt jest wycofywany, więc wystarczy konto bazy tylko do odczytu. SQL Server bez sekretu <code>DB_PASSWORD</code> używa uwierzytelniania Windows: usługa huba (LocalSystem) loguje się kontem komputera (<code>DOMENA\SERWER$</code>), które potrzebuje roli <code>db_datareader</code> w bazie modelu.</p>
+<ul>
+  <li><b>Instancja nazwana</b> (np. SQL Server Express): <code>db.host=SERWER\SQLEXPRESS</code> bez portu, przy działającej usłudze SQL Server Browser; albo stały port TCP (SQL Server Configuration Manager → TCP/IP → IPAll: TcpPort 1433, TcpDynamicPorts puste) i <code>db.host</code>/<code>db.port</code>.</li>
+  <li><b>Własny ciąg połączenia:</b> <code>db.odbc=Driver={ODBC Driver 17 for SQL Server};Server=sql.firma.pl,1433;Database=ea_repository;Trusted_Connection=Yes</code> zastępuje host, port, nazwę i użytkownika (bez hasła; <code>DB_PASSWORD</code>, jeśli jest, zostaje dodane).</li>
+  <li><b>db.sslmode</b> dla SQL Server: <code>prefer</code> = szyfrowanie, gdy serwer i sterownik go używają (bez sprawdzania certyfikatu); <code>require</code> = zawsze szyfrowane, certyfikat nie jest sprawdzany; <code>verify-full</code> = szyfrowane, a certyfikat musi być zaufany i zgodny z nazwą serwera (nie z certyfikatem samopodpisanym SQL Server).</li>
+</ul>
 <div class="note">Trzymaj pliki modeli huba osobno od plików, które ludzie edytują w EA. Aby odświeżyć model plikowy, podmień plik. Hub otwiera go tylko do odczytu przy każdym zapytaniu, więc restart nie jest potrzebny.</div>
 
 <h2 id="s5">5. Krok 3 – Sekrety</h2>
@@ -162,7 +167,7 @@ model.file=C:/CompassHub/models/Architecture.qea
 )
 Set-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Services\CompassHub -Name Environment -Type MultiString -Value $vars
 Restart-Service CompassHub</pre>
-<p>Hub czyta sekret, gdy pierwszy raz go potrzebuje. Brakujący jest zgłaszany tam, gdzie jest używany, np. „secret 'jira_token' is not set: give it as LOONAR_SECRET_JIRA_TOKEN (or a file named in LOONAR_SECRET_JIRA_TOKEN_FILE)”. Wartości nigdy nie pojawiają się w hub.json, w logach ani w widoku webowym.</p>
+<p>Hub czyta sekret, gdy pierwszy raz go potrzebuje. Brakujący jest zgłaszany tam, gdzie jest używany, np. „secret 'jira_token' is not set: give it as LOONAR_SECRET_JIRA_TOKEN (or a file named in LOONAR_SECRET_JIRA_TOKEN_FILE)”. Wartości nigdy nie pojawiają się w hub.json, w logach ani w widoku webowym. Znacznik BOM na początku oraz spacje i znak nowej linii na końcu pliku sekretu (Notatnik) są pomijane.</p>
 
 <h2 id="s6" class="break">6. Krok 4 – Usługa Windows i pierwsze logowanie</h2>
 <ol>
@@ -209,6 +214,8 @@ Set-WebConfigurationProperty -PSPath $p -Filter system.webServer/proxy -Name tim
   &lt;/system.webServer&gt;
 &lt;/configuration&gt;</pre></li>
   <li>Zapora: wpuść tylko ruch przychodzący 443. Portu 8730 nie otwiera się nigdy, bo hub nasłuchuje na 127.0.0.1.</li>
+  <li>AD FS na tym samym serwerze: AD FS też używa portu 443 (HTTP.sys). Zaznacz <b>Wymagaj oznaczania nazwy serwera (SNI)</b> w powiązaniu IIS (<code>New-WebBinding … -SslFlags 1</code>), inaczej IIS i AD FS sobie przeszkadzają.</li>
+  <li>Hub nie potrzebuje <code>preserveHostHeader</code> ani <code>X-Forwarded-Proto</code>: jego adresy wynikają z <code>redirect_uri</code> w hub.json.</li>
 </ol>
 <p>Hub ufa nagłówkowi <code>X-Forwarded-For</code> (dodawanemu przez ARR) tylko od proxy na tym samym komputerze. Dziennik audytu i blokada błędnych tokenów widzą wtedy prawdziwy adres klienta.</p>
 <p><b>Sprawdzenie:</b> ze stacji roboczej <code>https://hub.firma.pl/</code> pokazuje stronę logowania bez ostrzeżenia o certyfikacie.</p>
@@ -299,7 +306,7 @@ Set-WebConfigurationProperty -PSPath $p -Filter system.webServer/proxy -Name tim
 <h2 id="s10" class="break">10. Krok 8 – Stacje robocze (zasady grupy)</h2>
 <ol>
   <li><b>Zaufanie do certyfikatu.</b> Jeśli certyfikat huba pochodzi z firmowego CA, rozdaj jego główny urząd na stacje (GPO: Konfiguracja komputera → Zasady → Ustawienia systemu Windows → Ustawienia zabezpieczeń → Zasady kluczy publicznych → Zaufane główne urzędy certyfikacji). Bez tego Compass zgłasza niezaufany certyfikat (UnknownIssuer).</li>
-  <li><b>Szablony.</b> Skopiuj <code>LoonarCompass.admx</code> do <code>\\&lt;domena&gt;\SYSVOL\&lt;domena&gt;\Policies\PolicyDefinitions</code>, a <code>pl-PL\LoonarCompass.adml</code> (i <code>en-US</code>) do podfolderów językowych.</li>
+  <li><b>Szablony.</b> Skopiuj <code>LoonarCompass.admx</code> do <code>\\&lt;domena&gt;\SYSVOL\&lt;domena&gt;\Policies\PolicyDefinitions</code>, a <code>pl-PL\LoonarCompass.adml</code> (i <code>en-US</code>) do podfolderów językowych. Bez magazynu centralnego skopiuj je do <code>C:\Windows\PolicyDefinitions</code> na komputerze, na którym edytujesz GPO.</li>
   <li><b>GPO</b> dla OU stacji: Konfiguracja komputera → Szablony administracyjne → Loonar → Loonar Compass.</li>
 </ol>
 <table>
@@ -382,6 +389,8 @@ Start-Service CompassHub</pre>
   <tr><td>hub.log: „&lt;adres&gt;: 20 wrong tokens, refused for 10 minutes”</td><td>Z jednego adresu przyszło 20 <b>różnych</b> błędnych tokenów (ten sam stary token liczy się raz). Prawidłowe tokeny dalej działają. Znajdź klienta w hub.log.</td></tr>
   <tr><td>Duże pytania kończą się błędem 413 albo 404.13</td><td><code>maxAllowedContentLength</code> w web.config (krok 5).</td></tr>
   <tr><td>Długie odpowiedzi kończą się 502.3 po 2 minutach</td><td><code>timeout</code> ARR (krok 5).</td></tr>
+  <tr><td>AD FS: MSIS7628 z <code>Grant-AdfsApplicationPermission</code> zaraz po instalacji AD FS</td><td>Farma jeszcze się uruchamia: powtórz polecenie po kilku minutach.</td></tr>
+  <tr><td>hub.log / AD FS: MSIS9622 „Client authentication failed”</td><td>Plik sekretu nie zgadza się z AD FS. Wygeneruj nowy sekret: <code>Set-AdfsServerApplication -TargetIdentifier &lt;client id&gt; -ResetClientSecret</code>, zapisz go do pliku, <code>Restart-Service CompassHub</code>.</td></tr>
   <tr><td>Compass na Windows Server (np. Usługi pulpitu zdalnego): eksport do PDF nie działa albo pierwsze logowanie do Office jest blokowane</td><td>Compass tworzy PDF-y Wordem i PowerPointem na komputerze, na którym działa. Na Windows Server pierwsze logowanie do Office może blokować Konfiguracja zwiększonych zabezpieczeń programu IE (<code>odc.officeapps.live.com</code>): dodaj strony logowania Office do zaufanych albo wyłącz to ustawienie dla użytkowników w Menedżerze serwera.</td></tr>
 </table>
 

@@ -624,7 +624,8 @@ pub mod secrets {
             return Some(value.trim().to_string()).filter(|v| !v.is_empty());
         }
         let file = std::env::var(format!("LOONAR_SECRET_{key}_FILE")).ok()?;
-        std::fs::read_to_string(file).ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty())
+        // A file from Notepad may start with a byte order mark and end with a new line: neither is part of the secret.
+        std::fs::read_to_string(file).ok().map(|v| v.trim_start_matches('\u{feff}').trim().to_string()).filter(|v| !v.is_empty())
     }
 
     pub fn get(name: &str) -> Result<String> {

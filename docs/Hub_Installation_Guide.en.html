@@ -88,7 +88,7 @@
   <tr><th class="check">✓</th><th>Item</th><th>Notes</th></tr>
   <tr><td>☐</td><td>Windows Server 2019 or 2022, x64</td><td>2 vCPU, 4 GB RAM and 2 GB disk are enough for a team; more disk for large model files. No Enterprise Architect.</td></tr>
   <tr><td>☐</td><td>DNS name, e.g. <code>hub.company.com</code></td><td>Resolvable from the workstations.</td></tr>
-  <tr><td>☐</td><td>TLS certificate for that name</td><td>From the company CA or a public CA. <b>The workstations must trust its root</b> (Compass checks it against the Windows certificate store).</td></tr>
+  <tr><td>☐</td><td>TLS certificate for that name</td><td>From the company CA or a public CA. <b>The workstations must trust its root</b> (Compass checks it against the Windows certificate store). The hub name must be in the certificate's SAN; from AD CS, the account that requests it needs Enroll on the Web Server template.</td></tr>
   <tr><td>☐</td><td>IIS with the URL Rewrite and Application Request Routing (ARR) modules</td><td>Downloads from Microsoft (iis.net).</td></tr>
   <tr><td>☐</td><td>AD FS (Windows Server) or Microsoft Entra ID</td><td>Only for company sign-in, which is recommended. Without it the hub has its own users and passwords.</td></tr>
   <tr><td>☐</td><td>AD groups: <code>Compass-Admins</code>, <code>Compass-Architects</code>, <code>Compass-Viewers</code></td><td>The group gives the role in the hub. Other names are possible (step 6).</td></tr>
@@ -135,7 +135,12 @@ model.file=C:/CompassHub/models/Architecture.qea
 # db.name=ea_repository
 # db.user=compass_reader
 # db.sslmode=verify-full</pre>
-<p>SQL Server, MySQL and Oracle are read through the vendor's 64-bit ODBC driver, which must be installed on the server (e.g. "ODBC Driver 18 for SQL Server"). PostgreSQL and files need nothing more. Every read is rolled back, so a read-only database account is enough. SQL Server without the secret <code>DB_PASSWORD</code> uses Windows authentication: the hub service (LocalSystem) signs in as the computer account (<code>DOMAIN\SERVER$</code>), which then needs the <code>db_datareader</code> role in the model database.</p>
+<p>SQL Server, MySQL and Oracle are read through the vendor's 64-bit ODBC driver, which must be installed on the server. For SQL Server, "ODBC Driver 17 for SQL Server" (it comes with SQL Server 2022) or 18 is enough; the installed drivers: <code>Get-OdbcDriver -Name '*SQL Server*' -Platform 64-bit</code>. PostgreSQL and files need nothing more. Every read is rolled back, so a read-only database account is enough. SQL Server without the secret <code>DB_PASSWORD</code> uses Windows authentication: the hub service (LocalSystem) signs in as the computer account (<code>DOMAIN\SERVER$</code>), which then needs the <code>db_datareader</code> role in the model database.</p>
+<ul>
+  <li><b>Named instance</b> (e.g. SQL Server Express): <code>db.host=SERVER\SQLEXPRESS</code> without a port, with the SQL Server Browser service running; or a fixed TCP port (SQL Server Configuration Manager → TCP/IP → IPAll: TcpPort 1433, TcpDynamicPorts empty) and <code>db.host</code>/<code>db.port</code>.</li>
+  <li><b>Your own connection string:</b> <code>db.odbc=Driver={ODBC Driver 17 for SQL Server};Server=sql.company.com,1433;Database=ea_repository;Trusted_Connection=Yes</code> replaces host, port, name and user (without a password; <code>DB_PASSWORD</code>, if set, is added).</li>
+  <li><b>db.sslmode</b> for SQL Server: <code>prefer</code> = encryption when the server and the driver use it (no certificate check); <code>require</code> = always encrypted, the certificate is not checked; <code>verify-full</code> = encrypted and the certificate must be trusted and match the server name (not with a self-signed SQL Server certificate).</li>
+</ul>
 <div class="note">Keep the hub's model files separate from the files people edit in EA. To refresh a file model, replace the file. The hub opens it read-only for each request, so no restart is needed.</div>
 
 <h2 id="s5">5. Step 3 – Secrets</h2>
@@ -162,7 +167,7 @@ model.file=C:/CompassHub/models/Architecture.qea
 )
 Set-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Services\CompassHub -Name Environment -Type MultiString -Value $vars
 Restart-Service CompassHub</pre>
-<p>The hub reads a secret when it first needs it. A missing one is reported where it is used, e.g. "secret 'jira_token' is not set: give it as LOONAR_SECRET_JIRA_TOKEN (or a file named in LOONAR_SECRET_JIRA_TOKEN_FILE)". The values never appear in hub.json, the logs or the web view.</p>
+<p>The hub reads a secret when it first needs it. A missing one is reported where it is used, e.g. "secret 'jira_token' is not set: give it as LOONAR_SECRET_JIRA_TOKEN (or a file named in LOONAR_SECRET_JIRA_TOKEN_FILE)". The values never appear in hub.json, the logs or the web view. A byte order mark at the start and spaces or a new line at the end of a secret file (Notepad) are ignored.</p>
 
 <h2 id="s6" class="break">6. Step 4 – The Windows service and the first sign-in</h2>
 <ol>
@@ -209,6 +214,8 @@ Set-WebConfigurationProperty -PSPath $p -Filter system.webServer/proxy -Name tim
   &lt;/system.webServer&gt;
 &lt;/configuration&gt;</pre></li>
   <li>Firewall: allow inbound 443 only. Port 8730 is never opened, because the hub listens on 127.0.0.1.</li>
+  <li>AD FS on the same server: AD FS also uses port 443 (HTTP.sys). Tick <b>Require Server Name Indication</b> on the IIS binding (<code>New-WebBinding … -SslFlags 1</code>), or IIS and AD FS get in each other's way.</li>
+  <li>The hub does not need <code>preserveHostHeader</code> or <code>X-Forwarded-Proto</code>: its addresses come from <code>redirect_uri</code> in hub.json.</li>
 </ol>
 <p>The hub trusts <code>X-Forwarded-For</code> (which ARR adds) only from a proxy on the same computer. The audit trail and the lockout of wrong tokens then see the real client address.</p>
 <p><b>Check:</b> from a workstation, <code>https://hub.company.com/</code> shows the sign-in page with no certificate warning.</p>
@@ -299,7 +306,7 @@ Set-WebConfigurationProperty -PSPath $p -Filter system.webServer/proxy -Name tim
 <h2 id="s10" class="break">10. Step 8 – The workstations (Group Policy)</h2>
 <ol>
   <li><b>Trust the certificate.</b> If the hub certificate comes from the company CA, deploy its root to the workstations (GPO: Computer Configuration → Policies → Windows Settings → Security Settings → Public Key Policies → Trusted Root Certification Authorities). Without it, Compass reports an untrusted certificate (UnknownIssuer).</li>
-  <li><b>Templates.</b> Copy <code>LoonarCompass.admx</code> to <code>\\&lt;domain&gt;\SYSVOL\&lt;domain&gt;\Policies\PolicyDefinitions</code>, and <code>en-US\LoonarCompass.adml</code> (and <code>pl-PL</code> if needed) to the language subfolders.</li>
+  <li><b>Templates.</b> Copy <code>LoonarCompass.admx</code> to <code>\\&lt;domain&gt;\SYSVOL\&lt;domain&gt;\Policies\PolicyDefinitions</code>, and <code>en-US\LoonarCompass.adml</code> (and <code>pl-PL</code> if needed) to the language subfolders. Without a central store, copy them to <code>C:\Windows\PolicyDefinitions</code> on the computer where you edit the GPO.</li>
   <li><b>GPO</b> for the workstation OU: Computer Configuration → Administrative Templates → Loonar → Loonar Compass.</li>
 </ol>
 <table>
@@ -382,6 +389,8 @@ Start-Service CompassHub</pre>
   <tr><td>hub.log: "&lt;address&gt;: 20 wrong tokens, refused for 10 minutes"</td><td>20 <b>different</b> wrong tokens came from one address (an old token repeated counts once). Valid tokens still work. Find the client in hub.log.</td></tr>
   <tr><td>Large questions fail with 413 or 404.13</td><td><code>maxAllowedContentLength</code> in web.config (step 5).</td></tr>
   <tr><td>Long answers end with 502.3 after 2 minutes</td><td>The ARR <code>timeout</code> (step 5).</td></tr>
+  <tr><td>AD FS: MSIS7628 from <code>Grant-AdfsApplicationPermission</code> right after installing AD FS</td><td>The farm is still starting: repeat the command a few minutes later.</td></tr>
+  <tr><td>hub.log / AD FS: MSIS9622 "Client authentication failed"</td><td>The secret file does not match AD FS. Make a new secret: <code>Set-AdfsServerApplication -TargetIdentifier &lt;client id&gt; -ResetClientSecret</code>, write it to the file, <code>Restart-Service CompassHub</code>.</td></tr>
   <tr><td>Compass on a Windows Server (e.g. Remote Desktop Services): PDF export fails, or the first Office sign-in is blocked</td><td>Compass makes PDFs with Word and PowerPoint on the computer where it runs. On Windows Server, IE Enhanced Security Configuration can block the first Office sign-in (<code>odc.officeapps.live.com</code>): add the Office sign-in sites to the trusted sites, or turn the setting off for users in Server Manager.</td></tr>
 </table>
 

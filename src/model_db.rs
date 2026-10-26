@@ -72,7 +72,9 @@ pub fn odbc_connection_string(cfg: &AppConfig) -> Result<String> {
             let tls = sqlserver_tls(&driver, cfg.db_sslmode);
             // Without a password: Windows authentication (the account Compass or the hub runs under), not a SQL login.
             let login = if cfg.db_password.is_empty() { "Trusted_Connection=Yes;".to_string() } else { format!("UID={user};PWD={password};") };
-            format!("Driver={{{driver}}};Server={},{};Database={};{login}{tls}APP=Loonar Compass;", cfg.db_host, cfg.db_port, odbc_value(&cfg.db_name))
+            // A named instance (SERVER\SQLEXPRESS) is found by the SQL Server Browser service, without a port.
+            let server = if cfg.db_host.contains('\\') { cfg.db_host.clone() } else { format!("{},{}", cfg.db_host, cfg.db_port) };
+            format!("Driver={{{driver}}};Server={server};Database={};{login}{tls}APP=Loonar Compass;", odbc_value(&cfg.db_name))
         }
         ModelSource::MySql => format!("Driver={{{driver}}};Server={};Port={};Database={};User={user};Password={password};", cfg.db_host, cfg.db_port, odbc_value(&cfg.db_name)),
         _ => format!("Driver={{{driver}}};DBQ={}:{}/{};UID={user};PWD={password};", cfg.db_host, cfg.db_port, cfg.db_name),
