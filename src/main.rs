@@ -6492,7 +6492,7 @@ impl eframe::App for App {
                 if let Some(request) = &self.pending_approval {
                     egui::TopBottomPanel::bottom("approval").show(ctx, |ui| {
                         ui.add_space(6.0);
-                        ui.label(egui::RichText::new(crate::i18n::tr("The assistant wants to save changes to the model")).strong());
+                        ui.label(egui::RichText::new(crate::i18n::tr("The assistant asks for your approval")).strong());
                         egui::ScrollArea::vertical().max_height(180.0).id_salt("approval_text").show(ui, |ui| {
                             ui.label(&request.summary);
                         });

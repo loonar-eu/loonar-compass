@@ -231,7 +231,7 @@ Stop ‖ Przerwij ‖ Abbrechen ‖ Arrêter
 Stop after the current step ‖ Przerwij po bieżącym kroku ‖ Nach dem aktuellen Schritt abbrechen ‖ Arrêter après l'étape en cours
 Stopping after the current step… ‖ Przerywanie po bieżącym kroku… ‖ Wird nach dem aktuellen Schritt abgebrochen… ‖ Arrêt après l'étape en cours…
 {0} · mode {1} ‖ {0} · tryb {1} ‖ {0} · Modus {1} ‖ {0} · mode {1}
-The assistant wants to save changes to the model ‖ Asystent chce zapisać zmiany w modelu ‖ Der Assistent möchte Änderungen im Modell speichern ‖ L'assistant veut enregistrer des modifications dans le modèle
+The assistant asks for your approval ‖ Asystent prosi o Twoją zgodę ‖ Der Assistent bittet um Ihre Zustimmung ‖ L'assistant demande votre accord
 Approve ‖ Zatwierdź ‖ Freigeben ‖ Valider
 Reject ‖ Odrzuć ‖ Ablehnen ‖ Refuser
 Approved, Claude is saving… ‖ Zatwierdzono, Claude zapisuje… ‖ Freigegeben, Claude speichert… ‖ Validé, Claude enregistre…
