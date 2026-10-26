@@ -161,6 +161,10 @@ pub fn portable_sql(source: crate::config::ModelSource, sql: &str) -> String {
     match source {
         ModelSource::SqlServer => {
             q = replace_outside_literals(&q, "||", "+");
+            // SQLite's and PostgreSQL's substr is SUBSTRING in T-SQL (MySQL and Oracle know SUBSTR).
+            for name in ["substr(", "SUBSTR(", "Substr("] {
+                q = replace_outside_literals(&q, name, "substring(");
+            }
             if let Some(n) = limit {
                 // TOP goes after the last top-level SELECT (after a WITH part), after DISTINCT if there is one.
                 if let Some(&at) = top_level_words(&q, "select").last() {
@@ -743,6 +747,8 @@ mod odbc_tests {
         assert_eq!(super::portable_sql(SqlServer, "select name from t_object where name ilike 'a%' limit 5;"), "select top 5 name from t_object where name like 'a%'");
         assert_eq!(super::portable_sql(SqlServer, "with recursive tree(id) as (select 1 limit 1) select distinct id from tree limit 10"), "with tree(id) as (select 1 limit 1) select distinct top 10 id from tree");
         assert_eq!(super::portable_sql(SqlServer, "select a || 'x || y' || b from t"), "select a + 'x || y' + b from t");
+        assert_eq!(super::portable_sql(SqlServer, "select substr(note, 1, 120), 'substr(' from t_object"), "select substring(note, 1, 120), 'substr(' from t_object");
+        assert_eq!(super::portable_sql(SqlServer, "select substring(note, 1, 5) from t"), "select substring(note, 1, 5) from t");
         assert_eq!(super::portable_sql(Oracle, "select count(*) limit 3"), "select count(*) fetch first 3 rows only from dual");
         assert_eq!(super::portable_sql(MySql, "select cast(x as varchar(10)) from t limit 2"), "select cast(x as char(10)) from t limit 2");
         assert_eq!(super::portable_sql(Postgres, "select 1 limit 2;"), "select 1 limit 2");
