@@ -49,26 +49,31 @@ pub fn in_ea_tab() -> bool {
 /// What EA opens: the path of an EA file, or the connection string of the model database built from the database
 /// settings (EA needs the database account in it). The port follows a comma (`SRC=server,port@database`), the same way
 /// EA itself writes it.
-fn connection_string(cfg: &AppConfig) -> String {
+fn connection_string(cfg: &AppConfig) -> Result<String> {
     if cfg.uses_file() {
-        return cfg.model_file.display().to_string();
+        return Ok(cfg.model_file.display().to_string());
     }
     // EA's own connection for the background session: `ea.conn` (the text of an EA shortcut, e.g. for MySQL and
     // Oracle through an ODBC data source) or one built for SQL Server (OLE DB) and PostgreSQL (Pro Cloud-style SSDB).
     if !cfg.ea_conn.trim().is_empty() {
-        return cfg.ea_conn.trim().to_string();
+        return Ok(cfg.ea_conn.trim().to_string());
+    }
+    // MySQL and Oracle: EA opens them through an ODBC data source of its own, which Compass cannot guess (never a
+    // PostgreSQL connection to their port).
+    if matches!(cfg.model_source, crate::config::ModelSource::MySql | crate::config::ModelSource::Oracle) {
+        bail!("{}", crate::i18n::tr("EA needs its own connection to save in a MySQL or Oracle model: set ea.conn to the connection text of this repository in EA (e.g. \"ea_model --- DBType=0;Connect=Provider=MSDASQL.1;Persist Security Info=False;Data Source=<ODBC data source>;\"), or work in Compass inside EA with the repository open there."));
     }
     let host = if cfg.db_host.trim().eq_ignore_ascii_case("localhost") { "127.0.0.1" } else { cfg.db_host.trim() };
     if cfg.model_source == crate::config::ModelSource::SqlServer {
-        return format!(
+        return Ok(format!(
             "{db} --- DBType=1;Connect=Provider=SQLOLEDB.1;Password={pwd};Persist Security Info=True;User ID={user};Initial Catalog={db};Data Source={host},{port};LazyLoad=1;",
             db = cfg.db_name,
             pwd = cfg.db_password,
             user = cfg.db_user,
             port = cfg.db_port,
-        );
+        ));
     }
-    format!(
+    Ok(format!(
         "{db} --- DBType=4;Connect=Provider=SSDB;SRC={host},{port}@{db};UID={user};PWD={pwd};",
         db = cfg.db_name,
         // EA does not connect to the database under the name "localhost" (it then opens an invisible window and waits forever;
@@ -77,7 +82,7 @@ fn connection_string(cfg: &AppConfig) -> String {
         port = cfg.db_port,
         user = cfg.db_user,
         pwd = cfg.db_password,
-    )
+    ))
 }
 
 /// After this many minutes without calls the persistent EA session is closed (releasing the license and memory).
@@ -181,7 +186,7 @@ pub fn run_batch(cfg: &AppConfig, ops: &[Value], options: &BatchOptions) -> Resu
     // Whether the model (file or database) requires a user lock to edit: from its settings (on by default).
     let locks = cfg.ea_locks;
     let login = Login {
-        connection: connection_string(cfg),
+        connection: connection_string(cfg)?,
         user: cfg.ea_user.clone(),
         password: if anonymous {
             String::new()
