@@ -2117,7 +2117,7 @@ impl App {
                             }
                             label_cell(ui, crate::i18n::tr("Connection encryption"));
                             egui::ComboBox::from_id_salt("conn_sslmode")
-                                .width(SETTINGS_FIELD_WIDTH)
+                                .width(settings_field_width(ui))
                                 .selected_text(sslmode_label(&editor.sslmode))
                                 .show_ui(ui, |ui| {
                                     for mode in config::SslMode::ALL {
@@ -3297,6 +3297,8 @@ impl App {
         let inner_width = if ea::in_ea_tab() { inner_width.min((ui.available_width() - 52.0).max(240.0)) } else { inner_width };
         // The cards below span both columns; in a tab of EA there is only the left column, so they are as wide as it.
         let full_width = if ea::in_ea_tab() { inner_width } else { inner_width * 2.0 + 44.0 };
+        // The widest a field may be next to its label in a card (settings_field_width and the drop-downs keep to it).
+        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("settings_field_cap"), if ea::in_ea_tab() { inner_width - SETTINGS_LABEL_WIDTH - 12.0 } else { 640.0 }));
         ui.horizontal_top(|ui| {
             ui.vertical(|ui| {
                 settings_group(ui, crate::i18n::tr("AI model"), inner_width, |ui| {
@@ -3304,7 +3306,7 @@ impl App {
                         label_cell(ui, crate::i18n::tr("Provider"));
                         let provider_label = |p: &str| if p == "openai" { "OpenAI" } else { "Anthropic (Claude)" };
                         egui::ComboBox::from_id_salt("ai_provider")
-                            .width(SETTINGS_FIELD_WIDTH)
+                            .width(settings_field_width(ui))
                             .selected_text(provider_label(&self.form.ai_provider))
                             .show_ui(ui, |ui| {
                                 for p in ["anthropic", "openai"] {
@@ -3330,7 +3332,7 @@ impl App {
                         label_cell(ui, crate::i18n::tr("Effort"));
                         let effort_label = |e: &str| if e.is_empty() { crate::i18n::tr("model default").to_string() } else { e.to_string() };
                         egui::ComboBox::from_id_salt("claude_effort")
-                            .width(SETTINGS_FIELD_WIDTH)
+                            .width(settings_field_width(ui))
                             .selected_text(effort_label(&self.form.claude_effort))
                             .show_ui(ui, |ui| {
                                 for effort in config::EFFORTS {
@@ -3365,7 +3367,7 @@ impl App {
                         // Language of the interface, of the assistant's responses and of new templates (changes after "Save").
                         label_cell(ui, crate::i18n::tr("Language"));
                         egui::ComboBox::from_id_salt("ui_language")
-                            .width(SETTINGS_FIELD_WIDTH)
+                            .width(settings_field_width(ui))
                             .selected_text(i18n::Lang::parse(&self.form.ui_language).native_name())
                             .show_ui(ui, |ui| {
                                 for lang in i18n::Lang::ALL {
@@ -3375,7 +3377,7 @@ impl App {
                         ui.end_row();
                         label_cell(ui, crate::i18n::tr("Approval mode"));
                         egui::ComboBox::from_id_salt("approval_mode")
-                            .width(SETTINGS_FIELD_WIDTH)
+                            .width(settings_field_width(ui))
                             .selected_text(self.form.approval_mode.clone())
                             .show_ui(ui, |ui| {
                                 let min = self.cfg.as_ref().and_then(hub::known_min_mode);
@@ -3473,7 +3475,7 @@ impl App {
                         );
                         label_cell(ui, crate::i18n::tr("Connection encryption"));
                         egui::ComboBox::from_id_salt("db_sslmode")
-                            .width(SETTINGS_FIELD_WIDTH)
+                            .width(settings_field_width(ui))
                             .selected_text(sslmode_label(&self.form.db_sslmode))
                             .show_ui(ui, |ui| {
                                 for mode in config::SslMode::ALL {
@@ -5699,7 +5701,8 @@ fn label_cell(ui: &mut egui::Ui, label: &str) {
 fn settings_field_width(ui: &egui::Ui) -> f32 {
     // In a narrow tab of EA a field may be narrower than usual rather than stick out of the card.
     let narrowest = if ea::in_ea_tab() { 140.0 } else { SETTINGS_FIELD_WIDTH };
-    (ui.available_width() - 16.0).clamp(narrowest, 640.0)
+    let cap = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("settings_field_cap"))).unwrap_or(640.0).max(narrowest);
+    (ui.available_width() - 16.0).clamp(narrowest, 640.0).min(cap)
 }
 
 fn row(ui: &mut egui::Ui, label: &str, value: &mut String) {
