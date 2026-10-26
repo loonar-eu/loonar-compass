@@ -596,8 +596,9 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
                         hub.remember_company_account(&who.name, role);
                         let session = format!("lcs_{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
                         hub.sessions.lock().unwrap_or_else(|p| p.into_inner()).insert(token_hash(&session), (who.name.clone(), Instant::now() + Duration::from_secs(SESSION_HOURS * 3600)));
-                        log(&hub.dir, &format!("{} signed in with a company account as {}", who.name, role.name()));
-                        let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": who.name, "source": "", "summary": crate::i18n::fmt("signed in with a company account ({0})", &[role.name().to_string()]), "ok": true }));
+                        let place = if who.return_to.is_some() { " (Compass)" } else { "" };
+                        log(&hub.dir, &format!("{} signed in with a company account as {}{place}", who.name, role.name()));
+                        let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": who.name, "source": "", "summary": crate::i18n::fmt("signed in with a company account ({0})", &[format!("{}{place}", role.name())]), "ok": true }));
                         // Compass: the session goes to its own address on the user's computer (never through a proxy).
                         if let Some(back) = &who.return_to {
                             return redirect(&stream, &format!("{back}?session={session}&name={}&role={}", encode(&who.name), role.name()));
@@ -1570,8 +1571,9 @@ impl Hub {
         let status = response.status().as_u16();
         let bytes = response.bytes().map_err(|e| deny(502, format!("Anthropic: {e}")))?.to_vec();
         if let Ok(answer) = serde_json::from_slice::<Value>(&bytes) {
-            let usage = json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "model": request["model"], "status": status,
-                "input_tokens": answer["usage"]["input_tokens"], "output_tokens": answer["usage"]["output_tokens"] });
+            let usage = json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "key": secret, "model": request["model"], "status": status,
+                "input_tokens": answer["usage"]["input_tokens"], "output_tokens": answer["usage"]["output_tokens"],
+                "cache_creation_input_tokens": answer["usage"]["cache_creation_input_tokens"], "cache_read_input_tokens": answer["usage"]["cache_read_input_tokens"] });
             if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(self.dir.join("ai_usage.jsonl")) {
                 let _ = writeln!(f, "{usage}");
             }
@@ -1587,7 +1589,9 @@ impl Hub {
         let (mut day, mut month) = (0u64, 0u64);
         for entry in text.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok()).filter(|e| e["user"].as_str().is_some_and(|u| u.eq_ignore_ascii_case(user))) {
             let time = entry["time"].as_str().unwrap_or("");
-            let tokens = entry["input_tokens"].as_u64().unwrap_or(0) + entry["output_tokens"].as_u64().unwrap_or(0);
+            // What the request costs, in input tokens: tokens read from the cache count a tenth, as Anthropic bills them.
+            let tokens = entry["input_tokens"].as_u64().unwrap_or(0) + entry["output_tokens"].as_u64().unwrap_or(0)
+                + entry["cache_creation_input_tokens"].as_u64().unwrap_or(0) + entry["cache_read_input_tokens"].as_u64().unwrap_or(0) / 10;
             if time.starts_with(&this_month) {
                 month += tokens;
                 if time.starts_with(&today) {
@@ -1606,7 +1610,8 @@ impl Hub {
         people.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
         people.iter().map(|p| {
             let (day, month) = self.ai_usage_of(p);
-            json!({ "user": p, "tokens_today": day, "tokens_month": month })
+            let key = text.lines().rev().filter_map(|l| serde_json::from_str::<Value>(l).ok()).find(|e| e["user"].as_str().is_some_and(|u| u.eq_ignore_ascii_case(p))).and_then(|e| e["key"].as_str().map(String::from)).unwrap_or_default();
+            json!({ "user": p, "tokens_today": day, "tokens_month": month, "key": key })
         }).collect()
     }
 

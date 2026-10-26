@@ -207,9 +207,9 @@ async function loadUsers() {
     '<p class="muted small">An API token is for Compass (Settings → Team) and for MCP clients; it is shown once. A password set here must be changed at the next sign-in.</p>' +
     '<h3>Company accounts</h3><div id="company"></div><h3>AI usage (tokens through the hub)</h3><div id="aiusage"></div>';
   api('/api/users/ai').then(list => {
-    $('aiusage').innerHTML = list.length ? '<table><tr><th>Person</th><th>Today</th><th>This month</th></tr>' +
-      list.map(u => '<tr><td>' + esc(u.user) + '</td><td>' + u.tokens_today + '</td><td>' + u.tokens_month + '</td></tr>').join('') + '</table>' +
-      '<p class="muted small">Keys and limits per person, role or everybody are set in hub.json, section "ai".</p>'
+    $('aiusage').innerHTML = list.length ? '<table><tr><th>Person</th><th>Key (secret name)</th><th>Today</th><th>This month</th></tr>' +
+      list.map(u => '<tr><td>' + esc(u.user) + '</td><td>' + esc(u.key || '') + '</td><td>' + u.tokens_today + '</td><td>' + u.tokens_month + '</td></tr>').join('') + '</table>' +
+      '<p class="muted small">Tokens read from the cache count a tenth. Keys and limits per person, role or everybody are set in hub.json, section "ai".</p>'
       : '<p class="muted">Nobody has used the AI through the hub yet.</p>';
   }).catch(() => {});
   api('/api/users/company').then(list => {

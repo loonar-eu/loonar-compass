@@ -4532,6 +4532,9 @@ const MAX_ROUNDS: usize = 24;
 fn history_to_api(messages: &[Message], attachments_dir: &Path) -> anyhow::Result<Vec<Value>> {
     let mut out: Vec<Value> = Vec::new();
     for m in messages {
+        if m.role == "assistant" && i18n::Lang::ALL.iter().any(|lang| m.text.starts_with(i18n::tr_in(*lang, "Could not finish"))) {
+            continue;
+        }
         let blocks = if m.role == "assistant" {
             // The API does not accept images in an assistant message: diagram images it showed
             // earlier stay in the history only as a mention with the file name.

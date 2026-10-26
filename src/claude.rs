@@ -112,11 +112,16 @@ impl ClaudeClient {
         let mut body = json!({
             "model": self.model,
             "max_tokens": self.max_tokens,
-            "system": system,
+            // The system prompt and the tools are the same in every request: cached by Anthropic, they cost a tenth.
+            "system": [{ "type": "text", "text": system, "cache_control": { "type": "ephemeral" } }],
             "messages": messages,
         });
         if let Some(t) = tools {
-            body["tools"] = t.clone();
+            let mut tools = t.clone();
+            if let Some(last) = tools.as_array_mut().and_then(|list| list.last_mut()) {
+                last["cache_control"] = json!({ "type": "ephemeral" });
+            }
+            body["tools"] = tools;
         }
         if !self.effort.is_empty() {
             body["output_config"] = json!({ "effort": self.effort });
