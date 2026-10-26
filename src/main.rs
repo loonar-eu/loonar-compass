@@ -163,7 +163,9 @@ fn summarize_earlier(client: &claude::ClaudeClient, msgs: &[Value]) -> anyhow::R
         start -= 1;
     }
     if start < 2 {
-        anyhow::bail!("nothing to summarise");
+        // Everything is in the newest messages (e.g. one huge paste): nothing earlier to summarise, so the long texts
+        // before the last message are shortened in the middle instead.
+        return shorten_long_messages(msgs).context("nothing to summarise");
     }
     let mut transcript = String::new();
     for m in &msgs[..start] {
@@ -208,6 +210,54 @@ Leave out greetings and repeated tool output. Write in the language of the conve
         _ => {}
     }
     Ok(kept)
+}
+
+/// Texts longer than this in the earlier messages are shortened when there is nothing to summarise.
+const LONG_TEXT: usize = 30_000;
+
+/// The messages with every text over `LONG_TEXT` characters (except in the last message) cut in the middle, with a note
+/// of what was left out. None when nothing is that long.
+fn shorten_long_messages(msgs: &[Value]) -> Option<Vec<Value>> {
+    let cut = |text: &str| -> Option<String> {
+        let chars: Vec<char> = text.chars().collect();
+        (chars.len() > LONG_TEXT).then(|| {
+            let (head, tail) = (20_000, 5_000);
+            format!(
+                "{}
+[… {} characters left out here to keep the conversation within the model's limit …]
+{}",
+                chars[..head].iter().collect::<String>(),
+                chars.len() - head - tail,
+                chars[chars.len() - tail..].iter().collect::<String>()
+            )
+        })
+    };
+    let mut out = msgs.to_vec();
+    let mut changed = false;
+    let last = out.len().saturating_sub(1);
+    for m in out.iter_mut().take(last) {
+        match m["content"].clone() {
+            Value::String(t) => {
+                if let Some(short) = cut(&t) {
+                    m["content"] = Value::String(short);
+                    changed = true;
+                }
+            }
+            Value::Array(mut blocks) => {
+                for b in blocks.iter_mut() {
+                    for key in ["text", "content"] {
+                        if let Some(short) = b[key].as_str().and_then(|t| cut(t)) {
+                            b[key] = Value::String(short);
+                            changed = true;
+                        }
+                    }
+                }
+                m["content"] = Value::Array(blocks);
+            }
+            _ => {}
+        }
+    }
+    changed.then_some(out)
 }
 
 /// One thing found in the model: kind (element, package, diagram), id, name, type, package.
@@ -4924,7 +4974,12 @@ fn run_turn_with(
         emit(WorkerEvent::StepStart(crate::i18n::tr("The conversation is long: summarising its earlier part").into()));
         match summarize_earlier(&client, &msgs) {
             Ok(shorter) => {
-                emit(WorkerEvent::StepEnd { ok: true, detail: crate::i18n::fmt("{0} messages kept, the rest as a summary", &[(shorter.len().saturating_sub(1)).to_string()]) });
+                let detail = if shorter.len() == msgs.len() {
+                    crate::i18n::tr("long earlier messages shortened in the middle").to_string()
+                } else {
+                    crate::i18n::fmt("{0} messages kept, the rest as a summary", &[(shorter.len().saturating_sub(1)).to_string()])
+                };
+                emit(WorkerEvent::StepEnd { ok: true, detail });
                 msgs = shorter;
             }
             Err(e) => emit(WorkerEvent::StepEnd { ok: false, detail: shorten(&format!("{e:#}"), 200) }),
@@ -6941,6 +6996,17 @@ impl eframe::App for App {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn long_earlier_messages_are_shortened() {
+        let huge = "x".repeat(240_000);
+        let msgs = vec![json!({"role": "user", "content": huge}), json!({"role": "assistant", "content": "ok"}), json!({"role": "user", "content": "and now?"})];
+        let short = super::shorten_long_messages(&msgs).expect("shortened");
+        assert!(short[0]["content"].as_str().unwrap().len() < 30_000);
+        assert!(short[0]["content"].as_str().unwrap().contains("characters left out"));
+        assert_eq!(short[2]["content"], "and now?");
+        assert!(super::shorten_long_messages(&short).is_none(), "nothing long is left");
+    }
+
     use super::*;
 
     fn msg(role: &str, text: &str, attachments: &[&str]) -> Message {
