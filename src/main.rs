@@ -5557,7 +5557,8 @@ fn nav_button(ui: &mut egui::Ui, glyph: &str, fallback: &str, tip: &str, active:
     let response = match warning {
         Some(w) => response.on_hover_text(format!("{tip}\n\n{w}")),
         None => response.on_hover_text(tip),
-    };
+    }
+    .named(tip);
     let fill = if active {
         theme::NAV_ACTIVE
     } else if response.hovered() {
@@ -5586,12 +5587,27 @@ fn nav_button(ui: &mut egui::Ui, glyph: &str, fallback: &str, tip: &str, active:
 fn icon_button(ui: &mut egui::Ui, glyph: &str, fallback: &str, tip: &str) -> egui::Response {
     ui.add(egui::Button::new(icons::text(glyph, fallback, 15.0).color(theme::MUTED)).frame(false).min_size(egui::vec2(30.0, 30.0)))
         .on_hover_text(tip)
+        .named(tip)
+}
+
+/// A name for screen readers and UI Automation (AccessKit): an icon alone is only a glyph of the icon font.
+trait Named {
+    fn named(self, label: &str) -> Self;
+}
+
+impl Named for egui::Response {
+    fn named(self, label: &str) -> Self {
+        let enabled = self.enabled();
+        self.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, label));
+        self
+    }
 }
 
 /// Conversation row in the list: full width, rounded background when selected and on hover, a status dot
 /// and the title truncated to one line.
 fn conversation_row(ui: &mut egui::Ui, title: &str, dot: Option<egui::Color32>, selected: bool, width: f32) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 34.0), egui::Sense::click());
+    let response = response.named(title);
     let fill = if selected {
         theme::SELECTION
     } else if response.hovered() {
@@ -5993,6 +6009,7 @@ impl eframe::App for App {
                             if ui
                                 .add_enabled(can_rename, egui::Button::new(icons::text(icons::EDIT, "✎", 13.0)).min_size(egui::vec2(28.0, 28.0)))
                                 .on_hover_text(crate::i18n::tr("Rename the conversation"))
+                                .named(crate::i18n::tr("Rename the conversation"))
                                 .clicked()
                             {
                                 self.ea_rename = Some(shown_title(&self.session.title).to_string());
@@ -6002,10 +6019,12 @@ impl eframe::App for App {
                                 .add_enabled(can_rename && !busy, egui::Button::new(icons::text(icons::DELETE, "🗑", 13.0)).min_size(egui::vec2(28.0, 28.0)))
                                 .on_hover_text(crate::i18n::tr("Delete the conversation"))
                                 .on_disabled_hover_text(crate::i18n::tr("The assistant is working in it."))
+                                .named(crate::i18n::tr("Delete the conversation"))
                                 .clicked();
                             new_one = ui
                                 .add(egui::Button::new(icons::text(icons::ADD, "+", 13.0)).min_size(egui::vec2(28.0, 28.0)))
                                 .on_hover_text(crate::i18n::tr("New conversation"))
+                                .named(crate::i18n::tr("New conversation"))
                                 .clicked();
                         });
                         if let Some(name) = rename_done {
@@ -6035,7 +6054,8 @@ impl eframe::App for App {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             let new = ui
                                 .add(egui::Button::new(icons::text(icons::ADD, "+", 14.0)).min_size(egui::vec2(30.0, 30.0)))
-                                .on_hover_text(crate::i18n::tr("New conversation"));
+                                .on_hover_text(crate::i18n::tr("New conversation"))
+                                .named(crate::i18n::tr("New conversation"));
                             if new.clicked() {
                                 self.switch_to(Session::new());
                                 self.pending.clear();
@@ -6505,14 +6525,14 @@ impl eframe::App for App {
                                 .stroke(egui::Stroke::NONE)
                                 .rounding(16.0)
                                 .min_size(egui::vec2(if icons::loaded() { 34.0 } else { 70.0 }, 34.0));
-                            if ui.add(send).on_hover_text(crate::i18n::tr("Send (Enter)")).clicked() {
+                            if ui.add(send).on_hover_text(crate::i18n::tr("Send (Enter)")).named(crate::i18n::tr("Send")).clicked() {
                                 clicked = true;
                             }
                             if busy {
                                 let stop = egui::Button::new(icons::text(icons::STOP, crate::i18n::tr("Stop"), 13.0))
                                     .rounding(16.0)
                                     .min_size(egui::vec2(if icons::loaded() { 34.0 } else { 80.0 }, 34.0));
-                                if ui.add(stop).on_hover_text(crate::i18n::tr("Stop after the current step")).clicked() {
+                                if ui.add(stop).on_hover_text(crate::i18n::tr("Stop after the current step")).named(crate::i18n::tr("Stop")).clicked() {
                                     // Stopping works between steps: a model or EA call in progress runs to completion.
                                     self.cancel.store(true, Ordering::Relaxed);
                                     self.status = crate::i18n::tr("Stopping after the current step…").into();

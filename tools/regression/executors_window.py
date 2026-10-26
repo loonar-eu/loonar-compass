@@ -178,7 +178,7 @@ def instructions_rule(c):
     c.say_approving("Dopisz do instrukcji: aktywności zaczynają się od czasownika.")
     c.evidence("rule_added")
     model_objects(c, INSTRUCTIONS, "model_CompassInstructions")
-    c.click("\ue710")  # new conversation
+    c.click("Nowa rozmowa")  # new conversation
     c.start_conversation()
     c.say("Jakie mamy zasady nazewnictwa?")
     c.evidence("new_conversation_knows_rules")

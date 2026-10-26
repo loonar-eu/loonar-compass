@@ -9,7 +9,7 @@ from pywinauto import Application, keyboard, mouse
 
 from services import CONFIG
 
-SEND = ""  # the send button (Segoe Fluent icon)
+SEND = "Wyślij"  # the send button (its accessible name in the Polish UI the tests run in)
 
 
 class Compass:
