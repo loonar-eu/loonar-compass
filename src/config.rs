@@ -320,7 +320,11 @@ pub struct MachinePolicy {
 impl MachinePolicy {
     /// Read from the registry (Windows); nothing elsewhere.
     pub fn read() -> Self {
-        let text = |name: &str| registry_policy(name).map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+        Self::read_from(r"SOFTWARE\Policies\Loonar\Compass")
+    }
+
+    fn read_from(key: &str) -> Self {
+        let text = |name: &str| registry_policy(key, name).map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
         let flag = |name: &str| text(name).map(|v| v != "0" && !v.eq_ignore_ascii_case("false"));
         Self {
             hub_url: text("HubUrl").map(|u| u.trim_end_matches('/').to_string()),
@@ -359,7 +363,7 @@ impl MachinePolicy {
 
 /// One value of the policy key: the computer's (HKLM) first, then the user's (HKCU). Text or a number.
 #[cfg(windows)]
-fn registry_policy(name: &str) -> Option<String> {
+fn registry_policy(key: &str, name: &str) -> Option<String> {
     #[link(name = "advapi32")]
     extern "system" {
         fn RegGetValueW(key: isize, sub_key: *const u16, value: *const u16, flags: u32, kind: *mut u32, data: *mut u8, size: *mut u32) -> i32;
@@ -369,7 +373,7 @@ fn registry_policy(name: &str) -> Option<String> {
     const RRF_RT_REG_SZ: u32 = 0x0002;
     const RRF_RT_REG_DWORD: u32 = 0x0010;
     let wide = |s: &str| s.encode_utf16().chain(std::iter::once(0)).collect::<Vec<u16>>();
-    let (key, value) = (wide(r"SOFTWARE\Policies\Loonar\Compass"), wide(name));
+    let (key, value) = (wide(key), wide(name));
     for root in [HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER] {
         let mut buffer = vec![0u16; 2048];
         let mut size = (buffer.len() * 2) as u32;
@@ -388,7 +392,7 @@ fn registry_policy(name: &str) -> Option<String> {
 }
 
 #[cfg(not(windows))]
-fn registry_policy(_name: &str) -> Option<String> {
+fn registry_policy(_key: &str, _name: &str) -> Option<String> {
     None
 }
 
@@ -712,5 +716,28 @@ hub.url=https://my.example
         strict.approval_mode = ApprovalMode::Ask;
         MachinePolicy { min_approval: Some(ApprovalMode::Plan), ..Default::default() }.apply(&mut strict);
         assert_eq!(strict.approval_mode, ApprovalMode::Ask, "a stricter own setting stays (auto < plan < ask)");
+    }
+
+    /// The policy as Group Policy writes it (REG_SZ text, REG_DWORD flags), read from a scratch key of the user.
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "writes a scratch key under HKCU"]
+    fn machine_policy_from_registry() {
+        let key = r"HKCU\Software\Loonar\CompassPolicyTest";
+        let reg = |args: &[&str]| assert!(std::process::Command::new("reg").args(args).output().unwrap().status.success());
+        reg(&["add", key, "/v", "MinApproval", "/t", "REG_SZ", "/d", "ask", "/f"]);
+        reg(&["add", key, "/v", "WebAccess", "/t", "REG_DWORD", "/d", "0", "/f"]);
+        reg(&["add", key, "/v", "HubUrl", "/t", "REG_SZ", "/d", "https://hub.lab.local", "/f"]);
+        let policy = MachinePolicy::read_from(r"Software\Loonar\CompassPolicyTest");
+        reg(&["delete", key, "/f"]);
+        assert_eq!(policy.min_approval, Some(ApprovalMode::Ask));
+        assert_eq!(policy.web_access, Some(false));
+        let dir = std::env::temp_dir().join(format!("loonar-policy-reg-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("app.properties"), "approval.mode=auto
+").unwrap();
+        let mut cfg = AppConfig::load(&dir.join("app.properties")).unwrap();
+        policy.apply(&mut cfg);
+        assert_eq!(cfg.approval_mode, ApprovalMode::Ask);
     }
 }

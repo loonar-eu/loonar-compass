@@ -1926,6 +1926,14 @@ pub fn team_default(cfg: &AppConfig, key: &str) -> Option<String> {
     team_policy(cfg)?[key].as_str().map(str::trim).filter(|v| !v.is_empty()).map(String::from)
 }
 
+/// The strictest minimum of the computer's policy and the team policy already known (no request to the hub: for the
+/// window, which must not wait for the network).
+pub fn known_min_mode(cfg: &AppConfig) -> Option<crate::config::ApprovalMode> {
+    let team = POLICY.lock().unwrap_or_else(|p| p.into_inner()).as_ref().filter(|(_, url, _)| url.trim_end_matches('/') == cfg.hub_url.trim_end_matches('/'))
+        .and_then(|(_, _, p)| p["min_approval"].as_str().and_then(|m| crate::config::ApprovalMode::parse(m).ok()));
+    [cfg.policy.min_approval, team].into_iter().flatten().max_by_key(|m| m.strictness())
+}
+
 /// The approval mode in force: the one from the settings, made stricter by the team policy ("min_approval").
 pub fn effective_mode(cfg: &AppConfig) -> crate::config::ApprovalMode {
     // The settings already carry the computer's minimum (MachinePolicy::apply).

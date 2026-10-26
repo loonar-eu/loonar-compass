@@ -2728,7 +2728,11 @@ impl App {
                 }
             }
             _ => {
-                let mode = ApprovalMode::parse(&f.approval_mode)?;
+                let mut mode = ApprovalMode::parse(&f.approval_mode)?;
+                if let Some(min) = self.cfg.as_ref().and_then(hub::known_min_mode).filter(|min| min.strictness() > mode.strictness()) {
+                    mode = min;
+                    self.form.approval_mode = min.as_str().to_string();
+                }
                 updates.push(("approval.mode", mode.as_str().to_string()));
                 let new_lang = i18n::Lang::parse(&f.ui_language);
                 updates.push(("ui.language", new_lang.code().to_string()));
@@ -3293,8 +3297,11 @@ impl App {
                             .width(SETTINGS_FIELD_WIDTH)
                             .selected_text(self.form.approval_mode.clone())
                             .show_ui(ui, |ui| {
+                                let min = self.cfg.as_ref().and_then(hub::known_min_mode);
                                 for mode in ["plan", "ask", "auto"] {
-                                    ui.selectable_value(&mut self.form.approval_mode, mode.to_string(), approval_label(mode));
+                                    let allowed = min.is_none_or(|min| ApprovalMode::parse(mode).is_ok_and(|m| m.strictness() >= min.strictness()));
+                                    ui.add_enabled_ui(allowed, |ui| ui.selectable_value(&mut self.form.approval_mode, mode.to_string(), approval_label(mode)))
+                                        .response.on_disabled_hover_text(crate::i18n::tr("Your organisation requires a stricter approval mode."));
                                 }
                             });
                         ui.end_row();
@@ -6431,7 +6438,7 @@ impl eframe::App for App {
                                 }
                             }
                             if let Some(cfg) = &self.cfg {
-                                ui.label(egui::RichText::new(crate::i18n::fmt("{0} · mode {1}", &[(cfg.ai_model()).to_string(), (cfg.approval_mode.as_str()).to_string()])).small().color(theme::MUTED));
+                                ui.label(egui::RichText::new(crate::i18n::fmt("{0} · mode {1}", &[(cfg.ai_model()).to_string(), (hub::known_min_mode(cfg).filter(|min| min.strictness() > cfg.approval_mode.strictness()).unwrap_or(cfg.approval_mode).as_str()).to_string()])).small().color(theme::MUTED));
                             }
                         });
                     });
