@@ -156,9 +156,10 @@ pub fn describe(cfg: &crate::config::AppConfig, kind: &str, id: i64) -> Option<(
         "new_diagram" => q(format!("select coalesce(d.name,'') as c0, d.diagram_type as c1, coalesce(p.name,'') as c2 from t_diagram d left join t_package p on p.package_id = d.package_id where d.diagram_id = {id}"))
             .map(|r| (format!("diagram \"{}\" ({}, diagram_id {id}) in package \"{}\"", r[0], r[1], r[2]), r[1].clone(), String::new())),
         _ => q(format!(
-            "select coalesce(o.name,'') as c0, o.object_type as c1, coalesce(o.stereotype,'') as c2, coalesce(p.name,'') as c3 from t_object o left join t_package p on p.package_id = o.package_id where o.object_id = {id}"
+            "select coalesce(o.name,'') as c0, o.object_type as c1, coalesce(o.stereotype,'') as c2, coalesce(p.name,'') as c3, coalesce(o.status,'') as c4 from t_object o left join t_package p on p.package_id = o.package_id where o.object_id = {id}"
         ))
-        .map(|r| (format!("element \"{}\" ({}{}, object_id {id}) in package \"{}\"", r[0], r[1], if r[2].is_empty() { String::new() } else { format!(" «{}»", r[2]) }, r[3]), r[1].clone(), r[2].clone())),
+        // The status is in the description: a guard decides from it at once, without reading the model again.
+        .map(|r| (format!("element \"{}\" ({}{}, object_id {id}, status \"{}\") in package \"{}\"", r[0], r[1], if r[2].is_empty() { String::new() } else { format!(" «{}»", r[2]) }, r[4], r[3]), r[1].clone(), r[2].clone())),
     }
 }
 

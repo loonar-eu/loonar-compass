@@ -507,7 +507,9 @@ namespace LoonarCompass
                         }
                         return true;
                     }
-                    System.Threading.Thread.Sleep(100);
+                    // A pumping wait, not Sleep: Compass reads the object being deleted from this EA (Repository.SQLQuery)
+                    // while EA waits here; the calls of COM are served during the wait, the user's input is not.
+                    System.Threading.Thread.CurrentThread.Join(100);
                 }
                 Out(DateTime.Now.ToString("HH:mm:ss") + "  " + L10n.Get("No decision of the guard in time: the deletion goes ahead."));
                 return true;
