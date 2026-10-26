@@ -6,6 +6,8 @@ company sign-in (OpenID Connect), a read-only GraphQL API and tables for Power B
 It needs no Enterprise Architect and runs on Windows or Linux.
 
 Full documentation: the "Compass Hub" chapter of the user guide at https://loonar.eu/docs/.
+Step-by-step installation on Windows Server with IIS, AD FS and Group Policy: the "Compass Hub – Installation guide
+for IT" (`docs/Hub_Installation_Guide.en.pdf`, Polish: `docs/Instalacja_huba.pdf`).
 
 ## Start
 
@@ -159,4 +161,5 @@ and the secrets `JIRA_TOKEN` and `CONFLUENCE_TOKEN`, the hub forwards Compass re
   and the client address. The **Users** tab also lists company accounts with their role and last sign-in (read only).
 - **hub.json:** protect it with file permissions. Passwords and tokens are kept in it only as hashes.
 - **Default account:** it can do nothing until its password is changed.
-- **Lockout:** after 20 wrong passwords or tokens, an address is refused for 10 minutes.
+- **Lockout:** after 20 wrong passwords or 20 different wrong tokens within 10 minutes, an address is refused for
+  10 minutes (a client repeating one old token counts once; valid tokens still work).
