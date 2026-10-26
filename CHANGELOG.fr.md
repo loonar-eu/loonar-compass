@@ -56,7 +56,7 @@ Connexion d'entreprise au hub, modèles sur SQL Server, MySQL et Oracle, instruc
 - **Redémarrage du hub :** les sessions des personnes connectées survivent à un redémarrage du hub ; un même jeton invalide ne compte qu'une fois pour le blocage de l'adresse ; Compass demande aussitôt de se reconnecter quand la connexion au hub a expiré et décrit brièvement les erreurs du hub (sans pages HTML d'IIS).
 - **Glossaire du projet EA :** le type par défaut d'un nouveau terme est `Glossary` (auparavant `Slownik`).
 - **Longues conversations :** au-delà d'environ 100 000 jetons, la première partie est remplacée par un résumé pour les réponses suivantes (« La conversation est longue : résumé de sa première partie ») ; les messages les plus récents restent.
-- **Supprimer une conversation :** clic droit sur une conversation → « Supprimer la conversation ». Elle est déplacée dans `history\bin` et peut être récupérée ; pas pendant que l'assistant y travaille.
+- **Supprimer une conversation :** clic droit sur une conversation → « Supprimer la conversation » (dans Compass dans EA : le bouton 🗑 à côté du nom de la conversation). Elle est déplacée dans `history\bin` et peut être récupérée ; pas pendant que l'assistant y travaille.
 
 ### Documents, présentations et SharePoint
 
