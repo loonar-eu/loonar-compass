@@ -976,18 +976,23 @@ fn main() -> eframe::Result {
     }
     // Check mode for CI pipelines: `--check …` (report on the standard output, exit code 0 / 1 / 2).
     if args.iter().any(|a| a == "--check") {
-        std::process::exit(check::run(&args, &props_path));
+        let code = check::run(&args, &props_path);
+        ea::shutdown();
+        std::process::exit(code);
     }
     // A conversation without a window (regression tests, pipelines): `--ask "<message>" …`, see `ask_from_command_line`.
     if args.iter().any(|a| a == "--ask") {
         check::attach_console();
-        std::process::exit(match ask_from_command_line(&args, &props_path) {
+        let code = match ask_from_command_line(&args, &props_path) {
             Ok(code) => code,
             Err(e) => {
                 eprintln!("{e:#}");
                 2
             }
-        });
+        };
+        // The background EA of the writes is closed before the process ends (otherwise it stays without a window).
+        ea::shutdown();
+        std::process::exit(code);
     }
     // A new hub token and its SHA-256 for hub.json: `--hub-token`.
     if args.iter().any(|a| a == "--hub-token") {
