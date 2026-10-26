@@ -32,6 +32,39 @@ namespace LoonarCompass
             return "";
         }
 
+        /// <summary>EA has started: the Compass window is there from the start, with a note until a project is open
+        /// (and it starts Compass at once when EA was opened with a project).</summary>
+        public void EA_OnPostInitialized(object repository)
+        {
+            try
+            {
+                Window(repository);
+                if (!string.IsNullOrEmpty(Connection(repository)) && !current.Started)
+                    current.Start(Connection(repository), repository);
+            }
+            catch (Exception e)
+            {
+                Log.Write("PostInitialized: " + e.Message);
+            }
+        }
+
+        /// <summary>The Compass window in EA (a dockable window like Properties; EA remembers where the user put it),
+        /// created once, with the "no project" note until Compass starts in it.</summary>
+        static CompassTab Window(object repository)
+        {
+            dynamic repo = repository;
+            if (current == null || current.IsDisposed)
+            {
+                CompassTab tab = repo.AddWindow("Loonar Compass", "LoonarCompass.Tab") as CompassTab;
+                if (tab == null)
+                    throw new InvalidOperationException("EA did not create the Compass window.");
+                current = tab;
+                tab.Stop(L10n.Get("No project is open: open a .qea file or a repository to work with Compass."));
+            }
+            repo.ShowAddinWindow("Loonar Compass");
+            return current;
+        }
+
         /// <summary>A new element in EA: for event agents (Compass in the tab). Nothing is changed here.</summary>
         public bool EA_OnPostNewElement(object repository, object info)
         {
@@ -174,20 +207,9 @@ namespace LoonarCompass
                         current.Send(reference);
                     return;
                 }
-                dynamic repo = repository;
-                // A dockable window like Properties (EA remembers where the user put it), not a tab among the diagrams.
-                if (current != null && !current.IsDisposed)
-                {
-                    repo.ShowAddinWindow("Loonar Compass");
-                    return;
-                }
-                object control = repo.AddWindow("Loonar Compass", "LoonarCompass.Tab");
-                CompassTab tab = control as CompassTab;
-                if (tab == null)
-                    throw new InvalidOperationException("EA did not create the Compass window.");
-                current = tab;
-                repo.ShowAddinWindow("Loonar Compass");
-                tab.Start(connection, repository);
+                CompassTab tab = Window(repository);
+                if (!tab.Started && !string.IsNullOrEmpty(connection))
+                    tab.Start(connection, repository);
             }
             catch (Exception e)
             {
@@ -198,23 +220,27 @@ namespace LoonarCompass
         /// <summary>The open Compass tab: it always works with the project open in this EA window.</summary>
         static CompassTab current;
 
-        /// <summary>Another project opened in EA: the open Compass tab switches to it. (Tests: LOONAR_ADDIN_AUTOTAB=1
-        /// opens the tab as soon as a project is opened.)</summary>
+        /// <summary>A project opened in EA: Compass starts in its window by itself (or switches to the new project).</summary>
         public void EA_FileOpen(object repository)
         {
             Log.Write("FileOpen, tab open: " + (current != null && !current.IsDisposed));
-            if (current != null && !current.IsDisposed)
-                current.Start(Connection(repository), repository);
-            else if (Environment.GetEnvironmentVariable("LOONAR_ADDIN_AUTOTAB") == "1")
-                EA_MenuClick(repository, "MainMenu", "", "Loonar Compass");
+            try
+            {
+                Window(repository).Start(Connection(repository), repository);
+            }
+            catch (Exception e)
+            {
+                Log.Write("FileOpen: " + e.Message);
+            }
         }
 
-        /// <summary>The project closed in EA: Compass does not work without one, so it closes.</summary>
+        /// <summary>The project closed in EA: Compass does not work without one, so it closes and the window shows the
+        /// "no project" note again.</summary>
         public void EA_FileClose(object repository)
         {
             Log.Write("FileClose");
             if (current != null && !current.IsDisposed)
-                current.Stop(L10n.Get("Open a project in Enterprise Architect to work with Loonar Compass."));
+                current.Stop(L10n.Get("No project is open: open a .qea file or a repository to work with Compass."));
         }
 
         public void EA_Disconnect()
@@ -417,6 +443,12 @@ namespace LoonarCompass
         public bool Running
         {
             get { return process != null && child != IntPtr.Zero; }
+        }
+
+        /// <summary>Compass was started in this window (it may still be opening its window).</summary>
+        public bool Started
+        {
+            get { return process != null; }
         }
 
         /// <summary>A model event for the live check in Compass (handed over in a file, like the references).</summary>
@@ -861,7 +893,7 @@ namespace LoonarCompass
                 case "Open Compass in EA": return lang == "de" ? "Compass in EA öffnen" : lang == "fr" ? "Ouvrir Compass dans EA" : "Otwórz Compass w EA";
                 case "Open Compass in its own window": return lang == "de" ? "Compass in eigenem Fenster öffnen" : lang == "fr" ? "Ouvrir Compass dans sa propre fenêtre" : "Otwórz Compass w osobnym oknie";
                 case "Starting Loonar Compass…": return lang == "de" ? "Loonar Compass wird gestartet…" : lang == "fr" ? "Démarrage de Loonar Compass…" : "Uruchamianie Loonar Compass…";
-                case "Open a project in Enterprise Architect to work with Loonar Compass.": return lang == "de" ? "Öffnen Sie ein Projekt in Enterprise Architect, um mit Loonar Compass zu arbeiten." : lang == "fr" ? "Ouvrez un projet dans Enterprise Architect pour travailler avec Loonar Compass." : "Otwórz projekt w Enterprise Architect, aby pracować z Loonar Compass.";
+                case "No project is open: open a .qea file or a repository to work with Compass.": return lang == "de" ? "Kein Projekt geöffnet: Öffnen Sie eine .qea-Datei oder ein Repository, um mit Compass zu arbeiten." : lang == "fr" ? "Aucun projet ouvert : ouvrez un fichier .qea ou un référentiel pour travailler avec Compass." : "Brak otwartego projektu: otwórz plik .qea albo repozytorium, aby pracować z Compass.";
                 case "Add to the Compass conversation": return lang == "de" ? "Zur Compass-Unterhaltung hinzufügen" : lang == "fr" ? "Ajouter à la conversation Compass" : "Dodaj do rozmowy w Compass";
                 case "Element": return lang == "de" ? "Element" : lang == "fr" ? "Élément" : "Element";
                 case "Package": return lang == "de" ? "Paket" : lang == "fr" ? "Paquetage" : "Pakiet";
