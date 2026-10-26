@@ -1622,3 +1622,4 @@ Reading the Confluence page {0} ‖ Czytanie strony Confluence {0} ‖ Lesen der
 give 'page_id' or 'title' of the page ‖ podaj 'page_id' albo 'title' strony ‖ geben Sie 'page_id' oder 'title' der Seite an ‖ indiquez 'page_id' ou 'title' de la page
 no page titled "{0}" in the space {1} ‖ brak strony o tytule „{0}” w przestrzeni {1} ‖ keine Seite mit dem Titel „{0}“ im Bereich {1} ‖ aucune page intitulée « {0} » dans l'espace {1}
 long earlier messages shortened in the middle ‖ długie wcześniejsze wiadomości skrócone w środku ‖ lange frühere Nachrichten in der Mitte gekürzt ‖ longs messages précédents raccourcis au milieu
+the site has no document library "{0}" (it has: {1}) ‖ witryna nie ma biblioteki dokumentów „{0}” (ma: {1}) ‖ die Website hat keine Dokumentbibliothek „{0}“ (sie hat: {1}) ‖ le site n'a pas de bibliothèque de documents « {0} » (il a : {1})

@@ -47,14 +47,18 @@ impl Site {
         let path = url.path().trim_end_matches('/');
         let site_info = s.get_json(&format!("/sites/{host}:{path}"))?;
         let site_id = site_info["id"].as_str().context("no site id from Microsoft Graph")?.to_string();
-        let drives = s.get_json(&format!("/sites/{site_id}/drives"))?;
-        let wanted = if cfg.sharepoint_library.trim().is_empty() { "Documents" } else { cfg.sharepoint_library.trim() };
-        let drive = drives["value"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .find(|d| d["name"].as_str().is_some_and(|n| n.eq_ignore_ascii_case(wanted)) || (wanted == "Documents" && d["name"] == "Shared Documents"))
-            .with_context(|| crate::i18n::fmt("the site has no document library \"{0}\"", &[wanted.to_string()]))?;
+        let wanted = cfg.sharepoint_library.trim();
+        // No library given: the site's default one, whatever its name in the site's language ("Documents", "Dokumenty"…).
+        let drive = if wanted.is_empty() {
+            s.get_json(&format!("/sites/{site_id}/drive"))?
+        } else {
+            let drives = s.get_json(&format!("/sites/{site_id}/drives"))?;
+            let list = drives["value"].as_array().cloned().unwrap_or_default();
+            let names = list.iter().filter_map(|d| d["name"].as_str()).collect::<Vec<_>>().join(", ");
+            list.into_iter()
+                .find(|d| d["name"].as_str().is_some_and(|n| n.eq_ignore_ascii_case(wanted)) || (wanted.eq_ignore_ascii_case("Documents") && d["name"] == "Shared Documents"))
+                .with_context(|| crate::i18n::fmt("the site has no document library \"{0}\" (it has: {1})", &[wanted.to_string(), names]))?
+        };
         s.drive = drive["id"].as_str().unwrap_or("").to_string();
         Ok(s)
     }
@@ -146,19 +150,41 @@ pub fn run(input: &Value, ctx: &crate::tools::ToolContext) -> Result<String> {
             Ok(format!("<external_data source=\"SharePoint {path}\">\n{}\n</external_data>", crate::documents::limited(text)))
         }
         "upload" => {
-            let file = input["file"].as_str().context("give file (a file in the attachments folder, e.g. one you created)")?;
-            let local = ctx.cfg.attachments_dir.join(file);
-            if file.contains(['/', '\\', ':']) || !local.is_file() {
+            let given = input["file"].as_str().context("give file (a file in the attachments folder, e.g. one you created)")?.trim();
+            if given.contains(['/', '\\', ':']) {
                 bail!("{}", crate::i18n::tr("upload only files from the attachments folder (documents and presentations you created)"));
             }
+            let file = attachment_named(&ctx.cfg.attachments_dir, given)
+                .with_context(|| crate::i18n::tr("upload only files from the attachments folder (documents and presentations you created)"))?;
+            let local = ctx.cfg.attachments_dir.join(&file);
             let folder = input["folder"].as_str().unwrap_or("");
-            let name = input["name"].as_str().map(String::from).unwrap_or_else(|| crate::history::display_name(file).to_string());
+            let name = input["name"].as_str().map(String::from).unwrap_or_else(|| crate::history::display_name(&file).to_string());
             ctx.approver.confirm_upload(&crate::i18n::fmt("Upload {0} to SharePoint: {1}/{2}", &[name.clone(), ctx.cfg.sharepoint_site.trim().to_string(), format!("{}/{}", ctx.cfg.sharepoint_library.trim(), folder.trim_matches('/'))]))?;
             let url = site.upload(folder, &name, &std::fs::read(&local)?)?;
             Ok(format!("Uploaded to SharePoint: {url}"))
         }
         other => bail!("{}", crate::i18n::fmt("unknown action {0}: use list, read or upload", &[other.to_string()])),
     }
+}
+
+/// The file in the attachments folder: its stored name ("<id>_Name.docx") or, as the model usually says it, the
+/// name the user sees ("Name.docx"); then the newest such file.
+fn attachment_named(dir: &std::path::Path, given: &str) -> Option<String> {
+    if dir.join(given).is_file() {
+        return Some(given.to_string());
+    }
+    std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .filter(|e| e.path().is_file())
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().to_string();
+            let shown = crate::history::display_name(&name).to_string();
+            // Spaces and other characters are "_" in a stored name ("Test SharePoint.docx" → "…_Test_SharePoint.docx").
+            (shown.eq_ignore_ascii_case(given) || shown.eq_ignore_ascii_case(&crate::history::sanitize_name(given))).then(|| (e.metadata().and_then(|m| m.modified()).ok(), name))
+        })
+        .max_by_key(|(modified, _)| *modified)
+        .map(|(_, name)| name)
 }
 
 pub fn definition() -> Value {
@@ -208,6 +234,8 @@ mod tests {
                     (200, br#"{"access_token":"graph-token","expires_in":3600}"#.to_vec())
                 } else if path.contains("/sites/contoso.sharepoint.com:/sites/Arch") {
                     (200, br#"{"id":"site-1"}"#.to_vec())
+                } else if path.ends_with("/sites/site-1/drive") {
+                    (200, br#"{"id":"drive-1","name":"Dokumenty"}"#.to_vec())
                 } else if path.ends_with("/sites/site-1/drives") {
                     (200, br#"{"value":[{"id":"drive-1","name":"Documents"}]}"#.to_vec())
                 } else if path.ends_with("/root:/Specs:/children") {
@@ -247,6 +275,9 @@ mod tests {
         let read = run(&json!({ "action": "read", "path": "Specs/Order.md" }), &ctx).unwrap();
         assert!(read.contains("W1 The customer places an order"));
         std::fs::write(cfg.attachments_dir.join("abc_Review.pptx"), b"pptx bytes").unwrap();
+        std::fs::write(cfg.attachments_dir.join("27f7f074a214445481c5a853f29f5b70_Test_SharePoint.docx"), b"docx").unwrap();
+        assert_eq!(super::attachment_named(&cfg.attachments_dir, "Test SharePoint.docx").as_deref(), Some("27f7f074a214445481c5a853f29f5b70_Test_SharePoint.docx"), "the shown name finds the stored file");
+        assert_eq!(super::attachment_named(&cfg.attachments_dir, "abc_Review.pptx").as_deref(), Some("abc_Review.pptx"));
         let up = run(&json!({ "action": "upload", "file": "abc_Review.pptx", "folder": "Reports" }), &ctx).unwrap();
         assert!(up.contains("Uploaded to SharePoint: https://contoso.sharepoint.com/sites/Arch/Documents/Reports/x (10 bytes)"), "{up}");
         assert!(run(&json!({ "action": "upload", "file": "..\\\\app.properties" }), &ctx).is_err(), "only attachments");
