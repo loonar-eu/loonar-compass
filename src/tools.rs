@@ -389,6 +389,18 @@ The user always approves the publication. Use it only when explicitly asked to p
             }
         },
         {
+            "name": "confluence_read",
+            "description": "Reads a Confluence page as text: by page_id, or by title in a space (space: by default the space from the settings or the team hub). Use it when the user asks about the content of a Confluence page.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "title": { "type": "string", "description": "Exact title of the page." },
+                    "space": { "type": "string", "description": "Space key; by default from the settings." },
+                    "page_id": { "type": "string", "description": "Id of the page (instead of the title)." }
+                }
+            }
+        },
+        {
             "name": "confluence_pages",
             "description": "List of Confluence pages published earlier by the assistant (id, title, space, source file, date, URL), e.g. to refresh them after changes in the model.",
             "input_schema": { "type": "object", "properties": {} }
@@ -523,6 +535,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "create_confluence_page" => create_confluence_page(input, ctx),
         "publish_confluence" => publish_confluence(input, ctx),
         "confluence_pages" => confluence_pages(ctx.cfg).map(Into::into),
+        "confluence_read" => confluence_read(input, ctx.cfg).map(Into::into),
         "read_template" => crate::templates::read(&ctx.cfg.templates_dir, input["name"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["name".to_string()]))?).map(Into::into),
         "save_template" => {
             let name = input["name"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["name".to_string()]))?;
@@ -1014,6 +1027,30 @@ fn publish_confluence(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
 }
 
 /// List of pages published by the assistant (for refreshing after changes in the model).
+/// The text of a Confluence page (by id, or by title in a space), shortened for the model.
+fn confluence_read(input: &Value, cfg: &AppConfig) -> Result<String> {
+    const LONGEST: usize = 40_000;
+    let connection = confluence_connection(cfg)?;
+    let page_id = match input["page_id"].as_str().map(str::trim).filter(|id| !id.is_empty()) {
+        Some(id) => id.to_string(),
+        None => {
+            let title = input["title"].as_str().map(str::trim).filter(|t| !t.is_empty()).context(crate::i18n::tr("give 'page_id' or 'title' of the page"))?;
+            let space = input["space"].as_str().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string).unwrap_or_else(|| {
+                if cfg.confluence_space.trim().is_empty() { crate::hub::team_default(cfg, "confluence_space").unwrap_or_default() } else { cfg.confluence_space.clone() }
+            });
+            if space.trim().is_empty() {
+                bail!("{}", crate::i18n::tr("specify the Confluence space (space) or set a default one in the settings"));
+            }
+            connection.existing_page(&space, title, None)?.with_context(|| crate::i18n::fmt("no page titled \"{0}\" in the space {1}", &[title.to_string(), space.clone()]))?.id
+        }
+    };
+    let (title, body) = connection.page_body(&page_id)?;
+    let text = crate::web::html_text(&body);
+    let shortened: String = text.chars().take(LONGEST).collect();
+    let more = if shortened.len() < text.len() { "\n[…the rest of the page left out…]" } else { "" };
+    Ok(format!("Confluence page \"{title}\" (page_id {page_id}):\n\n{shortened}{more}"))
+}
+
 fn confluence_pages(cfg: &AppConfig) -> Result<String> {
     let pages = crate::confluence::published(&cfg.confluence_pages_file);
     if pages.is_empty() {

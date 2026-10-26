@@ -66,7 +66,7 @@ fn check(url: &reqwest::Url, domains: &[String]) -> Result<()> {
 }
 
 /// Text of an HTML page: without scripts, styles and tags, with paragraphs kept as lines.
-fn html_text(html: &str) -> String {
+pub(crate) fn html_text(html: &str) -> String {
     let lower = html.to_lowercase();
     let mut text = String::new();
     let mut i = 0;

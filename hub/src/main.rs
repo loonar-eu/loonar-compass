@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 #![allow(dead_code)]
 //! Compass Hub as its own program: `compass-hub hub.json` (or `--hub hub.json`) on Windows or Linux, in a container,
 //! or as a Windows service. Secrets (AI keys, Jira and Confluence tokens, database passwords) come from the environment:

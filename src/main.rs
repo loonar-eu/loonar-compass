@@ -1,4 +1,5 @@
 #![windows_subsystem = "windows"]
+#![recursion_limit = "256"]
 //! Loonar Compass - an AI assistant for Sparx Enterprise Architect: chat with an EA model (Claude API).
 //! All configuration is in the "Settings" window: `app.properties` plus secrets in Windows Credential Manager.
 //! Attachments: drag files from Explorer and the browser; limit 10 MB per file, 5 files per message.
@@ -4614,6 +4615,7 @@ fn tool_step(name: &str, input: &Value) -> String {
         "create_confluence_page" => crate::i18n::fmt("Confluence page: {0}", &[(input["title"].as_str().unwrap_or("")).to_string()]),
         "publish_confluence" => crate::i18n::fmt("Publishing to Confluence: {0}", &[(input["title"].as_str().or(input["page"].as_str()).unwrap_or("")).to_string()]),
         "confluence_pages" => crate::i18n::tr("List of published Confluence pages").to_string(),
+        "confluence_read" => crate::i18n::fmt("Reading the Confluence page {0}", &[input["title"].as_str().or(input["page_id"].as_str()).unwrap_or("").to_string()]),
         "jira_search" => crate::i18n::fmt("Jira search: {0}", &[input["jql"].as_str().unwrap_or("").to_string()]),
         "spell_check" => crate::i18n::tr("Spelling of the model's texts").to_string(),
         "trace_requirements" => crate::i18n::tr("Requirements of the document against the model").to_string(),
