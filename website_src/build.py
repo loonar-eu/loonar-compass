@@ -183,20 +183,22 @@ def diagram(t):
     s.append(f'<text class="dg-s" x="180" y="66" text-anchor="middle">{t["d_gw"]}</text>')
     s.append('<path class="dg-fl" d="M198 95H214" marker-end="url(#ah)"/>')
     s.append(f'<text class="dg-s" x="206" y="88" text-anchor="middle">{t["d_yes"]}</text>')
-    # subprocess
-    s.append('<rect class="dg-sub" x="214" y="36" width="240" height="118" rx="10"/>')
+    # expanded subprocess with its own start and end events (BPMN good practice)
+    s.append('<rect class="dg-sub" x="214" y="36" width="260" height="118" rx="10"/>')
     s.append(f'<text class="dg-h" x="226" y="54">{t["d_pay"]}</text>')
-    xs = [224, 300, 376]
+    s.append('<circle class="dg-ev" cx="231" cy="96" r="7"/>')
+    s.append('<path class="dg-fl" d="M238 96H246" marker-end="url(#ah)"/>')
+    xs = [246, 314, 382]
     for i, x in enumerate(xs):
-        s.append(f'<rect class="dg-task sm" x="{x}" y="74" width="66" height="44" rx="7"/>')
-        s.append(svg_lines(t["dg_sub"][i], x + 33, 96, 11, "dg-t sm"))
-        if i < 2:
-            s.append(f'<path class="dg-fl" d="M{x+66} 96H{x+76}" marker-end="url(#ah)"/>')
-    s.append('<path class="dg-fl" d="M454 95H474" marker-end="url(#ah)"/>')
-    s.append('<rect class="dg-task" x="474" y="72" width="104" height="46" rx="8"/>')
-    s.append(svg_lines(t["d_ship"], 526, 95))
-    s.append('<path class="dg-fl" d="M578 95H592" marker-end="url(#ah)"/>')
-    s.append('<circle class="dg-ev end" cx="605" cy="95" r="12"/>')
+        s.append(f'<rect class="dg-task sm" x="{x}" y="74" width="58" height="44" rx="7"/>')
+        s.append(svg_lines(t["dg_sub"][i], x + 29, 96, 11, "dg-t sm"))
+        s.append(f'<path class="dg-fl" d="M{x+58} 96H{x+68 if i < 2 else x+69}" marker-end="url(#ah)"/>')
+    s.append('<circle class="dg-ev end" cx="458" cy="96" r="7"/>')
+    s.append('<path class="dg-fl" d="M474 95H494" marker-end="url(#ah)"/>')
+    s.append('<rect class="dg-task" x="494" y="72" width="96" height="46" rx="8"/>')
+    s.append(svg_lines(t["d_ship"], 542, 95))
+    s.append('<path class="dg-fl" d="M590 95H600" marker-end="url(#ah)"/>')
+    s.append('<circle class="dg-ev end" cx="612" cy="95" r="12"/>')
     # no branch
     s.append('<path class="dg-fl" d="M180 113V196H232" marker-end="url(#ah)"/>')
     s.append(f'<text class="dg-s" x="168" y="150" text-anchor="end">{t["d_no"]}</text>')
