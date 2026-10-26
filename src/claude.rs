@@ -31,6 +31,8 @@ pub struct ClaudeClient {
     openai: bool,
     /// OpenAI-compatible endpoint (empty = OpenAI).
     openai_url: String,
+    /// Claude through the team hub (the hub keeps the key): its errors are about the hub, not about Anthropic.
+    via_hub: bool,
 }
 
 impl ClaudeClient {
@@ -39,7 +41,7 @@ impl ClaudeClient {
             .timeout(Duration::from_secs(300))
             .connect_timeout(Duration::from_secs(20))
             .build()?;
-        Ok(Self { http, api_key, model, max_tokens, workspace_id: workspace_id.trim().to_string(), effort: String::new(), show_thinking: false, base_url: String::new(), oauth: None, openai: false, openai_url: String::new() })
+        Ok(Self { http, api_key, model, max_tokens, workspace_id: workspace_id.trim().to_string(), effort: String::new(), show_thinking: false, base_url: String::new(), oauth: None, openai: false, openai_url: String::new(), via_hub: false })
     }
 
     /// The client of the provider chosen in the settings (Claude or OpenAI), with its key, model and effort.
@@ -72,6 +74,7 @@ impl ClaudeClient {
         if let Some((hub, token)) = crate::hub::via_hub(cfg, "ai") {
             let mut client = Self::new(token, cfg.claude_model.clone(), max_tokens, String::new())?.with_effort(&cfg.claude_effort).with_thinking(cfg.show_thinking);
             client.base_url = format!("{hub}/ai");
+            client.via_hub = true;
             return Ok(client);
         }
         // With OAuth2 there may be no API key at all.
@@ -181,6 +184,17 @@ impl ClaudeClient {
         let parsed: Option<Value> = serde_json::from_str(&text).ok();
         if (200..300).contains(&status) {
             return parsed.ok_or_else(|| Failure::Final(anyhow::anyhow!("{}", crate::i18n::tr("the API response is not JSON"))));
+        }
+        if self.via_hub {
+            let message = parsed.as_ref().and_then(|v| v["error"]["message"].as_str().or(v["error"].as_str()).map(String::from));
+            let error = match (status, message) {
+                (401, _) => crate::i18n::tr("Your sign-in to the team hub has expired: sign in again in Settings → Team (Compass Hub).").to_string(),
+                (_, Some(message)) => crate::i18n::fmt("The team hub refused the request ({0}): {1}", &[status.to_string(), message]),
+                (_, None) => crate::i18n::fmt("The team hub or the server in front of it does not answer properly ({0}). Try again in a moment or tell the administrator of the hub.", &[status.to_string()]),
+            };
+            let error = anyhow::anyhow!("{error}");
+            // Only a hub that is temporarily unavailable is asked again; a refusal (sign-in, limit, no key) is final.
+            return Err(if matches!(status, 502..=504) { Failure::Retry { error, wait } } else { Failure::Final(error) });
         }
         // An HTML page instead of JSON usually comes from a proxy or firewall between the computer and the API.
         let Some(value) = parsed else {

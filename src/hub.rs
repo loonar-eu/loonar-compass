@@ -91,6 +91,8 @@ pub struct Hub {
     users: Mutex<Vec<User>>,
     /// Signed-in sessions of the web view: SHA-256 of the session token → user and end of validity.
     sessions: Mutex<HashMap<[u8; 32], (String, Instant)>>,
+    /// Unknown tokens already counted for an address: a client repeating one stale token counts once.
+    failed_tokens: Mutex<HashMap<[u8; 32], Instant>>,
     policy: Mutex<Value>,
     audit_lock: Mutex<()>,
     ask_lock: Mutex<()>,
@@ -232,7 +234,9 @@ pub fn load(file: &Path) -> Result<(Hub, String)> {
             None => None,
         },
         external: Mutex::new(HashMap::new()),
+        failed_tokens: Mutex::new(HashMap::new()),
     };
+    hub.load_sessions();
     if default_account {
         hub.save_users()?;
         log(&hub.dir, &format!("no users in hub.json: the default account {DEFAULT_ADMIN} / {DEFAULT_PASSWORD} was created; change its password at the first sign-in"));
@@ -596,6 +600,7 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
                         hub.remember_company_account(&who.name, role);
                         let session = format!("lcs_{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
                         hub.sessions.lock().unwrap_or_else(|p| p.into_inner()).insert(token_hash(&session), (who.name.clone(), Instant::now() + Duration::from_secs(SESSION_HOURS * 3600)));
+                        hub.save_sessions();
                         let place = if who.return_to.is_some() { " (Compass)" } else { "" };
                         log(&hub.dir, &format!("{} signed in with a company account as {}{place}", who.name, role.name()));
                         let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": who.name, "source": "", "summary": crate::i18n::fmt("signed in with a company account ({0})", &[format!("{}{place}", role.name())]), "ok": true }));
@@ -643,16 +648,18 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
             }
             let list = failures.entry(ip).or_default();
             list.retain(|t| t.elapsed() < FAILURE_WINDOW);
-            list.push(Instant::now());
+            let mut seen = hub.failed_tokens.lock().unwrap_or_else(|p| p.into_inner());
+            seen.retain(|_, t| t.elapsed() < FAILURE_WINDOW);
+            if seen.insert(token_hash(&head.token), Instant::now()).is_none() {
+                list.push(Instant::now());
+            }
             locked = list.len() > MAX_FAILURES;
             if list.len() == MAX_FAILURES {
                 log(&hub.dir, &format!("{ip}: {MAX_FAILURES} wrong tokens, refused for {} minutes", FAILURE_WINDOW.as_secs() / 60));
             }
         }
-        // A small body is read first, so the client gets the answer instead of a reset connection.
-        if head.length <= 64 * 1024 {
-            let _ = read_body(&mut reader, head.length, started);
-        }
+        // The body is read first, so the client (or the proxy in front of the hub) gets the answer instead of a reset.
+        let _ = read_body(&mut reader, head.length, started);
         return if locked {
             respond(&stream, 429, "application/json; charset=utf-8", json!({ "error": "too many wrong tokens, try again later" }).to_string().as_bytes())
         } else {
@@ -780,6 +787,7 @@ impl Hub {
         };
         let session = format!("lcs_{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
         self.sessions.lock().unwrap_or_else(|p| p.into_inner()).insert(token_hash(&session), (user.name.clone(), Instant::now() + Duration::from_secs(SESSION_HOURS * 3600)));
+        self.save_sessions();
         log(&self.dir, &format!("{} signed in", user.name));
         (200, json!({ "token": session, "name": user.name, "role": user.role.name(), "must_change": user.must_change }))
     }
@@ -814,6 +822,37 @@ impl Hub {
     fn rules(&self) -> Value {
         let policy = self.policy.lock().unwrap();
         if policy["governance"].is_object() { policy["governance"].clone() } else { json!({}) }
+    }
+
+    /// Sessions (hashes only, never the tokens) and their owners in sessions.json, so a restart of the hub (an update,
+    /// a reboot) does not sign everybody out.
+    fn save_sessions(&self) {
+        let now = Instant::now();
+        let list: Vec<Value> = self.sessions.lock().unwrap_or_else(|p| p.into_inner()).iter().filter(|(_, (_, until))| *until > now)
+            .map(|(hash, (name, until))| json!({ "hash": hex(hash), "name": name, "until": chrono::Utc::now().timestamp() + until.duration_since(now).as_secs() as i64 })).collect();
+        let _ = std::fs::write(self.dir.join("sessions.json"), Value::Array(list).to_string());
+    }
+
+    fn load_sessions(&self) {
+        let now = chrono::Utc::now().timestamp();
+        let saved: Value = std::fs::read_to_string(self.dir.join("sessions.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
+        let mut sessions = self.sessions.lock().unwrap_or_else(|p| p.into_inner());
+        for s in saved.as_array().into_iter().flatten() {
+            let (Some(hash), Some(name), Some(until)) = (s["hash"].as_str(), s["name"].as_str(), s["until"].as_i64()) else { continue };
+            let Some(bytes) = (0..hash.len()).step_by(2).map(|i| u8::from_str_radix(hash.get(i..i + 2)?, 16).ok()).collect::<Option<Vec<u8>>>() else { continue };
+            if let (Ok(key), true) = (<[u8; 32]>::try_from(bytes.as_slice()), until > now) {
+                sessions.insert(key, (name.to_string(), Instant::now() + Duration::from_secs((until - now) as u64)));
+            }
+        }
+        drop(sessions);
+        // The roles of company accounts from their last sign-in (the provider gives them again at the next one).
+        let accounts: Value = std::fs::read_to_string(self.dir.join("company_accounts.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
+        let mut external = self.external.lock().unwrap_or_else(|p| p.into_inner());
+        for (name, v) in accounts.as_object().into_iter().flatten() {
+            if let Some(role) = v["role"].as_str() {
+                external.insert(name.clone(), Role::parse(role));
+            }
+        }
     }
 
     /// A refused or failed sign-in in the audit trail (result ✗), with the client address.
@@ -930,6 +969,7 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
         }
         ("POST", ["api", "logout"]) => {
             hub.sessions.lock().unwrap_or_else(|p| p.into_inner()).remove(&token_hash(&request.token));
+            hub.save_sessions();
             Ok((200, json!({ "ok": true })))
         }
         ("POST", ["api", "password"]) => {
