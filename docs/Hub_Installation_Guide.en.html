@@ -382,6 +382,7 @@ Start-Service CompassHub</pre>
   <tr><td>hub.log: "&lt;address&gt;: 20 wrong tokens, refused for 10 minutes"</td><td>20 <b>different</b> wrong tokens came from one address (an old token repeated counts once). Valid tokens still work. Find the client in hub.log.</td></tr>
   <tr><td>Large questions fail with 413 or 404.13</td><td><code>maxAllowedContentLength</code> in web.config (step 5).</td></tr>
   <tr><td>Long answers end with 502.3 after 2 minutes</td><td>The ARR <code>timeout</code> (step 5).</td></tr>
+  <tr><td>Compass on a Windows Server (e.g. Remote Desktop Services): PDF export fails, or the first Office sign-in is blocked</td><td>Compass makes PDFs with Word and PowerPoint on the computer where it runs. On Windows Server, IE Enhanced Security Configuration can block the first Office sign-in (<code>odc.officeapps.live.com</code>): add the Office sign-in sites to the trusted sites, or turn the setting off for users in Server Manager.</td></tr>
 </table>
 
 <h2 id="s14">14. Linux and Docker</h2>

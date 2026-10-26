@@ -382,6 +382,7 @@ Start-Service CompassHub</pre>
   <tr><td>hub.log: „&lt;adres&gt;: 20 wrong tokens, refused for 10 minutes”</td><td>Z jednego adresu przyszło 20 <b>różnych</b> błędnych tokenów (ten sam stary token liczy się raz). Prawidłowe tokeny dalej działają. Znajdź klienta w hub.log.</td></tr>
   <tr><td>Duże pytania kończą się błędem 413 albo 404.13</td><td><code>maxAllowedContentLength</code> w web.config (krok 5).</td></tr>
   <tr><td>Długie odpowiedzi kończą się 502.3 po 2 minutach</td><td><code>timeout</code> ARR (krok 5).</td></tr>
+  <tr><td>Compass na Windows Server (np. Usługi pulpitu zdalnego): eksport do PDF nie działa albo pierwsze logowanie do Office jest blokowane</td><td>Compass tworzy PDF-y Wordem i PowerPointem na komputerze, na którym działa. Na Windows Server pierwsze logowanie do Office może blokować Konfiguracja zwiększonych zabezpieczeń programu IE (<code>odc.officeapps.live.com</code>): dodaj strony logowania Office do zaufanych albo wyłącz to ustawienie dla użytkowników w Menedżerze serwera.</td></tr>
 </table>
 
 <h2 id="s14">14. Linux i Docker</h2>
