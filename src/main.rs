@@ -1028,6 +1028,8 @@ fn main() -> eframe::Result {
                 .with_min_inner_size([200.0, 200.0])
                 .with_decorations(false)
                 .with_taskbar(false)
+                // Off the screen until the add-in docks it into EA's panel: no window flashes in a random place at start.
+                .with_position([-32000.0, -32000.0])
                 .with_icon(Arc::new(egui::IconData { rgba: ICON_RGBA.to_vec(), width: 256, height: 256 }))
         } else {
             egui::ViewportBuilder::default()

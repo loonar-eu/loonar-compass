@@ -735,7 +735,10 @@ namespace LoonarCompass
             // A window of another process gets the keyboard only when both UI threads share their input state.
             GiveKeyboard();
             note.Visible = false;
-            Fit();
+            // Compass starts off the screen: inside the panel it always goes to the panel's corner.
+            int width, height;
+            if (OwnSize(out width, out height))
+                MoveWindow(child, 0, 0, width, height, true);
             // The timer keeps watching whether Compass is still running and follows the size of EA's panel.
             finder.Interval = 400;
         }
