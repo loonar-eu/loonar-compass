@@ -312,7 +312,18 @@ Set-WebConfigurationProperty -PSPath $p -Filter system.webServer/proxy -Name tim
   <tr><td>Dozwoleni dostawcy AI</td><td><code>AllowedProviders</code>, np. <code>anthropic</code></td><td>Inni dostawcy (np. OpenAI) są odrzucani.</td></tr>
 </table>
 <p>Bez domeny te same wartości można zaimportować plikiem <code>LoonarCompass-company-policy.reg</code> (i usunąć plikiem <code>LoonarCompass-remove-policy.reg</code>). Zasady komputera są silniejsze niż polityka huba i ustawienia użytkownika; mogą Compass tylko zaostrzyć.</p>
-<p><b>Instalacja Compass.</b> <code>LoonarCompass-Setup-0.9.exe</code> instaluje dla bieżącego użytkownika (<code>%LOCALAPPDATA%\Programs\Loonar Compass</code>) albo dla wszystkich i rejestruje dodatek w Enterprise Architect. W 0.9 instalacja jest interaktywna: cichej instalacji jeszcze nie ma. Dostępne jest ciche odinstalowanie: <code>--uninstall --quiet</code>.</p>
+<p><b>Instalacja Compass.</b> <code>LoonarCompass-Setup-0.9.exe</code> instaluje dla bieżącego użytkownika (<code>%LOCALAPPDATA%\Programs\Loonar Compass</code>) albo dla wszystkich (<code>Program Files</code>) i rejestruje dodatek w Enterprise Architect. Dla narzędzi wdrożeniowych (Intune, Configuration Manager, skrypt startowy) instaluje bez okna:</p>
+<pre>LoonarCompass-Setup-0.9.exe --quiet --all-users</pre>
+<table>
+  <tr><th>Opcja</th><th>Działanie</th></tr>
+  <tr><td><code>--quiet</code></td><td>Bez okna i bez pytań. Kod wyjścia 0 = zainstalowano, 1 = błąd, 740 = <code>--all-users</code> bez uprawnień administratora. Wynik jest w <code>%TEMP%\LoonarCompass-Setup.log</code> (dla SYSTEM: <code>C:\Windows\Temp</code>).</td></tr>
+  <tr><td><code>--all-users</code></td><td>Dla wszystkich: Program Files, wspólne menu Start, dodatek w EA dla wszystkich użytkowników (HKLM). Uruchamiaj jako SYSTEM albo administrator.</td></tr>
+  <tr><td><code>--dir &lt;folder&gt;</code></td><td>Inny folder programu.</td></tr>
+  <tr><td><code>--lang en|pl|de|fr</code></td><td>Język plików licencji i listy zmian.</td></tr>
+  <tr><td><code>--no-desktop</code>, <code>--no-start-menu</code></td><td>Bez tych skrótów.</td></tr>
+  <tr><td><code>--no-ea-addin</code></td><td>Bez dodatku w Enterprise Architect.</td></tr>
+</table>
+<p>To samo polecenie aktualizuje istniejącą instalację. Najpierw zamknij Compass i EA na komputerze. Ustawienia użytkownika nie są zmieniane; przy zasadach komputera (adres huba, wymagany hub) nikt nie musi niczego konfigurować. Ciche usunięcie: <code>"C:\Program Files\Loonar Compass\uninstall.exe" --uninstall --quiet</code>.</p>
 <p><b>Pierwsze logowanie użytkownika.</b> W Compass: Ustawienia → Zespół (Compass Hub) → <b>Zaloguj się kontem firmowym</b>. Przeglądarka otwiera AD FS i wraca do Compass. Logowanie trwa 12 godzin i przetrwa restart huba.</p>
 
 <h2 id="s11">11. Krok 9 – Lista odbiorcza</h2>
