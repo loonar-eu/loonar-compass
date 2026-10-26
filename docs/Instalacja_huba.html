@@ -135,7 +135,7 @@ model.file=C:/CompassHub/models/Architecture.qea
 # db.name=ea_repository
 # db.user=compass_reader
 # db.sslmode=verify-full</pre>
-<p>SQL Server, MySQL i Oracle są czytane przez 64-bitowy sterownik ODBC producenta, który musi być zainstalowany na serwerze (np. „ODBC Driver 18 for SQL Server”). PostgreSQL i pliki nie potrzebują niczego więcej. Każdy odczyt jest wycofywany, więc wystarczy konto bazy tylko do odczytu.</p>
+<p>SQL Server, MySQL i Oracle są czytane przez 64-bitowy sterownik ODBC producenta, który musi być zainstalowany na serwerze (np. „ODBC Driver 18 for SQL Server”). PostgreSQL i pliki nie potrzebują niczego więcej. Każdy odczyt jest wycofywany, więc wystarczy konto bazy tylko do odczytu. SQL Server bez sekretu <code>DB_PASSWORD</code> używa uwierzytelniania Windows: usługa huba (LocalSystem) loguje się kontem komputera (<code>DOMENA\SERWER$</code>), które potrzebuje roli <code>db_datareader</code> w bazie modelu.</p>
 <div class="note">Trzymaj pliki modeli huba osobno od plików, które ludzie edytują w EA. Aby odświeżyć model plikowy, podmień plik. Hub otwiera go tylko do odczytu przy każdym zapytaniu, więc restart nie jest potrzebny.</div>
 
 <h2 id="s5">5. Krok 3 – Sekrety</h2>

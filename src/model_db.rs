@@ -69,18 +69,27 @@ pub fn odbc_connection_string(cfg: &AppConfig) -> Result<String> {
     let user = odbc_value(&cfg.db_user);
     Ok(match cfg.model_source {
         ModelSource::SqlServer => {
-            let modern = driver.starts_with("ODBC Driver");
-            let tls = match (cfg.db_sslmode, modern) {
-                (SslMode::VerifyFull, _) => "Encrypt=yes;TrustServerCertificate=no;",
-                (SslMode::Require, _) => "Encrypt=yes;TrustServerCertificate=yes;",
-                (_, true) => "Encrypt=optional;",
-                (_, false) => "",
-            };
-            format!("Driver={{{driver}}};Server={},{};Database={};UID={user};PWD={password};{tls}APP=Loonar Compass;", cfg.db_host, cfg.db_port, odbc_value(&cfg.db_name))
+            let tls = sqlserver_tls(&driver, cfg.db_sslmode);
+            // Without a password: Windows authentication (the account Compass or the hub runs under), not a SQL login.
+            let login = if cfg.db_password.is_empty() { "Trusted_Connection=Yes;".to_string() } else { format!("UID={user};PWD={password};") };
+            format!("Driver={{{driver}}};Server={},{};Database={};{login}{tls}APP=Loonar Compass;", cfg.db_host, cfg.db_port, odbc_value(&cfg.db_name))
         }
         ModelSource::MySql => format!("Driver={{{driver}}};Server={};Port={};Database={};User={user};Password={password};", cfg.db_host, cfg.db_port, odbc_value(&cfg.db_name)),
         _ => format!("Driver={{{driver}}};DBQ={}:{}/{};UID={user};PWD={password};", cfg.db_host, cfg.db_port, cfg.db_name),
     })
+}
+
+/// TLS attributes for a SQL Server driver: "Encrypt=optional" exists only from ODBC Driver 18 (Driver 17 and the old
+/// "SQL Server" driver know only yes/no and do not encrypt by default).
+fn sqlserver_tls(driver: &str, mode: crate::config::SslMode) -> &'static str {
+    use crate::config::SslMode;
+    let version: u32 = driver.strip_prefix("ODBC Driver ").and_then(|rest| rest.split_whitespace().next()).and_then(|v| v.parse().ok()).unwrap_or(0);
+    match mode {
+        SslMode::VerifyFull => "Encrypt=yes;TrustServerCertificate=no;",
+        SslMode::Require => "Encrypt=yes;TrustServerCertificate=yes;",
+        _ if version >= 18 => "Encrypt=optional;",
+        _ => "",
+    }
 }
 
 /// Positions of a word outside string literals and at parenthesis depth 0 (case-insensitive, whole word).
@@ -749,6 +758,10 @@ mod odbc_tests {
         assert_eq!(super::portable_sql(SqlServer, "select a || 'x || y' || b from t"), "select a + 'x || y' + b from t");
         assert_eq!(super::portable_sql(SqlServer, "select substr(note, 1, 120), 'substr(' from t_object"), "select substring(note, 1, 120), 'substr(' from t_object");
         assert_eq!(super::portable_sql(SqlServer, "select substring(note, 1, 5) from t"), "select substring(note, 1, 5) from t");
+        use crate::config::SslMode;
+        assert_eq!(super::sqlserver_tls("ODBC Driver 17 for SQL Server", SslMode::Prefer), "", "Driver 17 does not know Encrypt=optional");
+        assert_eq!(super::sqlserver_tls("ODBC Driver 18 for SQL Server", SslMode::Prefer), "Encrypt=optional;");
+        assert_eq!(super::sqlserver_tls("SQL Server", SslMode::Require), "Encrypt=yes;TrustServerCertificate=yes;");
         assert_eq!(super::portable_sql(Oracle, "select count(*) limit 3"), "select count(*) fetch first 3 rows only from dual");
         assert_eq!(super::portable_sql(MySql, "select cast(x as varchar(10)) from t limit 2"), "select cast(x as char(10)) from t limit 2");
         assert_eq!(super::portable_sql(Postgres, "select 1 limit 2;"), "select 1 limit 2");

@@ -30,7 +30,7 @@ for IT" (`docs/Hub_Installation_Guide.en.pdf`, Polish: `docs/Instalacja_huba.pdf
 
 A source in `hub.json` points to an `app.properties` with the model: an EA file (`model.source=file`, `model.file=…`)
 or a database: `model.source=postgres`, `sqlserver`, `mysql` or `oracle` with `db.host`, `db.port`, `db.name`,
-`db.user` and `db.sslmode`; the password is the secret `DB_PASSWORD`. SQL Server, MySQL/MariaDB and Oracle are read
+`db.user` and `db.sslmode`; the password is the secret `DB_PASSWORD` (SQL Server without it: Windows authentication of the account the hub runs under). SQL Server, MySQL/MariaDB and Oracle are read
 through the vendor's 64-bit ODBC driver, found automatically; `db.odbc` takes a full ODBC connection string without
 the password instead. Reading is read-only (every read is rolled back). The Docker image has unixODBC: add the vendor's
 Linux ODBC driver (e.g. Microsoft's `msodbcsql18`) in an image built on it.
