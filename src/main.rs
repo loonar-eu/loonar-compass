@@ -3293,6 +3293,8 @@ impl App {
 
         // Inner width of a group frame: label, field and the gap between them.
         let inner_width = SETTINGS_LABEL_WIDTH + SETTINGS_FIELD_WIDTH + 12.0;
+        // A narrow tab of EA: the card (with its 16 px margins and the scroll bar) fits the panel, with a right margin.
+        let inner_width = if ea::in_ea_tab() { inner_width.min((ui.available_width() - 52.0).max(240.0)) } else { inner_width };
         // The cards below span both columns; in a tab of EA there is only the left column, so they are as wide as it.
         let full_width = if ea::in_ea_tab() { inner_width } else { inner_width * 2.0 + 44.0 };
         ui.horizontal_top(|ui| {
@@ -5695,7 +5697,9 @@ fn label_cell(ui: &mut egui::Ui, label: &str) {
 
 /// Settings fields grow with the window (addresses and paths stay readable), at least the old fixed width.
 fn settings_field_width(ui: &egui::Ui) -> f32 {
-    (ui.available_width() - 16.0).clamp(SETTINGS_FIELD_WIDTH, 640.0)
+    // In a narrow tab of EA a field may be narrower than usual rather than stick out of the card.
+    let narrowest = if ea::in_ea_tab() { 140.0 } else { SETTINGS_FIELD_WIDTH };
+    (ui.available_width() - 16.0).clamp(narrowest, 640.0)
 }
 
 fn row(ui: &mut egui::Ui, label: &str, value: &mut String) {
