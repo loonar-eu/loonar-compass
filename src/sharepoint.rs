@@ -84,7 +84,20 @@ impl Site {
     }
 
     pub fn download(&self, path: &str) -> Result<Vec<u8>> {
-        let response = self.get(&format!("/drives/{}/root:/{}:/content", self.drive, encode_path(path)))?;
+        // Graph sends the content from a short-lived pre-authenticated address on another host (a redirect from
+        // ".../content", which this client does not follow to other hosts): that address is read from the item and
+        // fetched without the Graph token.
+        let item = self.get_json(&format!("/drives/{}/root:/{}", self.drive, encode_path(path)))?;
+        let url = item["@microsoft.graph.downloadUrl"].as_str().with_context(|| crate::i18n::fmt("{0} is not a file in the library", &[path.to_string()]))?;
+        let parsed = reqwest::Url::parse(url)?;
+        if parsed.scheme() != "https" && !cfg!(test) {
+            bail!("Microsoft Graph gave a download address that is not https");
+        }
+        let plain = reqwest::blocking::Client::builder().timeout(Duration::from_secs(120)).redirect(reqwest::redirect::Policy::none()).build()?;
+        let response = plain.get(parsed).send()?;
+        if !response.status().is_success() {
+            bail!("{}", crate::i18n::fmt("Microsoft Graph answered {0}: {1}", &[response.status().to_string(), response.text().unwrap_or_default()]));
+        }
         let bytes = response.bytes()?;
         if bytes.len() > 60 * 1024 * 1024 {
             bail!("{}", crate::i18n::tr("the document is larger than 60 MB"));
@@ -215,6 +228,7 @@ mod tests {
     fn mock() -> String {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap().to_string();
+        let own = addr.clone();
         std::thread::spawn(move || {
             for stream in listener.incoming().flatten() {
                 let mut reader = BufReader::new(stream.try_clone().unwrap());
@@ -240,7 +254,9 @@ mod tests {
                     (200, br#"{"value":[{"id":"drive-1","name":"Documents"}]}"#.to_vec())
                 } else if path.ends_with("/root:/Specs:/children") {
                     (200, br#"{"value":[{"name":"Order.md","size":2048,"file":{}},{"name":"Old","folder":{}}]}"#.to_vec())
-                } else if path.ends_with("/root:/Specs/Order.md:/content") && method == "GET" {
+                } else if path.ends_with("/root:/Specs/Order.md") && method == "GET" {
+                    (200, format!(r#"{{"name":"Order.md","@microsoft.graph.downloadUrl":"http://{own}/download/Order.md?token=x"}}"#).into_bytes())
+                } else if path.starts_with("/download/Order.md") && method == "GET" {
                     (200, b"# Order\nW1 The customer places an order.".to_vec())
                 } else if method == "PUT" && path.contains("/root:/Reports/") {
                     (201, format!(r#"{{"webUrl":"https://contoso.sharepoint.com/sites/Arch/Documents/Reports/x ({} bytes)"}}"#, body.len()).into_bytes())
