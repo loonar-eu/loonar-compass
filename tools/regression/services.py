@@ -94,13 +94,14 @@ class Jira:
         return _call(self.site + path, method, body, self.auth)
 
     def evidence_issue(self, summary, parent):
-        """The issue that holds the evidence files of a run (created once per summary)."""
-        jql = urllib.parse.quote(f'project = {CONFIG["project"]} AND summary ~ "\\"{summary}\\""')
+        """The issue that holds the evidence files of a run: the newest one whose summary starts with this text (also when
+        closed: it is only a container, kept out of the release), created once if there is none."""
+        jql = urllib.parse.quote(f'project = {CONFIG["project"]} AND summary ~ "\\"{summary}\\"" ORDER BY created DESC')
         found = self.call("GET", f"/rest/api/3/search/jql?jql={jql}&fields=summary")["issues"]
         if found:
             return found[0]["key"]
         return self.call("POST", "/rest/api/3/issue", {"fields": {"project": {"key": CONFIG["project"]}, "issuetype": {"name": "Task"}, "summary": summary, "parent": {"key": parent},
-                                                               "labels": ["regresja"]}})["key"]
+                                                               "labels": ["regression-evidence"]}})["key"]
 
     def attach(self, key, path):
         """Uploads one file; returns its URL in Jira."""
