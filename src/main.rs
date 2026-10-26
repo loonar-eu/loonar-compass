@@ -3610,7 +3610,8 @@ impl App {
             });
             ui.label(egui::RichText::new(crate::i18n::tr("Azure DevOps: put your organization in place of YOUR-ORGANIZATION (Node.js needed; you sign in with your Microsoft account). GitHub: a personal access token saved below as mcp_github. ServiceNow / CMDB: the address of the MCP server approved in your company and its token as mcp_servicenow.")).small().color(theme::MUTED));
             ui.add(egui::TextEdit::multiline(&mut self.form.mcp_json).code_editor().desired_rows(6).desired_width(f32::INFINITY));
-            ui.horizontal(|ui| {
+            // Wraps to the next line in a narrow card instead of making the card wider.
+            ui.horizontal_wrapped(|ui| {
                 ui.label(crate::i18n::tr("Token for an MCP server:"));
                 ui.add(egui::TextEdit::singleline(&mut self.form.mcp_secret_name).hint_text("mcp_github").desired_width(140.0));
                 ui.add(egui::TextEdit::singleline(&mut self.form.mcp_secret_value).password(true).hint_text(crate::i18n::tr("token")).desired_width(220.0));
@@ -3892,14 +3893,25 @@ impl App {
                 ui.add(egui::TextEdit::singleline(&mut c.newsletter_email).hint_text(egui::RichText::new(crate::i18n::tr("e.g. john.smith@example.com")).color(theme::HINT)).desired_width(settings_field_width(ui)));
                 ui.end_row();
                 ui.label(crate::i18n::tr("Subscribe"));
-                ui.checkbox(&mut c.newsletter_on, crate::i18n::tr("I want to receive news about new releases"));
+                // Long labels wrap within the field column, so this card is as wide as the others.
+                let field = settings_field_width(ui);
+                ui.scope(|ui| {
+                    ui.set_max_width(field);
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+                    ui.checkbox(&mut c.newsletter_on, crate::i18n::tr("I want to receive news about new releases"));
+                });
                 ui.end_row();
                 ui.label(crate::i18n::tr("In the application"));
                 let mut check = c.update_check && !self.cfg.as_ref().is_some_and(|x| x.policy.update_check == Some(false));
+                let field = settings_field_width(ui);
+                ui.scope(|ui| {
+                ui.set_max_width(field);
+                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
                 if ui.add_enabled(!self.cfg.as_ref().is_some_and(|x| x.policy.update_check == Some(false)), egui::Checkbox::new(&mut check, crate::i18n::tr("Check once a day whether a new version is available"))).on_hover_text(crate::i18n::tr("A plain request to GitHub, without any identifier of this installation; nothing is downloaded or installed by itself. The team hub can switch it off for everybody.")).changed() {
                     c.update_check = check;
                     let _ = config::save_properties(&props_path, &[("app.update_check", check.to_string())]);
                 }
+                });
                 ui.end_row();
             });
             ui.add_space(4.0);
