@@ -1306,6 +1306,8 @@ struct App {
     dictionary_word: String,
     /// Whether Ctrl+V was held down in the previous frame (a paste counts once per key press).
     paste_down: bool,
+    /// Text from the clipboard waiting a moment (tab of EA): pasted only if the field did not get it by itself.
+    pending_paste: Option<(String, String, std::time::Instant)>,
     /// Demo mode: put the cursor in the message field (for screenshots with a blinking cursor).
     demo_focus: bool,
     /// Conversations in which the assistant is working but which are not shown in the window right now.
@@ -1506,6 +1508,7 @@ impl App {
             dictionary_rx: None,
             dictionary_word: String::new(),
             paste_down: false,
+            pending_paste: None,
             demo_focus: false,
             background: Vec::new(),
             recall: 0,
@@ -3008,10 +3011,11 @@ impl App {
             return;
         }
         let Ok(files) = clipboard.get().file_list() else {
-            // In a tab of EA the windowing library may not see Ctrl+V: text is pasted here.
+            // In a tab of EA the windowing library may not see Ctrl+V, or see it a frame later: the text waits a
+            // moment and is pasted here only if the field did not get it (otherwise it would be there twice).
             if ea::in_ea_tab() {
                 if let Some(text) = clipboard.get_text().ok().map(|t| t.replace("\r\n", "\n")).filter(|t| !t.is_empty()) {
-                    self.input.push_str(&text);
+                    self.pending_paste = Some((text, self.input.clone(), std::time::Instant::now()));
                     return;
                 }
             }
@@ -6523,10 +6527,21 @@ impl eframe::App for App {
                                 let _ = config::save_properties(&self.props_path, &[("claude.web_access", (!on).to_string())]);
                             }
                         }
+                        let model_text = self.cfg.as_ref().map(|cfg| {
+                            crate::i18n::fmt("{0} · mode {1}", &[(cfg.ai_model()).to_string(), (hub::known_min_mode(cfg).filter(|min| min.strictness() > cfg.approval_mode.strictness()).unwrap_or(cfg.approval_mode).as_str()).to_string()])
+                        });
                         if !ea::in_ea_tab() {
-                            ui.add(egui::Label::new(
-                                egui::RichText::new(crate::i18n::tr("Drag files into the window to attach them")).small().color(theme::HINT),
-                            ).truncate());
+                            // Only in the room left by the model label and the buttons on the right (they never overlap).
+                            let small = egui::TextStyle::Small.resolve(ui.style());
+                            let label = model_text.as_deref().map_or(0.0, |t| ui.fonts(|f| f.layout_no_wrap(t.to_string(), small, theme::MUTED).size().x));
+                            let room = ui.available_width() - label - if busy { 90.0 } else { 52.0 };
+                            if room > 60.0 {
+                                ui.allocate_ui(egui::vec2(room, 20.0), |ui| {
+                                    ui.add(egui::Label::new(
+                                        egui::RichText::new(crate::i18n::tr("Drag files into the window to attach them")).small().color(theme::HINT),
+                                    ).truncate());
+                                });
+                            }
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             // Sending also works while the assistant is working: the message goes to the queue.
@@ -6548,8 +6563,8 @@ impl eframe::App for App {
                                     self.status = crate::i18n::tr("Stopping after the current step…").into();
                                 }
                             }
-                            if let Some(cfg) = &self.cfg {
-                                ui.label(egui::RichText::new(crate::i18n::fmt("{0} · mode {1}", &[(cfg.ai_model()).to_string(), (hub::known_min_mode(cfg).filter(|min| min.strictness() > cfg.approval_mode.strictness()).unwrap_or(cfg.approval_mode).as_str()).to_string()])).small().color(theme::MUTED));
+                            if let Some(text) = &model_text {
+                                ui.label(egui::RichText::new(text).small().color(theme::MUTED));
                             }
                         });
                     });
@@ -6563,6 +6578,16 @@ impl eframe::App for App {
                     if self.paste_shortcut(ctx) || paste {
                         if let Some(cfg) = self.cfg.clone() {
                             self.paste_clipboard(&cfg);
+                        }
+                    }
+                    if let Some((text, before, at)) = self.pending_paste.take() {
+                        if self.input != before {
+                            // The field pasted it itself.
+                        } else if at.elapsed() > std::time::Duration::from_millis(300) {
+                            self.input.push_str(&text);
+                        } else {
+                            self.pending_paste = Some((text, before, at));
+                            ctx.request_repaint_after(std::time::Duration::from_millis(50));
                         }
                     }
                     });
