@@ -36,6 +36,7 @@ namespace LoonarCompass
         /// (and it starts Compass at once when EA was opened with a project).</summary>
         public void EA_OnPostInitialized(object repository)
         {
+            Log.Write("PostInitialized, project open: " + !string.IsNullOrEmpty(Connection(repository)));
             try
             {
                 Window(repository);
