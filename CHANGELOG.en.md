@@ -56,7 +56,7 @@ Company sign-in to the hub, models on SQL Server, MySQL and Oracle, the team's m
 - **Hub restart:** sessions of signed-in people survive a restart of the hub; the same invalid token counts once towards the address lockout; Compass asks to sign in again at once when the hub sign-in has expired and describes hub errors briefly (no IIS HTML pages).
 - **EA project glossary:** the default type of a new term is `Glossary` (before: `Slownik`).
 - **Long conversations:** above about 100 000 tokens, the earlier part is replaced by a summary for the next answers ("The conversation is long: summarising its earlier part"); the newest messages stay.
-- **Deleting a conversation:** right-click a conversation → "Delete the conversation". It is moved to `history\bin` and can be brought back; not while the assistant works in it.
+- **Deleting a conversation:** right-click a conversation → "Delete the conversation" (in Compass in EA: the 🗑 button next to the conversation name). It is moved to `history\bin` and can be brought back; not while the assistant works in it.
 
 ### Documents, presentations and SharePoint
 

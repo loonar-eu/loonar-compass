@@ -56,7 +56,7 @@ Anmeldung mit dem Firmenkonto am Hub, Modelle auf SQL Server, MySQL und Oracle, 
 - **Hub-Neustart:** Sitzungen angemeldeter Personen überstehen einen Neustart des Hubs; dasselbe ungültige Token zählt nur einmal für die Adresssperre; Compass fordert bei abgelaufener Hub-Anmeldung sofort zur erneuten Anmeldung auf und beschreibt Hub-Fehler kurz (keine IIS-HTML-Seiten).
 - **EA-Projektglossar:** der Standardtyp eines neuen Begriffs ist `Glossary` (vorher `Slownik`).
 - **Lange Unterhaltungen:** Ab etwa 100 000 Tokens wird der frühere Teil für die nächsten Antworten durch eine Zusammenfassung ersetzt („Die Unterhaltung ist lang: der frühere Teil wird zusammengefasst“); die neuesten Nachrichten bleiben.
-- **Unterhaltung löschen:** Rechtsklick auf eine Unterhaltung → „Unterhaltung löschen“. Sie wird nach `history\bin` verschoben und lässt sich zurückholen; nicht, während der Assistent darin arbeitet.
+- **Unterhaltung löschen:** Rechtsklick auf eine Unterhaltung → „Unterhaltung löschen“ (in Compass in EA: die Schaltfläche 🗑 neben dem Namen der Unterhaltung). Sie wird nach `history\bin` verschoben und lässt sich zurückholen; nicht, während der Assistent darin arbeitet.
 
 ### Dokumente, Präsentationen und SharePoint
 

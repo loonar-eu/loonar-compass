@@ -56,7 +56,7 @@ Logowanie kontem firmowym do huba, modele w SQL Server, MySQL i Oracle, instrukc
 - **Hub po restarcie:** sesje zalogowanych osób przetrwają restart huba; ten sam nieważny token liczy się do blokady adresu raz; Compass przy wygasłym logowaniu do huba od razu prosi o ponowne zalogowanie, a błędy huba opisuje krótko (bez stron HTML z IIS).
 - **Słownik projektu EA:** domyślny typ nowego pojęcia to `Glossary` (wcześniej `Slownik`).
 - **Długie rozmowy:** powyżej około 100 000 tokenów wcześniejsza część jest na potrzeby kolejnych odpowiedzi zastępowana streszczeniem („Rozmowa jest długa: streszczam jej wcześniejszą część”); najnowsze wiadomości zostają.
-- **Usuwanie rozmowy:** prawy przycisk myszy na rozmowie → „Usuń rozmowę”. Rozmowa trafia do `history\bin` i można ją przywrócić; nie w trakcie pracy asystenta w niej.
+- **Usuwanie rozmowy:** prawy przycisk myszy na rozmowie → „Usuń rozmowę” (w Compass w EA: przycisk 🗑 obok nazwy rozmowy). Rozmowa trafia do `history\bin` i można ją przywrócić; nie w trakcie pracy asystenta w niej.
 
 ### Dokumenty, prezentacje i SharePoint
 
