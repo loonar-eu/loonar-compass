@@ -1885,6 +1885,16 @@ pub fn team_policy(cfg: &AppConfig) -> Option<Value> {
     }
 }
 
+/// The team policy already received from the hub of the settings, without asking the hub (for the window).
+pub fn known_team_policy(cfg: &AppConfig) -> Option<Value> {
+    let url = cfg.hub_url.trim().trim_end_matches('/');
+    if url.is_empty() {
+        return None;
+    }
+    let known = POLICY.lock().unwrap_or_else(|p| p.into_inner()).as_ref().filter(|(_, u, _)| u.trim_end_matches('/') == url).map(|(_, _, p)| p.clone());
+    known.or_else(|| cached_policy(cfg, url))
+}
+
 /// The last policy received from this hub, for at most a week (the hub may be down for a while).
 fn cached_policy(cfg: &AppConfig, url: &str) -> Option<Value> {
     let cache: Value = serde_json::from_str(&std::fs::read_to_string(cfg.base_dir.join("hub_policy_cache.json")).ok()?).ok()?;

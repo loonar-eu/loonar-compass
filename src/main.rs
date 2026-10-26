@@ -3589,6 +3589,21 @@ impl App {
                 ui.label(egui::RichText::new("{\"agents\": [\n  {\"name\": \"Component owner\", \"event\": \"element_created\", \"applies_to\": \"Component\",\n   \"prompt\": \"Check that the new component has an owner and a description; suggest what to fill in.\"},\n  {\"name\": \"Flows\", \"event\": \"connector_created\", \"applies_to\": \"ControlFlow\", \"prompt\": \"Does this flow make sense in the process?\"}\n]}").small().monospace().color(theme::MUTED));
             }
             ui.add(egui::TextEdit::multiline(&mut self.form.agents_json).code_editor().desired_rows(6).desired_width(f32::INFINITY));
+            // The team's agents from the hub policy work too; they are changed in the hub, so here they are only listed.
+            let team: Vec<Value> = self.cfg.as_ref().and_then(hub::known_team_policy).and_then(|p| p["event_agents"].as_array().cloned()).unwrap_or_default();
+            if !team.is_empty() {
+                ui.add_space(6.0);
+                ui.label(egui::RichText::new(crate::i18n::tr("Agents of the team (from the hub's policy; changed by its administrator):")).small().strong());
+                for a in &team {
+                    ui.add(egui::Label::new(egui::RichText::new(format!(
+                        "• {} (team) – {}{}{}",
+                        a["name"].as_str().unwrap_or("?"),
+                        a["event"].as_str().unwrap_or("?"),
+                        if a["mode"] == "guard" { ", guard" } else { "" },
+                        a["applies_to"].as_str().map(|t| format!(", {t}")).unwrap_or_default()
+                    )).small()).wrap());
+                }
+            }
             self.group_footer(ui, &ctx2, GROUP_AGENTS, crate::i18n::tr("Save event agents"));
         });
         ui.add_space(12.0);
