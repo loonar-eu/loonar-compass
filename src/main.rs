@@ -138,9 +138,9 @@ fn leaks_rules(answer: &str) -> bool {
     hits >= 3
 }
 
-/// Above this many characters of text the earlier part of a conversation is replaced by a summary (about 100 000 tokens:
-/// the answers stay fast and the conversation never hits the model's context limit).
-const SUMMARY_THRESHOLD: usize = 400_000;
+/// Above this many characters of text the earlier part of a conversation is replaced by a summary (about 100 000 tokens
+/// of Polish or German text, with the system prompt and tools well below the model's context limit; the answers stay fast).
+const SUMMARY_THRESHOLD: usize = 300_000;
 /// The newest messages kept word for word.
 const SUMMARY_KEEP: usize = 6;
 
@@ -5728,7 +5728,8 @@ impl eframe::App for App {
                                 let event = agents::event_of(&kind);
                                 // A deleted object is no longer in the model: then the description EA gave with the event.
                                 if let Some((object, object_type, stereotype)) = agents::describe(&cfg, &kind, id).or_else(|| given.clone()) {
-                                    for agent in agents::matching(&agents, event, &object_type, &stereotype) {
+                                    // Guards answer EA before the deletion (start_guards); here only the advising agents.
+                                    for agent in agents::matching(&agents, event, &object_type, &stereotype).into_iter().filter(|a| !a.is_guard()) {
                                         let key = format!("{}:{kind}:{id}", agent.name);
                                         {
                                             let mut runs = agent_runs.lock().unwrap();

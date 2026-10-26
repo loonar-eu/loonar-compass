@@ -1100,7 +1100,7 @@ fn create_document(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
     }
     Ok(ToolOutput {
         text: format!(
-            "Document \"{file_name}.docx\" is ready ({} KB, images: {pictures}). The user sees it in the chat with the \"Open\" and \"Save as…\" buttons.",
+            "Document \"{file_name}.docx\" is ready ({} KB, images: {pictures}). The user sees it in the chat with the \"Open\" and \"Save as…\" buttons. It is kept only in Compass: do not name a folder or path for it; the user chooses where to keep it with \"Save as…\".",
             bytes.len() / 1024
         ),
         images: Vec::new(),
@@ -1143,7 +1143,7 @@ fn create_presentation(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         files.push(pdf);
     }
     Ok(ToolOutput {
-        text: format!("Presentation \"{file_name}.pptx\" is ready: {} slides{}. The user sees it in the chat with the \"Open\" and \"Save as…\" buttons.", slides.len() + 1, if files.len() > 1 { ", also as PDF" } else { "" }),
+        text: format!("Presentation \"{file_name}.pptx\" is ready: {} slides{}. The user sees it in the chat with the \"Open\" and \"Save as…\" buttons. It is kept only in Compass: do not name a folder or path for it; the user chooses where to keep it with \"Save as…\".", slides.len() + 1, if files.len() > 1 { ", also as PDF" } else { "" }),
         images: Vec::new(),
         files,
     })
@@ -1168,7 +1168,7 @@ fn create_spreadsheet(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
     std::fs::write(ctx.cfg.attachments_dir.join(&stored), &bytes).context(crate::i18n::tr("saving the workbook"))?;
     let rows: usize = sheets.iter().map(|s| s.rows.len()).sum();
     Ok(ToolOutput {
-        text: format!("Workbook \"{file_name}.xlsx\" is ready (sheets: {}, rows: {rows}). The user sees it in the chat with the \"Open\" and \"Save as…\" buttons.", sheets.len()),
+        text: format!("Workbook \"{file_name}.xlsx\" is ready (sheets: {}, rows: {rows}). The user sees it in the chat with the \"Open\" and \"Save as…\" buttons. It is kept only in Compass: do not name a folder or path for it; the user chooses where to keep it with \"Save as…\".", sheets.len()),
         images: Vec::new(),
         files: vec![stored],
     })
