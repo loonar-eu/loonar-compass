@@ -265,7 +265,7 @@ fn delegate_definition() -> Value {
 impact (what a planned change affects: elements, diagrams, relationships, risks — give the change and the ids), \
 review (check a package, a draft or a list of planned operations against good modelling practice and the team's instructions), \
 document (draft the text of a document section from the model, as Markdown, without writing anything). \
-Use it for larger analyses that would fill the conversation with query results; give the sub-agent everything it needs in task (ids, names, the goal).",
+Use it for larger analyses that would fill the conversation with query results, and always when the user asks for a sub-agent; give the sub-agent everything it needs in task (ids, names, the goal).",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -6740,7 +6740,25 @@ impl eframe::App for App {
                                 ui.add_space(if is_user { 14.0 } else { 18.0 });
                             }
                             // Steps of the assistant's work: what it is doing now and what it has already done in this turn, with time and result.
-                            // In a tab of EA they are in EA's System Output ("Loonar Compass" tab), not in the chat.
+                            // In a tab of EA they are in EA's System Output ("Loonar Compass" tab), not in the chat; only the
+                            // assistant's plan (task list) is shown here too, because the user follows it while it works.
+                            if let Some(plan) = self.steps.iter().find(|s| s.text.starts_with(TASKS_MARK)).filter(|_| ea::in_ea_tab()) {
+                                egui::Frame::none()
+                                    .fill(theme::SURFACE)
+                                    .stroke(egui::Stroke::new(1.0_f32, theme::BORDER))
+                                    .rounding(10.0)
+                                    .inner_margin(egui::Margin::symmetric(10.0, 6.0))
+                                    .show(ui, |ui| {
+                                        ui.set_width(ui.available_width());
+                                        ui.label(egui::RichText::new(&plan.text).strong());
+                                        if let Some((_, detail, _)) = &plan.result {
+                                            for line in detail.lines().filter(|l| !l.trim().is_empty()) {
+                                                ui.add(egui::Label::new(egui::RichText::new(line).small()).wrap());
+                                            }
+                                        }
+                                    });
+                                ui.add_space(8.0);
+                            }
                             if !self.steps.is_empty() && !ea::in_ea_tab() {
                                 // Steps card: expanded while working, collapsed to one line when finished
                                 // (clicking the header toggles it; the user's choice applies until the next response).
