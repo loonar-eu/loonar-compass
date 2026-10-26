@@ -517,20 +517,42 @@ pub fn take_references() -> Vec<String> {
 }
 
 /// Model events the EA add-in passed on (a new relationship, a changed element): ("connector" | "element", id).
-pub fn take_events() -> Vec<(String, i64)> {
+/// One event of EA: kind, id and, for a deletion, the object's description from EA (description, type, stereotype),
+/// because the object is gone when Compass reads the event.
+pub type Event = (String, i64, Option<(String, String, String)>);
+
+pub fn take_events() -> Vec<Event> {
     let Some(name) = ROT_NAME.get() else { return Vec::new() };
     let file = std::env::temp_dir().join(format!("loonar-ea-event-{name}.txt"));
     let Ok(text) = std::fs::read_to_string(&file) else { return Vec::new() };
     let _ = std::fs::remove_file(&file);
-    let mut events: Vec<(String, i64)> = text
-        .lines()
-        .filter_map(|line| {
-            let (kind, id) = line.trim().split_once(':')?;
-            Some((kind.to_string(), id.trim().parse().ok()?))
-        })
-        .collect();
+    let mut events: Vec<Event> = text.lines().filter_map(parse_event).collect();
     events.dedup();
     events
+}
+
+/// "kind:id" or "kind:id<TAB>description<TAB>type<TAB>stereotype".
+fn parse_event(line: &str) -> Option<Event> {
+    let mut parts = line.trim_end_matches(['\r', '\n']).split('\t');
+    let (kind, id) = parts.next()?.trim().split_once(':')?;
+    let described = match (parts.next(), parts.next(), parts.next()) {
+        (Some(d), Some(t), Some(s)) if !d.trim().is_empty() => Some((d.to_string(), t.to_string(), s.to_string())),
+        _ => None,
+    };
+    Some((kind.to_string(), id.trim().parse().ok()?, described))
+}
+
+#[cfg(test)]
+mod event_tests {
+    #[test]
+    fn events_with_and_without_description() {
+        assert_eq!(super::parse_event("element:42"), Some(("element".into(), 42, None)));
+        assert_eq!(
+            super::parse_event("package_deleting:7\tpackage \"Old\" (package_id 7) in package \"Model\"\tPackage\t"),
+            Some(("package_deleting".into(), 7, Some(("package \"Old\" (package_id 7) in package \"Model\"".into(), "Package".into(), String::new()))))
+        );
+        assert_eq!(super::parse_event("nonsense"), None);
+    }
 }
 
 /// The repository registered in the Running Object Table under the item moniker `!name`.

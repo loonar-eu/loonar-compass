@@ -126,15 +126,15 @@ namespace LoonarCompass
 
         // Before a deletion EA asks the add-in: event agents get the event, and a guard (an agent in "guard" mode in
         // Compass) can stop it. True = EA goes ahead.
-        public bool EA_OnPreDeleteElement(object repository, object info) { return Ask("element_deleting", info, "ElementID"); }
-        public bool EA_OnPreDeleteConnector(object repository, object info) { return Ask("connector_deleting", info, "ConnectorID"); }
-        public bool EA_OnPreDeleteDiagram(object repository, object info) { return Ask("diagram_deleting", info, "DiagramID"); }
-        public bool EA_OnPreDeletePackage(object repository, object info) { return Ask("package_deleting", info, "PackageID"); }
-        public bool EA_OnPreDeleteAttribute(object repository, object info) { return Ask("attribute_deleting", info, "AttributeID"); }
-        public bool EA_OnPreDeleteMethod(object repository, object info) { return Ask("method_deleting", info, "MethodID"); }
-        public bool EA_OnPreDeleteGlossaryTerm(object repository, object info) { return Ask("glossary_term_deleting", info, "GlossaryID"); }
+        public bool EA_OnPreDeleteElement(object repository, object info) { return Ask(repository, "element_deleting", info, "ElementID"); }
+        public bool EA_OnPreDeleteConnector(object repository, object info) { return Ask(repository, "connector_deleting", info, "ConnectorID"); }
+        public bool EA_OnPreDeleteDiagram(object repository, object info) { return Ask(repository, "diagram_deleting", info, "DiagramID"); }
+        public bool EA_OnPreDeletePackage(object repository, object info) { return Ask(repository, "package_deleting", info, "PackageID"); }
+        public bool EA_OnPreDeleteAttribute(object repository, object info) { return Ask(repository, "attribute_deleting", info, "AttributeID"); }
+        public bool EA_OnPreDeleteMethod(object repository, object info) { return Ask(repository, "method_deleting", info, "MethodID"); }
+        public bool EA_OnPreDeleteGlossaryTerm(object repository, object info) { return Ask(repository, "glossary_term_deleting", info, "GlossaryID"); }
 
-        static bool Ask(string kind, object info, string property)
+        static bool Ask(object repository, string kind, object info, string property)
         {
             if (current == null || current.IsDisposed)
                 return true;
@@ -142,13 +142,83 @@ namespace LoonarCompass
             {
                 dynamic properties = info;
                 string line = kind + ":" + properties.Get(property).Value;
-                current.Event(line);
+                // The object is gone by the time Compass reads the event: its description goes with the event
+                // ("kind:id<TAB>description<TAB>type<TAB>stereotype"), for the advising agents of deletions.
+                current.Event(line + Describe(repository, kind, Convert.ToInt32(properties.Get(property).Value)));
                 return current.Guard(kind, line);
             }
             catch (Exception e)
             {
                 Log.Write(kind + " guard: " + e.Message);
                 return true;
+            }
+        }
+
+        /// <summary>"\tdescription\ttype\tstereotype" of the object about to be deleted (as Compass describes it), or "".</summary>
+        static string Describe(object repository, string kind, int id)
+        {
+            try
+            {
+                dynamic repo = repository;
+                string description, type, stereotype;
+                if (kind.StartsWith("element"))
+                {
+                    dynamic e = repo.GetElementByID(id);
+                    string st = (string)e.Stereotype;
+                    description = "element \"" + e.Name + "\" (" + e.Type + (st.Length > 0 ? " «" + st + "»" : "") + ", object_id " + id + ", status \"" + e.Status + "\") in package \"" + repo.GetPackageByID(e.PackageID).Name + "\"";
+                    type = e.Type;
+                    stereotype = st;
+                }
+                else if (kind.StartsWith("package"))
+                {
+                    dynamic p = repo.GetPackageByID(id);
+                    string parent = p.ParentID != 0 ? (string)repo.GetPackageByID(p.ParentID).Name : "";
+                    description = "package \"" + p.Name + "\" (package_id " + id + ") in package \"" + parent + "\"";
+                    type = "Package";
+                    stereotype = p.StereotypeEx;
+                }
+                else if (kind.StartsWith("connector"))
+                {
+                    dynamic c = repo.GetConnectorByID(id);
+                    string st = (string)c.Stereotype;
+                    description = "relationship " + c.Type + (st.Length > 0 ? " «" + st + "»" : "") + " (connector_id " + id + ") " + repo.GetElementByID(c.ClientID).Name + " → " + repo.GetElementByID(c.SupplierID).Name;
+                    type = c.Type;
+                    stereotype = st;
+                }
+                else if (kind.StartsWith("diagram"))
+                {
+                    dynamic d = repo.GetDiagramByID(id);
+                    description = "diagram \"" + d.Name + "\" (" + d.Type + ", diagram_id " + id + ") in package \"" + repo.GetPackageByID(d.PackageID).Name + "\"";
+                    type = d.Type;
+                    stereotype = "";
+                }
+                else if (kind.StartsWith("attribute"))
+                {
+                    dynamic a = repo.GetAttributeByID(id);
+                    dynamic owner = repo.GetElementByID(a.ParentID);
+                    description = "attribute \"" + a.Name + "\" : " + a.Type + " (attribute id " + id + ") of " + owner.Type + " \"" + owner.Name + "\"";
+                    type = "Attribute";
+                    stereotype = a.Stereotype;
+                }
+                else if (kind.StartsWith("method"))
+                {
+                    dynamic m = repo.GetMethodByID(id);
+                    dynamic owner = repo.GetElementByID(m.ParentID);
+                    description = "operation \"" + m.Name + "\"() : " + m.ReturnType + " (operation id " + id + ") of " + owner.Type + " \"" + owner.Name + "\"";
+                    type = "Operation";
+                    stereotype = m.Stereotype;
+                }
+                else
+                {
+                    return "";
+                }
+                Func<string, string> clean = t => (t ?? "").Replace('\t', ' ').Replace('\r', ' ').Replace('\n', ' ');
+                return "\t" + clean(description) + "\t" + clean(type) + "\t" + clean(stereotype);
+            }
+            catch (Exception e)
+            {
+                Log.Write("Describe " + kind + " " + id + ": " + e.Message);
+                return "";
             }
         }
 

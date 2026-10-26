@@ -2789,8 +2789,10 @@ impl App {
             }
         }
         let mut words: Vec<String> = Vec::new();
-        for range in &self.spell_errors {
-            let word = self.input[range.clone()].to_string();
+        // The ranges belong to the text of the last spelling check: after an edit in this frame (e.g. Ctrl+A, Delete)
+        // they may point past the text, so they are used only while the text is the same.
+        for range in self.spell_errors.iter().filter(|_| self.spell_text == self.input) {
+            let Some(word) = self.input.get(range.clone()).map(str::to_string) else { continue };
             if !words.contains(&word) {
                 words.push(word);
             }
@@ -5720,11 +5722,12 @@ impl eframe::App for App {
                     let agent_runs = self.agent_runs.clone();
                     std::thread::spawn(move || {
                         let agents = agents::load_all(&cfg);
-                        for (kind, id) in events {
+                        for (kind, id, given) in events {
                             // Event agents (AI): advice in System Output; the same agent and object at most once a minute.
                             if !agents.is_empty() {
                                 let event = agents::event_of(&kind);
-                                if let Some((object, object_type, stereotype)) = agents::describe(&cfg, &kind, id) {
+                                // A deleted object is no longer in the model: then the description EA gave with the event.
+                                if let Some((object, object_type, stereotype)) = agents::describe(&cfg, &kind, id).or_else(|| given.clone()) {
                                     for agent in agents::matching(&agents, event, &object_type, &stereotype) {
                                         let key = format!("{}:{kind}:{id}", agent.name);
                                         {
