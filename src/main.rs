@@ -4368,7 +4368,7 @@ impl App {
         }
         ui.add_space(14.0);
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new(crate::i18n::tr("Today so far (sent tomorrow)")).font(bold(16.0)));
+            ui.label(egui::RichText::new(crate::i18n::tr("Today so far (sent every hour)")).font(bold(16.0)));
             if ui.small_button(crate::i18n::tr("Refresh")).clicked() {
                 self.stats.loaded = false;
             }

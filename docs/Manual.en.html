@@ -132,12 +132,11 @@
   <li><b>Welcome.</b> The prerequisites and a list of things worth preparing before installation.</li>
   <li><b>What's new.</b> When updating: the changes since the installed version. For a new installation: the changes in the current version.</li>
   <li><b>License agreement.</b> Select “I accept the terms of the license agreement”.</li>
+  <li><b>Usage statistics.</b> The option “Send anonymous usage statistics (recommended)” is selected. The page explains what is sent and what never is; you can change your choice later in the “Usage statistics” view (chapter 18). The details that the wizard used to ask for (API key, model, Enterprise Architect) are now entered after the first start, in the “Settings” view (chapter 5).</li>
   <li><b>Destination folder.</b> The installation type (described below), the program folder (<b>Browse…</b>) and the shortcuts: Start menu (application, user guide, uninstall) and Desktop. The option <b>“Add Loonar Compass to Enterprise Architect”</b> installs Compass in EA (chapter 10); restart EA after the installation.</li>
-  <li><b>Configuration.</b> Choose “Enter the details now” or “Configure later in the application ("Settings" view)”. The page contains the Claude API key (with a note on what the application sends to Anthropic; you can choose OpenAI later in the settings), the model (a PostgreSQL database: server, port, database name, database user, database password; or an EA file: the path to the .qea/.qeax file, which you can select with the <b>…</b> button), Enterprise Architect (the path to <code>EA.exe</code>, which you can select with the <b>…</b> button, the EA user account and the EA account password) and the approval mode.</li>
   <li><b>Ready to install.</b> A summary of the installation type, folder, shortcuts and configuration. Click <b>Install</b>; the progress bar shows the percentage and the current step.</li>
   <li><b>Installation complete.</b> With “Launch Loonar Compass” selected, the application opens after you click <b>Finish</b>.</li>
 </ol>
-<figure class="small"><img src="img/en/installer-config.png" alt="Setup wizard: optional configuration of the Claude API key, the model (database or file), Enterprise Architect and approval mode"><figcaption>Configuration in the wizard is optional: you can enter the same details later in the “Settings” view</figcaption></figure>
 <h3>Installation type</h3>
 <p>On the “Destination folder” page, you choose who the application is installed for:</p>
 <ul>
@@ -168,6 +167,7 @@
   <tr><td><b>Model audit log</b></td><td>The assistant's saves to the model, with export to Excel (chapter 16)</td></tr>
   <tr><td><b>Changelog</b></td><td>The list of features and known limitations of each version</td></tr>
   <tr><td><b>Report a bug</b></td><td>A bug report form with images (chapter 20)</td></tr>
+  <tr><td><b>Usage statistics</b></td><td>What the application sends anonymously, today’s summary, the log of what was sent in the last 30 days, switching off and a new installation id (chapter 18)</td></tr>
   <tr><td><b>Support the project</b> (heart icon, at the bottom of the bar)</td><td>Voluntary support for the development of the application, links to GitHub and loonar.eu</td></tr>
   <tr><td><b>About</b> (at the very bottom of the bar)</td><td>Version, application owner, links (privacy policy, source code on GitHub, loonar.eu), trademark notice, license text and the licenses of the open-source components (chapter 24)</td></tr>
 </table>
@@ -308,6 +308,9 @@
   <li>An answer can take at most <b>24 steps</b>. If the assistant has not finished by then, it stops so as not to run in an endless loop; send a new message (for example “continue”) to carry on.</li>
 </ul>
 <figure><img src="img/en/steps.png" alt="Steps card listing the assistant's steps with their duration and results"><figcaption>The assistant at work: the list of steps</figcaption></figure>
+<h3>Rating answers and reports from the chat</h3>
+<p>Under every answer of the assistant there are the buttons <b>👍</b> and <b>👎</b>. After 👎, choose a reason: “Wrong or inaccurate answer”, “Not what I asked for”, “Too slow” or “A mistake in the model”. The same menu has <b>“Report a problem with this answer”</b>: it opens the report form (chapter 20) with the subject filled in and the reported answer attached. Ratings go only to the usage statistics, if they are on, and help decide what to improve first.</p>
+<p>When you ask for something the assistant cannot do (for example an unsupported file format or integration), it says so plainly and suggests what it can do instead. Under such an answer there is the button <b>“💡 Request this feature”</b>: it opens the report form with the subject “Feature request: …”, where you describe what you need. The request goes to GitHub as an idea.</p>
 <h3>Questions, plan and sub-agents</h3>
 <ul>
   <li><b>Clarifying questions.</b> When something important is unclear before a larger change (which package, which notation, naming, scope), the assistant does not guess: it shows a small form “Questions to you” in the chat, with choices or a field for a short answer. A choice can be replaced by your own text in the field “Something else…”. <b>Send answers</b> sends them as your next message, starting with “My answers:”, and the assistant carries on.</li>
@@ -1018,6 +1021,10 @@
   <li><b>Protection against hidden instructions</b> (prompt injection). A document, an issue, a page or a model note can contain text written to steer the assistant. The assistant gets safety rules in every request; the results of documents, Jira, Confluence, MCP servers, the CMDB and code are marked as data, not as instructions; and an answer that repeats the assistant's internal instructions word for word is withheld (“The answer repeated the assistant's internal instructions and was withheld.”). Saves still go through your approval (chapter 16).</li>
   <li>The connection string of your open EA window, with its login details, is never sent to the model.</li>
 </ul>
+<h3>Usage statistics</h3>
+<p>Unless you switch them off, Loonar Compass sends anonymous statistics: at each start a random installation id (created on this computer, not derived from the computer or from you) with the application version, Windows version and language, and every hour a summary of the day: the kinds of tasks and how they ended, how often each function of the assistant was used and how often it failed, ratings of answers, what the assistant could not do, approvals, views opened, tokens and the kind of setup. It <b>never</b> sends the content of conversations, names or ids from the model, file paths, server addresses, error messages or user names. The service that receives the data does not store IP addresses; only the author sees the data, and only summaries over all installations together are published (the “Published statistics” link). The data is kept for 13 months.</p>
+<p>At the first start the application shows a notice with the buttons <b>Keep on</b>, <b>Switch off</b> and <b>Show details</b>. The <b>“Usage statistics”</b> view (navigation bar) shows exactly what was counted today (“Today so far”) and what was sent in the last 30 days, as JSON with a <b>Copy</b> button. There you can untick “Send anonymous usage statistics (every hour)” (days not sent yet are then deleted) or give the installation a <b>New identifier</b>, after which later days can no longer be joined with the earlier ones.</p>
+<p>An organisation can switch the statistics off for everybody: with the environment variable <code>LOONAR_TELEMETRY=0</code>, a registry policy (the ADMX template in the package for administrators) or the policy of the team hub (<code>"telemetry": false</code>). Then nothing is counted or sent.</p>
 <h3>Connections and encryption</h3>
 <ul>
   <li>The AI model API (Anthropic or OpenAI, or the address in <code>claude.url</code>), Confluence, Jira, SharePoint, Miro and OAuth2 token addresses are used over HTTPS only (<code>http://</code> only for a server on the same computer).</li>
@@ -1065,13 +1072,14 @@
 <h2 id="s20" class="break">20. Reporting bugs and new releases</h2>
 <h3>Report a bug</h3>
 <ol>
-  <li>Click the <b>Report a bug</b> icon in the navigation bar.</li>
-  <li>Enter a subject and a description: what you were doing, what you expected, what happened. The description is required.</li>
-  <li>Add images, for example screenshots: drag them into the window, paste them from the clipboard (<span class="key">Ctrl</span> + <span class="key">V</span>) or choose them from disk. The added images are shown as thumbnails; together they can take up to 15 MB. Remove personal and confidential data from the screenshots before sending.</li>
-  <li>Optionally, enter the email address to which I should reply. The option “Include technical information (application version, system, model, approval mode, last message; no passwords or keys)” is selected by default; clear it if you do not want to include this information.</li>
-  <li>Click <b>Send report</b>. A ready message to the author, with the images as attachments, opens in the Windows mail program. Check it and send it.</li>
+  <li>Click the <b>Report a bug</b> icon in the navigation bar or, for a particular answer, <b>👎 → “Report a problem with this answer”</b> (chapter 6).</li>
+  <li>Choose how to send the report: <b>“Public issue on GitHub (recommended)”</b> or <b>“E-mail to the author (private)”</b>.</li>
+  <li>Enter a subject and a description: what you were doing, what happened, what you expected. The description is required; you can paste the error text from the chat into it. For a GitHub issue the subject and the description are public: do not put confidential information in them.</li>
+  <li>Add images, ideally screenshots with the problem marked: drag them into the window, paste them from the clipboard (<span class="key">Ctrl</span> + <span class="key">V</span>) or choose them from disk with <b>+ Add image</b>.</li>
+  <li>Options: <b>“Include technical information (public)”</b> adds the version, Windows, AI model, approval mode, number of steps and installation id, without passwords or keys. For a report from an answer, <b>“Attach the reported answer”</b> adds your question, the answer and the assistant’s steps; only the author sees them. <b>“Show what is attached”</b> shows exactly what will be sent. An e-mail address for replies is optional.</li>
+  <li>Click <b>Send report</b>. A GitHub issue is created at once, and the application shows its link, where you can follow what happens with it. For e-mail, a ready message opens in your mail program with the images attached; check it and send it.</li>
 </ol>
-<p>The report goes to Loonar Mariusz Głowacki and is used only to answer it and to improve the application; the details are in the <a href="https://loonar.eu/privacy/">privacy policy</a>, linked from the form. The temporary copies of the images are deleted as soon as the mail program has taken them. If the mail program does not accept attachments from other applications, a message without images opens together with the folder containing the images: drag them into the message. Only in this case do the copies stay in that folder.</p>
+<p>In a GitHub issue (repository github.com/loonar-eu/loonar-compass) the title, the description and, if you leave the option on, the technical information are public. Screenshots, the reported answer and your e-mail address go to a private repository that only the author reads. A report sent by e-mail is not published. Reports are used only to answer and improve the application and are kept for up to 2 years after the matter is closed. Before sending, remove personal data and confidential information from the screenshots. Details are in the privacy policy, linked in the form; the <b>“Issues and ideas”</b> link leads to the list of all reports.</p>
 <h3>New releases (newsletter)</h3>
 <p>On the <b>“New releases (newsletter)”</b> card in the settings, enter your email address and select “I want to receive news about new releases”: a short email when a new version is released, with a description of the changes and where to download it, without ads. Your choice is stored in the settings, and subscribing and unsubscribing are sent to the author as a message from the mail program. Your address is used only for this news, based on your consent, until you withdraw it: clear the option and save, or write an email. The card links to the privacy policy.</p>
 

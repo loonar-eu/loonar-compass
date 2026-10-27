@@ -7,6 +7,7 @@
       <string id="Loonar">Loonar</string>
       <string id="Compass">Loonar Compass</string>
       <string id="SUPPORTED_Compass09">Loonar Compass 0.9 lub nowszy</string>
+      <string id="SUPPORTED_Compass091">Loonar Compass 0.9.1 lub nowszy</string>
       <string id="HubUrl">Adres huba zespołu</string>
       <string id="HubUrl_Help">Adres huba zespołu (Compass Hub), na przykład https://compass-hub.example.com. Compass używa go zamiast adresu z ustawień, a pole w ustawieniach jest zablokowane. Polityka zespołu z huba (reguły kontroli modelu, minimalny tryb zatwierdzania, dostęp do internetu, agenci zdarzeń) obowiązuje wtedy wszystkich. Użytkownicy logują się kontem firmowym w Ustawienia → Zespół (Compass Hub).</string>
       <string id="RequireHub">Wymagaj huba zespołu</string>
@@ -14,7 +15,9 @@
       <string id="WebAccess">Zezwalaj na dostęp do internetu</string>
       <string id="WebAccess_Help">Wyłączone: asystent nie może szukać w internecie ani czytać stron, a przycisk 🌐 jest zablokowany. Włączone albo nieskonfigurowane: decyduje użytkownik (domyślnie wyłączone), a hub zespołu nadal może to wyłączyć.</string>
       <string id="UpdateCheck">Sprawdzaj nowe wersje</string>
-      <string id="UpdateCheck_Help">Wyłączone: Compass nie sprawdza raz dziennie na GitHubie, czy jest nowsze wydanie (gdy IT aktualizuje Compass centralnie). Compass nigdy sam niczego nie pobiera ani nie instaluje.</string>
+      <string id="UpdateCheck_Help">Wyłączone: Compass nie sprawdza co godzinę na GitHubie, czy jest nowsze wydanie (gdy IT aktualizuje Compass centralnie). Compass nigdy sam niczego nie pobiera ani nie instaluje.</string>
+      <string id="Telemetry">Wysyłaj anonimowe statystyki użycia</string>
+      <string id="Telemetry_Help">Wyłączone: Compass nie liczy ani nie wysyła statystyk użycia (bez pingu przy starcie z losowym identyfikatorem instalacji i bez podsumowań co godzinę), dni jeszcze niewysłane są usuwane, a użytkownik nie może ich włączyć. Włączone albo nieskonfigurowane: decyduje użytkownik (domyślnie włączone, z informacją przy pierwszym uruchomieniu). Treści rozmów, modelu, ścieżki, adresy i nazwy użytkowników nie są wysyłane w żadnym przypadku.</string>
       <string id="MinApproval">Minimalny tryb zatwierdzania</string>
       <string id="MinApproval_Help">Najmniej surowy tryb zatwierdzania zapisów do modelu: „ask” (każdy zapis zatwierdzany), „plan” (zatwierdzany pierwszy zapis odpowiedzi), „auto” (bez zatwierdzania). Surowszy tryb ustawiony przez użytkownika zostaje.</string>
       <string id="MinApproval_Ask">ask – zatwierdzaj każdy zapis</string>
