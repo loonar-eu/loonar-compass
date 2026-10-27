@@ -1464,6 +1464,34 @@ fn xml(text: &str) -> String {
     text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
+/// The rest of a relationship query (after its first five columns): the types, ids and classifiers of both ends, for
+/// [`named_ends`].
+const ENDS: &str = "s.object_type as c5, s.object_id as c6, coalesce(sc.name,'') as c7, t.object_type as c8, t.object_id as c9, coalesce(tc.name,'') as c10 \
+    from t_connector c join t_object s on s.object_id = c.start_object_id join t_object t on t.object_id = c.end_object_id \
+    left join t_object sc on sc.object_id = s.classifier left join t_object tc on tc.object_id = t.classifier";
+
+/// Relationship rows with the names of the ends (columns `source` and `target`) filled in where EA has none, e.g.
+/// unnamed lifelines: ":Classifier" or "(unnamed Type #id)". The extra columns of [`ENDS`] are dropped.
+fn named_ends(mut rows: Vec<Vec<String>>, source: usize, target: usize) -> Vec<Vec<String>> {
+    let label = |name: &str, kind: &str, id: &str, classifier: &str| {
+        if !name.trim().is_empty() {
+            name.to_string()
+        } else if !classifier.trim().is_empty() {
+            format!(":{classifier}")
+        } else {
+            format!("({} {kind} #{id})", crate::i18n::tr("unnamed"))
+        }
+    };
+    for r in &mut rows {
+        if r.len() >= 11 {
+            r[source] = label(&r[source], &r[5], &r[6], &r[7]);
+            r[target] = label(&r[target], &r[8], &r[9], &r[10]);
+        }
+        r.truncate(5);
+    }
+    rows
+}
+
 /// A Confluence page (storage format) of a package with its subpackages: elements with their descriptions and the
 /// relationships between them. Text only: the hub has no EA to draw diagrams.
 /// A report of a package with its subpackages: Word (description, elements table, relationships) or Excel
@@ -1486,10 +1514,10 @@ fn package_report(cfg: &AppConfig, model: &str, package: i64, format: &str) -> R
         "select coalesce(o.name,'') as c0, o.object_type as c1, coalesce(o.stereotype,'') as c2, coalesce(o.status,'') as c3, p.name as c4, coalesce(o.note,'') as c5 \
          from t_object o join t_package p on p.package_id = o.package_id where o.package_id in ({ids}) and o.object_type not in ('Package','Note','Text','Boundary') order by p.name, o.name"
     ))?;
-    let relations = q(format!(
-        "select coalesce(s.name,'') as c0, c.connector_type as c1, coalesce(c.stereotype,'') as c2, coalesce(t.name,'') as c3, coalesce(c.name,'') as c4 from t_connector c \
-         join t_object s on s.object_id = c.start_object_id join t_object t on t.object_id = c.end_object_id where s.package_id in ({ids}) and t.package_id in ({ids}) order by 1, 4"
-    ))?;
+    let relations = named_ends(q(format!(
+        "select coalesce(s.name,'') as c0, c.connector_type as c1, coalesce(c.stereotype,'') as c2, coalesce(t.name,'') as c3, coalesce(c.name,'') as c4, {ENDS} \
+         where s.package_id in ({ids}) and t.package_id in ({ids}) order by 1, 4"
+    ))?, 0, 3);
     let base: String = root[0].chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect();
     let date = chrono::Local::now().format("%Y-%m-%d").to_string();
     if format == "xlsx" {
@@ -1546,11 +1574,10 @@ fn package_page(cfg: &AppConfig, model: &str, package: i64) -> Result<(String, S
          from t_object o join t_package p on p.package_id = o.package_id where o.package_id in ({ids}) and o.object_type not in ('Package','Note','Text','Boundary') \
          order by p.name, o.name"
     ))?;
-    let relations = q(format!(
-        "select c.connector_type as c0, coalesce(c.stereotype,'') as c1, coalesce(s.name,'') as c2, coalesce(t.name,'') as c3, coalesce(c.name,'') as c4 from t_connector c \
-         join t_object s on s.object_id = c.start_object_id join t_object t on t.object_id = c.end_object_id \
+    let relations = named_ends(q(format!(
+        "select c.connector_type as c0, coalesce(c.stereotype,'') as c1, coalesce(s.name,'') as c2, coalesce(t.name,'') as c3, coalesce(c.name,'') as c4, {ENDS} \
          where s.package_id in ({ids}) and t.package_id in ({ids}) order by 3, 4"
-    ))?;
+    ))?, 2, 3);
     let mut page = String::new();
     page.push_str(&format!("<p><em>{}</em></p>", xml(&crate::i18n::fmt("Published from the model {0} by the team hub on {1}. Edit the model, not this page: the next publication replaces it.", &[model.to_string(), chrono::Local::now().format("%Y-%m-%d %H:%M").to_string()]))));
     if !root[1].trim().is_empty() {
@@ -2057,6 +2084,18 @@ const WEB_PAGE: &str = include_str!("hub_web.html");
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Unnamed ends of relationships (e.g. lifelines) get the classifier's name or their type and id.
+    #[test]
+    fn unnamed_relationship_ends() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        let row = |s: &str, sc: &str, t: &str, tc: &str| -> Vec<String> {
+            [s, "Sequence", "", t, "m()", "Object", "7", sc, "Object", "9", tc].iter().map(|v| v.to_string()).collect()
+        };
+        let rows = named_ends(vec![row("", "Customer", "", ""), row("A", "", "B", "X")], 0, 3);
+        assert_eq!(rows[0], vec![":Customer", "Sequence", "", "(unnamed Object #9)", "m()"]);
+        assert_eq!(rows[1], vec!["A", "Sequence", "", "B", "m()"]);
+    }
 
     #[test]
     fn roles_and_names() {
