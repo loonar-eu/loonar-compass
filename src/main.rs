@@ -499,8 +499,8 @@ const WORK_RULES: &str = "Asking and planning: when a request to change the mode
 (which package, the name, the attributes, the notation, the scope), FIRST ask with the ask_user tool and end your answer there; do not prepare \
 any change (ea_write) before the answers come, and never ask clarifying questions as plain text. Reading the model first to offer the right \
 options is fine. When the user asks for work in several steps (e.g. \"in 4 steps\", a numbered list of tasks) or the work clearly has 3 or more \
-steps, call task_list with all tasks pending BEFORE the first of them, then update it as each task starts and ends, so that the last update \
-shows every task done.";
+steps, call task_list with all tasks pending BEFORE the first of them (when the user named the steps, exactly those steps as the tasks), \
+then update it as each task starts and ends, so that the last update shows every task done.";
 
 /// Rules for preparing documentation (Word, Confluence, templates).
 const DOC_RULES: &str = "Documentation: when the user asks for a document or a page (feasibility study, BRD, change description, process description, specification), \
@@ -5112,6 +5112,9 @@ fn run_turn_with(
     // for a specific prompt and the API rejects them when the prompt changes midway (e.g. after memory_save).
     // The model knows notes saved during this response from the tool results; in the next response they go into the prompt.
     let system = system_prompt(&cfg);
+    // The plan shown with task_list (done, all): while tasks are open, every round reminds the model to tick them
+    // off (LC-270: smaller models showed the plan once and never updated it).
+    let mut plan: Option<(usize, usize)> = None;
 
     for round in 1..=MAX_ROUNDS {
         if cancel.load(Ordering::Relaxed) {
@@ -5234,6 +5237,8 @@ fn run_turn_with(
             } else if name == "task_list" {
                 // The plan of the work with its progress: one step of the answer, replaced at every update.
                 let (header, lines) = task_list_text(&block["input"]);
+                let all = lines.lines().count();
+                plan = Some((lines.lines().filter(|l| l.starts_with('✓')).count(), all));
                 emit(WorkerEvent::StepStart(header));
                 emit(WorkerEvent::StepEnd { ok: true, detail: lines });
                 Ok(tools::ToolOutput::from("The task list is shown to the user. Update it (task_list) when a task starts or is done.".to_string()))
@@ -5296,6 +5301,14 @@ fn run_turn_with(
                 }),
             };
             results.push(result);
+        }
+        if let Some((done, all)) = plan.filter(|(done, all)| done < all) {
+            let updated = content.as_array().is_some_and(|c| c.iter().any(|b| b["type"] == "tool_use" && b["name"] == "task_list"));
+            if !updated {
+                results.push(text_block(&format!(
+                    "(Your plan shows {done} of {all} tasks done. When a task is finished, update it with task_list before going on; the last update must show every task done.)"
+                )));
+            }
         }
         // Messages added during the work go into the same user message, after the tool results.
         results.extend(drain_inbox(inbox, &cfg.attachments_dir, emit)?);
