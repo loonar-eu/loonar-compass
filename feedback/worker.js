@@ -11,7 +11,8 @@
 //                    newest); never anything of one installation
 //   GET  /health
 //
-// Once a day (cron): data older than 13 months is deleted; on Mondays the summary of the week that ended is computed.
+// Once a day (cron): data older than 13 months is deleted, the summary of the week that ended is computed, and the
+// download counts of the releases (GitHub counts only totals) are written down, so downloads per day can be shown.
 //
 // The application never holds a GitHub token: the token is a secret of this Worker (GITHUB_TOKEN). Everything that
 // arrives is checked against a strict schema; unknown fields are refused, so nothing else can be published.
@@ -427,6 +428,7 @@ async function weekly(env, now = new Date()) {
     env.DB.prepare("DELETE FROM starts WHERE day < ?1").bind(oldest),
     env.DB.prepare("DELETE FROM days WHERE day < ?1").bind(oldest),
     env.DB.prepare("DELETE FROM weekly WHERE week < ?1").bind(oldest),
+    env.DB.prepare("DELETE FROM downloads WHERE day < ?1").bind(oldest),
   ]);
   const week = lastWeek(now);
   const done = await env.DB.prepare("SELECT 1 FROM weekly WHERE week = ?1").bind(week).first();
@@ -441,6 +443,25 @@ async function weekly(env, now = new Date()) {
   await env.DB.prepare("INSERT OR REPLACE INTO weekly (week, data, created) VALUES (?1, ?2, ?3)")
     .bind(week, JSON.stringify(summary), now.toISOString())
     .run();
+}
+
+/** The download counts of all release files today (GitHub keeps only totals; the differences give downloads per day). */
+async function downloads(env, now = new Date()) {
+  if (!env.DB) return;
+  const day = now.toISOString().slice(0, 10);
+  const rows = [];
+  for (let page = 1; page <= 5; page++) {
+    const r = await fetch(`${env.GITHUB_API || "https://api.github.com"}/repos/${env.ISSUES_REPO}/releases?per_page=100&page=${page}`, {
+      headers: { "User-Agent": "compass-feedback", Accept: "application/vnd.github+json" },
+    });
+    if (!r.ok) throw new Error(`GitHub releases: ${r.status}`);
+    const releases = await r.json();
+    for (const rel of releases) for (const a of rel.assets || []) rows.push([rel.tag_name, a.name, a.download_count]);
+    if (releases.length < 100) break;
+  }
+  if (!rows.length) return;
+  await env.DB.batch(rows.map(([tag, asset, count]) =>
+    env.DB.prepare("INSERT OR REPLACE INTO downloads (day, tag, asset, count) VALUES (?1, ?2, ?3, ?4)").bind(day, tag, asset, count)));
 }
 
 async function publicSummary(url, env) {
@@ -460,7 +481,10 @@ async function publicSummary(url, env) {
 
 export default {
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(weekly(env, new Date(event.scheduledTime)));
+    const now = new Date(event.scheduledTime);
+    ctx.waitUntil(Promise.allSettled([weekly(env, now), downloads(env, now)]).then((results) => {
+      for (const r of results) if (r.status === "rejected") console.error(r.reason);
+    }));
   },
 
   async fetch(request, env) {

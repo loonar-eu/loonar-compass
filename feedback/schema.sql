@@ -24,6 +24,15 @@ CREATE TABLE IF NOT EXISTS days (
 );
 CREATE INDEX IF NOT EXISTS days_day ON days (day);
 
+-- The download counts of the release files on a day (totals from GitHub; differences = downloads per day).
+CREATE TABLE IF NOT EXISTS downloads (
+  day   TEXT NOT NULL,
+  tag   TEXT NOT NULL,
+  asset TEXT NOT NULL,
+  count INTEGER NOT NULL,
+  PRIMARY KEY (day, tag, asset)
+);
+
 -- The summary of a week over all installations together (computed on Mondays; GET /v1/summary).
 CREATE TABLE IF NOT EXISTS weekly (
   week    TEXT PRIMARY KEY,

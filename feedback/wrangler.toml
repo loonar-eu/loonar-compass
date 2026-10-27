@@ -25,7 +25,8 @@ name = "REPORT_LIMITER"
 namespace_id = "1002"
 simple = { limit = 3, period = 60 }
 
-# Once a day: data older than 13 months is deleted; on Mondays the summary of the last week is computed.
+# Once a day: data older than 13 months is deleted, the summary of the last week is computed and the download counts
+# of the releases are written down.
 [triggers]
 crons = ["17 3 * * *"]
 
