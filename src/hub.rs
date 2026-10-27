@@ -30,6 +30,8 @@ use std::time::{Duration, Instant};
 
 pub const DEFAULT_LISTEN: &str = "127.0.0.1:8730";
 const MAX_BODY: usize = 4 * 1024 * 1024;
+/// A request to the AI gateway may carry images and documents of the conversation.
+const MAX_AI_BODY: usize = 32 * 1024 * 1024;
 /// Request line and headers together.
 const MAX_HEAD: usize = 16 * 1024;
 const MAX_HEADERS: usize = 100;
@@ -89,6 +91,8 @@ pub struct Hub {
     users: Mutex<Vec<User>>,
     /// Signed-in sessions of the web view: SHA-256 of the session token → user and end of validity.
     sessions: Mutex<HashMap<[u8; 32], (String, Instant)>>,
+    /// Unknown tokens already counted for an address: a client repeating one stale token counts once.
+    failed_tokens: Mutex<HashMap<[u8; 32], Instant>>,
     policy: Mutex<Value>,
     audit_lock: Mutex<()>,
     ask_lock: Mutex<()>,
@@ -96,10 +100,16 @@ pub struct Hub {
     change_lock: Mutex<()>,
     /// The team's Jira and Confluence ("integrations" in hub.json); tokens from the hub's secrets.
     integrations: Value,
+    /// The AI gateway ("ai" in hub.json): which key each person, role or everybody uses.
+    ai: Value,
     /// Wrong tokens per address.
     failures: Mutex<HashMap<IpAddr, Vec<Instant>>>,
     /// Questions per user.
     asks: Mutex<HashMap<String, Vec<Instant>>>,
+    /// Sign-in with a company account (OIDC), if "oidc" is in hub.json.
+    oidc: Option<crate::oidc::Provider>,
+    /// People signed in with a company account: name → role from their groups at the last sign-in.
+    external: Mutex<HashMap<String, Role>>,
 }
 
 /// A user of the hub.
@@ -217,7 +227,16 @@ pub fn load(file: &Path) -> Result<(Hub, String)> {
         file: file.to_path_buf(), dir, sources, users: Mutex::new(users), sessions: Mutex::new(HashMap::new()), policy: Mutex::new(value["policy"].clone()),
         audit_lock: Mutex::new(()), ask_lock: Mutex::new(()), change_lock: Mutex::new(()), failures: Mutex::new(HashMap::new()), asks: Mutex::new(HashMap::new()),
         integrations: value["integrations"].clone(),
+        ai: value["ai"].clone(),
+        oidc: match crate::oidc::Config::from_json(&value["oidc"])? {
+            // A provider without a client secret (a public client with PKCE) works too.
+            Some(config) => Some(crate::oidc::Provider::new(config, crate::config::secrets::get(crate::config::secrets::OIDC_CLIENT_SECRET).unwrap_or_default())),
+            None => None,
+        },
+        external: Mutex::new(HashMap::new()),
+        failed_tokens: Mutex::new(HashMap::new()),
     };
+    hub.load_sessions();
     if default_account {
         hub.save_users()?;
         log(&hub.dir, &format!("no users in hub.json: the default account {DEFAULT_ADMIN} / {DEFAULT_PASSWORD} was created; change its password at the first sign-in"));
@@ -317,6 +336,9 @@ struct Head {
     target: String,
     length: usize,
     token: String,
+    /// The last address of X-Forwarded-For (the one the proxy in front of the hub added).
+    forwarded: Option<IpAddr>,
+    content_type: String,
 }
 
 fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Head, HttpError> {
@@ -352,7 +374,7 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
     let mut parts = first.split_whitespace();
     let method = parts.next().unwrap_or("").to_string();
     let target = parts.next().unwrap_or("/").to_string();
-    let (mut length, mut token) = (0usize, String::new());
+    let (mut length, mut token, mut forwarded, mut content_type) = (0usize, String::new(), None, String::new());
     for count in 0.. {
         if count > MAX_HEADERS {
             return Err(deny(431, "too many headers"));
@@ -366,14 +388,24 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
                 "content-length" => length = value.trim().parse().map_err(|_| deny(400, "Content-Length"))?,
                 "transfer-encoding" => return Err(deny(501, "Transfer-Encoding is not supported")),
                 "authorization" => token = value.trim().strip_prefix("Bearer ").unwrap_or("").trim().to_string(),
+                // Compass talking to the hub's AI gateway sends the hub token as an Anthropic key.
+                "x-api-key" if token.is_empty() => token = value.trim().to_string(),
+                "content-type" => content_type = value.trim().to_string(),
+                "x-forwarded-for" => forwarded = value.split(',').next_back().and_then(|a| forwarded_address(a.trim())),
                 _ => {}
             }
         }
     }
-    if length > MAX_BODY {
+    if length > MAX_AI_BODY || (length > MAX_BODY && !target.starts_with("/ai/")) {
         return Err(deny(413, "request body too large"));
     }
-    Ok(Head { method, target, length, token })
+    Ok(Head { method, target, length, token, forwarded, content_type })
+}
+
+/// An address of X-Forwarded-For: "10.1.2.3", "2001:db8::1", or with a port as IIS/ARR sends it by default
+/// ("10.1.2.3:51234", "[2001:db8::1]:51234").
+fn forwarded_address(text: &str) -> Option<IpAddr> {
+    text.parse::<IpAddr>().ok().or_else(|| text.parse::<std::net::SocketAddr>().ok().map(|a| a.ip()))
 }
 
 fn read_body(reader: &mut BufReader<&TcpStream>, length: usize, started: Instant) -> Result<Vec<u8>, HttpError> {
@@ -438,6 +470,48 @@ fn respond(mut stream: &TcpStream, status: u16, content_type: &str, body: &[u8])
     Ok(())
 }
 
+/// A file to download (a report).
+fn respond_file(mut stream: &TcpStream, content_type: &str, name: &str, body: &[u8]) -> Result<()> {
+    let safe: String = name.chars().map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '_' }).collect();
+    write!(
+        stream,
+        "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nContent-Disposition: attachment; filename=\"{safe}\"\r\nCache-Control: no-store\r\n\
+         X-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'none'\r\nConnection: close\r\n\r\n",
+        body.len()
+    )?;
+    stream.write_all(body)?;
+    stream.flush()?;
+    Ok(())
+}
+
+/// The return address of a sign-in started by Compass: http on this computer's loopback, the fixed path.
+fn compass_return(url: &str) -> bool {
+    reqwest::Url::parse(url).is_ok_and(|u| u.scheme() == "http" && matches!(u.host_str(), Some("127.0.0.1") | Some("localhost")) && u.path() == "/compass-callback" && u.query().is_none())
+}
+
+/// A redirect (the company sign-in): to the provider, or back to the page.
+fn redirect(mut stream: &TcpStream, location: &str) -> Result<()> {
+    write!(
+        stream,
+        "HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n\
+         X-Frame-Options: DENY\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\n\r\n"
+    )?;
+    stream.flush()?;
+    Ok(())
+}
+
+/// A small page when the company sign-in did not work, with the way back.
+fn sign_in_problem(stream: &TcpStream, message: &str) -> Result<()> {
+    let esc = message.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;");
+    let page = format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>Compass Hub</title></head><body style=\"font-family:Segoe UI,sans-serif;max-width:560px;margin:60px auto;color:#1b2a3a\">\
+         <h1 style=\"font-size:22px\">{}</h1><p>{esc}</p><p><a href=\"/\">{}</a></p></body></html>",
+        crate::i18n::tr("Sign-in did not work"),
+        crate::i18n::tr("Back to the sign-in page")
+    );
+    respond(stream, 403, "text/html; charset=utf-8", page.as_bytes())
+}
+
 /// An error with its HTTP status.
 struct HttpError(u16, String);
 
@@ -469,6 +543,12 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
         Ok(head) => head,
         Err(HttpError(status, message)) => return respond(&stream, status, "application/json; charset=utf-8", json!({ "error": message }).to_string().as_bytes()),
     };
+    // Behind a proxy on this computer (IIS/ARR, nginx) every request comes from the loopback address: the client is
+    // the address the proxy added to X-Forwarded-For. From any other address the header is not trusted.
+    let peer = match (peer, head.forwarded) {
+        (Some(ip), Some(client)) if ip.is_loopback() => Some(client),
+        (peer, _) => peer,
+    };
     let (path, query) = split_target(&head.target);
     if head.method == "GET" {
         match path.as_str() {
@@ -476,6 +556,69 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
             "/app.js" => return respond(&stream, 200, "text/javascript; charset=utf-8", web_page().1.as_bytes()),
             "/api/health" => return respond(&stream, 200, "application/json; charset=utf-8", json!({ "ok": true, "app": crate::config::APP_NAME, "version": env!("CARGO_PKG_VERSION") }).to_string().as_bytes()),
             "/favicon.ico" => return respond(&stream, 204, "text/plain", b""),
+            "/api/auth" => {
+                let info = match &hub.oidc {
+                    Some(p) => json!({ "oidc": true, "button": p.config.button, "password_login": p.config.password_login }),
+                    None => json!({ "oidc": false, "password_login": true }),
+                };
+                return respond(&stream, 200, "application/json; charset=utf-8", info.to_string().as_bytes());
+            }
+            "/auth/login" => {
+                let Some(provider) = &hub.oidc else { return respond(&stream, 404, "text/plain", b"not found") };
+                // Compass signs in through the browser and gets the session back on its own computer only.
+                let return_to = match query.get("return") {
+                    Some(r) if compass_return(r) => Some(r.clone()),
+                    Some(_) => return sign_in_problem(&stream, &crate::i18n::tr("The return address of the sign-in is not allowed.")),
+                    None => None,
+                };
+                return match provider.start(return_to) {
+                    Ok(url) => redirect(&stream, &url),
+                    Err(e) => {
+                        log(&hub.dir, &format!("company sign-in could not start: {e:#}"));
+                        sign_in_problem(&stream, &crate::i18n::tr("The company sign-in is not available right now. Try again later or ask the administrator of the hub."))
+                    }
+                };
+            }
+            "/auth/callback" => {
+                let Some(provider) = &hub.oidc else { return respond(&stream, 404, "text/plain", b"not found") };
+                if let Some(error) = query.get("error") {
+                    let detail = query.get("error_description").cloned().unwrap_or_default();
+                    log(&hub.dir, &format!("company sign-in refused by the provider: {error} {detail}"));
+                    hub.audit_sign_in("", &crate::i18n::fmt("company sign-in refused by the provider: {0}", &[format!("{error} {detail}").trim().to_string()]), peer);
+                    return sign_in_problem(&stream, &crate::i18n::fmt("The sign-in was refused: {0}", &[if detail.is_empty() { error.clone() } else { detail }]));
+                }
+                let (code, state) = (query.get("code").cloned().unwrap_or_default(), query.get("state").cloned().unwrap_or_default());
+                return match provider.finish(&code, &state) {
+                    Ok(who) => {
+                        if hub.users.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|u| u.name.eq_ignore_ascii_case(&who.name)) {
+                            log(&hub.dir, &format!("company sign-in of {} refused: a local user has the same name", who.name));
+                            hub.audit_sign_in(&who.name, &crate::i18n::tr("company sign-in refused: a local user has the same name"), peer);
+                            return sign_in_problem(&stream, &crate::i18n::tr("A local user of the hub has the same name: the administrator has to rename or remove it first."));
+                        }
+                        let role = Role::parse(&who.role);
+                        hub.external.lock().unwrap_or_else(|p| p.into_inner()).insert(who.name.clone(), role);
+                        hub.remember_company_account(&who.name, role);
+                        let session = format!("lcs_{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
+                        hub.sessions.lock().unwrap_or_else(|p| p.into_inner()).insert(token_hash(&session), (who.name.clone(), Instant::now() + Duration::from_secs(SESSION_HOURS * 3600)));
+                        hub.save_sessions();
+                        let place = if who.return_to.is_some() { " (Compass)" } else { "" };
+                        log(&hub.dir, &format!("{} signed in with a company account as {}{place}", who.name, role.name()));
+                        let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": who.name, "source": "", "summary": crate::i18n::fmt("signed in with a company account ({0})", &[format!("{}{place}", role.name())]), "ok": true }));
+                        // Compass: the session goes to its own address on the user's computer (never through a proxy).
+                        if let Some(back) = &who.return_to {
+                            return redirect(&stream, &format!("{back}?session={session}&name={}&role={}", encode(&who.name), role.name()));
+                        }
+                        // The session goes to the page in the fragment: it never reaches a server log or a proxy.
+                        redirect(&stream, &format!("/#session={session}"))
+                    }
+                    Err(e) => {
+                        log(&hub.dir, &format!("company sign-in failed: {e:#}"));
+                        let who = e.downcast_ref::<crate::oidc::NoGroup>().map(|n| n.name.clone()).unwrap_or_default();
+                        hub.audit_sign_in(&who, &crate::i18n::fmt("company sign-in failed: {0}", &[format!("{e:#}")]), peer);
+                        sign_in_problem(&stream, &format!("{e:#}"))
+                    }
+                };
+            }
             _ => {}
         }
     }
@@ -488,6 +631,9 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
             Ok(body) => body,
             Err(HttpError(status, message)) => return respond(&stream, status, "application/json; charset=utf-8", json!({ "error": message }).to_string().as_bytes()),
         };
+        if hub.oidc.as_ref().is_some_and(|p| !p.config.password_login) {
+            return respond(&stream, 403, "application/json; charset=utf-8", json!({ "error": crate::i18n::tr("this hub accepts only the company sign-in") }).to_string().as_bytes());
+        }
         let (status, value) = hub.login(&body, peer);
         return respond(&stream, status, "application/json; charset=utf-8", value.to_string().as_bytes());
     }
@@ -502,16 +648,18 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
             }
             let list = failures.entry(ip).or_default();
             list.retain(|t| t.elapsed() < FAILURE_WINDOW);
-            list.push(Instant::now());
+            let mut seen = hub.failed_tokens.lock().unwrap_or_else(|p| p.into_inner());
+            seen.retain(|_, t| t.elapsed() < FAILURE_WINDOW);
+            if seen.insert(token_hash(&head.token), Instant::now()).is_none() {
+                list.push(Instant::now());
+            }
             locked = list.len() > MAX_FAILURES;
             if list.len() == MAX_FAILURES {
                 log(&hub.dir, &format!("{ip}: {MAX_FAILURES} wrong tokens, refused for {} minutes", FAILURE_WINDOW.as_secs() / 60));
             }
         }
-        // A small body is read first, so the client gets the answer instead of a reset connection.
-        if head.length <= 64 * 1024 {
-            let _ = read_body(&mut reader, head.length, started);
-        }
+        // The body is read first, so the client (or the proxy in front of the hub) gets the answer instead of a reset.
+        let _ = read_body(&mut reader, head.length, started);
         return if locked {
             respond(&stream, 429, "application/json; charset=utf-8", json!({ "error": "too many wrong tokens, try again later" }).to_string().as_bytes())
         } else {
@@ -522,10 +670,49 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
         Ok(body) => body,
         Err(HttpError(status, message)) => return respond(&stream, status, "application/json; charset=utf-8", json!({ "error": message }).to_string().as_bytes()),
     };
+    let content_type = head.content_type.clone();
     let request = Request { method: head.method, path, query, token: head.token, body };
     // An account with a password set by someone else (the default one, a reset) can only change it or sign out.
     if must_change && !matches!((request.method.as_str(), request.path.as_str()), ("GET", "/api/me") | ("POST", "/api/password") | ("POST", "/api/logout")) {
         return respond(&stream, 403, "application/json; charset=utf-8", json!({ "error": crate::i18n::tr("change your password first"), "must_change": true }).to_string().as_bytes());
+    }
+    // A Word or Excel report of a package: a file, not JSON.
+    if request.method == "GET" {
+        let parts: Vec<&str> = request.path.trim_matches('/').split('/').collect();
+        if let ["api", "sources", id, "report"] = parts.as_slice() {
+            let result = (|| -> Result<(Vec<u8>, &'static str, String), HttpError> {
+                let source = hub.source(id)?;
+                let package: i64 = request.query.get("package").and_then(|p| p.parse().ok()).ok_or_else(|| deny(400, crate::i18n::tr("give the package (package_id)")))?;
+                let format = request.query.get("format").map(String::as_str).unwrap_or("docx");
+                package_report(&source.cfg, &source.name, package, format)
+            })();
+            return match result {
+                Ok((bytes, content_type, name)) => {
+                    let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": id, "summary": crate::i18n::fmt("report {0} downloaded", &[name.clone()]), "ok": true }));
+                    respond_file(&stream, content_type, &name, &bytes)
+                }
+                Err(HttpError(status, message)) => respond(&stream, status, "application/json; charset=utf-8", json!({ "error": message }).to_string().as_bytes()),
+            };
+        }
+    }
+    // The team's services for Compass: Claude with the team's key, Jira and Confluence with the team's account.
+    let gateway = if request.method == "POST" && request.path == "/ai/v1/messages" {
+        Some(hub.ai_gateway(&user, role, &request.body))
+    } else if let Some(rest) = request.path.strip_prefix("/proxy/jira") {
+        Some(hub.service_proxy("jira", &user, role, &request.method, rest, &request.query, &request.body, &content_type))
+    } else if let Some(rest) = request.path.strip_prefix("/proxy/confluence") {
+        Some(hub.service_proxy("confluence", &user, role, &request.method, rest, &request.query, &request.body, &content_type))
+    } else {
+        None
+    };
+    if let Some(result) = gateway {
+        return match result {
+            Ok((status, content_type, bytes)) => respond(&stream, status, &content_type, &bytes),
+            Err(HttpError(status, message)) => {
+                log(&hub.dir, &format!("{} {} ({user}) -> {status} {message}", request.method, request.path));
+                respond(&stream, status, "application/json; charset=utf-8", json!({ "type": "error", "error": { "type": "hub_error", "message": message } }).to_string().as_bytes())
+            }
+        };
     }
     match route(hub, &request, user.to_string(), role) {
         Ok((status, value)) => respond(&stream, status, "application/json; charset=utf-8", value.to_string().as_bytes()),
@@ -566,6 +753,9 @@ impl Hub {
         let mut sessions = self.sessions.lock().unwrap_or_else(|p| p.into_inner());
         sessions.retain(|_, (_, until)| *until > Instant::now());
         let (name, _) = sessions.get(&hash)?.clone();
+        if let Some(role) = self.external.lock().unwrap_or_else(|p| p.into_inner()).get(&name) {
+            return Some((name.clone(), *role, false));
+        }
         users.iter().find(|u| u.name == name).map(|u| (u.name.clone(), u.role, u.must_change))
     }
 
@@ -579,6 +769,8 @@ impl Hub {
             let list = failures.entry(ip).or_default();
             list.retain(|t| t.elapsed() < FAILURE_WINDOW);
             if list.len() >= MAX_FAILURES {
+                drop(failures);
+                self.audit_sign_in(&name, &crate::i18n::tr("sign-in blocked: too many wrong sign-ins from this address"), peer);
                 return (429, json!({ "error": "too many wrong sign-ins, try again later" }));
             }
         }
@@ -590,10 +782,12 @@ impl Hub {
                 failures.entry(ip).or_default().push(Instant::now());
             }
             log(&self.dir, &format!("failed sign-in as {name:?}"));
+            self.audit_sign_in(&name, &crate::i18n::tr("wrong user name or password"), peer);
             return (401, json!({ "error": crate::i18n::tr("wrong user name or password") }));
         };
         let session = format!("lcs_{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
         self.sessions.lock().unwrap_or_else(|p| p.into_inner()).insert(token_hash(&session), (user.name.clone(), Instant::now() + Duration::from_secs(SESSION_HOURS * 3600)));
+        self.save_sessions();
         log(&self.dir, &format!("{} signed in", user.name));
         (200, json!({ "token": session, "name": user.name, "role": user.role.name(), "must_change": user.must_change }))
     }
@@ -628,6 +822,60 @@ impl Hub {
     fn rules(&self) -> Value {
         let policy = self.policy.lock().unwrap();
         if policy["governance"].is_object() { policy["governance"].clone() } else { json!({}) }
+    }
+
+    /// Sessions (hashes only, never the tokens) and their owners in sessions.json, so a restart of the hub (an update,
+    /// a reboot) does not sign everybody out.
+    fn save_sessions(&self) {
+        let now = Instant::now();
+        let list: Vec<Value> = self.sessions.lock().unwrap_or_else(|p| p.into_inner()).iter().filter(|(_, (_, until))| *until > now)
+            .map(|(hash, (name, until))| json!({ "hash": hex(hash), "name": name, "until": chrono::Utc::now().timestamp() + until.duration_since(now).as_secs() as i64 })).collect();
+        let _ = std::fs::write(self.dir.join("sessions.json"), Value::Array(list).to_string());
+    }
+
+    fn load_sessions(&self) {
+        let now = chrono::Utc::now().timestamp();
+        let saved: Value = std::fs::read_to_string(self.dir.join("sessions.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
+        let mut sessions = self.sessions.lock().unwrap_or_else(|p| p.into_inner());
+        for s in saved.as_array().into_iter().flatten() {
+            let (Some(hash), Some(name), Some(until)) = (s["hash"].as_str(), s["name"].as_str(), s["until"].as_i64()) else { continue };
+            let Some(bytes) = (0..hash.len()).step_by(2).map(|i| u8::from_str_radix(hash.get(i..i + 2)?, 16).ok()).collect::<Option<Vec<u8>>>() else { continue };
+            if let (Ok(key), true) = (<[u8; 32]>::try_from(bytes.as_slice()), until > now) {
+                sessions.insert(key, (name.to_string(), Instant::now() + Duration::from_secs((until - now) as u64)));
+            }
+        }
+        drop(sessions);
+        // The roles of company accounts from their last sign-in (the provider gives them again at the next one).
+        let accounts: Value = std::fs::read_to_string(self.dir.join("company_accounts.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
+        let mut external = self.external.lock().unwrap_or_else(|p| p.into_inner());
+        for (name, v) in accounts.as_object().into_iter().flatten() {
+            if let Some(role) = v["role"].as_str() {
+                external.insert(name.clone(), Role::parse(role));
+            }
+        }
+    }
+
+    /// A refused or failed sign-in in the audit trail (result ✗), with the client address.
+    fn audit_sign_in(&self, user: &str, reason: &str, peer: Option<IpAddr>) {
+        let _ = self.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": if user.is_empty() { "?" } else { user },
+            "source": "", "summary": crate::i18n::tr("sign-in"), "ok": false,
+            "error": match peer { Some(ip) => format!("{reason} ({ip})"), None => reason.to_string() } }));
+    }
+
+    /// Company accounts are not users of the hub (their role comes from the provider at every sign-in); the last
+    /// sign-in of each is kept in company_accounts.json only to show the administrator who uses the hub.
+    fn remember_company_account(&self, name: &str, role: Role) {
+        let file = self.dir.join("company_accounts.json");
+        let mut all: Value = std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| json!({}));
+        all[name] = json!({ "role": role.name(), "last_sign_in": chrono::Local::now().to_rfc3339() });
+        let _ = std::fs::write(&file, serde_json::to_string_pretty(&all).unwrap_or_default());
+    }
+
+    fn company_accounts(&self) -> Vec<Value> {
+        let all: Value = std::fs::read_to_string(self.dir.join("company_accounts.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| json!({}));
+        let mut list: Vec<Value> = all.as_object().into_iter().flatten().map(|(name, v)| json!({ "name": name, "role": v["role"], "last_sign_in": v["last_sign_in"] })).collect();
+        list.sort_by(|a, b| b["last_sign_in"].as_str().cmp(&a["last_sign_in"].as_str()));
+        list
     }
 
     fn append_audit(&self, entry: &Value) -> Result<()> {
@@ -721,6 +969,7 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
         }
         ("POST", ["api", "logout"]) => {
             hub.sessions.lock().unwrap_or_else(|p| p.into_inner()).remove(&token_hash(&request.token));
+            hub.save_sessions();
             Ok((200, json!({ "ok": true })))
         }
         ("POST", ["api", "password"]) => {
@@ -739,6 +988,14 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
             hub.save_users().map_err(|e| deny(500, format!("{e:#}")))?;
             let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": "", "summary": "password changed", "ok": true }));
             Ok((200, json!({ "ok": true })))
+        }
+        ("GET", ["api", "users", "ai"]) => {
+            require(role, Role::Admin)?;
+            Ok((200, json!(hub.ai_usage_all())))
+        }
+        ("GET", ["api", "users", "company"]) => {
+            require(role, Role::Admin)?;
+            Ok((200, json!(hub.company_accounts())))
         }
         ("GET", ["api", "users"]) => {
             require(role, Role::Admin)?;
@@ -869,7 +1126,17 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
             let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": id, "summary": format!("Confluence page {page_id}: {title}"), "ok": true }));
             Ok((201, json!({ "title": title, "url": page_url, "created": created })))
         }
-        ("GET", ["api", "policy"]) => Ok((200, hub.policy.lock().unwrap().clone())),
+        ("GET", ["api", "policy"]) => {
+            let mut policy = hub.policy.lock().unwrap().clone();
+            // Compass working through the hub needs the team's project and space as its defaults.
+            if policy["jira_via_hub"] == true {
+                policy["jira_project"] = hub.integrations["jira"]["project"].clone();
+            }
+            if policy["confluence_via_hub"] == true {
+                policy["confluence_space"] = hub.integrations["confluence"]["space"].clone();
+            }
+            Ok((200, policy))
+        }
         ("PUT", ["api", "policy"]) => {
             require(role, Role::Admin)?;
             let policy = body()?;
@@ -886,6 +1153,37 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
         }
         ("GET", ["api", "sources"]) => Ok((200, json!(hub.sources.iter().map(|s| json!({ "id": s.id, "name": s.name, "kind": if s.cfg.uses_file() { "file" } else { "database" } })).collect::<Vec<_>>()))),
         // Questions of people without EA: the assistant reads the source and answers (it cannot change the model).
+        // Read-only GraphQL over a model (any role).
+        ("POST", ["api", "sources", id, "graphql"]) => {
+            let source = hub.source(id)?;
+            Ok((200, crate::graphql::execute(&source.cfg, &body()?)))
+        }
+        ("GET", ["api", "graphql", "schema"]) => Ok((200, json!({ "sdl": crate::graphql::sdl() }))),
+        // Flat tables of a model for Power BI, Excel and other tools (Get Data → Web, with the Authorization header).
+        ("GET", ["api", "sources", id, "table", table]) => {
+            let source = hub.source(id)?;
+            let sql = match *table {
+                "elements" => "select o.object_id, o.name, o.object_type, o.stereotype, o.status, o.package_id, p.name as package, o.author, o.version, o.phase, o.createddate, o.modifieddate from t_object o left join t_package p on p.package_id = o.package_id where o.object_type <> 'Package'",
+                "connectors" => "select c.connector_id, c.connector_type, c.stereotype, c.name, c.start_object_id, s.name as source, c.end_object_id, t.name as target from t_connector c left join t_object s on s.object_id = c.start_object_id left join t_object t on t.object_id = c.end_object_id",
+                "packages" => "select package_id, name, parent_id, version, createddate, modifieddate from t_package",
+                "diagrams" => "select diagram_id, name, diagram_type, package_id, author, createddate, modifieddate from t_diagram",
+                "attributes" => "select a.id, a.object_id, o.name as element, a.name, a.type from t_attribute a left join t_object o on o.object_id = a.object_id",
+                "tagged_values" => "select v.propertyid, v.object_id, o.name as element, v.property, v.value from t_objectproperties v left join t_object o on o.object_id = v.object_id",
+                _ => return Err(deny(404, crate::i18n::tr("tables: elements, connectors, packages, diagrams, attributes, tagged_values"))),
+            };
+            let sql = crate::model_db::portable_sql(source.cfg.model_source, &format!("{sql} limit 100000"));
+            let names: Vec<String> = sql
+                .split(" from ")
+                .next()
+                .unwrap_or("")
+                .trim_start_matches("select ")
+                .trim_start_matches("top 100000 ")
+                .split(", ")
+                .map(|c| c.rsplit(" as ").next().unwrap_or(c).rsplit('.').next().unwrap_or(c).trim().to_string())
+                .collect();
+            let rows = crate::tools::query_rows(&source.cfg, &sql)?;
+            Ok((200, Value::Array(rows.into_iter().map(|r| Value::Object(names.iter().cloned().zip(r.into_iter().map(Value::String)).collect())).collect())))
+        }
         ("POST", ["api", "sources", id, "ask"]) => {
             let source = hub.source(id)?;
             let question = body()?["question"].as_str().unwrap_or("").trim().to_string();
@@ -1166,8 +1464,97 @@ fn xml(text: &str) -> String {
     text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
+/// The rest of a relationship query (after its first five columns): the types, ids and classifiers of both ends, for
+/// [`named_ends`].
+const ENDS: &str = "s.object_type as c5, s.object_id as c6, coalesce(sc.name,'') as c7, t.object_type as c8, t.object_id as c9, coalesce(tc.name,'') as c10 \
+    from t_connector c join t_object s on s.object_id = c.start_object_id join t_object t on t.object_id = c.end_object_id \
+    left join t_object sc on sc.object_id = s.classifier left join t_object tc on tc.object_id = t.classifier";
+
+/// Relationship rows with the names of the ends (columns `source` and `target`) filled in where EA has none, e.g.
+/// unnamed lifelines: ":Classifier" or "(unnamed Type #id)". The extra columns of [`ENDS`] are dropped.
+fn named_ends(mut rows: Vec<Vec<String>>, source: usize, target: usize) -> Vec<Vec<String>> {
+    let label = |name: &str, kind: &str, id: &str, classifier: &str| {
+        if !name.trim().is_empty() {
+            name.to_string()
+        } else if !classifier.trim().is_empty() {
+            format!(":{classifier}")
+        } else {
+            format!("({} {kind} #{id})", crate::i18n::tr("unnamed"))
+        }
+    };
+    for r in &mut rows {
+        if r.len() >= 11 {
+            r[source] = label(&r[source], &r[5], &r[6], &r[7]);
+            r[target] = label(&r[target], &r[8], &r[9], &r[10]);
+        }
+        r.truncate(5);
+    }
+    rows
+}
+
 /// A Confluence page (storage format) of a package with its subpackages: elements with their descriptions and the
 /// relationships between them. Text only: the hub has no EA to draw diagrams.
+/// A report of a package with its subpackages: Word (description, elements table, relationships) or Excel
+/// (sheets Elements and Relationships). The hub has no EA, so there are no diagram pictures.
+fn package_report(cfg: &AppConfig, model: &str, package: i64, format: &str) -> Result<(Vec<u8>, &'static str, String), HttpError> {
+    let q = |sql: String| crate::tools::query_rows(cfg, &sql).map_err(|e| HttpError(500, format!("{e:#}")));
+    let root = q(format!("select name as c0, coalesce(notes,'') as c1 from t_package where package_id = {package}"))?
+        .into_iter()
+        .next()
+        .ok_or_else(|| deny(404, crate::i18n::fmt("there is no package with id {0}", &[package.to_string()])))?;
+    let ids: Vec<String> = q(format!(
+        "with recursive tree(package_id) as (select package_id as c0 from t_package where package_id = {package} \
+         union all select p.package_id as c0 from t_package p join tree t on p.parent_id = t.package_id) select package_id as c0 from tree"
+    ))?
+    .into_iter()
+    .map(|r| r[0].clone())
+    .collect();
+    let ids = ids.join(",");
+    let elements = q(format!(
+        "select coalesce(o.name,'') as c0, o.object_type as c1, coalesce(o.stereotype,'') as c2, coalesce(o.status,'') as c3, p.name as c4, coalesce(o.note,'') as c5 \
+         from t_object o join t_package p on p.package_id = o.package_id where o.package_id in ({ids}) and o.object_type not in ('Package','Note','Text','Boundary') order by p.name, o.name"
+    ))?;
+    let relations = named_ends(q(format!(
+        "select coalesce(s.name,'') as c0, c.connector_type as c1, coalesce(c.stereotype,'') as c2, coalesce(t.name,'') as c3, coalesce(c.name,'') as c4, {ENDS} \
+         where s.package_id in ({ids}) and t.package_id in ({ids}) order by 1, 4"
+    ))?, 0, 3);
+    let base: String = root[0].chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect();
+    let date = chrono::Local::now().format("%Y-%m-%d").to_string();
+    if format == "xlsx" {
+        let sheet = |name: &str, columns: &[&'static str], rows: &[Vec<String>]| crate::xlsx::Sheet {
+            name: name.to_string(),
+            columns: columns.iter().map(|c| crate::i18n::tr(c).to_string()).collect(),
+            rows: rows.iter().map(|r| r.iter().map(|v| json!(v)).collect()).collect(),
+        };
+        let bytes = crate::xlsx::build(&[
+            sheet(crate::i18n::tr("Elements"), &["name", "type", "stereotype", "status", "package", "description"], &elements),
+            sheet(crate::i18n::tr("Relationships"), &["source", "type", "stereotype", "target", "name"], &relations),
+        ])
+        .map_err(|e| HttpError(500, format!("{e:#}")))?;
+        return Ok((bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", format!("{base}_{date}.xlsx")));
+    }
+    let cell = |t: &str| t.replace('|', "/").replace(['\r', '\n'], " ");
+    let mut md = String::new();
+    md.push_str(&format!("*{}*\n\n", crate::i18n::fmt("Report of the model {0} from the team hub, {1}.", &[model.to_string(), date.clone()])));
+    if !root[1].trim().is_empty() {
+        md.push_str(&format!("{}\n\n", root[1].trim()));
+    }
+    md.push_str(&format!("## {} ({})\n\n| {} | {} | {} | {} |\n|---|---|---|---|\n", crate::i18n::tr("Elements"), elements.len(), crate::i18n::tr("name"), crate::i18n::tr("type"), crate::i18n::tr("package"), crate::i18n::tr("description")));
+    for e in elements.iter().take(2000) {
+        let kind = if e[2].is_empty() { e[1].clone() } else { format!("{} «{}»", e[1], e[2]) };
+        md.push_str(&format!("| {} | {} | {} | {} |\n", cell(&e[0]), cell(&kind), cell(&e[4]), cell(&e[5].chars().take(500).collect::<String>())));
+    }
+    if !relations.is_empty() {
+        md.push_str(&format!("\n## {} ({})\n\n", crate::i18n::tr("Relationships"), relations.len()));
+        for r in relations.iter().take(2000) {
+            let kind = if r[2].is_empty() { r[1].clone() } else { format!("{} «{}»", r[1], r[2]) };
+            md.push_str(&format!("- {} → {} ({kind}){}\n", r[0], r[3], if r[4].is_empty() { String::new() } else { format!(": {}", r[4]) }));
+        }
+    }
+    let bytes = crate::docx::build(&root[0], &md, |_, _| anyhow::bail!("no pictures in hub reports")).map_err(|e| HttpError(500, format!("{e:#}")))?;
+    Ok((bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", format!("{base}_{date}.docx")))
+}
+
 fn package_page(cfg: &AppConfig, model: &str, package: i64) -> Result<(String, String), HttpError> {
     let q = |sql: String| crate::tools::query_rows(cfg, &sql).map_err(|e| HttpError(500, format!("{e:#}")));
     let root = q(format!("select name as c0, coalesce(notes,'') as c1 from t_package where package_id = {package}"))?
@@ -1187,11 +1574,10 @@ fn package_page(cfg: &AppConfig, model: &str, package: i64) -> Result<(String, S
          from t_object o join t_package p on p.package_id = o.package_id where o.package_id in ({ids}) and o.object_type not in ('Package','Note','Text','Boundary') \
          order by p.name, o.name"
     ))?;
-    let relations = q(format!(
-        "select c.connector_type as c0, coalesce(c.stereotype,'') as c1, coalesce(s.name,'') as c2, coalesce(t.name,'') as c3, coalesce(c.name,'') as c4 from t_connector c \
-         join t_object s on s.object_id = c.start_object_id join t_object t on t.object_id = c.end_object_id \
+    let relations = named_ends(q(format!(
+        "select c.connector_type as c0, coalesce(c.stereotype,'') as c1, coalesce(s.name,'') as c2, coalesce(t.name,'') as c3, coalesce(c.name,'') as c4, {ENDS} \
          where s.package_id in ({ids}) and t.package_id in ({ids}) order by 3, 4"
-    ))?;
+    ))?, 2, 3);
     let mut page = String::new();
     page.push_str(&format!("<p><em>{}</em></p>", xml(&crate::i18n::fmt("Published from the model {0} by the team hub on {1}. Edit the model, not this page: the next publication replaces it.", &[model.to_string(), chrono::Local::now().format("%Y-%m-%d %H:%M").to_string()]))));
     if !root[1].trim().is_empty() {
@@ -1217,6 +1603,124 @@ fn package_page(cfg: &AppConfig, model: &str, package: i64) -> Result<(String, S
 }
 
 impl Hub {
+    /// The AI gateway: the hub keeps the Claude keys ("ai": {"keys": [{"for": "<user>" | "role:<role>" | "*", "secret": "<name>"}]}),
+    /// Compass sends its requests here with the hub token. The first entry for the person, then for their role,
+    /// then for everybody gives the key (a hub secret, e.g. LOONAR_SECRET_CLAUDE_KEY_TEAM). Usage per person goes to
+    /// ai_usage.jsonl. The request is passed to Anthropic as it is.
+    fn ai_gateway(&self, user: &str, role: Role, body: &[u8]) -> Result<(u16, String, Vec<u8>), HttpError> {
+        let keys = self.ai["keys"].as_array().cloned().unwrap_or_default();
+        let wanted = [user.to_lowercase(), format!("role:{}", role.name()), "*".to_string()];
+        let secret = wanted.iter().find_map(|w| keys.iter().find(|k| k["for"].as_str().is_some_and(|f| f.trim().to_lowercase() == *w)).and_then(|k| k["secret"].as_str()))
+            .ok_or_else(|| deny(403, crate::i18n::tr("the hub has no AI key for you: ask the administrator of the hub")))?;
+        let key = crate::config::secrets::get(secret).map_err(|e| HttpError(500, format!("{e:#}")))?;
+        // Limits ("ai": {"limits": [{"for": …, "tokens_per_day": N, "tokens_per_month": N}]}): the first entry for the
+        // person, their role or everybody; input and output tokens counted from ai_usage.jsonl.
+        let limits = self.ai["limits"].as_array().cloned().unwrap_or_default();
+        if let Some(limit) = wanted.iter().find_map(|w| limits.iter().find(|l| l["for"].as_str().is_some_and(|f| f.trim().to_lowercase() == *w))) {
+            let (day, month) = self.ai_usage_of(user);
+            if limit["tokens_per_day"].as_u64().is_some_and(|max| day >= max) {
+                return Err(deny(429, crate::i18n::fmt("your AI limit for today is used up ({0} tokens); it renews tomorrow or ask the administrator of the hub", &[day.to_string()])));
+            }
+            if limit["tokens_per_month"].as_u64().is_some_and(|max| month >= max) {
+                return Err(deny(429, crate::i18n::fmt("your AI limit for this month is used up ({0} tokens); ask the administrator of the hub", &[month.to_string()])));
+            }
+        }
+        let request: Value = serde_json::from_slice(body).map_err(|_| deny(400, "the request is not JSON"))?;
+        if let Some(models) = self.ai["models"].as_array() {
+            let model = request["model"].as_str().unwrap_or("");
+            if !models.iter().any(|m| m.as_str() == Some(model)) {
+                return Err(deny(403, crate::i18n::fmt("the model {0} is not allowed by the hub", &[model.to_string()])));
+            }
+        }
+        let http = reqwest::blocking::Client::builder().timeout(Duration::from_secs(600)).build().map_err(|e| HttpError(500, e.to_string()))?;
+        let response = http.post(crate::claude::API_URL).header("x-api-key", key).header("anthropic-version", crate::claude::API_VERSION)
+            .header("content-type", "application/json").body(body.to_vec()).send().map_err(|e| deny(502, format!("Anthropic: {e}")))?;
+        let status = response.status().as_u16();
+        let bytes = response.bytes().map_err(|e| deny(502, format!("Anthropic: {e}")))?.to_vec();
+        if let Ok(answer) = serde_json::from_slice::<Value>(&bytes) {
+            let usage = json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "key": secret, "model": request["model"], "status": status,
+                "input_tokens": answer["usage"]["input_tokens"], "output_tokens": answer["usage"]["output_tokens"],
+                "cache_creation_input_tokens": answer["usage"]["cache_creation_input_tokens"], "cache_read_input_tokens": answer["usage"]["cache_read_input_tokens"] });
+            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(self.dir.join("ai_usage.jsonl")) {
+                let _ = writeln!(f, "{usage}");
+            }
+        }
+        Ok((status, "application/json".into(), bytes))
+    }
+
+    /// Tokens (input + output) the person used today and this month, from ai_usage.jsonl.
+    fn ai_usage_of(&self, user: &str) -> (u64, u64) {
+        let text = std::fs::read_to_string(self.dir.join("ai_usage.jsonl")).unwrap_or_default();
+        let now = chrono::Local::now();
+        let (today, this_month) = (now.format("%Y-%m-%d").to_string(), now.format("%Y-%m").to_string());
+        let (mut day, mut month) = (0u64, 0u64);
+        for entry in text.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok()).filter(|e| e["user"].as_str().is_some_and(|u| u.eq_ignore_ascii_case(user))) {
+            let time = entry["time"].as_str().unwrap_or("");
+            // What the request costs, in input tokens: tokens read from the cache count a tenth, as Anthropic bills them.
+            let tokens = entry["input_tokens"].as_u64().unwrap_or(0) + entry["output_tokens"].as_u64().unwrap_or(0)
+                + entry["cache_creation_input_tokens"].as_u64().unwrap_or(0) + entry["cache_read_input_tokens"].as_u64().unwrap_or(0) / 10;
+            if time.starts_with(&this_month) {
+                month += tokens;
+                if time.starts_with(&today) {
+                    day += tokens;
+                }
+            }
+        }
+        (day, month)
+    }
+
+    /// The AI usage of every person, today and this month (the Users tab of the administrator).
+    fn ai_usage_all(&self) -> Vec<Value> {
+        let text = std::fs::read_to_string(self.dir.join("ai_usage.jsonl")).unwrap_or_default();
+        let mut people: Vec<String> = text.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok()).filter_map(|e| e["user"].as_str().map(String::from)).collect();
+        people.sort_by_key(|p| p.to_lowercase());
+        people.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+        people.iter().map(|p| {
+            let (day, month) = self.ai_usage_of(p);
+            let key = text.lines().rev().filter_map(|l| serde_json::from_str::<Value>(l).ok()).find(|e| e["user"].as_str().is_some_and(|u| u.eq_ignore_ascii_case(p))).and_then(|e| e["key"].as_str().map(String::from)).unwrap_or_default();
+            json!({ "user": p, "tokens_today": day, "tokens_month": month, "key": key })
+        }).collect()
+    }
+
+    /// Jira or Confluence through the hub, with the team's account from "integrations": only their REST API, viewers
+    /// only read, every change is in the audit trail with the person who made it.
+    #[allow(clippy::too_many_arguments)]
+    fn service_proxy(&self, kind: &str, user: &str, role: Role, method: &str, rest: &str, query: &HashMap<String, String>, body: &[u8], content_type: &str) -> Result<(u16, String, Vec<u8>), HttpError> {
+        let s = &self.integrations[kind];
+        let base = s["url"].as_str().unwrap_or("").trim().trim_end_matches('/').to_string();
+        if base.is_empty() {
+            return Err(deny(404, crate::i18n::fmt("the hub has no {0}: the administrator sets \"integrations\" in hub.json", &[kind.to_string()])));
+        }
+        if !rest.starts_with("/rest/") || rest.contains("..") {
+            return Err(deny(403, "only the REST API goes through the hub"));
+        }
+        if method != "GET" && role == Role::Viewer {
+            return Err(deny(403, crate::i18n::tr("a viewer only reads")));
+        }
+        let secret = if kind == "jira" { crate::config::secrets::JIRA_TOKEN } else { crate::config::secrets::CONFLUENCE_TOKEN };
+        let token = crate::config::secrets::get(secret).map_err(|e| HttpError(500, format!("{e:#}")))?;
+        let mut url = reqwest::Url::parse(&format!("{base}{rest}")).map_err(|_| deny(400, "invalid address"))?;
+        for (k, v) in query {
+            url.query_pairs_mut().append_pair(k, v);
+        }
+        let http = reqwest::blocking::Client::builder().timeout(Duration::from_secs(60)).build().map_err(|e| HttpError(500, e.to_string()))?;
+        let method_value = reqwest::Method::from_bytes(method.as_bytes()).map_err(|_| deny(405, "method"))?;
+        let mut request = http.request(method_value, url).header("Accept", "application/json").header("X-Atlassian-Token", "no-check");
+        let account = s["user"].as_str().unwrap_or("").trim();
+        request = if account.is_empty() { request.bearer_auth(&token) } else { request.basic_auth(account, Some(&token)) };
+        if !body.is_empty() {
+            request = request.header("Content-Type", if content_type.is_empty() { "application/json" } else { content_type }).body(body.to_vec());
+        }
+        let response = request.send().map_err(|e| deny(502, format!("{kind}: {e}")))?;
+        let status = response.status().as_u16();
+        let response_type = response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|c| c.to_str().ok()).unwrap_or("application/json").to_string();
+        let bytes = response.bytes().map_err(|e| deny(502, format!("{kind}: {e}")))?.to_vec();
+        if method != "GET" {
+            let _ = self.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": "", "summary": format!("{kind}: {method} {rest}"), "ok": status < 400 }));
+        }
+        Ok((status, response_type, bytes))
+    }
+
     /// The team's Jira from hub.json ("integrations": {"jira": {"url", "user", "project", "issue_type"}}); token: secret jira_token.
     fn create_issue(&self, summary: &str, description: &str) -> Result<(String, String), HttpError> {
         let j = &self.integrations["jira"];
@@ -1350,12 +1854,41 @@ static LAST_FAILURE: Mutex<Option<String>> = Mutex::new(None);
 /// The team policy read from the hub, with the time it was read (read again after 5 minutes).
 static POLICY: Mutex<Option<(std::time::Instant, String, Value)>> = Mutex::new(None);
 
+/// After a new sign-in: the next question asks the hub again.
+pub fn forget_policy() {
+    *POLICY.lock().unwrap_or_else(|p| p.into_inner()) = None;
+}
+
+/// URL encoding and decoding of one value, for the sign-in of Compass.
+pub fn encode_value(text: &str) -> String {
+    encode(text)
+}
+
+pub fn url_decode_value(text: &str) -> String {
+    url_decode(text)
+}
+
 pub fn note_failure(message: &str) {
     *LAST_FAILURE.lock().unwrap() = Some(message.to_string());
 }
 
 pub fn last_failure() -> Option<String> {
     LAST_FAILURE.lock().unwrap().clone()
+}
+
+/// Web access as the team policy allows it: Err(reason) when the hub's policy has "web_access": false, otherwise the
+/// domains to allow (the team's "web_allowed_domains" replace the user's own list).
+pub fn web_access(cfg: &AppConfig) -> Result<Vec<String>, String> {
+    let Some(policy) = team_policy(cfg) else {
+        return Ok(cfg.web_domains.clone());
+    };
+    if policy["web_access"] == false {
+        return Err(crate::i18n::tr("the team policy of the hub switches web access off").into());
+    }
+    match policy["web_allowed_domains"].as_array() {
+        Some(list) => Ok(list.iter().filter_map(|d| d.as_str()).map(|d| d.trim().to_lowercase()).filter(|d| !d.is_empty()).collect()),
+        None => Ok(cfg.web_domains.clone()),
+    }
 }
 
 /// The team policy from the hub of the settings (None without a hub or when it does not answer).
@@ -1368,18 +1901,85 @@ pub fn team_policy(cfg: &AppConfig) -> Option<Value> {
     }
     match client.policy() {
         Ok(policy) => {
-            *POLICY.lock().unwrap() = Some((std::time::Instant::now(), client.url.clone(), policy.clone()));
+            remember_policy(cfg, &client.url, &policy);
             Some(policy)
         }
         Err(e) => {
             note_failure(&format!("{e:#}"));
-            None
+            cached_policy(cfg, &client.url)
         }
     }
 }
 
+/// Keeps a policy just read from the hub: in memory for 5 minutes and in hub_policy_cache.json (also the settings'
+/// connection check, so a changed policy shows at once).
+pub fn remember_policy(cfg: &AppConfig, url: &str, policy: &Value) {
+    *POLICY.lock().unwrap_or_else(|p| p.into_inner()) = Some((std::time::Instant::now(), url.to_string(), policy.clone()));
+    let _ = std::fs::write(cfg.base_dir.join("hub_policy_cache.json"), json!({ "url": url, "time": chrono::Utc::now().to_rfc3339(), "policy": policy }).to_string());
+}
+
+/// The team policy already received from the hub of the settings, without asking the hub (for the window).
+pub fn known_team_policy(cfg: &AppConfig) -> Option<Value> {
+    let url = cfg.hub_url.trim().trim_end_matches('/');
+    if url.is_empty() {
+        return None;
+    }
+    let known = POLICY.lock().unwrap_or_else(|p| p.into_inner()).as_ref().filter(|(_, u, _)| u.trim_end_matches('/') == url).map(|(_, _, p)| p.clone());
+    known.or_else(|| cached_policy(cfg, url))
+}
+
+/// The last policy received from this hub, for at most a week (the hub may be down for a while).
+fn cached_policy(cfg: &AppConfig, url: &str) -> Option<Value> {
+    let cache: Value = serde_json::from_str(&std::fs::read_to_string(cfg.base_dir.join("hub_policy_cache.json")).ok()?).ok()?;
+    let time = chrono::DateTime::parse_from_rfc3339(cache["time"].as_str()?).ok()?;
+    (cache["url"] == url && chrono::Utc::now().signed_duration_since(time).num_days() < 7).then(|| cache["policy"].clone())
+}
+
+/// With the computer rule RequireHub: the assistant works only connected to the hub and with its policy.
+/// Err is the message for the user (what to do).
+pub fn required(cfg: &AppConfig) -> Result<(), String> {
+    if !cfg.policy.require_hub {
+        return Ok(());
+    }
+    if cfg.hub_url.trim().is_empty() {
+        return Err(crate::i18n::tr("Your organisation requires the team hub, but no hub address is set: ask IT for the address of the hub.").into());
+    }
+    if !crate::config::secrets::exists(crate::config::secrets::HUB_TOKEN) {
+        return Err(crate::i18n::tr("Your organisation requires the team hub: sign in to it in Settings → Team (Compass Hub) → Sign in with your company account.").into());
+    }
+    match team_policy(cfg) {
+        Some(_) => Ok(()),
+        None => Err(crate::i18n::fmt("Your organisation requires the team hub, and it cannot be reached or your sign-in has expired: sign in again in Settings → Team (Compass Hub). Problem: {0}", &[last_failure().unwrap_or_default()])),
+    }
+}
+
+/// The hub address and token when the team policy routes this service through the hub ("ai_via_hub",
+/// "jira_via_hub", "confluence_via_hub"): Compass then uses the team's key or account kept on the hub.
+pub fn via_hub(cfg: &AppConfig, service: &str) -> Option<(String, String)> {
+    let policy = team_policy(cfg)?;
+    if policy[format!("{service}_via_hub").as_str()] != true {
+        return None;
+    }
+    let client = Client::from_config(cfg)?;
+    Some((client.url, client.token))
+}
+
+/// A default the team policy gives (e.g. "jira_project", "confluence_space").
+pub fn team_default(cfg: &AppConfig, key: &str) -> Option<String> {
+    team_policy(cfg)?[key].as_str().map(str::trim).filter(|v| !v.is_empty()).map(String::from)
+}
+
+/// The strictest minimum of the computer's policy and the team policy already known (no request to the hub: for the
+/// window, which must not wait for the network).
+pub fn known_min_mode(cfg: &AppConfig) -> Option<crate::config::ApprovalMode> {
+    let team = POLICY.lock().unwrap_or_else(|p| p.into_inner()).as_ref().filter(|(_, url, _)| url.trim_end_matches('/') == cfg.hub_url.trim_end_matches('/'))
+        .and_then(|(_, _, p)| p["min_approval"].as_str().and_then(|m| crate::config::ApprovalMode::parse(m).ok()));
+    [cfg.policy.min_approval, team].into_iter().flatten().max_by_key(|m| m.strictness())
+}
+
 /// The approval mode in force: the one from the settings, made stricter by the team policy ("min_approval").
 pub fn effective_mode(cfg: &AppConfig) -> crate::config::ApprovalMode {
+    // The settings already carry the computer's minimum (MachinePolicy::apply).
     let local = cfg.approval_mode;
     let team = team_policy(cfg).and_then(|p| p["min_approval"].as_str().and_then(|m| crate::config::ApprovalMode::parse(m).ok()));
     match team {
@@ -1491,6 +2091,20 @@ const WEB_PAGE: &str = include_str!("hub_web.html");
 mod tests {
     use super::*;
 
+    /// Unnamed ends of relationships (e.g. lifelines) get the classifier's name or their type and id.
+    #[test]
+    fn unnamed_relationship_ends() {
+        // Other tests may switch the language at the same time: the label is compared in whichever is set.
+        let row = |s: &str, sc: &str, t: &str, tc: &str| -> Vec<String> {
+            [s, "Sequence", "", t, "m()", "Object", "7", sc, "Object", "9", tc].iter().map(|v| v.to_string()).collect()
+        };
+        let rows = named_ends(vec![row("", "Customer", "", ""), row("A", "", "B", "X")], 0, 3);
+        assert_eq!(rows[0][0], ":Customer");
+        assert!(rows[0][3].starts_with('(') && rows[0][3].ends_with(" Object #9)"), "{}", rows[0][3]);
+        assert_eq!(rows[0].len(), 5);
+        assert_eq!(rows[1], vec!["A", "Sequence", "", "B", "m()"]);
+    }
+
     #[test]
     fn roles_and_names() {
         assert!(Role::Admin > Role::Architect && Role::Architect > Role::Viewer);
@@ -1513,6 +2127,85 @@ mod tests {
     /// The hub with two data sources (a PostgreSQL database and an EA project file, from LOONAR_HUB_DB_PROPS and
     /// LOONAR_HUB_FILE_PROPS): roles, policy, audit, notes, the web page, the REST API and MCP on both sources.
     /// Run with: `cargo test hub_two_sources -- --ignored --nocapture`.
+    /// Behind a proxy on this computer the client is the last X-Forwarded-For address (wrong sign-ins of one client do
+    /// not lock out the others), and a wrong sign-in is in the audit trail with ✗ and that address. The header from
+    /// another computer is not trusted (the test can only connect from loopback, so it checks the trusted case).
+    #[test]
+    fn sign_in_failures_behind_proxy() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        let dir = std::env::temp_dir().join(format!("loonar-hub-proxy-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0", "sources": [] }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let base = format!("http://{}", rx.recv().unwrap());
+        let http = reqwest::blocking::Client::new();
+        let login = |client: &str, password: &str| {
+            http.post(format!("{base}/api/login")).header("X-Forwarded-For", format!("203.0.113.9, {client}"))
+                .json(&json!({ "name": "admin", "password": password })).send().unwrap().status().as_u16()
+        };
+        for _ in 0..MAX_FAILURES {
+            assert_eq!(login("10.0.0.1", "wrong"), 401);
+        }
+        assert_eq!(login("10.0.0.1", "wrong"), 429, "the client that guessed is locked out");
+        assert_eq!(login("10.0.0.2", "passw0rd"), 200, "another client behind the same proxy is not");
+        let audit = std::fs::read_to_string(dir.join("audit.jsonl")).unwrap();
+        let failed: Vec<Value> = audit.lines().filter_map(|l| serde_json::from_str(l).ok()).filter(|e: &Value| e["ok"] == false).collect();
+        assert!(failed.len() > MAX_FAILURES, "wrong sign-ins and the lock-out are in the audit trail: {audit}");
+        assert!(failed.iter().all(|e| e["user"] == "admin" && e["error"].as_str().unwrap().contains("(10.0.0.1)")), "{audit}");
+        assert_eq!(forwarded_address("10.1.2.3:51234"), Some("10.1.2.3".parse().unwrap()), "IIS/ARR adds the port by default");
+        assert_eq!(forwarded_address("[2001:db8::1]:51234"), Some("2001:db8::1".parse().unwrap()));
+        assert_eq!(forwarded_address("2001:db8::1"), Some("2001:db8::1".parse().unwrap()));
+        assert_eq!(forwarded_address("unknown"), None);
+    }
+
+    /// The AI gateway and the Jira proxy with real services: `LOONAR_SECRET_CLAUDE_KEY_TEAM=… LOONAR_SECRET_JIRA_TOKEN=…
+    /// LOONAR_TEST_JIRA_URL=… LOONAR_TEST_JIRA_USER=… cargo test hub_gateways -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a Claude key and a Jira account"]
+    fn hub_gateways() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        crate::config::secrets::use_environment();
+        let dir = std::env::temp_dir().join(format!("loonar-hub-gw-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0", "sources": [],
+            "users": [{ "name": "anna", "token": "anna-token-0123456789", "role": "architect" }, { "name": "bartek", "token": "bartek-token-0123456789", "role": "viewer" }],
+            "integrations": { "jira": { "url": std::env::var("LOONAR_TEST_JIRA_URL").unwrap(), "user": std::env::var("LOONAR_TEST_JIRA_USER").unwrap(), "project": "LC" } },
+            "ai": { "keys": [{ "for": "role:architect", "secret": "claude_key_team" }], "limits": [{ "for": "anna", "tokens_per_day": 1 }] } }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let base = format!("http://{}", rx.recv().unwrap());
+        let http = reqwest::blocking::Client::new();
+        let ask = |key: &str| http.post(format!("{base}/ai/v1/messages")).header("x-api-key", key).header("anthropic-version", "2023-06-01")
+            .json(&json!({ "model": "claude-haiku-5-5", "max_tokens": 50, "messages": [{ "role": "user", "content": "Say OK." }] })).send().unwrap();
+        let first = ask("anna-token-0123456789");
+        assert_eq!(first.status(), 200, "{}", first.text().unwrap_or_default());
+        assert_eq!(ask("anna-token-0123456789").status(), 429, "the daily limit of 1 token is used up");
+        assert_eq!(ask("bartek-token-0123456789").status(), 403, "no key for a viewer");
+        assert_eq!(ask("wrong-token").status(), 401);
+        let usage = std::fs::read_to_string(dir.join("ai_usage.jsonl")).unwrap();
+        assert!(usage.contains("\"user\":\"anna\""), "{usage}");
+        // Jira through the hub: reading works for everybody, writing not for a viewer, nothing outside the REST API.
+        let me = http.get(format!("{base}/proxy/jira/rest/api/3/myself")).bearer_auth("bartek-token-0123456789").send().unwrap();
+        assert_eq!(me.status(), 200);
+        assert_eq!(http.post(format!("{base}/proxy/jira/rest/api/3/issue")).bearer_auth("bartek-token-0123456789").json(&json!({})).send().unwrap().status(), 403);
+        assert_eq!(http.get(format!("{base}/proxy/jira/secure/Dashboard.jspa")).bearer_auth("anna-token-0123456789").send().unwrap().status(), 403);
+        // Compass reads the team's project from the policy.
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Compass's sign-in may return only to its own one-time address on the loopback.
+    #[test]
+    fn compass_return_address() {
+        assert!(compass_return("http://127.0.0.1:53211/compass-callback"));
+        assert!(compass_return("http://localhost:53211/compass-callback"));
+        for bad in ["https://127.0.0.1:1/compass-callback", "http://evil.example/compass-callback", "http://127.0.0.1:1/other", "http://127.0.0.1:1/compass-callback?x=1", "http://127.0.0.1.evil.example/compass-callback"] {
+            assert!(!compass_return(bad), "{bad}");
+        }
+    }
+
     /// A new hub gets the default account admin / passw0rd, which can do nothing until its password is changed; the
     /// admin manages users and API tokens; wrong passwords are counted.
     #[test]
@@ -1655,6 +2348,169 @@ mod tests {
         assert!(body.contains("<table>") && body.contains("Published from the model Shop"), "{body}");
         let audit: Value = http.get(format!("{base}/api/audit?limit=10")).bearer_auth(viewer).send().unwrap().json().unwrap();
         assert!(audit.as_array().unwrap().iter().filter(|e| e["summary"].as_str().is_some_and(|s| s.starts_with("Jira") || s.starts_with("Confluence"))).count() >= 3, "{audit}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Company sign-in end to end against a local Keycloak (scratchpad kc/compass-realm.json):
+    /// `docker run -p 127.0.0.1:8180:8080 … quay.io/keycloak/keycloak:26.0 start-dev --import-realm`, then
+    /// `LOONAR_HUB_FILE_PROPS=… cargo test hub_oidc_keycloak -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a local Keycloak and a test model"]
+    fn hub_oidc_keycloak() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        crate::config::secrets::use_environment();
+        std::env::set_var("LOONAR_SECRET_OIDC_CLIENT_SECRET", "lab-test-client-secret-5f1c9e");
+        let dir = std::env::temp_dir().join(format!("loonar-hub-oidc-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:18731",
+            "sources": [{ "id": "shop", "name": "Shop", "properties": std::env::var("LOONAR_HUB_FILE_PROPS").unwrap() }],
+            "users": [{ "name": "admin", "token": "admin-token-0123456789", "role": "admin" }],
+            "oidc": { "issuer": "http://127.0.0.1:8180/realms/compass", "client_id": "compass-hub", "redirect_uri": "http://127.0.0.1:18731/auth/callback" } }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        std::thread::spawn(move || serve(hub, &listen, |_| {}));
+        std::thread::sleep(Duration::from_millis(300));
+        let http = reqwest::blocking::Client::builder().redirect(reqwest::redirect::Policy::none()).build().unwrap();
+        let base = "http://127.0.0.1:18731";
+        assert_eq!(http.get(format!("{base}/api/auth")).send().unwrap().json::<Value>().unwrap()["oidc"], true);
+
+        // A browser: the hub sends it to Keycloak, the login form is filled in, Keycloak sends it back with a code.
+        let sign_in_at = |login: &str, user: &str, password: &str| -> reqwest::blocking::Response {
+            let to_provider = http.get(format!("{base}{login}")).send().unwrap();
+            assert_eq!(to_provider.status(), 302);
+            let url = to_provider.headers()["location"].to_str().unwrap().to_string();
+            assert!(url.contains("code_challenge_method=S256") && url.contains("nonce="));
+            let page = http.get(&url).send().unwrap();
+            let cookies: Vec<String> = page.headers().get_all("set-cookie").iter().filter_map(|c| c.to_str().ok()).map(|c| c.split(';').next().unwrap().to_string()).collect();
+            let html = page.text().unwrap();
+            let action = html.split("action=\"").nth(1).unwrap().split('"').next().unwrap().replace("&amp;", "&");
+            let back = http.post(&action).header("Cookie", cookies.join("; ")).form(&[("username", user), ("password", password), ("credentialId", "")]).send().unwrap();
+            assert_eq!(back.status(), 302, "Keycloak accepted the password");
+            let callback = back.headers()["location"].to_str().unwrap().to_string();
+            assert!(callback.starts_with(&format!("{base}/auth/callback?")), "{callback}");
+            http.get(&callback).send().unwrap()
+        };
+        let sign_in = |user: &str, password: &str| sign_in_at("/auth/login", user, password);
+        // Compass: the session goes back to its one-time address on this computer; any other return is refused.
+        let compass = sign_in_at("/auth/login?return=http%3A%2F%2F127.0.0.1%3A55123%2Fcompass-callback", "anna", "Lab-Test-anna-7Q2");
+        assert_eq!(compass.status(), 302);
+        let back = compass.headers()["location"].to_str().unwrap().to_string();
+        assert!(back.starts_with("http://127.0.0.1:55123/compass-callback?session=lcs_") && back.contains("&role=architect"), "{back}");
+        let session = back.split("session=").nth(1).unwrap().split('&').next().unwrap();
+        assert_eq!(http.get(format!("{base}/api/me")).bearer_auth(session).send().unwrap().json::<Value>().unwrap()["name"], "anna");
+        assert_eq!(http.get(format!("{base}/auth/login?return=https%3A%2F%2Fevil.example%2Fcompass-callback")).send().unwrap().status(), 403);
+        let anna = sign_in("anna", "Lab-Test-anna-7Q2");
+        assert_eq!(anna.status(), 302);
+        let location = anna.headers()["location"].to_str().unwrap().to_string();
+        let session = location.strip_prefix("/#session=").expect("the session in the fragment").to_string();
+        let me: Value = http.get(format!("{base}/api/me")).bearer_auth(&session).send().unwrap().json().unwrap();
+        println!("anna: {me}");
+        assert_eq!(me["role"], "architect");
+        assert_eq!(me["name"], "anna");
+        let celina = sign_in("celina", "Lab-Test-celina-9X4");
+        let session = celina.headers()["location"].to_str().unwrap().strip_prefix("/#session=").unwrap().to_string();
+        let me: Value = http.get(format!("{base}/api/me")).bearer_auth(&session).send().unwrap().json().unwrap();
+        assert_eq!(me["role"], "admin", "the highest role of the groups");
+        // Without a Compass group: no session, a page with the reason.
+        let ewa = sign_in("ewa", "Lab-Test-ewa-3K8");
+        assert_eq!(ewa.status(), 403);
+        assert!(ewa.text().unwrap().contains("not in any group of the hub"));
+        // A callback with a state the hub did not start is refused.
+        let forged = http.get(format!("{base}/auth/callback?code=x&state=forged")).send().unwrap();
+        assert_eq!(forged.status(), 403);
+        let audit = std::fs::read_to_string(dir.join("audit.jsonl")).unwrap_or_default();
+        assert!(audit.contains("signed in with a company account"), "the sign-in is in the audit trail");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Team event agents from the hub policy reach Compass: `LOONAR_HUB_FILE_PROPS=… cargo test hub_team_agents -- --ignored`
+    #[test]
+    #[ignore = "requires a test model"]
+    fn hub_team_agents() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        crate::config::secrets::use_environment();
+        std::env::set_var("LOONAR_SECRET_HUB_TOKEN", "admin-token-team-agents-0123");
+        let dir = std::env::temp_dir().join(format!("loonar-hub-agents-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:18732",
+            "sources": [{ "id": "shop", "name": "Shop", "properties": std::env::var("LOONAR_HUB_FILE_PROPS").unwrap() }],
+            "users": [{ "name": "admin", "token": "admin-token-team-agents-0123", "role": "admin" }],
+            "policy": { "event_agents": [{ "name": "Keep requirements", "event": "element_deleting", "mode": "guard", "applies_to": "Requirement", "prompt": "Block approved requirements." }] } }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        std::thread::spawn(move || serve(hub, &listen, |_| {}));
+        std::thread::sleep(Duration::from_millis(300));
+        let props = dir.join("app.properties");
+        std::fs::write(&props, format!("{}\nhub.url=http://127.0.0.1:18732\n", std::fs::read_to_string(std::env::var("LOONAR_HUB_FILE_PROPS").unwrap()).unwrap())).unwrap();
+        let cfg = crate::config::AppConfig::load(&props).unwrap();
+        let agents = crate::agents::load_all(&cfg);
+        assert!(agents.iter().any(|a| a.name == "Keep requirements (team)" && a.is_guard()), "{agents:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Word and Excel reports of a package from the hub: `LOONAR_HUB_FILE_PROPS=… cargo test hub_reports -- --ignored`
+    #[test]
+    #[ignore = "requires a test model"]
+    fn hub_reports() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        let dir = std::env::temp_dir().join(format!("loonar-hub-reports-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:18733",
+            "sources": [{ "id": "shop", "name": "Shop", "properties": std::env::var("LOONAR_HUB_FILE_PROPS").unwrap() }],
+            "users": [{ "name": "olek", "token": "viewer-token-reports-0123", "role": "viewer" }] }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let cfg = hub.sources[0].cfg.clone();
+        std::thread::spawn(move || serve(hub, &listen, |_| {}));
+        std::thread::sleep(Duration::from_millis(300));
+        let package = crate::tools::query_rows(&cfg, "select package_id from t_package where name = 'Shop domain'").unwrap()[0][0].clone();
+        let http = reqwest::blocking::Client::new();
+        for (format, kind) in [("docx", "wordprocessingml"), ("xlsx", "spreadsheetml")] {
+            let r = http.get(format!("http://127.0.0.1:18733/api/sources/shop/report?package={package}&format={format}")).bearer_auth("viewer-token-reports-0123").send().unwrap();
+            assert_eq!(r.status(), 200);
+            assert!(r.headers()["content-type"].to_str().unwrap().contains(kind));
+            assert!(r.headers()["content-disposition"].to_str().unwrap().contains(&format!(".{format}")));
+            let bytes = r.bytes().unwrap();
+            assert!(bytes.starts_with(b"PK") && bytes.len() > 2000, "{format}: {} bytes", bytes.len());
+            if format == "docx" {
+                let text = crate::documents::text_of("r.docx", &bytes).unwrap();
+                assert!(text.contains("Order") && text.contains("Relationships"), "{text}");
+            }
+        }
+        let missing = http.get("http://127.0.0.1:18733/api/sources/shop/report?package=999999").bearer_auth("viewer-token-reports-0123").send().unwrap();
+        assert_eq!(missing.status(), 404);
+        assert_eq!(http.get(format!("http://127.0.0.1:18733/api/sources/shop/report?package={package}")).send().unwrap().status(), 401, "only signed-in users");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// GraphQL and the Power BI tables: `LOONAR_HUB_FILE_PROPS=… cargo test hub_graphql -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a test model"]
+    fn hub_graphql() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        let dir = std::env::temp_dir().join(format!("loonar-hub-graphql-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:18734",
+            "sources": [{ "id": "shop", "name": "Shop", "properties": std::env::var("LOONAR_HUB_FILE_PROPS").unwrap() }],
+            "users": [{ "name": "olek", "token": "viewer-token-graphql-0123", "role": "viewer" }] }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        std::thread::spawn(move || serve(hub, &listen, |_| {}));
+        std::thread::sleep(Duration::from_millis(300));
+        let http = reqwest::blocking::Client::new();
+        let q = |query: &str, variables: Value| -> Value {
+            http.post("http://127.0.0.1:18734/api/sources/shop/graphql").bearer_auth("viewer-token-graphql-0123").json(&json!({ "query": query, "variables": variables })).send().unwrap().json().unwrap()
+        };
+        let answer = q("query($n: String) { elements(name: $n, type: \"Class\") { id name type package { name } attributes { name type } connectors { type source { name } target { name } } } }", json!({ "n": "order" }));
+        println!("{}", serde_json::to_string_pretty(&answer).unwrap().chars().take(1500).collect::<String>());
+        let order = answer["data"]["elements"].as_array().unwrap().iter().find(|e| e["name"] == "Order").expect("Order");
+        assert_eq!(order["package"]["name"], "Shop domain");
+        assert!(order["attributes"].as_array().unwrap().iter().any(|a| a["name"] == "date"));
+        assert!(!order["connectors"].as_array().unwrap().is_empty());
+        let roots = q("{ packages { name packages { name diagrams { name type } } } }", Value::Null);
+        assert!(roots["data"]["packages"].as_array().is_some_and(|p| !p.is_empty()), "{roots}");
+        let bad = q("{ nothing }", Value::Null);
+        assert!(!bad["errors"].as_array().unwrap().is_empty());
+        let table: Value = http.get("http://127.0.0.1:18734/api/sources/shop/table/elements").bearer_auth("viewer-token-graphql-0123").send().unwrap().json().unwrap();
+        assert!(table.as_array().unwrap().iter().any(|r| r["name"] == "Order" && r["package"] == "Shop domain"), "{}", table.to_string().chars().take(300).collect::<String>());
+        let schema: Value = http.get("http://127.0.0.1:18734/api/graphql/schema").bearer_auth("viewer-token-graphql-0123").send().unwrap().json().unwrap();
+        assert!(schema["sdl"].as_str().unwrap().contains("type Element"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

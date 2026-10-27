@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 #![allow(dead_code)]
 //! Compass Hub as its own program: `compass-hub hub.json` (or `--hub hub.json`) on Windows or Linux, in a container,
 //! or as a Windows service. Secrets (AI keys, Jira and Confluence tokens, database passwords) come from the environment:
@@ -25,6 +26,16 @@ mod jira;
 mod model_db;
 #[path = "../../src/net.rs"]
 mod net;
+#[path = "../../src/auth.rs"]
+mod auth;
+#[path = "../../src/graphql.rs"]
+mod graphql;
+#[path = "../../src/docx.rs"]
+mod docx;
+#[path = "../../src/xlsx.rs"]
+mod xlsx;
+#[path = "../../src/oidc.rs"]
+mod oidc;
 #[path = "../../src/openai.rs"]
 mod openai;
 #[path = "../../src/ops.rs"]

@@ -1,12 +1,12 @@
-"""Nowe, płaskie logo Loonar: te same „węzły-gwiazdy” na granatowym tle, bez poświaty i gradientów.
-Dwa kolory (granat + biel) + wariant jednokolorowy do nadruku."""
+"""The flat Loonar logo: the same "star nodes" on a navy background, without glow or gradients.
+Two colours (navy + white) and a one-colour variant for print."""
 import math, os, sys
 
 out = sys.argv[1]
 NAVY = "#0E4A6B"
 WHITE = "#FFFFFF"
 
-# (x, y, promień tarczy, kąty promieni w stopniach, długość promienia)
+# (x, y, radius of the disc, angles of the rays in degrees, length of the rays)
 NODES = [
     (110, 168, 30, [62, 152, 238, 330], 2.1),
     (164, 88, 24, [40, 128, 215, 305], 2.2),
@@ -44,9 +44,9 @@ def svg(body, background=None, size=256):
 
 os.makedirs(out, exist_ok=True)
 files = {
-    "loonar-logo.svg": svg(mark(WHITE, NAVY), NAVY),             # podstawowe: biel na granacie
-    "loonar-logo-navy.svg": svg(mark(NAVY, WHITE)),              # granat na jasnym tle, bez tła (nadruk, kubek)
-    "loonar-logo-black.svg": svg(mark("#000000", WHITE)),        # jednokolorowe
+    "loonar-logo.svg": svg(mark(WHITE, NAVY), NAVY),             # main: white on navy
+    "loonar-logo-navy.svg": svg(mark(NAVY, WHITE)),              # navy on a light background, no background (print, mug)
+    "loonar-logo-black.svg": svg(mark("#000000", WHITE)),        # one colour
     "loonar-logo-white.svg": svg(mark(WHITE, "#000000").replace('stroke="#000000"', 'stroke="none"').replace('fill="#000000"', 'fill="none"')),
 }
 for name, text in files.items():

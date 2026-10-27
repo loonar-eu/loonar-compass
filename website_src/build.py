@@ -32,16 +32,16 @@ OWNER = "Loonar Mariusz Głowacki"
 EMAIL = "mariusz@loonar.eu"
 
 # ---- current release: change these lines for a new version (see website/README.md) ----
-VER = "0.8.2"
+VER = "0.9"
 # The only link to the installer: a GitHub release asset. The file name and the repository are taken from it.
-SETUP_URL = "https://github.com/loonar-eu/loonar-compass/releases/download/v0.8.2/LoonarCompass-Setup-0.8.2.exe"
-RELEASE = "2026-10-23"
-DATE = {"en": "23 October 2026", "pl": "23 października 2026", "de": "23. Oktober 2026", "fr": "23 octobre 2026"}
+SETUP_URL = "https://github.com/loonar-eu/loonar-compass/releases/download/v0.9.0/LoonarCompass-Setup-0.9.exe"
+RELEASE = "2026-10-27"
+DATE = {"en": "27 October 2026", "pl": "27 października 2026", "de": "27. Oktober 2026", "fr": "27 octobre 2026"}
 # SHA-256 of the installer, shown next to the download button (PowerShell: Get-FileHash <installer>).
 # When the installer is in DIST, the build checks this value against the file and takes the size from it;
 # without the file it uses SHA256 and SIZE_MB as written here and prints a warning.
-SHA256 = "05af47ac0192154982cc7a13f20762e0a060a711b25dceabe7fef20059ecdc1a"
-SIZE_MB = 28
+SHA256 = "e146fc050e0928e2b12be54b78f767c0cde556a47e670127382eaf8b14b7fc5b"
+SIZE_MB = 33
 DIST = os.path.join(ROOT, "dist")
 # ---- services used by the website --------------------------------------------------------
 GOATCOUNTER = "loonar"   # GoatCounter site code (https://loonar.goatcounter.com); "" switches the statistics off
@@ -183,20 +183,22 @@ def diagram(t):
     s.append(f'<text class="dg-s" x="180" y="66" text-anchor="middle">{t["d_gw"]}</text>')
     s.append('<path class="dg-fl" d="M198 95H214" marker-end="url(#ah)"/>')
     s.append(f'<text class="dg-s" x="206" y="88" text-anchor="middle">{t["d_yes"]}</text>')
-    # subprocess
-    s.append('<rect class="dg-sub" x="214" y="36" width="240" height="118" rx="10"/>')
+    # expanded subprocess with its own start and end events (BPMN good practice)
+    s.append('<rect class="dg-sub" x="214" y="36" width="260" height="118" rx="10"/>')
     s.append(f'<text class="dg-h" x="226" y="54">{t["d_pay"]}</text>')
-    xs = [224, 300, 376]
+    s.append('<circle class="dg-ev" cx="231" cy="96" r="7"/>')
+    s.append('<path class="dg-fl" d="M238 96H246" marker-end="url(#ah)"/>')
+    xs = [246, 314, 382]
     for i, x in enumerate(xs):
-        s.append(f'<rect class="dg-task sm" x="{x}" y="74" width="66" height="44" rx="7"/>')
-        s.append(svg_lines(t["dg_sub"][i], x + 33, 96, 11, "dg-t sm"))
-        if i < 2:
-            s.append(f'<path class="dg-fl" d="M{x+66} 96H{x+76}" marker-end="url(#ah)"/>')
-    s.append('<path class="dg-fl" d="M454 95H474" marker-end="url(#ah)"/>')
-    s.append('<rect class="dg-task" x="474" y="72" width="104" height="46" rx="8"/>')
-    s.append(svg_lines(t["d_ship"], 526, 95))
-    s.append('<path class="dg-fl" d="M578 95H592" marker-end="url(#ah)"/>')
-    s.append('<circle class="dg-ev end" cx="605" cy="95" r="12"/>')
+        s.append(f'<rect class="dg-task sm" x="{x}" y="74" width="58" height="44" rx="7"/>')
+        s.append(svg_lines(t["dg_sub"][i], x + 29, 96, 11, "dg-t sm"))
+        s.append(f'<path class="dg-fl" d="M{x+58} 96H{x+68 if i < 2 else x+69}" marker-end="url(#ah)"/>')
+    s.append('<circle class="dg-ev end" cx="458" cy="96" r="7"/>')
+    s.append('<path class="dg-fl" d="M474 95H494" marker-end="url(#ah)"/>')
+    s.append('<rect class="dg-task" x="494" y="72" width="96" height="46" rx="8"/>')
+    s.append(svg_lines(t["d_ship"], 542, 95))
+    s.append('<path class="dg-fl" d="M590 95H600" marker-end="url(#ah)"/>')
+    s.append('<circle class="dg-ev end" cx="612" cy="95" r="12"/>')
     # no branch
     s.append('<path class="dg-fl" d="M180 113V196H232" marker-end="url(#ah)"/>')
     s.append(f'<text class="dg-s" x="168" y="150" text-anchor="end">{t["d_no"]}</text>')

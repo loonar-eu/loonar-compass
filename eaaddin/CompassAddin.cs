@@ -32,6 +32,40 @@ namespace LoonarCompass
             return "";
         }
 
+        /// <summary>EA has started: the Compass window is there from the start, with a note until a project is open
+        /// (and it starts Compass at once when EA was opened with a project).</summary>
+        public void EA_OnPostInitialized(object repository)
+        {
+            Log.Write("PostInitialized, project open: " + !string.IsNullOrEmpty(Connection(repository)));
+            try
+            {
+                Window(repository);
+                if (!string.IsNullOrEmpty(Connection(repository)) && !current.Started)
+                    current.Start(Connection(repository), repository);
+            }
+            catch (Exception e)
+            {
+                Log.Write("PostInitialized: " + e.Message);
+            }
+        }
+
+        /// <summary>The Compass window in EA (a dockable window like Properties; EA remembers where the user put it),
+        /// created once, with the "no project" note until Compass starts in it.</summary>
+        static CompassTab Window(object repository)
+        {
+            dynamic repo = repository;
+            if (current == null || current.IsDisposed)
+            {
+                CompassTab tab = repo.AddWindow("Loonar Compass", "LoonarCompass.Tab") as CompassTab;
+                if (tab == null)
+                    throw new InvalidOperationException("EA did not create the Compass window.");
+                current = tab;
+                tab.Stop(L10n.Get("No project is open: open a .qea file or a repository to work with Compass."));
+            }
+            repo.ShowAddinWindow("Loonar Compass");
+            return current;
+        }
+
         /// <summary>A new element in EA: for event agents (Compass in the tab). Nothing is changed here.</summary>
         public bool EA_OnPostNewElement(object repository, object info)
         {
@@ -53,22 +87,138 @@ namespace LoonarCompass
             return false;
         }
 
-        /// <summary>An element changed in EA (name, stereotype, tagged values…): Compass checks it by the model rules.
-        /// New elements are checked after their first edit (EA creates them as "Class1" and the name is typed next).</summary>
+        /// <summary>An element, relationship, diagram or package changed in EA (name, stereotype, tagged values…): Compass
+        /// checks it by the model rules and passes it to event agents. New elements are checked after their first edit
+        /// (EA creates them as "Class1" and the name is typed next).</summary>
         public void EA_OnNotifyContextItemModified(object repository, string guid, int type)
         {
-            // 4 = otElement
-            if (type != 4 || current == null || current.IsDisposed)
+            if (current == null || current.IsDisposed)
                 return;
             try
             {
                 dynamic r = repository;
-                dynamic element = r.GetElementByGuid(guid);
-                current.Event("element:" + element.ElementID);
+                switch (type)
+                {
+                    case 4: // otElement
+                        current.Event("element:" + r.GetElementByGuid(guid).ElementID);
+                        break;
+                    case 7: // otConnector
+                        current.Event("connector_changed:" + r.GetConnectorByGuid(guid).ConnectorID);
+                        break;
+                    case 8: // otDiagram
+                        current.Event("diagram_changed:" + r.GetDiagramByGuid(guid).DiagramID);
+                        break;
+                    case 5: // otPackage
+                        current.Event("package_changed:" + r.GetPackageByGuid(guid).PackageID);
+                        break;
+                }
             }
             catch (Exception e)
             {
                 Log.Write("ContextItemModified: " + e.Message);
+            }
+        }
+
+        public bool EA_OnPostNewPackage(object repository, object info) { Pass("package_created", info, "PackageID"); return false; }
+        public bool EA_OnPostNewAttribute(object repository, object info) { Pass("attribute_created", info, "AttributeID"); return false; }
+        public bool EA_OnPostNewMethod(object repository, object info) { Pass("method_created", info, "MethodID"); return false; }
+        public bool EA_OnPostNewGlossaryTerm(object repository, object info) { Pass("glossary_term_created", info, "GlossaryID"); return false; }
+
+        // Before a deletion EA asks the add-in: event agents get the event, and a guard (an agent in "guard" mode in
+        // Compass) can stop it. True = EA goes ahead.
+        public bool EA_OnPreDeleteElement(object repository, object info) { return Ask(repository, "element_deleting", info, "ElementID"); }
+        public bool EA_OnPreDeleteConnector(object repository, object info) { return Ask(repository, "connector_deleting", info, "ConnectorID"); }
+        public bool EA_OnPreDeleteDiagram(object repository, object info) { return Ask(repository, "diagram_deleting", info, "DiagramID"); }
+        public bool EA_OnPreDeletePackage(object repository, object info) { return Ask(repository, "package_deleting", info, "PackageID"); }
+        public bool EA_OnPreDeleteAttribute(object repository, object info) { return Ask(repository, "attribute_deleting", info, "AttributeID"); }
+        public bool EA_OnPreDeleteMethod(object repository, object info) { return Ask(repository, "method_deleting", info, "MethodID"); }
+        public bool EA_OnPreDeleteGlossaryTerm(object repository, object info) { return Ask(repository, "glossary_term_deleting", info, "GlossaryID"); }
+
+        static bool Ask(object repository, string kind, object info, string property)
+        {
+            if (current == null || current.IsDisposed)
+                return true;
+            try
+            {
+                dynamic properties = info;
+                string line = kind + ":" + properties.Get(property).Value;
+                // The object is gone by the time Compass reads the event: its description goes with the event
+                // ("kind:id<TAB>description<TAB>type<TAB>stereotype"), for the advising agents of deletions.
+                current.Event(line + Describe(repository, kind, Convert.ToInt32(properties.Get(property).Value)));
+                return current.Guard(kind, line);
+            }
+            catch (Exception e)
+            {
+                Log.Write(kind + " guard: " + e.Message);
+                return true;
+            }
+        }
+
+        /// <summary>"\tdescription\ttype\tstereotype" of the object about to be deleted (as Compass describes it), or "".</summary>
+        static string Describe(object repository, string kind, int id)
+        {
+            try
+            {
+                dynamic repo = repository;
+                string description, type, stereotype;
+                if (kind.StartsWith("element"))
+                {
+                    dynamic e = repo.GetElementByID(id);
+                    string st = (string)e.Stereotype;
+                    description = "element \"" + e.Name + "\" (" + e.Type + (st.Length > 0 ? " «" + st + "»" : "") + ", object_id " + id + ", status \"" + e.Status + "\") in package \"" + repo.GetPackageByID(e.PackageID).Name + "\"";
+                    type = e.Type;
+                    stereotype = st;
+                }
+                else if (kind.StartsWith("package"))
+                {
+                    dynamic p = repo.GetPackageByID(id);
+                    string parent = p.ParentID != 0 ? (string)repo.GetPackageByID(p.ParentID).Name : "";
+                    description = "package \"" + p.Name + "\" (package_id " + id + ") in package \"" + parent + "\"";
+                    type = "Package";
+                    stereotype = p.StereotypeEx;
+                }
+                else if (kind.StartsWith("connector"))
+                {
+                    dynamic c = repo.GetConnectorByID(id);
+                    string st = (string)c.Stereotype;
+                    description = "relationship " + c.Type + (st.Length > 0 ? " «" + st + "»" : "") + " (connector_id " + id + ") " + repo.GetElementByID(c.ClientID).Name + " → " + repo.GetElementByID(c.SupplierID).Name;
+                    type = c.Type;
+                    stereotype = st;
+                }
+                else if (kind.StartsWith("diagram"))
+                {
+                    dynamic d = repo.GetDiagramByID(id);
+                    description = "diagram \"" + d.Name + "\" (" + d.Type + ", diagram_id " + id + ") in package \"" + repo.GetPackageByID(d.PackageID).Name + "\"";
+                    type = d.Type;
+                    stereotype = "";
+                }
+                else if (kind.StartsWith("attribute"))
+                {
+                    dynamic a = repo.GetAttributeByID(id);
+                    dynamic owner = repo.GetElementByID(a.ParentID);
+                    description = "attribute \"" + a.Name + "\" : " + a.Type + " (attribute id " + id + ") of " + owner.Type + " \"" + owner.Name + "\"";
+                    type = "Attribute";
+                    stereotype = a.Stereotype;
+                }
+                else if (kind.StartsWith("method"))
+                {
+                    dynamic m = repo.GetMethodByID(id);
+                    dynamic owner = repo.GetElementByID(m.ParentID);
+                    description = "operation \"" + m.Name + "\"() : " + m.ReturnType + " (operation id " + id + ") of " + owner.Type + " \"" + owner.Name + "\"";
+                    type = "Operation";
+                    stereotype = m.Stereotype;
+                }
+                else
+                {
+                    return "";
+                }
+                Func<string, string> clean = t => (t ?? "").Replace('\t', ' ').Replace('\r', ' ').Replace('\n', ' ');
+                return "\t" + clean(description) + "\t" + clean(type) + "\t" + clean(stereotype);
+            }
+            catch (Exception e)
+            {
+                Log.Write("Describe " + kind + " " + id + ": " + e.Message);
+                return "";
             }
         }
 
@@ -128,20 +278,9 @@ namespace LoonarCompass
                         current.Send(reference);
                     return;
                 }
-                dynamic repo = repository;
-                // A dockable window like Properties (EA remembers where the user put it), not a tab among the diagrams.
-                if (current != null && !current.IsDisposed)
-                {
-                    repo.ShowAddinWindow("Loonar Compass");
-                    return;
-                }
-                object control = repo.AddWindow("Loonar Compass", "LoonarCompass.Tab");
-                CompassTab tab = control as CompassTab;
-                if (tab == null)
-                    throw new InvalidOperationException("EA did not create the Compass window.");
-                current = tab;
-                repo.ShowAddinWindow("Loonar Compass");
-                tab.Start(connection, repository);
+                CompassTab tab = Window(repository);
+                if (!tab.Started && !string.IsNullOrEmpty(connection))
+                    tab.Start(connection, repository);
             }
             catch (Exception e)
             {
@@ -152,23 +291,27 @@ namespace LoonarCompass
         /// <summary>The open Compass tab: it always works with the project open in this EA window.</summary>
         static CompassTab current;
 
-        /// <summary>Another project opened in EA: the open Compass tab switches to it. (Tests: LOONAR_ADDIN_AUTOTAB=1
-        /// opens the tab as soon as a project is opened.)</summary>
+        /// <summary>A project opened in EA: Compass starts in its window by itself (or switches to the new project).</summary>
         public void EA_FileOpen(object repository)
         {
             Log.Write("FileOpen, tab open: " + (current != null && !current.IsDisposed));
-            if (current != null && !current.IsDisposed)
-                current.Start(Connection(repository), repository);
-            else if (Environment.GetEnvironmentVariable("LOONAR_ADDIN_AUTOTAB") == "1")
-                EA_MenuClick(repository, "MainMenu", "", "Loonar Compass");
+            try
+            {
+                Window(repository).Start(Connection(repository), repository);
+            }
+            catch (Exception e)
+            {
+                Log.Write("FileOpen: " + e.Message);
+            }
         }
 
-        /// <summary>The project closed in EA: Compass does not work without one, so it closes.</summary>
+        /// <summary>The project closed in EA: Compass does not work without one, so it closes and the window shows the
+        /// "no project" note again.</summary>
         public void EA_FileClose(object repository)
         {
             Log.Write("FileClose");
             if (current != null && !current.IsDisposed)
-                current.Stop(L10n.Get("Open a project in Enterprise Architect to work with Loonar Compass."));
+                current.Stop(L10n.Get("No project is open: open a .qea file or a repository to work with Compass."));
         }
 
         public void EA_Disconnect()
@@ -373,6 +516,12 @@ namespace LoonarCompass
             get { return process != null && child != IntPtr.Zero; }
         }
 
+        /// <summary>Compass was started in this window (it may still be opening its window).</summary>
+        public bool Started
+        {
+            get { return process != null; }
+        }
+
         /// <summary>A model event for the live check in Compass (handed over in a file, like the references).</summary>
         public void Event(string line)
         {
@@ -384,6 +533,69 @@ namespace LoonarCompass
             }
             catch
             {
+            }
+        }
+
+        /// <summary>Asks Compass whether a deletion may go ahead: only when a guard watches this event (Compass lists them in
+        /// a file). Waits at most 40 seconds; no answer = the deletion is stopped, so a protected object is never lost
+        /// because Compass did not answer.</summary>
+        public bool Guard(string kind, string line)
+        {
+            if (rotName == null || process == null)
+                return true;
+            string temp = Path.GetTempPath();
+            try
+            {
+                string guarded = Path.Combine(temp, "loonar-ea-guards-" + rotName + ".txt");
+                if (!File.Exists(guarded) || Array.IndexOf(File.ReadAllLines(guarded), kind) < 0)
+                    return true;
+            }
+            catch
+            {
+                return true;
+            }
+            string id = Guid.NewGuid().ToString("N");
+            string request = Path.Combine(temp, "loonar-ea-guard-" + rotName + "-" + id + ".req");
+            string response = Path.Combine(temp, "loonar-ea-guard-" + rotName + "-" + id + ".res");
+            Cursor previous = Cursor.Current;
+            try
+            {
+                Cursor.Current = Cursors.WaitCursor;
+                File.WriteAllText(request, line);
+                DateTime until = DateTime.Now.AddSeconds(40);
+                while (DateTime.Now < until)
+                {
+                    if (File.Exists(response))
+                    {
+                        string[] answer = File.ReadAllLines(response);
+                        File.Delete(response);
+                        if (answer.Length > 0 && answer[0] == "block")
+                        {
+                            string reason = answer.Length > 1 ? answer[1] : "";
+                            Cursor.Current = previous;
+                            MessageBox.Show(L10n.Get("Loonar Compass stopped this deletion:") + "\n\n" + reason, "Loonar Compass", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return false;
+                        }
+                        return true;
+                    }
+                    // A pumping wait, not Sleep: Compass reads the object being deleted from this EA (Repository.SQLQuery)
+                    // while EA waits here; the calls of COM are served during the wait, the user's input is not.
+                    System.Threading.Thread.CurrentThread.Join(100);
+                }
+                Out(DateTime.Now.ToString("HH:mm:ss") + "  " + L10n.Get("No decision of the guard in time: the deletion is stopped."));
+                Cursor.Current = previous;
+                MessageBox.Show(L10n.Get("No decision of the guard in time: the deletion is stopped.") + "\n\n" + L10n.Get("Try again in a moment. If it happens again, check Loonar Compass (it must be open in EA)."), "Loonar Compass", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+            catch (Exception e)
+            {
+                Log.Write("Guard: " + e.Message);
+                return true;
+            }
+            finally
+            {
+                Cursor.Current = previous;
+                try { File.Delete(request); } catch { }
             }
         }
 
@@ -523,7 +735,10 @@ namespace LoonarCompass
             // A window of another process gets the keyboard only when both UI threads share their input state.
             GiveKeyboard();
             note.Visible = false;
-            Fit();
+            // Compass starts off the screen: inside the panel it always goes to the panel's corner.
+            int width, height;
+            if (OwnSize(out width, out height))
+                MoveWindow(child, 0, 0, width, height, true);
             // The timer keeps watching whether Compass is still running and follows the size of EA's panel.
             finder.Interval = 400;
         }
@@ -757,7 +972,7 @@ namespace LoonarCompass
                 case "Open Compass in EA": return lang == "de" ? "Compass in EA öffnen" : lang == "fr" ? "Ouvrir Compass dans EA" : "Otwórz Compass w EA";
                 case "Open Compass in its own window": return lang == "de" ? "Compass in eigenem Fenster öffnen" : lang == "fr" ? "Ouvrir Compass dans sa propre fenêtre" : "Otwórz Compass w osobnym oknie";
                 case "Starting Loonar Compass…": return lang == "de" ? "Loonar Compass wird gestartet…" : lang == "fr" ? "Démarrage de Loonar Compass…" : "Uruchamianie Loonar Compass…";
-                case "Open a project in Enterprise Architect to work with Loonar Compass.": return lang == "de" ? "Öffnen Sie ein Projekt in Enterprise Architect, um mit Loonar Compass zu arbeiten." : lang == "fr" ? "Ouvrez un projet dans Enterprise Architect pour travailler avec Loonar Compass." : "Otwórz projekt w Enterprise Architect, aby pracować z Loonar Compass.";
+                case "No project is open: open a .qea file or a repository to work with Compass.": return lang == "de" ? "Kein Projekt geöffnet: Öffnen Sie eine .qea-Datei oder ein Repository, um mit Compass zu arbeiten." : lang == "fr" ? "Aucun projet ouvert : ouvrez un fichier .qea ou un référentiel pour travailler avec Compass." : "Brak otwartego projektu: otwórz plik .qea albo repozytorium, aby pracować z Compass.";
                 case "Add to the Compass conversation": return lang == "de" ? "Zur Compass-Unterhaltung hinzufügen" : lang == "fr" ? "Ajouter à la conversation Compass" : "Dodaj do rozmowy w Compass";
                 case "Element": return lang == "de" ? "Element" : lang == "fr" ? "Élément" : "Element";
                 case "Package": return lang == "de" ? "Paket" : lang == "fr" ? "Paquetage" : "Pakiet";
@@ -768,6 +983,9 @@ namespace LoonarCompass
                 case "Loonar Compass is working with the project": return lang == "de" ? "Loonar Compass arbeitet mit dem Projekt" : lang == "fr" ? "Loonar Compass travaille sur le projet" : "Loonar Compass pracuje na projekcie";
                 case "Loonar Compass closed": return lang == "de" ? "Loonar Compass geschlossen" : lang == "fr" ? "Loonar Compass fermé" : "Loonar Compass zamknięty";
                 case "Loonar Compass was closed.": return lang == "de" ? "Loonar Compass wurde geschlossen." : lang == "fr" ? "Loonar Compass a été fermé." : "Loonar Compass został zamknięty.";
+                case "Loonar Compass stopped this deletion:": return lang == "de" ? "Loonar Compass hat dieses Löschen gestoppt:" : lang == "fr" ? "Loonar Compass a arrêté cette suppression :" : "Loonar Compass zatrzymał to usunięcie:";
+                case "No decision of the guard in time: the deletion is stopped.": return lang == "de" ? "Keine Entscheidung des Wächters rechtzeitig: das Löschen wird gestoppt." : lang == "fr" ? "Pas de décision du gardien à temps : la suppression est arrêtée." : "Strażnik nie zdecydował na czas: usunięcie zostaje wstrzymane.";
+                case "Try again in a moment. If it happens again, check Loonar Compass (it must be open in EA).": return lang == "de" ? "Versuchen Sie es gleich noch einmal. Passiert es wieder, prüfen Sie Loonar Compass (es muss in EA geöffnet sein)." : lang == "fr" ? "Réessayez dans un instant. Si cela se reproduit, vérifiez Loonar Compass (il doit être ouvert dans EA)." : "Spróbuj za chwilę. Jeśli to się powtórzy, sprawdź Loonar Compass (musi być otwarty w EA).";
                 case "Loonar Compass did not open its window.": return lang == "de" ? "Loonar Compass hat sein Fenster nicht geöffnet." : lang == "fr" ? "Loonar Compass n'a pas ouvert sa fenêtre." : "Loonar Compass nie otworzył okna.";
             }
             return english;

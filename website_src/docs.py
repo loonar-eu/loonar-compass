@@ -18,6 +18,12 @@ SOURCE = {"pl": "Instrukcja_uzytkownika", "en": "Manual.en", "de": "Manual.de", 
 # guide. Guides of versions before 0.6 have no marks: there these chapters were 2, 3 and 17.
 INSTALL_BEFORE_0_6 = {"s2", "s3", "s17"}
 PAGES = ("index.html", "install.html")
+# The hub's installation guide for IT (in docs/, PDF): Polish for the Polish pages, English for the others.
+HUB_GUIDE = {"pl": "Instalacja_huba.pdf", "en": "Hub_Installation_Guide.en.pdf"}
+HUB_T = {"en": "Compass Hub (optional): installation guide for IT (PDF)",
+         "pl": "Compass Hub (opcjonalny): instrukcja instalacji dla działu IT (PDF)",
+         "de": "Compass Hub (optional): Installationsanleitung für die IT (PDF, Englisch)",
+         "fr": "Compass Hub (optionnel) : guide d’installation pour l’IT (PDF, en anglais)"}
 
 T = {
     "en": dict(docs="Documentation", guide="User guide", install="Installation", version="Version", latest="latest",
@@ -133,6 +139,11 @@ def generate(b):
                     write_page(b, ver, label, lang, page, picked, has_pdf, vers, current, chapters)
                     if label == "latest":
                         urls.append(b.SITE + base + lang + "/" + ("" if page == "index.html" else page))
+    # The installation guide of the hub for IT (PDF, English and Polish), from 0.9; a page of its own comes later.
+    hub_out = os.path.join(b.OUT, "docs", current, "hub")
+    os.makedirs(hub_out, exist_ok=True)
+    for name in HUB_GUIDE.values():
+        shutil.copyfile(os.path.join(ROOT, "docs", name), os.path.join(hub_out, name))
     index_page(b, vers, current)
     return urls
 
@@ -166,6 +177,9 @@ def write_page(b, ver, label, lang, page, chapters, has_pdf, vers, current, all_
         for v in vers)
     pdf_href = f"{SOURCE[lang]}.pdf" if label != "latest" else b.rel(d, f"docs/{ver}/{lang}/") + f"{SOURCE[lang]}.pdf"
     pdf = f'<p class="docs-pdf"><a href="{pdf_href}" download>{dt["pdf"]}</a></p>' if has_pdf else ""
+    if install and ver == current:
+        hub_pdf = b.rel(d, f"docs/{ver}/hub/") + HUB_GUIDE.get(lang, HUB_GUIDE["en"])
+        pdf += f'<p class="docs-pdf"><a href="{hub_pdf}" download>{HUB_T[lang]}</a></p>'
     old = ""
     if ver != current:
         newest = b.rel(d, f"docs/latest/{lang}/") + ("" if page == "index.html" else page)

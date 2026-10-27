@@ -2,6 +2,87 @@
 
 Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen Loonar EA Assistant).
 
+## Version 0.9 (2026-10-27)
+
+Anmeldung mit dem Firmenkonto am Hub, Modelle auf SQL Server, MySQL und Oracle, die Modellierungsanweisungen des Teams im Repository, Dokumente in PDF, PowerPoint, Visio und Excel, Präsentationen, SharePoint, Wächter, die ein Löschen stoppen, und ein umsichtigerer Assistent: Rückfragen, ein Plan, Sub-Agenten und Schutz vor versteckten Anweisungen.
+
+### Compass Hub
+
+- **Anmeldung mit dem Firmenkonto (OpenID Connect):** AD FS, Microsoft Entra ID, Keycloak, Okta und andere Anbieter, eingerichtet im Abschnitt `"oidc"` von `hub.json`. Die Weboberfläche zeigt „Sign in with your company account“.
+  - Authorization Code mit PKCE; der Hub prüft das ID-Token selbst (RS256-Signatur mit den Schlüsseln des Anbieters, Aussteller, Zielgruppe, Ablauf, Nonce).
+  - Rollen aus Gruppen (`roles`, standardmäßig Compass-Admins, Compass-Architects, Compass-Viewers): Die höchste Rolle gewinnt, ohne Gruppe kein Zugang. Ein lokaler Benutzer mit demselben Namen wird abgewiesen.
+  - Der geheime Clientschlüssel ist das Hub-Geheimnis `OIDC_CLIENT_SECRET`. `"password_login": false` lässt nur die Firmenanmeldung zu; API-Tokens funktionieren weiterhin. Jede Anmeldung landet im Audit-Protokoll.
+- **Hub hinter IIS/ARR und Anmelde-Audit:** `allatclaims` wird für AD FS automatisch ergänzt; die Sperre nach falschen Passwörtern nutzt die Client-Adresse aus `X-Forwarded-For` (nur von einem Proxy auf demselben Computer); fehlgeschlagene und abgelehnte Anmeldungen im „Audit trail“ mit ✗; der Tab „Users“ listet Firmenkonten mit Rolle und letzter Anmeldung (nur lesen); der Windows-Dienst stoppt und startet sauber neu. Handbuch: die ARR-Einstellung `reverseRewriteHostInResponseHeaders="false"`.
+- **Ereignis-Agenten für das Team:** der Richtlinienschlüssel `"event_agents"` (dasselbe Format wie `event_agents.json`, auch Wächter). Die Agenten arbeiten im Compass in EA aller Teammitglieder, gekennzeichnet mit „(team)“.
+- **Reiter „Team policy“ (Admin):** ein JSON-Editor der Richtlinie (min_approval, governance, event_agents, ask_min_role, ask_per_hour).
+- **Word- und Excel-Berichte:** „Word report of the package“ und „Excel report of the package“ im Reiter Model check: Beschreibung, Elemente, Beziehungen (ohne Diagrammbilder). Jeder Download wird protokolliert.
+- **GraphQL und Power BI:** schreibgeschützt `POST /api/sources/{id}/graphql` (Pakete, Elemente mit Attributen, Operationen, Tagged Values und Beziehungen, Diagramme; Schema unter `GET /api/graphql/schema`) und flache Tabellen `GET /api/sources/{id}/table/{elements|connectors|packages|diagrams|attributes|tagged_values}` für Power BI (Daten abrufen → Web → Erweitert, Header `Authorization: Bearer <API-Token>`). Jede Rolle.
+
+### Modelle auf SQL Server, MySQL und Oracle
+
+- **Neue Repositorys:** Neben PostgreSQL und .qea-Dateien liest Compass EA-Repositorys auf SQL Server, MySQL/MariaDB und Oracle: im eigenständigen Fenster, im Hub und im Prüfmodus. Einstellungen → Modell bietet die Optionen SQL Server, MySQL und Oracle.
+- **ODBC-Treiber:** Der 64-Bit-ODBC-Treiber des Herstellers wird automatisch gefunden (SQL Server: ODBC Driver 18 oder 17 oder der Windows-eigene Treiber „SQL Server“). Eine vollständige Verbindungszeichenfolge ohne Passwort lässt sich in `db.odbc` angeben (zum Beispiel für Oracle).
+- **Nur lesend:** Jeder Lesezugriff wird zurückgesetzt (Rollback).
+- **Speichern über EA** (die EA-Edition muss DBMS-Repositories unterstützen):
+  - SQL Server: Compass baut die Verbindung für EA selbst auf (OLE-DB-Anbieter SQLOLEDB), wie bei PostgreSQL.
+  - MySQL und Oracle: Die Verbindung für EA kommt aus der neuen Einstellung `ea.conn` in app.properties, dem Text einer EA-Verbindungsverknüpfung über eine ODBC-Datenquelle (z. B. `ea_lab --- DBType=0;Connect=Provider=MSDASQL.1;Data Source=<ODBC-DSN>;…`). Ohne sie laufen Änderungen über Compass in EA, das wie bisher mit jedem in EA geöffneten Repository arbeitet.
+- **Docker:** Das Hub-Image enthält unixODBC; den Linux-ODBC-Treiber des Herstellers fügen Sie in einem darauf aufbauenden Image hinzu.
+
+### Modellierungsanweisungen im Repository
+
+- **Das Regelwerk des Teams in EA:** ein Artifact «CompassInstructions» („Loonar Compass – modelling instructions“), dessen Notizen die Regeln des Repositorys sind (Benennung, Typen und Stereotypen, Pakete, Diagramme, Tagged Values, Prüfungen). Der Assistent befolgt sie in jeder Antwort, für alle, die das Repository öffnen.
+- **Startassistent:** Der Assistent analysiert das Repository und entwirft die Regeln; Speichern und Ergänzen einer Regel sind Änderungen des Modells, die zur Freigabe angezeigt werden.
+  - Beispiel: „Bereite Modellierungsanweisungen für dieses Repository vor“.
+  - Beispiel: „Ergänze die Anweisungen: Aktivitäten beginnen mit einem Verb“.
+
+### Unterhaltung
+
+- **Rückfragen als Formular:** Ist etwas Wichtiges unklar, zeigt der Assistent „Fragen an Sie“ mit Auswahlmöglichkeiten oder einer kurzen Antwort („Etwas anderes…“); „Antworten senden“ schickt sie als nächste Nachricht („Meine Antworten:“).
+- **Plan größerer Arbeiten:** „📋 Plan: 1 von 4 erledigt“ mit ✓ ▶ ○ in den Schritten (und in System Output von EA), aktualisiert während der Arbeit.
+- **Sub-Agenten:** Für größere Analysen übergibt der Assistent eine Aufgabe an einen Sub-Agenten mit der Rolle impact, review oder document, der das Modell in einem eigenen Kontext liest und ein kompaktes Ergebnis liefert („Sub-Agent (impact): …“).
+- **Aus dem Modell wählen:** Die Schaltfläche ⌖ neben „Einfügen“ sucht Elemente, Pakete und Diagramme nach Namen (leer = oberste Pakete) und fügt sie als Verweise in die Nachricht ein, etwa «Element: Order (Class, id 26)».
+- **Überlegungen des Assistenten:** Die Schaltfläche 💭 neben „Einfügen“ zeigt eine Zusammenfassung der Überlegungen als Schritt „💭 Überlegungen des Assistenten“ (nur Claude; der Aufwand bleibt in den Einstellungen).
+- **Code in der Sandbox von Anthropic:** Die Schaltfläche ∑ neben „Einfügen“ (standardmäßig aus; nur Claude) erlaubt dem Assistenten, Code für Berechnungen und Datenanalyse auszuführen; die Ausgabe erscheint als Schritt „Code in der Sandbox“. Die dorthin übergebenen Daten gehen wie die Unterhaltung an Anthropic.
+- **Web (🌐):** eine Schaltfläche neben ∑ (standardmäßig aus). Mit Claude Websuche und Seitenlesen über Anthropic; mit OpenAI liest Compass nur Seiten, deren Adressen im Gespräch genannt wurden (nie Adressen dieses Computers oder des Firmennetzes). Erlaubte Domains: `claude.web_domains`. Hub-Richtlinie: `"web_access": false` schaltet es für alle aus, `"web_allowed_domains"` begrenzt die Domains. Suchen und Seiten erscheinen in den Schritten der Antwort.
+- **Hinweis auf eine neue Version:** einmal täglich prüft Compass die neueste Version auf GitHub und zeigt eine Leiste „Neuigkeiten und Download / Nicht jetzt“ (in EA: eine Zeile in System Output). Nichts wird von selbst heruntergeladen oder installiert, keine Kennung der Installation. Ausschalten: Einstellungen → Neue Versionen (Newsletter) oder `app.update_check=false`; Hub-Richtlinie `"update_check": false`.
+- **Richtlinie des Computers (Gruppenrichtlinie, Intune) und Firmenanmeldung:** der Schlüssel `HKLM/HKCU\SOFTWARE\Policies\Loonar\Compass` – `HubUrl` (Hub-Adresse gesperrt), `RequireHub` (der Assistent nur mit dem Hub und seiner Richtlinie; fällt der Hub aus, die letzte Richtlinie bis zu einer Woche), `WebAccess`, `UpdateCheck`, `MinApproval`, `AllowedProviders`. ADMX/ADML-Vorlagen in `deploy\policies`. „Mit dem Firmenkonto anmelden“ unter Einstellungen → Team: die Anmeldung des Hubs im Browser, die Sitzung kommt an 127.0.0.1 zurück und landet in der Anmeldeinformationsverwaltung.
+- **KI-Schlüssel, Jira und Confluence auf dem Hub:** das Gateway `/ai/v1/messages` – der Hub verwahrt die Claude-Schlüssel pro Person (Name oder AD-UPN), Rolle oder für alle, mit Token-Limits pro Tag und Monat und einer Modellliste; Verbrauch pro Person im Tab Users. Jira und Confluence über den Hub mit dem Teamkonto (ein Viewer liest nur, Änderungen im Audit). Richtlinie: `ai_via_hub`, `jira_via_hub`, `confluence_via_hub`.
+- **Ein Wächter ohne Entscheidung blockiert:** entscheidet ein Wächter nicht innerhalb von 40 s oder kann er nicht (keine KI, Hub nicht erreichbar), wird das Löschen mit einer Meldung gestoppt (vorher wurde gelöscht).
+- **Stille Installation:** `LoonarCompass-Setup --quiet [--all-users] [--dir …] [--lang …] [--no-desktop] [--no-start-menu] [--no-ea-addin]` – Verteilung mit Intune, Configuration Manager oder einem Skript; für alle Benutzer funktioniert das EA-Add-in bei jedem.
+- **Wächter für Löschungen in EA:** EA friert während der Entscheidung nicht mehr ein, und der Wächter entscheidet wirklich (vorher wurde nach 40 s ohne Entscheidung gelöscht).
+- **Confluence-Seiten lesen:** der Assistent liest eine Seite nach Titel oder ID, auch über den Hub.
+- **Installationsanleitung des Hubs für die IT** (Englisch und Polnisch).
+- **Compass in EA ab dem Start:** das Compass-Fenster ist ab dem Start von EA sichtbar; ohne Projekt zeigt es „Kein Projekt geöffnet…“, beim Öffnen einer Datei oder eines Repositorys startet Compass von selbst und kehrt nach dem Schließen des Projekts zu diesem Hinweis zurück.
+- **Hub-Neustart:** Sitzungen angemeldeter Personen überstehen einen Neustart des Hubs; dasselbe ungültige Token zählt nur einmal für die Adresssperre; Compass fordert bei abgelaufener Hub-Anmeldung sofort zur erneuten Anmeldung auf und beschreibt Hub-Fehler kurz (keine IIS-HTML-Seiten).
+- **EA-Projektglossar:** der Standardtyp eines neuen Begriffs ist `Glossary` (vorher `Slownik`).
+- **Lange Unterhaltungen:** Ab etwa 100 000 Tokens wird der frühere Teil für die nächsten Antworten durch eine Zusammenfassung ersetzt („Die Unterhaltung ist lang: der frühere Teil wird zusammengefasst“); die neuesten Nachrichten bleiben.
+- **Unterhaltung löschen:** Rechtsklick auf eine Unterhaltung → „Unterhaltung löschen“ (in Compass in EA: die Schaltfläche 🗑 neben dem Namen der Unterhaltung). Sie wird nach `history\bin` verschoben und lässt sich zurückholen; nicht, während der Assistent darin arbeitet.
+
+### Dokumente, Präsentationen und SharePoint
+
+- **Dokumente lesen:** Das Werkzeug `read_document` und Anhänge lesen PDF (jede Seite; einen Scan ohne Textebene hängen Sie an, damit das Modell die Seitenbilder liest), PowerPoint .pptx (Folien mit Notizen), Visio .vsdx (Seiten, Formen mit Text, Verbindungen A → B), Excel .xlsx (Blätter, Zellen) und Word. Alte .doc-, .ppt-, .xls- und .vsd-Dateien müssen im neuen Format gespeichert werden.
+  - Anforderungen für `trace_requirements` und `--requirements` können aus diesen Formaten stammen.
+- **PowerPoint-Präsentationen:** `create_presentation` erstellt einen Foliensatz im Format 16:9: eine Titelfolie, Folien mit Aufzählungen auf zwei Ebenen und/oder einem Diagramm oder Bild, auf Wunsch auch als PDF (über Microsoft PowerPoint).
+- **PDF-Dokumente:** `create_document` mit dem Format pdf oder both (über Microsoft Word). PDF braucht Microsoft Office auf dem Computer.
+- **SharePoint:** die neue Karte Einstellungen → SharePoint (Website-Adresse, Dokumentbibliothek, Mandanten-ID, Anwendungs-ID (Client-ID), geheimer Clientschlüssel; „Speichern und SharePoint-Verbindung testen“). Sie braucht eine App-Registrierung in Entra ID mit der Microsoft-Graph-Anwendungsberechtigung Sites.Selected (für die Website erteilt) oder Sites.ReadWrite.All.
+  - Der Assistent listet einen Ordner auf, liest den Text eines Dokuments und lädt eine von ihm erstellte Datei hoch; jedes Hochladen wird erfragt.
+
+### Enterprise Architect
+
+- **Ereignis-Agenten für 18 Ereignisse:** created, changed und deleting von Elementen, Konnektoren, Diagrammen und Paketen; created und deleting von Attributen, Methoden und Glossarbegriffen.
+- **Wächter:** `"mode": "guard"` bei einem Ereignis `*_deleting`. EA fragt Compass vor dem Löschen; der Wächter antwortet ALLOW oder BLOCK mit einem Grund, und EA zeigt „Loonar Compass hat dieses Löschen gestoppt:“ und bricht ab. Ohne Antwort innerhalb von 40 s wird gelöscht.
+  - Beispiel: `{"name": "Keep approved", "event": "element_deleting", "mode": "guard", "applies_to": "Requirement", "prompt": "Block deleting a requirement whose status is Approved."}`.
+- **MDG-Technologien:** das Werkzeug `mdg_technologies`: die vom Modell verwendeten Profile (mit Anzahl), die Technologiedateien von EA und Ihre eigenen, die in das Modell importierten Technologien, Stereotypen mit Metatyp und Anwendungsbereich sowie ihre Tagged Values mit Typ, Werten und Standardwert.
+- **Die EA-API:** Das Werkzeug `ea_api` liest die Automatisierungsschnittstelle aus EA.tlb des installierten EA (Klassen, Eigenschaften nur lesbar oder lesbar/schreibbar, Methoden mit Parametern, Aufzählungen); der Assistent nutzt es, bevor er EA-Skripte schreibt.
+- **Versionskontrolle von Paketen:** das Werkzeug `version_control_status` (Pakete unter Versionskontrolle, Konfiguration, Datei, wer sie ausgecheckt hat) und die Modelloperation `version_control` (check_out, check_in, get_latest, put_latest, resync, mit Kommentar). Immer mit Rückfrage; das Paket muss in EA bereits unter Versionskontrolle stehen.
+
+### Sicherheit und Anmeldung
+
+- **Schutz vor versteckten Anweisungen (Prompt Injection):** Sicherheitsregeln in jeder Anfrage; Ergebnisse von Dokumenten, Jira, Confluence, MCP, der CMDB und Code sind als Daten gekennzeichnet; eine Antwort, die die internen Anweisungen wörtlich wiederholt, wird zurückgehalten.
+- **MCP-Server über HTTP:** `"auth": {"type": "basic", "user", "password"}` oder `{"type": "oauth2", "token_url", "client_id", "client_secret", "scope"}` in `mcp_servers.json` (Geheimnisse als `${secret:mcp_…}`).
+- **Der KI-Dienst mit OAuth2:** neue Felder auf der Karte KI-Modell: „OAuth2-Token-Adresse“ (optional, statt eines API-Schlüssels), dann „OAuth2-Client-ID“, „OAuth2-Bereich (Scope)“ und „Geheimer OAuth2-Clientschlüssel“ (in der Anmeldeinformationsverwaltung). Zum Beispiel Entra ID mit dem Scope `https://cognitiveservices.azure.com/.default`. Gespeichert als `ai.oauth.*`.
+- **Claude über eine andere Adresse:** das Feld „Claude-Adresse“ (nur Claude; leer = Anthropic), zum Beispiel Azure AI Foundry `https://<Ressource>.services.ai.azure.com/anthropic` oder ein Firmen-Gateway. Gespeichert als `claude.url`.
+
 ## Version 0.8.2 (2026-10-23)
 
 Compass Hub als eigenes Programm (Windows, Linux, Docker) mit Benutzerkonten, die Modellprüfung in CI-Pipelines, ArchiMate-Regeln, die vollständige Rückverfolgbarkeitskette, der Vergleich mit einer CMDB und fertige MCP-Server.

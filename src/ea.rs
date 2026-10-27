@@ -49,11 +49,46 @@ pub fn in_ea_tab() -> bool {
 /// What EA opens: the path of an EA file, or the connection string of the model database built from the database
 /// settings (EA needs the database account in it). The port follows a comma (`SRC=server,port@database`), the same way
 /// EA itself writes it.
-fn connection_string(cfg: &AppConfig) -> String {
+fn connection_string(cfg: &AppConfig) -> Result<String> {
     if cfg.uses_file() {
-        return cfg.model_file.display().to_string();
+        return Ok(cfg.model_file.display().to_string());
     }
-    format!(
+    // EA's own connection for the background session: `ea.conn` (the text of an EA shortcut, e.g. for MySQL and
+    // Oracle through an ODBC data source) or one built for SQL Server (OLE DB) and PostgreSQL (Pro Cloud-style SSDB).
+    // An ea.conn of another kind of database (left from an earlier model) is not used (LC-261).
+    if !cfg.ea_conn.trim().is_empty() {
+        if ea_conn_matches(&cfg.ea_conn, cfg.model_source) {
+            return Ok(cfg.ea_conn.trim().to_string());
+        }
+    }
+    // MySQL and Oracle: EA opens them through an ODBC data source of its own, which Compass cannot guess (never a
+    // PostgreSQL connection to their port).
+    if matches!(cfg.model_source, crate::config::ModelSource::MySql | crate::config::ModelSource::Oracle) {
+        // The example carries the DBType of this kind of database (EA: MySQL 0, Oracle 3).
+        let kind = if cfg.model_source == crate::config::ModelSource::Oracle { "3" } else { "0" };
+        let other = cfg.ea_conn.split(';').find_map(|p| p.split_once('=').filter(|(k, _)| k.trim().ends_with("DBType")).map(|(_, v)| v.trim().to_string()));
+        let mismatch = other.map(|t| format!("{} ", crate::i18n::fmt("The ea.conn in the settings is for another kind of database than the model (DBType {0}).", &[t]))).unwrap_or_default();
+        bail!("{mismatch}{}", crate::i18n::fmt("EA needs its own connection to save in a MySQL or Oracle model: set ea.conn to the connection text of this repository in EA (e.g. \"ea_model --- DBType={0};Connect=Provider=MSDASQL.1;Persist Security Info=False;Data Source=<ODBC data source>;\"), or work in Compass inside EA with the repository open there.", &[kind.to_string()]));
+    }
+    let host = if cfg.db_host.trim().eq_ignore_ascii_case("localhost") { "127.0.0.1" } else { cfg.db_host.trim() };
+    if cfg.model_source == crate::config::ModelSource::SqlServer {
+        // No user: Windows authentication, as in Compass's own connection (LC-261).
+        if cfg.db_user.trim().is_empty() {
+            return Ok(format!(
+                "{db} --- DBType=1;Connect=Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog={db};Data Source={host},{port};LazyLoad=1;",
+                db = cfg.db_name,
+                port = cfg.db_port,
+            ));
+        }
+        return Ok(format!(
+            "{db} --- DBType=1;Connect=Provider=SQLOLEDB.1;Password={pwd};Persist Security Info=True;User ID={user};Initial Catalog={db};Data Source={host},{port};LazyLoad=1;",
+            db = cfg.db_name,
+            pwd = cfg.db_password,
+            user = cfg.db_user,
+            port = cfg.db_port,
+        ));
+    }
+    Ok(format!(
         "{db} --- DBType=4;Connect=Provider=SSDB;SRC={host},{port}@{db};UID={user};PWD={pwd};",
         db = cfg.db_name,
         // EA does not connect to the database under the name "localhost" (it then opens an invisible window and waits forever;
@@ -62,7 +97,22 @@ fn connection_string(cfg: &AppConfig) -> String {
         port = cfg.db_port,
         user = cfg.db_user,
         pwd = cfg.db_password,
-    )
+    ))
+}
+
+/// Whether EA's connection text is for the kind of database of the model (by its `DBType`; text without it is kept).
+fn ea_conn_matches(conn: &str, source: crate::config::ModelSource) -> bool {
+    use crate::config::ModelSource::*;
+    let Some(t) = conn.split(';').find_map(|p| p.split_once('=').filter(|(k, _)| k.trim().rsplit(' ').next().is_some_and(|k| k.eq_ignore_ascii_case("DBType"))).map(|(_, v)| v.trim().to_string())) else {
+        return true;
+    };
+    match source {
+        MySql => t == "0",
+        SqlServer => t == "1",
+        Oracle => t == "3",
+        Postgres => t == "4",
+        File => false,
+    }
 }
 
 /// After this many minutes without calls the persistent EA session is closed (releasing the license and memory).
@@ -166,7 +216,7 @@ pub fn run_batch(cfg: &AppConfig, ops: &[Value], options: &BatchOptions) -> Resu
     // Whether the model (file or database) requires a user lock to edit: from its settings (on by default).
     let locks = cfg.ea_locks;
     let login = Login {
-        connection: connection_string(cfg),
+        connection: connection_string(cfg)?,
         user: cfg.ea_user.clone(),
         password: if anonymous {
             String::new()
@@ -206,7 +256,26 @@ pub fn run_batch(cfg: &AppConfig, ops: &[Value], options: &BatchOptions) -> Resu
     let (reply, answer) = mpsc::channel();
     let request = Request { ops: ops.to_vec(), rollback_key: options.rollback_key.clone(), keep_locks: options.keep_locks, locks, reply };
     let sent = guard.as_ref().expect("EA thread").requests.send(request).is_ok();
-    let result = if sent { answer.recv_timeout(timeout()) } else { Err(mpsc::RecvTimeoutError::Disconnected) };
+    let started = guard.as_ref().expect("EA thread").started_wall;
+    // Waits in short slices: a message box of the background EA (which nobody sees) stops the job at once,
+    // with the box's text, instead of after the whole time limit.
+    let deadline = Instant::now() + timeout();
+    let result = loop {
+        if !sent {
+            break Err(mpsc::RecvTimeoutError::Disconnected);
+        }
+        match answer.recv_timeout(Duration::from_secs(2)) {
+            Err(mpsc::RecvTimeoutError::Timeout) if Instant::now() < deadline => {
+                if let Some(text) = crate::ea_ui::background_message_box(started) {
+                    if let Some(worker) = guard.take() {
+                        kill_orphan_ea(worker.started_wall);
+                    }
+                    bail!("{}", crate::i18n::fmt("EA stopped the operation with a message: {0}. Nothing more was written.", &[if text.is_empty() { "?".to_string() } else { text }]));
+                }
+            }
+            other => break other,
+        }
+    };
     let result = match result {
         Ok(result) => result,
         Err(mpsc::RecvTimeoutError::Timeout) => {
@@ -302,6 +371,47 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::path::Path;
+
+    /// LC-261: a PostgreSQL ea.conn left from an earlier model is not used for SQL Server; no user = Windows authentication.
+    #[test]
+    fn ea_conn_of_another_database_is_not_used() {
+        use crate::config::ModelSource;
+        let pg = "ea1 --- DBType=4;Connect=Provider=SSDB;SRC=10.0.0.1,5432@eapx;UID=u;PWD=p;";
+        assert!(ea_conn_matches(pg, ModelSource::Postgres));
+        assert!(!ea_conn_matches(pg, ModelSource::SqlServer));
+        assert!(ea_conn_matches("ea_model --- DBType=0;Connect=Provider=MSDASQL.1;Data Source=x;", ModelSource::MySql));
+        assert!(ea_conn_matches("no type here", ModelSource::Oracle));
+        let dir = std::env::temp_dir().join(format!("loonar-lc261-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("app.properties"), format!("model.source=sqlserver
+db.host=localhost
+db.port=1433
+db.name=ea_lab
+db.user=
+ea.conn={pg}
+")).unwrap();
+        let cfg = AppConfig::load(&dir.join("app.properties")).unwrap();
+        let c = connection_string(&cfg).unwrap();
+        assert!(c.contains("DBType=1") && c.contains("Integrated Security=SSPI") && c.contains("127.0.0.1,1433") && !c.contains("User ID"), "{c}");
+    }
+
+    /// LC-228: a message box of the background EA (here "File not found") stops the job within seconds, with its
+    /// text, instead of after the time limit. `cargo test background_box_stops_job -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA"]
+    fn background_box_stops_job() {
+        let dir = std::env::temp_dir().join(format!("loonar-lc228-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("app.properties"), "model.source=file
+model.file=C:/nie-ma/takiego/pliku.qea
+").unwrap();
+        let cfg = AppConfig::load(&dir.join("app.properties")).unwrap();
+        let start = Instant::now();
+        let result = run_batch(&cfg, &[json!({ "op": "set_notes", "element": 1, "notes": "x" })], &BatchOptions::default());
+        println!("{:?} after {:?}", result.as_ref().err().map(|e| e.to_string()), start.elapsed());
+        assert!(result.is_err());
+        assert!(start.elapsed() < Duration::from_secs(60), "stopped quickly");
+    }
 
     /// Closes the EA session at the end of a test, also after a failure (otherwise EA stays in the background and holds a license).
     struct CloseEa;

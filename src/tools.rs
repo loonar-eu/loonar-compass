@@ -63,6 +63,11 @@ impl Approver {
         Ok(())
     }
 
+    /// Consent for sending a file outside the application (an upload): always asked.
+    pub fn confirm_upload(&self, summary: &str) -> Result<()> {
+        self.confirm_always(summary)
+    }
+
     /// Consent regardless of the mode (also in auto): for actions that send content outside the application and the model.
     fn confirm_always(&self, summary: &str) -> Result<()> {
         if !(self.ask)(summary.to_string()) {
@@ -87,6 +92,12 @@ pub fn definitions() -> Value {
         items.push(crate::traceability::definition());
         items.push(crate::code_drift::definition());
         items.push(crate::cmdb::definition());
+        items.push(crate::mdg::definition());
+        items.push(crate::sharepoint::definition());
+        items.push(crate::instructions::definition());
+        items.push(crate::documents::definition());
+        items.push(crate::mdg::version_control_definition());
+        items.push(crate::ea_api::definition());
         items.push(crate::undo::definition());
         items.push(crate::estimate::definition());
         items.push(json!({
@@ -144,6 +155,7 @@ delete {element | diagram | connector | package} (permanently deletes an object 
 remove_from_diagram {diagram, element} (removes the element from the diagram, the element stays in the model); \
 reverse_connector {connector} (swaps the source and the target of a relationship); \
 update_package {package, name?, notes?, version?, status?, stereotype?}; \
+version_control {package, action, comment?} (version control of a package that is already under version control in EA: action check_out, check_in, get_latest (replaces the package with the version from version control), put_latest (checks in and keeps it checked out) or resync (reads the version control status of the package again); comment for check_out, check_in and put_latest; always asked; call version_control_status first); \
 generate_report {package, file, template?} (a document from an EA document template, like Publish → Report Builder: file = a full path ending .docx, .pdf or .rtf, by default in the attachments folder; template = the name of an EA template, default \"Model Report\"; use it when the user wants EA's own report format or a company template; for documents you write yourself use create_document); \
 layout_diagram {diagram, direction?, spacing?} (EA's automatic layout of the whole diagram, like Layout → Diagram Layout: direction down (default), right, up or left; spacing in pixels, default 40; use it after creating a diagram with many elements or when the user asks to tidy a diagram; then check the result with ea_show_diagram); \
 export_xmi {package, file} (exports the package with its contents and diagrams to an XMI file; file = a full path ending .xml or .xmi, by default in the attachments folder); \
@@ -151,7 +163,7 @@ import_xmi {package, file, keep_guids?} (imports an XMI file into the package; G
 set_linked_document {element, text} (the element's linked document (Ctrl+Alt+D in EA), from plain text, one paragraph per line; replaces an existing one); \
 set_swimlanes {diagram, lanes: [{title, width?, color?}], orientation?} (diagram swimlanes (Diagram → Swimlanes), replaces existing ones; orientation vertical (default) or horizontal); \
 set_composite {element, diagram} (links the element to an existing diagram as its composite diagram (in EA: New Child Diagram → Composite → Select Composite Diagram): when the element is double-clicked, EA opens that diagram instead of the properties; this is how you link a BPMN subprocess to the subprocess diagram, also when the diagram is in an ordinary package; in the database the linked element has t_object.ntype = 8 and the diagram id in the pdata1 column); \
-create_attribute {element, name, type?, visibility?, notes?, default?, stereotype?} (a class attribute, visibility: Public|Private|Protected|Package); create_operation {element, name, return_type?, visibility?, notes?, stereotype?, parameters?: [{name, type}]} (a class operation with parameters); update_attribute {attribute, name?, type?, visibility?, notes?, default?, static?} and delete_attribute {attribute} (attribute = t_attribute.id); update_operation {operation, name?, return_type?, visibility?, notes?, static?} and delete_operation {operation} (operation = t_operation.operationid); clone_package {package, name?, key?} (a copy of the package with all its contents next to the original, e.g. a variant to experiment with); update_scenario {element, scenario, name?, type?, notes?, steps?} (changes an existing structured scenario found by its name or GUID; steps, when given, replace all steps); delete_scenario {element, scenario}; create_scenario {element, name, type?, notes?, steps: [{text, actor?, uses?, results?}]} (a STRUCTURED SCENARIO of an element, e.g. a use case: the Scenarios tab of the element, with numbered steps; ALWAYS use this, never notes, when the user asks for scenarios, flows or structured scenarios; type: Basic Path (default), Alternate or Exception; actor = true for a step done by the actor, false for the system; in the database t_objectscenarios, steps in its xmlcontent); add_glossary_term {term, type?, meaning, forms?: [..]} (a term in the EA PROJECT GLOSSARY, the list EA highlights in notes and documents with its meaning - not a model element; t_glossary holds the terms; EA highlights only the exact written form, so for a Polish term ALWAYS pass in forms every inflected form of it: singular and plural in all seven cases from the nominative to the vocative, for a multi-word term the whole phrase inflected; type: the one the user names, otherwise Slownik (the type appears in EA once used); ask the user for the meaning if they did not give it); create_baseline {package, version, notes?} (saves a version of the package in the model; ALWAYS make a baseline before deleting from or substantially restructuring an existing package that you did not create in this conversation, and tell the user they can restore it in EA: package in the browser → Manage Baselines → Compare/Restore; baselines are in t_document with doctype = 'Baseline'); \
+create_attribute {element, name, type?, visibility?, notes?, default?, stereotype?} (a class attribute, visibility: Public|Private|Protected|Package); create_operation {element, name, return_type?, visibility?, notes?, stereotype?, parameters?: [{name, type}]} (a class operation with parameters); update_attribute {attribute, name?, type?, visibility?, notes?, default?, static?} and delete_attribute {attribute} (attribute = t_attribute.id); update_operation {operation, name?, return_type?, visibility?, notes?, static?} and delete_operation {operation} (operation = t_operation.operationid); clone_package {package, name?, key?} (a copy of the package with all its contents next to the original, e.g. a variant to experiment with); update_scenario {element, scenario, name?, type?, notes?, steps?} (changes an existing structured scenario found by its name or GUID; steps, when given, replace all steps); delete_scenario {element, scenario}; create_scenario {element, name, type?, notes?, steps: [{text, actor?, uses?, results?}]} (a STRUCTURED SCENARIO of an element, e.g. a use case: the Scenarios tab of the element, with numbered steps; ALWAYS use this, never notes, when the user asks for scenarios, flows or structured scenarios; type: Basic Path (default), Alternate or Exception; actor = true for a step done by the actor, false for the system; in the database t_objectscenarios, steps in its xmlcontent); add_glossary_term {term, type?, meaning, forms?: [..]} (a term in the EA PROJECT GLOSSARY, the list EA highlights in notes and documents with its meaning - not a model element; t_glossary holds the terms; EA highlights only the exact written form, so for a Polish term ALWAYS pass in forms every inflected form of it: singular and plural in all seven cases from the nominative to the vocative, for a multi-word term the whole phrase inflected; type: the one the user names, otherwise Glossary (the type appears in EA once used); ask the user for the meaning if they did not give it); create_baseline {package, version, notes?} (saves a version of the package in the model; ALWAYS make a baseline before deleting from or substantially restructuring an existing package that you did not create in this conversation, and tell the user they can restore it in EA: package in the browser → Manage Baselines → Compare/Restore; baselines are in t_document with doctype = 'Baseline'); \
 update_diagram {diagram, name?, notes?, stereotype?} (changes the name, notes or stereotype of an existing diagram); hide_connectors {diagram, connectors, hidden?} (hides the given connectors on this one diagram only, a list of ids from t_connector.connector_id; hidden=false shows them again; the connectors stay in the model and on other diagrams, so this is how you declutter a dense diagram instead of deleting relationships; in the database: t_diagramlinks.hidden); \
 route_connector {diagram, connector, start?, points?, end?} (routes one connector along the given path, e.g. following the user's sketch: start = [x, y] the attachment point on the edge of the source element, end = [x, y] the attachment point on the edge of the target element, points = a list of bend points [[x, y], ...]; coordinates as in place (pixels from the top-left corner of the diagram, Y axis downwards), and take the element positions from t_diagramobjects (rectleft, -recttop, rectright, -rectbottom); for purely horizontal and vertical lines, each successive point (from start through points to end) must have the same x or y coordinate as the previous one; example: from the left side of element B to the left, then up to the bottom side of element A: start at the middle of B's left side, one bend point below the middle of A at the height of start, end at the middle of A's bottom side; connector = t_connector.connector_id); \
 set_line_style {diagram, style, connectors?} (the routing of connector lines on the diagram, as in EA Line Style: style = direct (straight) | auto (automatic) | custom (manually bent) | orthogonal_square (orthogonal) | orthogonal_rounded (orthogonal, rounded) | tree_vertical | tree_horizontal | lateral_vertical | lateral_horizontal; connectors = a list of connector ids (t_connector.connector_id), without it all connectors between the diagram's elements get the style; bend points are cleared; in the database the style is in t_diagramlinks.style as Mode= and TREE=); \
@@ -222,6 +234,34 @@ After drawing, look at the result and fix it if anything overlaps.",
             }
         },
         {
+            "name": "create_presentation",
+            "description": "Creates a PowerPoint presentation (PPTX, 16:9) and shows it in the chat: a title slide, then slides with a title, bullet points (two levels) and/or a picture \
+(diagram:ID for a diagram from EA, image:NAME for an image drawn with render_image; with bullets the picture goes on the right). pdf: true also makes a PDF with Microsoft PowerPoint. \
+Use it when the user asks for slides or a presentation; keep slides short (at most 6 bullets). The title slide counts: when the user asks for N slides, give N-1 slides here, so the file has exactly N.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "file_name": { "type": "string" },
+                    "title": { "type": "string" },
+                    "subtitle": { "type": "string" },
+                    "slides": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "title": { "type": "string" },
+                                "bullets": { "type": "array", "items": { "anyOf": [{ "type": "string" }, { "type": "object", "properties": { "text": { "type": "string" }, "level": { "type": "integer" } }, "required": ["text"] }] } },
+                                "image": { "type": "string", "description": "diagram:ID or image:NAME" }
+                            },
+                            "required": ["title"]
+                        }
+                    },
+                    "pdf": { "type": "boolean" }
+                },
+                "required": ["file_name", "title", "slides"]
+            }
+        },
+        {
             "name": "create_document",
             "description": "Creates a Word document (DOCX) and shows it to the user in the chat with the \"Open\" and \"Save as…\" buttons. \
 Content in Markdown: # / ## / ### headings, paragraphs with **bold**, lists (- item, 1. item), tables (| a | b | with a |---|---| row), \
@@ -232,7 +272,8 @@ drawn earlier with render_image (NAME from its result). Use it when the user ask
                 "properties": {
                     "file_name": { "type": "string", "description": "File name without extension." },
                     "title": { "type": "string", "description": "Title at the beginning of the document (optional)." },
-                    "markdown": { "type": "string", "description": "Document content in Markdown." }
+                    "markdown": { "type": "string", "description": "Document content in Markdown." },
+                    "format": { "type": "string", "enum": ["docx", "pdf", "both"], "description": "docx (default), pdf (made with Microsoft Word on this computer) or both." }
                 },
                 "required": ["file_name", "markdown"]
             }
@@ -345,6 +386,18 @@ The user always approves the publication. Use it only when explicitly asked to p
                     "page_id": { "type": "string", "description": "Id of an existing page to update." }
                 },
                 "required": ["page"]
+            }
+        },
+        {
+            "name": "confluence_read",
+            "description": "Reads a Confluence page as text: by page_id, or by title in a space (space: by default the space from the settings or the team hub). Use it when the user asks about the content of a Confluence page.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "title": { "type": "string", "description": "Exact title of the page." },
+                    "space": { "type": "string", "description": "Space key; by default from the settings." },
+                    "page_id": { "type": "string", "description": "Id of the page (instead of the title)." }
+                }
             }
         },
         {
@@ -477,10 +530,12 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         }
         "render_image" => render_image(input, ctx),
         "create_document" => create_document(input, ctx),
+        "create_presentation" => create_presentation(input, ctx),
         "create_spreadsheet" => create_spreadsheet(input, ctx),
         "create_confluence_page" => create_confluence_page(input, ctx),
         "publish_confluence" => publish_confluence(input, ctx),
         "confluence_pages" => confluence_pages(ctx.cfg).map(Into::into),
+        "confluence_read" => confluence_read(input, ctx.cfg).map(Into::into),
         "read_template" => crate::templates::read(&ctx.cfg.templates_dir, input["name"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["name".to_string()]))?).map(Into::into),
         "save_template" => {
             let name = input["name"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["name".to_string()]))?;
@@ -502,6 +557,22 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "undo_change" => undo_change(input, ctx).map(Into::into),
         "estimate_change" => crate::estimate::estimate(ctx.cfg, &input["elements"].as_array().into_iter().flatten().filter_map(|v| v.as_i64()).collect::<Vec<_>>(), input["depth"].as_u64().unwrap_or(2) as usize).map(Into::into),
         "change_sets" => change_sets(input, ctx).map(Into::into),
+        "mdg_technologies" => crate::mdg::run(input, ctx.cfg).map(Into::into),
+        "sharepoint" => crate::sharepoint::run(input, ctx).map(Into::into),
+        "model_instructions" => crate::instructions::run(input, ctx).map(Into::into),
+        "read_document" => {
+            let path = read_path(ctx, input["file"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["file".to_string()]))?, false)?;
+            let size = std::fs::metadata(&path).with_context(|| crate::i18n::fmt("cannot read {0}", &[path.display().to_string()]))?.len();
+            if size > 60 * 1024 * 1024 {
+                bail!("{}", crate::i18n::tr("the document is larger than 60 MB"));
+            }
+            let bytes = std::fs::read(&path).with_context(|| crate::i18n::fmt("cannot read {0}", &[path.display().to_string()]))?;
+            let text = crate::documents::text_of(&path.display().to_string(), &bytes)?;
+            Ok(format!("{} ({} characters):
+{}", path.display(), text.chars().count(), crate::documents::limited(text)).into())
+        }
+        "version_control_status" => crate::mdg::version_control_status(input, ctx.cfg).map(Into::into),
+        "ea_api" => crate::ea_api::run(input, ctx.cfg).map(Into::into),
         "cmdb_compare" => {
             let text = match input["file"].as_str().map(str::trim).filter(|f| !f.is_empty()) {
                 Some(file) => {
@@ -740,11 +811,7 @@ fn trace_requirements(input: &Value, ctx: &ToolContext) -> Result<String> {
         let path = read_path(ctx, file, false)?;
         crate::traceability::read_document(&path)?
     } else if let Some(page) = input["confluence_page"].as_str().filter(|p| !p.trim().is_empty()) {
-        if ctx.cfg.confluence_url.trim().is_empty() {
-            bail!("{}", crate::i18n::tr("Confluence is not configured in the settings"));
-        }
-        let token = crate::config::secrets::get(crate::config::secrets::CONFLUENCE_TOKEN).context(crate::i18n::tr("no Confluence token"))?;
-        let connection = crate::confluence::Connection { base_url: ctx.cfg.confluence_url.clone(), user: ctx.cfg.confluence_user.clone(), token };
+        let connection = confluence_connection(ctx.cfg)?;
         crate::traceability::html_text(&connection.page_body(page)?.1)
     } else {
         input["text"].as_str().filter(|t| !t.trim().is_empty()).with_context(|| crate::i18n::tr("give 'file', 'confluence_page' or 'text'"))?.to_string()
@@ -794,8 +861,11 @@ fn ea_script(input: &Value, ctx: &ToolContext) -> Result<String> {
     }
 }
 
-/// Connection to Jira from the settings.
+/// Connection to Jira from the settings, or through the hub when the team policy says so.
 fn jira(cfg: &AppConfig) -> Result<crate::jira::Connection> {
+    if let Some((hub, token)) = crate::hub::via_hub(cfg, "jira") {
+        return Ok(crate::jira::Connection { base_url: format!("{hub}/proxy/jira"), user: String::new(), token });
+    }
     if cfg.jira_url.trim().is_empty() {
         bail!("{}", crate::i18n::tr("Jira is not configured: enter its address and token in Settings → Jira"));
     }
@@ -811,7 +881,9 @@ fn jira(cfg: &AppConfig) -> Result<crate::jira::Connection> {
 /// New Jira issue: always with the user's consent (the content leaves the application).
 fn jira_create_issue(input: &Value, ctx: &ToolContext) -> Result<String> {
     let connection = jira(ctx.cfg)?;
-    let project = input["project"].as_str().map(str::trim).filter(|p| !p.is_empty()).unwrap_or(ctx.cfg.jira_project.trim()).to_string();
+    let team_project = crate::hub::team_default(ctx.cfg, "jira_project").unwrap_or_default();
+    let own_project = if ctx.cfg.jira_project.trim().is_empty() { team_project.as_str() } else { ctx.cfg.jira_project.trim() };
+    let project = input["project"].as_str().map(str::trim).filter(|p| !p.is_empty()).unwrap_or(own_project).to_string();
     if project.is_empty() {
         bail!("{}", crate::i18n::tr("no Jira project: give 'project' or set the default project in Settings → Jira"));
     }
@@ -883,7 +955,8 @@ fn create_confluence_page(input: &Value, ctx: &ToolContext) -> Result<ToolOutput
     }
     std::fs::write(ctx.cfg.attachments_dir.join(format!("{stem}.confluence.md")), format!("{TITLE_MARKER} {title} -->\n{markdown}")).context(crate::i18n::tr("saving the page source"))?;
     std::fs::write(ctx.cfg.attachments_dir.join(&stored), &storage).context(crate::i18n::tr("saving the page code"))?;
-    let publish_hint = if ctx.cfg.confluence_url.trim().is_empty() {
+    // Confluence of the team hub ("confluence_via_hub") counts as configured too (LC-263).
+    let publish_hint = if ctx.cfg.confluence_url.trim().is_empty() && crate::hub::via_hub(ctx.cfg, "confluence").is_none() {
         "Publishing through the API is not configured (Settings → Confluence), so the user pastes the code into the source editor."
     } else {
         "You can publish it with the publish_confluence tool (page = the file name above) when the user asks for it."
@@ -901,6 +974,9 @@ fn create_confluence_page(input: &Value, ctx: &ToolContext) -> Result<ToolOutput
 }
 
 fn confluence_connection(cfg: &AppConfig) -> Result<crate::confluence::Connection> {
+    if let Some((hub, token)) = crate::hub::via_hub(cfg, "confluence") {
+        return Ok(crate::confluence::Connection { base_url: format!("{hub}/proxy/confluence"), user: String::new(), token });
+    }
     if cfg.confluence_url.trim().is_empty() {
         bail!("{}", crate::i18n::tr("Confluence is not configured: complete Settings → Confluence (address, space, token)"));
     }
@@ -909,15 +985,47 @@ fn confluence_connection(cfg: &AppConfig) -> Result<crate::confluence::Connectio
 }
 
 /// Publishes or updates a page in Confluence. Diagrams are exported from EA again, so the page shows the current model.
+/// The Markdown source of a page made by create_confluence_page. The model often gives the name without the unique
+/// prefix, with .md instead of .xml, or even the page title (LC-271), so a missing file is looked up by the end of its
+/// name (also as the title turned into a file name) or by the title saved in it (newest first).
+fn page_source(dir: &std::path::Path, page: &str) -> std::path::PathBuf {
+    let stem = page.trim_end_matches(".confluence.xml").trim_end_matches(".confluence.md").trim_end_matches(".xml").trim_end_matches(".md").trim();
+    let exact = dir.join(format!("{stem}.confluence.md"));
+    if exact.is_file() {
+        return exact;
+    }
+    let ends = [format!("{}.confluence.md", stem.to_lowercase()), format!("{}.confluence.md", crate::history::sanitize_name(stem).to_lowercase())];
+    let titled = |path: &std::path::Path| {
+        std::fs::read_to_string(path).ok().and_then(|s| s.lines().next().map(str::to_string)).is_some_and(|first| {
+            let title = first.trim().trim_start_matches(TITLE_MARKER).trim_start_matches(LEGACY_TITLE_MARKER).trim_end_matches("-->").trim().to_lowercase();
+            title == stem.to_lowercase()
+        })
+    };
+    std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| {
+            let name = e.file_name().to_string_lossy().to_lowercase();
+            name.ends_with(".confluence.md") && (ends.iter().any(|w| name.ends_with(w.as_str())) || titled(&e.path()))
+        })
+        .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok())
+        .map(|e| e.path())
+        .unwrap_or(exact)
+}
+
 fn publish_confluence(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
     let page = input["page"].as_str().context(crate::i18n::tr("missing field 'page' (the .confluence.xml file from create_confluence_page)"))?;
     let page = std::path::Path::new(page.trim()).file_name().context(crate::i18n::tr("page file name"))?.to_string_lossy().to_string();
-    let source_file = ctx.cfg.attachments_dir.join(page.replace(".confluence.xml", ".confluence.md"));
+    let source_file = page_source(&ctx.cfg.attachments_dir, &page);
+    let page = source_file.file_name().map(|n| n.to_string_lossy().replace(".confluence.md", ".confluence.xml")).unwrap_or(page);
     let source = std::fs::read_to_string(&source_file).with_context(|| crate::i18n::fmt("the page source {0} does not exist", &[source_file.display().to_string()]))?;
     let (title_line, markdown) = source.split_once('\n').unwrap_or(("", &source));
     let saved_title = title_line.trim().trim_start_matches(TITLE_MARKER).trim_start_matches(LEGACY_TITLE_MARKER).trim_end_matches("-->").trim().to_string();
     let title = input["title"].as_str().map(str::to_string).unwrap_or(saved_title);
-    let space = input["space"].as_str().map(str::to_string).unwrap_or_else(|| ctx.cfg.confluence_space.clone());
+    let space = input["space"].as_str().map(str::to_string).unwrap_or_else(|| {
+        if ctx.cfg.confluence_space.trim().is_empty() { crate::hub::team_default(ctx.cfg, "confluence_space").unwrap_or_default() } else { ctx.cfg.confluence_space.clone() }
+    });
     if space.trim().is_empty() {
         bail!("{}", crate::i18n::tr("specify the Confluence space (space) or set a default one in the settings"));
     }
@@ -950,6 +1058,30 @@ fn publish_confluence(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
 }
 
 /// List of pages published by the assistant (for refreshing after changes in the model).
+/// The text of a Confluence page (by id, or by title in a space), shortened for the model.
+fn confluence_read(input: &Value, cfg: &AppConfig) -> Result<String> {
+    const LONGEST: usize = 40_000;
+    let connection = confluence_connection(cfg)?;
+    let page_id = match input["page_id"].as_str().map(str::trim).filter(|id| !id.is_empty()) {
+        Some(id) => id.to_string(),
+        None => {
+            let title = input["title"].as_str().map(str::trim).filter(|t| !t.is_empty()).context(crate::i18n::tr("give 'page_id' or 'title' of the page"))?;
+            let space = input["space"].as_str().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string).unwrap_or_else(|| {
+                if cfg.confluence_space.trim().is_empty() { crate::hub::team_default(cfg, "confluence_space").unwrap_or_default() } else { cfg.confluence_space.clone() }
+            });
+            if space.trim().is_empty() {
+                bail!("{}", crate::i18n::tr("specify the Confluence space (space) or set a default one in the settings"));
+            }
+            connection.existing_page(&space, title, None)?.with_context(|| crate::i18n::fmt("no page titled \"{0}\" in the space {1}", &[title.to_string(), space.clone()]))?.id
+        }
+    };
+    let (title, body) = connection.page_body(&page_id)?;
+    let text = crate::web::html_text(&body);
+    let shortened: String = text.chars().take(LONGEST).collect();
+    let more = if shortened.len() < text.len() { "\n[…the rest of the page left out…]" } else { "" };
+    Ok(format!("Confluence page \"{title}\" (page_id {page_id}):\n\n{shortened}{more}"))
+}
+
 fn confluence_pages(cfg: &AppConfig) -> Result<String> {
     let pages = crate::confluence::published(&cfg.confluence_pages_file);
     if pages.is_empty() {
@@ -985,13 +1117,66 @@ fn create_document(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
     })?;
     let stored = format!("{}_{}.docx", uuid::Uuid::new_v4().simple(), crate::history::sanitize_name(file_name.trim_end_matches(".docx")));
     std::fs::write(ctx.cfg.attachments_dir.join(&stored), &bytes).context(crate::i18n::tr("saving the document"))?;
+    let format = input["format"].as_str().unwrap_or("docx");
+    if format == "pdf" || format == "both" {
+        let pdf = stored.trim_end_matches(".docx").to_string() + ".pdf";
+        crate::office::docx_to_pdf(&ctx.cfg.attachments_dir.join(&stored), &ctx.cfg.attachments_dir.join(&pdf)).context(crate::i18n::tr("making the PDF with Microsoft Word"))?;
+        let mut files = vec![pdf];
+        if format == "both" {
+            files.push(stored);
+        } else {
+            let _ = std::fs::remove_file(ctx.cfg.attachments_dir.join(&stored));
+        }
+        return Ok(ToolOutput { text: format!("Document \"{file_name}\" is ready as PDF{} (images: {pictures}). The user sees it in the chat.", if format == "both" { " and DOCX" } else { "" }), images: Vec::new(), files });
+    }
     Ok(ToolOutput {
         text: format!(
-            "Document \"{file_name}.docx\" is ready ({} KB, images: {pictures}). The user sees it in the chat with the \"Open\" and \"Save as…\" buttons.",
+            "Document \"{file_name}.docx\" is ready ({} KB, images: {pictures}). The user sees it in the chat with the \"Open\" and \"Save as…\" buttons. It is kept only in Compass: do not name a folder or path for it; the user chooses where to keep it with \"Save as…\".",
             bytes.len() / 1024
         ),
         images: Vec::new(),
         files: vec![stored],
+    })
+}
+
+/// Builds a PowerPoint presentation (and a PDF of it with PowerPoint, if asked) and shows it as a file in the chat.
+fn create_presentation(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
+    let file_name = input["file_name"].as_str().unwrap_or(crate::i18n::tr("Presentation"));
+    let title = input["title"].as_str().unwrap_or(file_name);
+    let subtitle = input["subtitle"].as_str().unwrap_or("");
+    let mut slides = Vec::new();
+    for s in input["slides"].as_array().with_context(|| crate::i18n::fmt("missing list '{0}'", &["slides".to_string()]))?.iter().take(60) {
+        let bullets = s["bullets"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|b| match b {
+                Value::String(t) => Some((t.clone(), 0u8)),
+                Value::Object(_) => Some((b["text"].as_str()?.to_string(), b["level"].as_u64().unwrap_or(0).min(1) as u8)),
+                _ => None,
+            })
+            .take(14)
+            .collect();
+        let picture = match s["image"].as_str().map(str::trim).filter(|i| !i.is_empty()) {
+            Some(source) => Some(picture(ctx, source)?),
+            None => None,
+        };
+        slides.push(crate::pptx::Slide { title: s["title"].as_str().unwrap_or("").to_string(), bullets, picture });
+    }
+    let bytes = crate::pptx::build(title, subtitle, &slides)?;
+    std::fs::create_dir_all(&ctx.cfg.attachments_dir).context(crate::i18n::tr("attachments folder"))?;
+    let stored = format!("{}_{}.pptx", uuid::Uuid::new_v4().simple(), crate::history::sanitize_name(file_name.trim_end_matches(".pptx")));
+    std::fs::write(ctx.cfg.attachments_dir.join(&stored), &bytes).context(crate::i18n::tr("saving the document"))?;
+    let mut files = vec![stored.clone()];
+    if input["pdf"] == true {
+        let pdf = stored.trim_end_matches(".pptx").to_string() + ".pdf";
+        crate::office::pptx_to_pdf(&ctx.cfg.attachments_dir.join(&stored), &ctx.cfg.attachments_dir.join(&pdf)).context(crate::i18n::tr("making the PDF with Microsoft PowerPoint"))?;
+        files.push(pdf);
+    }
+    Ok(ToolOutput {
+        text: format!("Presentation \"{file_name}.pptx\" is ready: {} slides{}. The user sees it in the chat with the \"Open\" and \"Save as…\" buttons. It is kept only in Compass: do not name a folder or path for it; the user chooses where to keep it with \"Save as…\".", slides.len() + 1, if files.len() > 1 { ", also as PDF" } else { "" }),
+        images: Vec::new(),
+        files,
     })
 }
 
@@ -1014,7 +1199,7 @@ fn create_spreadsheet(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
     std::fs::write(ctx.cfg.attachments_dir.join(&stored), &bytes).context(crate::i18n::tr("saving the workbook"))?;
     let rows: usize = sheets.iter().map(|s| s.rows.len()).sum();
     Ok(ToolOutput {
-        text: format!("Workbook \"{file_name}.xlsx\" is ready (sheets: {}, rows: {rows}). The user sees it in the chat with the \"Open\" and \"Save as…\" buttons.", sheets.len()),
+        text: format!("Workbook \"{file_name}.xlsx\" is ready (sheets: {}, rows: {rows}). The user sees it in the chat with the \"Open\" and \"Save as…\" buttons. It is kept only in Compass: do not name a folder or path for it; the user chooses where to keep it with \"Save as…\".", sheets.len()),
         images: Vec::new(),
         files: vec![stored],
     })
@@ -1095,6 +1280,11 @@ fn destructive_details(cfg: &AppConfig, ops: &[Value]) -> Vec<String> {
             }
             "delete_attribute" | "delete_operation" | "delete_scenario" => {
                 lines.push(crate::i18n::fmt("DELETE {0} of element {1}", &[kind.trim_start_matches("delete_").to_string(), op["element"].as_i64().map(|id| name_of("t_object", "object_id", id)).unwrap_or_else(|| op["element"].to_string())]));
+                continue;
+            }
+            "version_control" => {
+                let package = op["package"].as_i64().map(|id| name_of("t_package", "package_id", id)).unwrap_or_else(|| op["package"].to_string());
+                lines.push(crate::i18n::fmt("VERSION CONTROL: {0} of package {1}", &[op["action"].as_str().unwrap_or("?").replace('_', " ").to_uppercase(), package]));
                 continue;
             }
             "set_swimlanes" | "set_linked_document" | "update_scenario" => {
@@ -1366,6 +1556,24 @@ fn normalize_stamp(s: &str) -> String {
 mod tests {
     use super::*;
     use std::path::Path;
+
+    /// LC-271: the page source is found also by a name without the unique prefix or with .md.
+    #[test]
+    fn page_source_by_short_name() {
+        let dir = std::env::temp_dir().join(format!("loonar-lc271-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let full = dir.join("0a1b2c_Domena_lista_klas.confluence.md");
+        std::fs::write(&full, "<!-- title: x -->\n# x").unwrap();
+        for given in ["0a1b2c_Domena_lista_klas.confluence.xml", "Domena_lista_klas.confluence.xml", "lista_klas.confluence.md", "LISTA_KLAS"] {
+            assert_eq!(page_source(&dir, given), full, "{given}");
+        }
+        // The page title instead of a file name (the file name has the title made safe, the title is in the file).
+        let titled = dir.join("9f8e7d_Domena_zamówień_–_klasy.confluence.md");
+        std::fs::write(&titled, "<!-- title: Domena zamówień – klasy -->\n# x").unwrap();
+        assert_eq!(page_source(&dir, "Domena zamówień – klasy.confluence.md"), titled);
+        assert_eq!(page_source(&dir, "Domena zamówień – klasy"), titled);
+        assert_eq!(page_source(&dir, "other.confluence.xml"), dir.join("other.confluence.md"));
+    }
 
     /// The developer's app.properties; without it (CI) the default settings, enough for the tests that refuse before touching a model.
     fn test_config() -> AppConfig {

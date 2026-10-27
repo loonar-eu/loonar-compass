@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<policyDefinitionResources xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <displayName>Loonar Compass</displayName>
+  <description>Policies of Loonar Compass, the AI assistant for Sparx Enterprise Architect.</description>
+  <resources>
+    <stringTable>
+      <string id="Loonar">Loonar</string>
+      <string id="Compass">Loonar Compass</string>
+      <string id="SUPPORTED_Compass09">Loonar Compass 0.9 or later</string>
+      <string id="HubUrl">Team hub address</string>
+      <string id="HubUrl_Help">The address of the team hub (Compass Hub), for example https://compass-hub.example.com. Compass uses it instead of the address in its settings, and the field in the settings is locked. The hub's team policy (model check rules, minimum approval mode, web access, event agents) then applies to everyone. Users sign in with their company account in Settings → Team (Compass Hub).</string>
+      <string id="RequireHub">Require the team hub</string>
+      <string id="RequireHub_Help">Enabled: the assistant works only when Compass is signed in to the team hub and has its team policy. If the hub does not answer, the last policy received (at most a week old) is used; without it the assistant does not work. Use together with "Team hub address".</string>
+      <string id="WebAccess">Allow web access</string>
+      <string id="WebAccess_Help">Disabled: the assistant cannot search the web or read web pages, and the 🌐 button is locked. Enabled or not configured: the user decides (off by default), and the team hub can still switch it off.</string>
+      <string id="UpdateCheck">Check for new versions</string>
+      <string id="UpdateCheck_Help">Disabled: Compass does not check GitHub once a day for a newer release (use it when IT updates Compass centrally). Nothing is ever downloaded or installed by Compass itself.</string>
+      <string id="MinApproval">Minimum approval mode</string>
+      <string id="MinApproval_Help">The least strict approval mode of writes to the model: "ask" (every write is approved), "plan" (the first write of an answer is approved), "auto" (no approval). A stricter mode set by the user stays.</string>
+      <string id="MinApproval_Ask">ask – approve every write</string>
+      <string id="MinApproval_Plan">plan – approve the plan of an answer</string>
+      <string id="MinApproval_Auto">auto – no approval</string>
+      <string id="AllowedProviders">Allowed AI providers</string>
+      <string id="AllowedProviders_Help">The AI providers Compass may use, separated by commas: anthropic, openai. Another provider in the settings is refused with a message.</string>
+    </stringTable>
+    <presentationTable>
+      <presentation id="HubUrl"><textBox refId="HubUrl"><label>Address of the hub:</label></textBox></presentation>
+      <presentation id="MinApproval"><dropdownList refId="MinApproval" defaultItem="0">Mode:</dropdownList></presentation>
+      <presentation id="AllowedProviders"><textBox refId="AllowedProviders"><label>Providers (e.g. anthropic,openai):</label><defaultValue>anthropic</defaultValue></textBox></presentation>
+    </presentationTable>
+  </resources>
+</policyDefinitionResources>

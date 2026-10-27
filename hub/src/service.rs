@@ -17,6 +17,8 @@ const NAME: &str = "CompassHub";
 const DISPLAY: &str = "Compass Hub (Loonar Compass team service)";
 
 static FILE: OnceLock<String> = OnceLock::new();
+/// The status handle, so the control handler can report the stop before the process ends.
+static STATUS: OnceLock<service_control_handler::ServiceStatusHandle> = OnceLock::new();
 
 pub fn install(file: &str) -> Result<()> {
     let file = std::fs::canonicalize(file).with_context(|| format!("{file} does not exist"))?;
@@ -66,19 +68,8 @@ pub fn run(file: String) {
     }
 }
 
-fn service_main(_: Vec<OsString>) {
-    let status_handle = match service_control_handler::register(NAME, |control| match control {
-        ServiceControl::Stop | ServiceControl::Shutdown => {
-            // The hub keeps no state in memory that is not on disk: stopping ends the process.
-            std::process::exit(0);
-        }
-        ServiceControl::Interrogate => ServiceControlHandlerResult::NoError,
-        _ => ServiceControlHandlerResult::NotImplemented,
-    }) {
-        Ok(handle) => handle,
-        Err(_) => return,
-    };
-    let status = |state: ServiceState, code: u32| ServiceStatus {
+fn status(state: ServiceState, code: u32) -> ServiceStatus {
+    ServiceStatus {
         service_type: ServiceType::OWN_PROCESS,
         current_state: state,
         controls_accepted: if state == ServiceState::Running { ServiceControlAccept::STOP | ServiceControlAccept::SHUTDOWN } else { ServiceControlAccept::empty() },
@@ -86,9 +77,44 @@ fn service_main(_: Vec<OsString>) {
         checkpoint: 0,
         wait_hint: Duration::from_secs(5),
         process_id: None,
+    }
+}
+
+fn service_main(_: Vec<OsString>) {
+    // The control handler only reports "stop pending" and wakes this thread, then returns at once: the service
+    // manager's stop request must get its answer, or a restart fails although the service stopped.
+    let (stop, stopped) = std::sync::mpsc::channel::<()>();
+    let stop = std::sync::Mutex::new(stop);
+    let status_handle = match service_control_handler::register(NAME, move |control| match control {
+        ServiceControl::Stop | ServiceControl::Shutdown => {
+            if let Some(handle) = STATUS.get() {
+                let _ = handle.set_service_status(status(ServiceState::StopPending, 0));
+            }
+            let _ = stop.lock().map(|s| s.send(()));
+            ServiceControlHandlerResult::NoError
+        }
+        ServiceControl::Interrogate => ServiceControlHandlerResult::NoError,
+        _ => ServiceControlHandlerResult::NotImplemented,
+    }) {
+        Ok(handle) => handle,
+        Err(_) => return,
     };
+    let _ = STATUS.set(status_handle);
     let _ = status_handle.set_service_status(status(ServiceState::Running, 0));
+    // The hub serves in its own thread; it keeps no state in memory that is not on disk, so it is not waited for:
+    // the process ends after this function reports the stop.
     let file = FILE.get().cloned().unwrap_or_default();
-    let result = crate::run(&file);
-    let _ = status_handle.set_service_status(status(ServiceState::Stopped, if result.is_ok() { 0 } else { 1 }));
+    let (ended, hub_ended) = std::sync::mpsc::channel::<bool>();
+    std::thread::spawn(move || {
+        let _ = ended.send(crate::run(&file).is_ok());
+    });
+    let code = loop {
+        if stopped.recv_timeout(Duration::from_millis(500)).is_ok() {
+            break 0;
+        }
+        if let Ok(ok) = hub_ended.try_recv() {
+            break if ok { 0 } else { 1 };
+        }
+    };
+    let _ = status_handle.set_service_status(status(ServiceState::Stopped, code));
 }

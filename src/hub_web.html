@@ -43,6 +43,7 @@ h3 { font-size:14px; margin:16px 0 6px; }
 .login p { margin:0 0 16px; }
 .login input { width:100%; margin-bottom:12px; padding:9px 10px; }
 .login button { width:100%; padding:9px; }
+.login a.sso { display:block; text-align:center; margin-top:8px; padding:9px; border:1px solid var(--line); border-radius:6px; text-decoration:none; color:var(--accent); }
 .small { font-size:12px; }
 .actions { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; }
 .notice { padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:var(--bg); margin:8px 0; }
@@ -60,6 +61,7 @@ h3 { font-size:14px; margin:16px 0 6px; }
     </div>
     <div id="bytoken" hidden><input id="token" type="password" placeholder="Your hub token" aria-label="Hub token"></div>
     <button id="login">Sign in</button>
+    <a id="sso" class="sso" href="/auth/login" hidden>Sign in with your company account</a>
     <p class="error" id="loginerror"></p>
     <p class="muted small"><a href="#" id="usetoken">Sign in with a token instead</a> · No account yet? Ask the administrator of the hub.</p>
   </div>
@@ -98,6 +100,7 @@ h3 { font-size:14px; margin:16px 0 6px; }
       <button data-tab="notes">Team notes</button>
       <button data-tab="changes">Change sets</button>
       <button data-tab="users" id="userstab" hidden>Users</button>
+      <button data-tab="policy" id="policytab" hidden>Team policy</button>
     </div>
     <div id="view-ask">
       <p class="muted">Ask about the selected model in your own words, e.g. "Which systems use the payment gateway?" The assistant only reads the model.</p>
@@ -108,7 +111,9 @@ h3 { font-size:14px; margin:16px 0 6px; }
       <div class="row"><input id="q" placeholder="Element name (at least 2 characters)"><button id="go">Search</button></div>
       <div id="results"></div>
     </div>
-    <div id="view-lint" hidden><p class="muted">Pick a package on the left: it is checked with all subpackages by the team rules.</p><div id="lint"></div></div>
+    <div id="view-lint" hidden><p class="muted">Pick a package on the left: it is checked with all subpackages by the team rules.</p>
+      <div class="row"><button id="repdocx" class="ghost">Word report of the package</button><button id="repxlsx" class="ghost">Excel report of the package</button></div>
+      <div id="lint"></div></div>
     <div id="view-gap" hidden>
       <div class="row"><input id="asis" placeholder="as-is package id"><input id="tobe" placeholder="to-be package id"><button id="gapgo">Compare</button></div>
       <div id="gap"></div>
@@ -117,6 +122,14 @@ h3 { font-size:14px; margin:16px 0 6px; }
     <div id="view-notes" hidden><div id="notes"></div></div>
     <div id="view-changes" hidden><div id="changes"></div></div>
     <div id="view-users" hidden><div id="users"></div></div>
+    <div id="view-policy" hidden>
+      <p class="muted">The team's rules for every Compass connected to this hub, as JSON: <b>min_approval</b> (plan, ask, auto), <b>governance</b> (model check rules),
+      <b>event_agents</b> (agents that run in everybody's Compass in EA, the same format as event_agents.json; "mode": "guard" stops deletions), <b>ask_min_role</b>, <b>ask_per_hour</b>,
+      <b>web_access</b> (false switches the assistant's web search and page reading off for everybody), <b>web_allowed_domains</b> (the only domains it may use, e.g. ["learn.microsoft.com", "sparxsystems.com"]), <b>update_check</b> (false: Compass does not check for new versions, when IT updates centrally),
+      <b>ai_via_hub</b>, <b>jira_via_hub</b>, <b>confluence_via_hub</b> (true: Compass uses Claude, Jira or Confluence through the hub, with the keys and accounts kept here; keys and limits per person in hub.json, section "ai").</p>
+      <textarea id="policytext" rows="22" spellcheck="false" style="width:100%;font-family:Consolas,monospace;font-size:12px"></textarea>
+      <div class="row"><button id="policysave">Save the policy</button><span id="policystatus" class="muted"></span></div>
+    </div>
   </section>
 </main>
 </div>
@@ -124,6 +137,11 @@ h3 { font-size:14px; margin:16px 0 6px; }
 const $ = id => document.getElementById(id);
 let token = '';
 try { token = sessionStorage.getItem('hubToken') || ''; } catch (e) {}
+// Back from the company sign-in: the session is in the fragment, taken out of the address at once.
+if (location.hash.startsWith('#session=')) {
+  token = decodeURIComponent(location.hash.slice('#session='.length));
+  history.replaceState(null, '', '/');
+}
 let selectedPackage = null;
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 async function api(path) {
@@ -186,7 +204,20 @@ async function loadUsers() {
     '<table><tr><th>User</th><th>Role</th><th>Sign-in</th><th></th></tr>' +
     list.map(u => '<tr><td>' + esc(u.name) + '</td><td>' + esc(u.role) + '</td><td>' + (u.password ? 'password' : '') + (u.password && u.token ? ' + ' : '') + (u.token ? 'API token' : '') + (u.must_change ? ' <span class="muted">(must change)</span>' : '') +
       '</td><td><button class="ghost" data-act="role" data-name="' + esc(u.name) + '">Role</button> <button class="ghost" data-act="reset" data-name="' + esc(u.name) + '">Reset password</button> <button class="ghost" data-act="token" data-name="' + esc(u.name) + '">New API token</button> <button class="ghost" data-act="del" data-name="' + esc(u.name) + '">Remove</button></td></tr>').join('') + '</table>' +
-    '<p class="muted small">An API token is for Compass (Settings → Team) and for MCP clients; it is shown once. A password set here must be changed at the next sign-in.</p>';
+    '<p class="muted small">An API token is for Compass (Settings → Team) and for MCP clients; it is shown once. A password set here must be changed at the next sign-in.</p>' +
+    '<h3>Company accounts</h3><div id="company"></div><h3>AI usage (tokens through the hub)</h3><div id="aiusage"></div>';
+  api('/api/users/ai').then(list => {
+    $('aiusage').innerHTML = list.length ? '<table><tr><th>Person</th><th>Key (secret name)</th><th>Today</th><th>This month</th></tr>' +
+      list.map(u => '<tr><td>' + esc(u.user) + '</td><td>' + esc(u.key || '') + '</td><td>' + u.tokens_today + '</td><td>' + u.tokens_month + '</td></tr>').join('') + '</table>' +
+      '<p class="muted small">Tokens read from the cache count a tenth. Keys and limits per person, role or everybody are set in hub.json, section "ai".</p>'
+      : '<p class="muted">Nobody has used the AI through the hub yet.</p>';
+  }).catch(() => {});
+  api('/api/users/company').then(list => {
+    $('company').innerHTML = list.length ? '<table><tr><th>Account</th><th>Role at the last sign-in</th><th>Last sign-in</th></tr>' +
+      list.map(c => '<tr><td>' + esc(c.name) + '</td><td>' + esc(c.role) + '</td><td>' + esc((c.last_sign_in || '').slice(0, 19).replace('T', ' ')) + '</td></tr>').join('') + '</table>' +
+      '<p class="muted small">Read only: the role of a company account comes from its groups at the sign-in provider; change it there.</p>'
+      : '<p class="muted">No one has signed in with a company account yet.</p>';
+  }).catch(() => {});
   $('uadd').onclick = async () => {
     const name = prompt('User name:'); if (!name) return;
     const role = prompt('Role (viewer, architect or admin):', 'viewer'); if (!role) return;
@@ -224,6 +255,7 @@ async function login() {
     me = await api('/api/me');
     if (me.must_change) { try { sessionStorage.setItem('hubToken', token); } catch (e) {} showChange(); return; }
     $('userstab').hidden = me.role !== 'admin';
+    $('policytab').hidden = me.role !== 'admin';
     try { sessionStorage.setItem('hubToken', token); } catch (e) {}
     $('who').textContent = me.name + ' · ' + me.role;
     $('loginview').hidden = true;
@@ -351,12 +383,35 @@ async function ask() {
 }
 function show(tab) {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-  ['ask', 'search', 'lint', 'gap', 'audit', 'notes', 'changes', 'users'].forEach(t => $('view-' + t).hidden = t !== tab);
+  ['ask', 'search', 'lint', 'gap', 'audit', 'notes', 'changes', 'users', 'policy'].forEach(t => $('view-' + t).hidden = t !== tab);
+  if (tab === 'policy') api('/api/policy').then(p => { $('policytext').value = JSON.stringify(p, null, 2); $('policystatus').textContent = ''; }).catch(e => $('policystatus').textContent = e.message);
   if (tab === 'users') loadUsers().catch(e => $('users').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
   if (tab === 'changes') loadChanges().catch(e => $('changes').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
   if (tab === 'audit') loadAudit().catch(e => $('audit').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
   if (tab === 'notes') loadNotes().catch(e => $('notes').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
 }
+$('policysave').onclick = async () => {
+  let value;
+  try { value = JSON.parse($('policytext').value); } catch (e) { $('policystatus').textContent = 'Not valid JSON: ' + e.message; return; }
+  try {
+    const r = await fetch('/api/policy', { method: 'PUT', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
+    const v = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(v.error || r.status);
+    $('policystatus').textContent = 'Saved. Compass picks it up within 5 minutes.';
+  } catch (e) { $('policystatus').textContent = e.message; }
+};
+async function downloadReport(format) {
+  if (!selectedPackage) { alert('Pick a package on the left first.'); return; }
+  const r = await fetch('/api/sources/' + encodeURIComponent(source()) + '/report?package=' + encodeURIComponent(selectedPackage) + '&format=' + format, { headers: { Authorization: 'Bearer ' + token } });
+  if (!r.ok) { const v = await r.json().catch(() => ({})); alert(v.error || r.status); return; }
+  const name = (r.headers.get('Content-Disposition') || '').split('filename="')[1]?.replace('"', '') || ('report.' + format);
+  const url = URL.createObjectURL(await r.blob());
+  const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+$('repdocx').onclick = () => downloadReport('docx');
+$('repxlsx').onclick = () => downloadReport('xlsx');
 $('tabs').onclick = e => { const b = e.target.closest('button'); if (b) show(b.dataset.tab); };
 $('login').onclick = signIn;
 $('token').onkeydown = e => { if (e.key === 'Enter') signIn(); };
@@ -370,6 +425,10 @@ $('askgo').onclick = ask;
 $('question').onkeydown = e => { if (e.key === 'Enter') ask(); };
 $('q').onkeydown = e => { if (e.key === 'Enter') search(); };
 $('source').onchange = () => { loadTree(); $('results').innerHTML = ''; $('lint').innerHTML = ''; };
+fetch('/api/auth').then(r => r.json()).then(a => {
+  if (a.oidc) { $('sso').textContent = a.button || $('sso').textContent; $('sso').hidden = false; }
+  if (a.password_login === false) { $('byname').hidden = true; $('login').hidden = true; $('usetoken').hidden = true; }
+}).catch(() => {});
 if (token) login();
 </script>
 </body>

@@ -33,6 +33,9 @@ pub struct ServerConfig {
     pub env: Vec<(String, String)>,
     pub url: Option<String>,
     pub headers: Vec<(String, String)>,
+    /// Sign-in other than a header: {"type": "basic", "user", "password"} or {"type": "oauth2", "token_url", "client_id",
+    /// "client_secret", "scope"} (secrets as ${secret:mcp_…}).
+    pub auth: Value,
     pub trusted: bool,
     /// The server is the MCP endpoint of the team hub from the settings: its headers may use ${secret:hub_token}.
     pub is_team_hub: bool,
@@ -172,6 +175,7 @@ pub fn parse(text: &str) -> Result<Vec<ServerConfig>> {
             env: pairs(&s["env"]),
             url: s["url"].as_str().map(String::from),
             headers: pairs(&s["headers"]),
+            auth: s["auth"].clone(),
             trusted: s["trusted"] == true,
             is_team_hub: false,
         };
@@ -246,7 +250,17 @@ impl Connection {
             });
             Transport::Stdio { child, stdin, lines }
         } else {
-            let headers = config.headers.iter().map(|(k, v)| Ok((k.clone(), expand_for(v, config.is_team_hub)?))).collect::<Result<Vec<_>>>()?;
+            let mut headers = config.headers.iter().map(|(k, v)| Ok((k.clone(), expand_for(v, config.is_team_hub)?))).collect::<Result<Vec<_>>>()?;
+            let field = |k: &str| -> Result<String> { expand_for(config.auth[k].as_str().unwrap_or(""), config.is_team_hub) };
+            match config.auth["type"].as_str() {
+                Some("basic") => headers.push(("Authorization".into(), crate::auth::basic(&field("user")?, &field("password")?))),
+                Some("oauth2") => {
+                    let token = crate::auth::client_credentials(&field("token_url")?, &field("client_id")?, &field("client_secret")?, &field("scope")?)?;
+                    headers.push(("Authorization".into(), format!("Bearer {token}")));
+                }
+                Some(other) => bail!("{}", crate::i18n::fmt("MCP server {0}: unknown auth type {1} (basic, oauth2)", &[config.name.clone(), other.to_string()])),
+                None => {}
+            }
             let client = reqwest::blocking::Client::builder().timeout(TIMEOUT).redirect(crate::net::same_origin_redirects()).build()?;
             Transport::Http { client, url: config.url.clone().unwrap_or_default(), headers, session: None }
         };

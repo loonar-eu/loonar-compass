@@ -2,6 +2,87 @@
 
 All notable changes to Loonar Compass (named Loonar EA Assistant until version 0.3).
 
+## Version 0.9 (2026-10-27)
+
+Company sign-in to the hub, models on SQL Server, MySQL and Oracle, the team's modelling instructions in the repository, documents in PDF, PowerPoint, Visio and Excel, presentations, SharePoint, guards that stop deletions, and a more careful assistant: questions, a plan, sub-agents and protection against hidden instructions.
+
+### Compass Hub
+
+- **Company sign-in (OpenID Connect):** AD FS, Microsoft Entra ID, Keycloak, Okta and other providers, configured in the `"oidc"` section of `hub.json`. The web view shows "Sign in with your company account".
+  - Authorization code with PKCE; the hub checks the ID token itself (RS256 signature against the provider's keys, issuer, audience, expiry, nonce).
+  - Roles from groups (`roles`, by default Compass-Admins, Compass-Architects, Compass-Viewers): the highest role wins, no group means no access. A local user with the same name is refused.
+  - The client secret is the hub secret `OIDC_CLIENT_SECRET`. `"password_login": false` leaves only the company sign-in; API tokens still work. Every sign-in goes to the audit trail.
+- **Hub behind IIS/ARR and sign-in audit:** `allatclaims` added automatically for AD FS; the lockout after wrong passwords uses the client address from `X-Forwarded-For` (only from a proxy on the same computer); failed and refused sign-ins in the "Audit trail" with ✗; the "Users" tab lists company accounts with role and last sign-in (read only); the Windows service stops and restarts cleanly. Guide: the ARR setting `reverseRewriteHostInResponseHeaders="false"`.
+- **Event agents for the team:** the policy key `"event_agents"` (the same format as `event_agents.json`, guards too). The agents work in everybody's Compass in EA, marked "(team)".
+- **"Team policy" tab (admin):** a JSON editor of the policy (min_approval, governance, event_agents, ask_min_role, ask_per_hour).
+- **Word and Excel reports:** "Word report of the package" and "Excel report of the package" in the Model check tab: description, elements, relationships (no diagram pictures). Every download is audited.
+- **GraphQL and Power BI:** read-only `POST /api/sources/{id}/graphql` (packages, elements with attributes, operations, tagged values and relationships, diagrams; schema at `GET /api/graphql/schema`) and flat tables `GET /api/sources/{id}/table/{elements|connectors|packages|diagrams|attributes|tagged_values}` for Power BI (Get Data → Web → Advanced, header `Authorization: Bearer <API token>`). Any role.
+
+### Models on SQL Server, MySQL and Oracle
+
+- **New repositories:** besides PostgreSQL and .qea files, Compass reads EA repositories on SQL Server, MySQL/MariaDB and Oracle: in the separate window, in the hub and in check mode. Settings → Model has the choices SQL Server, MySQL and Oracle.
+- **ODBC driver:** the vendor's 64-bit ODBC driver is found automatically (SQL Server: ODBC Driver 18 or 17, or Windows' own "SQL Server" driver). A full connection string without the password can be given in `db.odbc` (for example for Oracle).
+- **Read only:** every read is rolled back.
+- **Saving through EA** (the EA edition must support DBMS repositories):
+  - SQL Server: Compass builds EA's connection by itself (OLE DB provider SQLOLEDB), as for PostgreSQL.
+  - MySQL and Oracle: EA's connection comes from the new setting `ea.conn` in app.properties, the text of an EA connection shortcut through an ODBC data source (e.g. `ea_lab --- DBType=0;Connect=Provider=MSDASQL.1;Data Source=<ODBC DSN>;…`). Without it, changes go through Compass in EA, which works with any repository open in EA, as before.
+- **Docker:** the hub image has unixODBC; add the vendor's Linux ODBC driver in an image built on it.
+
+### Modelling instructions in the repository
+
+- **The team's rulebook in EA:** an Artifact «CompassInstructions» ("Loonar Compass – modelling instructions") whose notes are the rules of the repository (naming, types and stereotypes, packages, diagrams, tagged values, checks). The assistant follows them in every answer, for everybody who opens the repository.
+- **Starting wizard:** the assistant analyzes the repository and drafts the rules; saving and adding a rule are changes of the model shown for approval.
+  - Example: "Prepare modelling instructions for this repository".
+  - Example: "Add to the instructions: activities start with a verb".
+
+### Conversation
+
+- **Clarifying questions as a form:** when something important is unclear, the assistant shows "Questions to you" with choices or a short answer ("Something else…"); "Send answers" sends them as the next message ("My answers:").
+- **Plan of larger work:** "📋 Plan: 1 of 4 done" with ✓ ▶ ○ in the steps (and in EA's System Output), updated as the assistant works.
+- **Sub-agents:** for larger analyses the assistant hands a task to a sub-agent with the role impact, review or document, which reads the model in its own context and returns a compact result ("Sub-agent (impact): …").
+- **Pick from the model:** the ⌖ button next to Paste searches elements, packages and diagrams by name (empty = top packages) and adds them to the message as references, such as «Element: Order (Class, id 26)».
+- **The assistant's reasoning:** the 💭 button next to Paste shows a summary of the reasoning as the step "💭 The assistant's reasoning" (Claude only; the effort stays in Settings).
+- **Code in Anthropic's sandbox:** the ∑ button next to Paste (off by default; Claude only) lets the assistant run code for calculations and data analysis; its output is the step "Code in the sandbox". The data passed there goes to Anthropic, like the conversation.
+- **Web (🌐):** a button next to ∑ (off by default). With Claude, web search and page reading through Anthropic; with OpenAI, Compass reads only pages whose addresses were given in the conversation (never addresses of this computer or the company network). Allowed domains: `claude.web_domains`. Hub policy: `"web_access": false` switches it off for everybody, `"web_allowed_domains"` limits the domains. Searches and pages are shown in the steps of the answer.
+- **New version notice:** once a day Compass checks the latest release on GitHub and shows a bar "What's new and download / Not now" (in EA: a line in System Output). Nothing is downloaded or installed by itself, no installation identifier. Switch off: Settings → New releases (newsletter) or `app.update_check=false`; hub policy `"update_check": false`.
+- **Computer policy (Group Policy, Intune) and company sign-in:** the key `HKLM/HKCU\SOFTWARE\Policies\Loonar\Compass` – `HubUrl` (hub address locked), `RequireHub` (the assistant only with the hub and its policy; if the hub is down, the last policy up to a week old), `WebAccess`, `UpdateCheck`, `MinApproval`, `AllowedProviders`. ADMX/ADML templates in `deploy\policies`. "Sign in with your company account" in Settings → Team: the hub's sign-in in the browser, the session comes back to 127.0.0.1 and goes to Credential Manager.
+- **AI keys, Jira and Confluence on the hub:** the `/ai/v1/messages` gateway – the hub keeps the Claude keys, per person (name or AD UPN), role or everybody, with daily and monthly token limits and a model list; usage per person in the Users tab. Jira and Confluence through the hub with the team's account (a viewer only reads, changes in the audit trail). Policy: `ai_via_hub`, `jira_via_hub`, `confluence_via_hub`.
+- **A guard without a decision blocks:** when a guard does not decide within 40 s or cannot (no AI, the hub down), the deletion is stopped with a message (before, it went ahead).
+- **Quiet installation:** `LoonarCompass-Setup --quiet [--all-users] [--dir …] [--lang …] [--no-desktop] [--no-start-menu] [--no-ea-addin]` – deployment with Intune, Configuration Manager or a script; for all users the EA add-in works for everybody.
+- **Guard of deletions in EA:** EA no longer freezes while the guard decides, and the guard really decides (before, the deletion went ahead after 40 s without a decision).
+- **Reading Confluence pages:** the assistant reads a page by title or id, also through the hub.
+- **Hub installation guide for IT** (English and Polish).
+- **Compass in EA from the start:** the Compass window is visible as soon as EA starts; without a project it shows "No project is open…", Compass starts by itself when a file or repository is opened and returns to that note when the project is closed.
+- **Hub restart:** sessions of signed-in people survive a restart of the hub; the same invalid token counts once towards the address lockout; Compass asks to sign in again at once when the hub sign-in has expired and describes hub errors briefly (no IIS HTML pages).
+- **EA project glossary:** the default type of a new term is `Glossary` (before: `Slownik`).
+- **Long conversations:** above about 100 000 tokens, the earlier part is replaced by a summary for the next answers ("The conversation is long: summarising its earlier part"); the newest messages stay.
+- **Deleting a conversation:** right-click a conversation → "Delete the conversation" (in Compass in EA: the 🗑 button next to the conversation name). It is moved to `history\bin` and can be brought back; not while the assistant works in it.
+
+### Documents, presentations and SharePoint
+
+- **Reading documents:** the tool `read_document` and attachments read PDF (every page; attach a scan without a text layer so the model reads the page images), PowerPoint .pptx (slides with notes), Visio .vsdx (pages, shapes with text, connections A → B), Excel .xlsx (sheets, cells) and Word. Old .doc, .ppt, .xls and .vsd files must be saved in the new format.
+  - Requirements for `trace_requirements` and `--requirements` can come from these formats.
+- **PowerPoint presentations:** `create_presentation` makes a 16:9 deck: a title slide, slides with bullets on two levels and/or a diagram or image, optionally also as PDF (through Microsoft PowerPoint).
+- **PDF documents:** `create_document` with the format pdf or both (through Microsoft Word). PDF needs Microsoft Office on the computer.
+- **SharePoint:** the new card Settings → SharePoint (site address, document library, tenant ID, application (client) ID, client secret; "Save and test SharePoint connection"). It needs an app registration in Entra ID with the Microsoft Graph application permission Sites.Selected (granted to the site) or Sites.ReadWrite.All.
+  - The assistant lists a folder, reads a document's text and uploads a file it has made; every upload is asked.
+
+### Enterprise Architect
+
+- **Event agents for 18 events:** created, changed and deleting of elements, connectors, diagrams and packages; created and deleting of attributes, methods and glossary terms.
+- **Guards:** `"mode": "guard"` on a `*_deleting` event. EA asks Compass before deleting; the guard answers ALLOW or BLOCK with a reason, and EA shows "Loonar Compass stopped this deletion:" and cancels. Without an answer within 40 s the deletion goes ahead.
+  - Example: `{"name": "Keep approved", "event": "element_deleting", "mode": "guard", "applies_to": "Requirement", "prompt": "Block deleting a requirement whose status is Approved."}`.
+- **MDG technologies:** the tool `mdg_technologies`: the profiles the model uses (with counts), EA's and your technology files, the technologies imported into the model, stereotypes with metatype and what they apply to, and their tagged values with type, values and default.
+- **The EA API:** the tool `ea_api` reads the automation interface from EA.tlb of the installed EA (classes, properties read or read/write, methods with parameters, enumerations); the assistant uses it before writing EA scripts.
+- **Version control of packages:** the tool `version_control_status` (packages under version control, configuration, file, who has them checked out) and the model operation `version_control` (check_out, check_in, get_latest, put_latest, resync, with a comment). Always asked; the package must already be under version control in EA.
+
+### Security and sign-in
+
+- **Protection against hidden instructions (prompt injection):** safety rules in every prompt; results of documents, Jira, Confluence, MCP, the CMDB and code are marked as data; an answer that repeats the internal instructions word for word is withheld.
+- **MCP servers over HTTP:** `"auth": {"type": "basic", "user", "password"}` or `{"type": "oauth2", "token_url", "client_id", "client_secret", "scope"}` in `mcp_servers.json` (secrets as `${secret:mcp_…}`).
+- **The AI service with OAuth2:** new fields on the AI model card: "OAuth2 token address" (optional, instead of an API key), then "OAuth2 client ID", "OAuth2 scope" and "OAuth2 client secret" (kept in Credential Manager). For example Entra ID with the scope `https://cognitiveservices.azure.com/.default`. Saved as `ai.oauth.*`.
+- **Claude through another address:** the field "Claude address" (Claude only; empty = Anthropic), for example Azure AI Foundry `https://<resource>.services.ai.azure.com/anthropic` or a company gateway. Saved as `claude.url`.
+
 ## Version 0.8.2 (2026-10-23)
 
 Compass Hub as a program of its own (Windows, Linux, Docker) with user accounts, the model check in CI pipelines, ArchiMate rules, the full traceability chain, comparison with a CMDB and ready-made MCP servers.

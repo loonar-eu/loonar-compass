@@ -39,3 +39,8 @@ editor/node_modules/
 /target2h/
 /hub/target/
 /hub/THIRD-PARTY-NOTICES-*.txt
+
+# Regression run: local settings and collected evidence
+/tools/regression/config.local.json
+/tools/regression/out/
+target_ora/

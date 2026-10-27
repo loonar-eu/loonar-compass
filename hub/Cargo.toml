@@ -1,6 +1,6 @@
 [package]
 name = "compass-hub"
-version = "0.8.2"
+version = "0.9.0"
 edition = "2021"
 description = "Compass Hub: the team service of Loonar Compass (team models, policy, audit trail, change sets, web view, MCP server)"
 publish = false
@@ -20,6 +20,11 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 uuid = { version = "1", features = ["v4"] }
 postgres = "0.19"
+odbc-api = "8"
+juniper = { version = "0.16", default-features = false, features = ["schema-language"] }
+docx-rs = "0.4"
+rust_xlsxwriter = "0.80"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 native-tls = "0.2"
 postgres-native-tls = "0.5"
 rusqlite = { version = "0.37", features = ["bundled", "hooks"] }

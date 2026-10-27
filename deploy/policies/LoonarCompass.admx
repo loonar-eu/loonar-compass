@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Group Policy template for Loonar Compass: copy LoonarCompass.admx to C:\Windows\PolicyDefinitions (or the central
+     store \\<domain>\SYSVOL\<domain>\Policies\PolicyDefinitions) and the language folders (en-US, pl-PL) next to it.
+     The values go to HKLM (computer) or HKCU (user) \SOFTWARE\Policies\Loonar\Compass; the computer's value wins. -->
+<policyDefinitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <policyNamespaces>
+    <target prefix="loonarcompass" namespace="Loonar.Policies.Compass" />
+    <using prefix="windows" namespace="Microsoft.Policies.Windows" />
+  </policyNamespaces>
+  <resources minRequiredRevision="1.0" />
+  <supportedOn>
+    <definitions>
+      <definition name="SUPPORTED_Compass09" displayName="$(string.SUPPORTED_Compass09)" />
+    </definitions>
+  </supportedOn>
+  <categories>
+    <category name="Loonar" displayName="$(string.Loonar)" />
+    <category name="Compass" displayName="$(string.Compass)">
+      <parentCategory ref="Loonar" />
+    </category>
+  </categories>
+  <policies>
+    <policy name="HubUrl" class="Both" displayName="$(string.HubUrl)" explainText="$(string.HubUrl_Help)" presentation="$(presentation.HubUrl)" key="SOFTWARE\Policies\Loonar\Compass">
+      <parentCategory ref="Compass" />
+      <supportedOn ref="SUPPORTED_Compass09" />
+      <elements>
+        <text id="HubUrl" valueName="HubUrl" required="true" />
+      </elements>
+    </policy>
+    <policy name="RequireHub" class="Both" displayName="$(string.RequireHub)" explainText="$(string.RequireHub_Help)" key="SOFTWARE\Policies\Loonar\Compass" valueName="RequireHub">
+      <parentCategory ref="Compass" />
+      <supportedOn ref="SUPPORTED_Compass09" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+    <policy name="WebAccess" class="Both" displayName="$(string.WebAccess)" explainText="$(string.WebAccess_Help)" key="SOFTWARE\Policies\Loonar\Compass" valueName="WebAccess">
+      <parentCategory ref="Compass" />
+      <supportedOn ref="SUPPORTED_Compass09" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+    <policy name="UpdateCheck" class="Both" displayName="$(string.UpdateCheck)" explainText="$(string.UpdateCheck_Help)" key="SOFTWARE\Policies\Loonar\Compass" valueName="UpdateCheck">
+      <parentCategory ref="Compass" />
+      <supportedOn ref="SUPPORTED_Compass09" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+    <policy name="MinApproval" class="Both" displayName="$(string.MinApproval)" explainText="$(string.MinApproval_Help)" presentation="$(presentation.MinApproval)" key="SOFTWARE\Policies\Loonar\Compass">
+      <parentCategory ref="Compass" />
+      <supportedOn ref="SUPPORTED_Compass09" />
+      <elements>
+        <enum id="MinApproval" valueName="MinApproval" required="true">
+          <item displayName="$(string.MinApproval_Ask)"><value><string>ask</string></value></item>
+          <item displayName="$(string.MinApproval_Plan)"><value><string>plan</string></value></item>
+          <item displayName="$(string.MinApproval_Auto)"><value><string>auto</string></value></item>
+        </enum>
+      </elements>
+    </policy>
+    <policy name="AllowedProviders" class="Both" displayName="$(string.AllowedProviders)" explainText="$(string.AllowedProviders_Help)" presentation="$(presentation.AllowedProviders)" key="SOFTWARE\Policies\Loonar\Compass">
+      <parentCategory ref="Compass" />
+      <supportedOn ref="SUPPORTED_Compass09" />
+      <elements>
+        <text id="AllowedProviders" valueName="AllowedProviders" required="true" />
+      </elements>
+    </policy>
+  </policies>
+</policyDefinitions>

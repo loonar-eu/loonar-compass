@@ -1,11 +1,12 @@
-# Generates the PDF user guides in 4 languages (Microsoft Edge in headless mode):
-#   docs\Instrukcja_uzytkownika.html -> .pdf (pl), docs\Manual.<en|de|fr>.html -> .pdf
+# Generates the PDF user guides in 4 languages and the hub installation guide for IT (Microsoft Edge in headless mode):
+#   docs\Instrukcja_uzytkownika.html -> .pdf (pl), docs\Manual.<en|de|fr>.html -> .pdf,
+#   docs\Hub_Installation_Guide.en.html and docs\Instalacja_huba.html -> .pdf
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $edge = @('C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe', 'C:\Program Files\Microsoft\Edge\Application\msedge.exe') | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $edge) { throw 'Microsoft Edge not found' }
 $profile = Join-Path $env:TEMP 'loonar-manual-edge'
-foreach ($name in 'Instrukcja_uzytkownika', 'Manual.en', 'Manual.de', 'Manual.fr') {
+foreach ($name in 'Instrukcja_uzytkownika', 'Manual.en', 'Manual.de', 'Manual.fr', 'Hub_Installation_Guide.en', 'Instalacja_huba') {
     $html = Join-Path $root "docs\$name.html"
     $pdf = Join-Path $root "docs\$name.pdf"
     if (-not (Test-Path $html)) { throw "missing $html" }
