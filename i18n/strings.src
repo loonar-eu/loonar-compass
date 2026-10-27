@@ -1630,3 +1630,4 @@ Agents of the team (from the hub's policy; changed by its administrator): ‖ Ag
 
 The ea.conn in the settings is for another kind of database than the model (DBType {0}). ‖ ea.conn w ustawieniach dotyczy innego rodzaju bazy niż model (DBType {0}). ‖ ea.conn in den Einstellungen gehört zu einer anderen Datenbankart als das Modell (DBType {0}). ‖ ea.conn dans les paramètres concerne un autre type de base que le modèle (DBType {0}).
 unnamed ‖ bez nazwy ‖ unbenannt ‖ sans nom
+Switched off by your organisation (the computer's policy or the team hub). ‖ Wyłączone przez Twoją organizację (zasady komputera albo hub zespołu). ‖ Von Ihrer Organisation ausgeschaltet (Richtlinie des Computers oder Team-Hub). ‖ Désactivé par votre organisation (stratégie de l'ordinateur ou hub d'équipe).

@@ -3939,12 +3939,15 @@ impl App {
                 });
                 ui.end_row();
                 ui.label(crate::i18n::tr("In the application"));
-                let mut check = c.update_check && !self.cfg.as_ref().is_some_and(|x| x.policy.update_check == Some(false));
+                // Switched off by the organisation: the computer's policy or the team policy of the hub (LC-269).
+                let locked = self.cfg.as_ref().is_some_and(|x| x.policy.update_check == Some(false) || hub::known_team_policy(x).is_some_and(|p| p["update_check"] == false));
+                let mut check = c.update_check && !locked;
                 let field = settings_field_width(ui);
                 ui.scope(|ui| {
                 ui.set_max_width(field);
                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-                if ui.add_enabled(!self.cfg.as_ref().is_some_and(|x| x.policy.update_check == Some(false)), egui::Checkbox::new(&mut check, crate::i18n::tr("Check once a day whether a new version is available"))).on_hover_text(crate::i18n::tr("A plain request to GitHub, without any identifier of this installation; nothing is downloaded or installed by itself. The team hub can switch it off for everybody.")).changed() {
+                let tip = if locked { crate::i18n::tr("Switched off by your organisation (the computer's policy or the team hub).") } else { crate::i18n::tr("A plain request to GitHub, without any identifier of this installation; nothing is downloaded or installed by itself. The team hub can switch it off for everybody.") };
+                if ui.add_enabled(!locked, egui::Checkbox::new(&mut check, crate::i18n::tr("Check once a day whether a new version is available"))).on_hover_text(tip).on_disabled_hover_text(tip).changed() {
                     c.update_check = check;
                     let _ = config::save_properties(&props_path, &[("app.update_check", check.to_string())]);
                 }
