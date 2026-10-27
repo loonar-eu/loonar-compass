@@ -18,12 +18,25 @@ SOURCE = {"pl": "Instrukcja_uzytkownika", "en": "Manual.en", "de": "Manual.de", 
 # guide. Guides of versions before 0.6 have no marks: there these chapters were 2, 3 and 17.
 INSTALL_BEFORE_0_6 = {"s2", "s3", "s17"}
 PAGES = ("index.html", "install.html")
-# The hub's installation guide for IT (in docs/, PDF): Polish for the Polish pages, English for the others.
-HUB_GUIDE = {"pl": "Instalacja_huba.pdf", "en": "Hub_Installation_Guide.en.pdf"}
-HUB_T = {"en": "Compass Hub (optional): installation guide for IT (PDF)",
-         "pl": "Compass Hub (opcjonalny): instrukcja instalacji dla działu IT (PDF)",
-         "de": "Compass Hub (optional): Installationsanleitung für die IT (PDF, Englisch)",
-         "fr": "Compass Hub (optionnel) : guide d’installation pour l’IT (PDF, en anglais)"}
+# The hub's installation guide for IT (docs/<name>.html and .pdf), a page of its own (hub.html) from 0.9.1; a
+# language without its own guide shows the English one.
+HUB_SOURCE = {"pl": "Instalacja_huba", "en": "Hub_Installation_Guide.en", "de": "Hub_Installation_Guide.de", "fr": "Hub_Installation_Guide.fr"}
+HUB_T = {
+    "en": dict(tab="Compass Hub (IT)", title="Compass Hub – installation guide for IT", pdf="Download as PDF (hub guide)",
+               desc="Installing Compass Hub {v}, the optional team server of Loonar Compass: Windows service, IIS, company sign-in (OpenID Connect), policies."),
+    "pl": dict(tab="Compass Hub (IT)", title="Compass Hub – instrukcja instalacji dla działu IT", pdf="Pobierz jako PDF (instrukcja huba)",
+               desc="Instalacja Compass Hub {v}, opcjonalnego serwera zespołu Loonar Compass: usługa Windows, IIS, logowanie kontem firmowym (OpenID Connect), zasady."),
+    "de": dict(tab="Compass Hub (IT)", title="Compass Hub – Installationsanleitung für die IT", pdf="Als PDF herunterladen (Hub-Anleitung)",
+               desc="Installation von Compass Hub {v}, dem optionalen Team-Server von Loonar Compass: Windows-Dienst, IIS, Firmenanmeldung (OpenID Connect), Richtlinien."),
+    "fr": dict(tab="Compass Hub (IT)", title="Compass Hub – guide d’installation pour l’IT", pdf="Télécharger en PDF (guide du hub)",
+               desc="Installation de Compass Hub {v}, le serveur d’équipe optionnel de Loonar Compass : service Windows, IIS, connexion d’entreprise (OpenID Connect), stratégies."),
+}
+
+
+def hub_source(lang):
+    """The hub guide of a language (or the English one) as (html path, pdf file name)."""
+    name = HUB_SOURCE[lang] if os.path.isfile(os.path.join(ROOT, "docs", HUB_SOURCE[lang] + ".html")) else HUB_SOURCE["en"]
+    return os.path.join(ROOT, "docs", name + ".html"), name + ".pdf"
 
 T = {
     "en": dict(docs="Documentation", guide="User guide", install="Installation", version="Version", latest="latest",
@@ -139,11 +152,18 @@ def generate(b):
                     write_page(b, ver, label, lang, page, picked, has_pdf, vers, current, chapters)
                     if label == "latest":
                         urls.append(b.SITE + base + lang + "/" + ("" if page == "index.html" else page))
-    # The installation guide of the hub for IT (PDF, English and Polish), from 0.9; a page of its own comes later.
+    # The installation guide of the hub for IT: a page of the current version (and its PDF in docs/<ver>/hub/).
     hub_out = os.path.join(b.OUT, "docs", current, "hub")
     os.makedirs(hub_out, exist_ok=True)
-    for name in HUB_GUIDE.values():
-        shutil.copyfile(os.path.join(ROOT, "docs", name), os.path.join(hub_out, name))
+    for lang in b.LANGS:
+        guide, pdf_name = hub_source(lang)
+        pdf = os.path.join(ROOT, "docs", pdf_name)
+        if os.path.isfile(pdf):
+            shutil.copyfile(pdf, os.path.join(hub_out, pdf_name))
+        chapters = sections(guide)
+        for label in (current, "latest"):
+            write_page(b, current, label, lang, "hub.html", chapters, os.path.isfile(pdf), [current], current, chapters)
+        urls.append(b.SITE + f"docs/latest/{lang}/hub.html")
     index_page(b, vers, current)
     return urls
 
@@ -153,11 +173,13 @@ def write_page(b, ver, label, lang, page, chapters, has_pdf, vers, current, all_
     P = b.rel(d, "")
     t, dt = b.texts(lang), T[lang]
     install = page == "install.html"
+    hub = page == "hub.html"
+    ht = HUB_T[lang]
     here = {c[0] for c in chapters}
     other = "index.html" if install else "install.html"
     body = "\n".join(clean(c[2], here, other) for c in chapters)
-    title = dt["title_install"] if install else dt["title_guide"]
-    desc = (dt["desc_install"] if install else dt["desc_guide"]).format(v=ver)
+    title = ht["title"] if hub else dt["title_install"] if install else dt["title_guide"]
+    desc = (ht["desc"] if hub else dt["desc_install"] if install else dt["desc_guide"]).format(v=ver)
     canonical = b.SITE + f"docs/latest/{lang}/" + ("" if page == "index.html" else page) if ver == current else b.SITE + d + ("" if page == "index.html" else page)
     alternates = [(l, b.SITE + f"docs/{label}/{l}/" + ("" if page == "index.html" else page)) for l in b.LANGS]
     links = {l: f"../{l}/" + ("" if page == "index.html" else page) for l in b.LANGS}
@@ -169,17 +191,20 @@ def write_page(b, ver, label, lang, page, chapters, has_pdf, vers, current, all_
         f'<li><a href="#{cid}">{_html.escape(name)}</a></li>' if cid in here
         else f'<li class="docs-toc-other"><a href="{other}#{cid}">{_html.escape(name)} <span aria-hidden="true">↗</span></a></li>'
         for cid, name, _ in all_chapters)
-    tabs = (f'<a href="index.html"{" aria-current=\"page\"" if not install else ""}>{dt["guide"]}</a>'
+    tabs = (f'<a href="index.html"{" aria-current=\"page\"" if page == "index.html" else ""}>{dt["guide"]}</a>'
             f'<a href="install.html"{" aria-current=\"page\"" if install else ""}>{dt["install"]}</a>')
+    if ver == current:  # the hub guide is a page of the current version only
+        tabs += f'<a href="hub.html"{" aria-current=\"page\"" if hub else ""}>{ht["tab"]}</a>'
+    if hub:  # one version and no chapters on other pages
+        vers = [current]
     ver_links = "".join(
         f'<li><a href="{b.rel(d, f"docs/{v}/{lang}/")}{"" if page == "index.html" else page}"'
         f'{" aria-current=\"page\"" if v == ver else ""}>{v}{" (" + dt["latest"] + ")" if v == current else ""}</a></li>'
         for v in vers)
     pdf_href = f"{SOURCE[lang]}.pdf" if label != "latest" else b.rel(d, f"docs/{ver}/{lang}/") + f"{SOURCE[lang]}.pdf"
-    pdf = f'<p class="docs-pdf"><a href="{pdf_href}" download>{dt["pdf"]}</a></p>' if has_pdf else ""
-    if install and ver == current:
-        hub_pdf = b.rel(d, f"docs/{ver}/hub/") + HUB_GUIDE.get(lang, HUB_GUIDE["en"])
-        pdf += f'<p class="docs-pdf"><a href="{hub_pdf}" download>{HUB_T[lang]}</a></p>'
+    if hub:
+        pdf_href = b.rel(d, f"docs/{ver}/hub/") + hub_source(lang)[1]
+    pdf = f'<p class="docs-pdf"><a href="{pdf_href}" download>{ht["pdf"] if hub else dt["pdf"]}</a></p>' if has_pdf else ""
     old = ""
     if ver != current:
         newest = b.rel(d, f"docs/latest/{lang}/") + ("" if page == "index.html" else page)
