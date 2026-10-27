@@ -1376,7 +1376,10 @@ struct App {
     contact: Contact,
     /// The check for a newer release (started once, in the background) and the release to tell the user about.
     update_rx: Option<mpsc::Receiver<Option<update::Release>>>,
-    update_started: bool,
+    /// When to check for a newer release again (every hour while the application is open) and the version already
+    /// announced in EA's System Output.
+    update_next: Option<std::time::Instant>,
+    update_told: Option<String>,
     update: Option<update::Release>,
     /// Signing in to the hub with the company account (in the background) and its last result.
     hub_signin_rx: Option<mpsc::Receiver<Result<(String, String), String>>>,
@@ -1615,7 +1618,8 @@ impl App {
         let (settings_tx, settings_rx) = mpsc::channel();
         Self {
             update_rx: None,
-            update_started: false,
+            update_next: None,
+            update_told: None,
             update: None,
             hub_signin_rx: None,
             hub_signin_status: String::new(),
@@ -4282,7 +4286,7 @@ impl App {
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                 .show(ctx, |ui| {
                     ui.set_max_width(480.0);
-                    ui.add(egui::Label::new(crate::i18n::tr("Loonar Compass sends anonymous usage statistics once a day: which functions were used and how often they failed, the application version and the kind of setup. Never the content of conversations, names from the model, file paths or server addresses. It is your choice: the application works the same either way. Leaving them on helps a lot, because they are the only way to see what to improve first. Everything that was sent is in the Usage statistics view, where you can also switch them off at any time.")).wrap());
+                    ui.add(egui::Label::new(crate::i18n::tr("Loonar Compass sends anonymous usage statistics: at the start a random installation id with the application version, Windows version and language, and every hour a summary of the day: what kinds of tasks were done and how they ended, which functions were used and how often they failed, ratings of answers and what the assistant could not do. Never the content of conversations, names from the model, file paths or server addresses. It is your choice: the application works the same either way. Leaving them on helps a lot, because they are the only way to see what to improve first. Everything that was sent is in the Usage statistics view, where you can also switch them off at any time.")).wrap());
                     ui.add_space(10.0);
                     ui.horizontal(|ui| {
                         if ui.button(crate::i18n::tr("Keep on")).clicked() {
@@ -4330,7 +4334,7 @@ impl App {
         ui.add_space(10.0);
         ui.label(egui::RichText::new(crate::i18n::tr("Usage statistics")).font(bold(24.0)));
         ui.add_space(6.0);
-        ui.add(egui::Label::new(crate::i18n::tr("Once a day Compass sends a summary of the previous day: how often each function of the assistant was used and how often it failed, answers, AI service errors, approvals, views opened, tokens, the application version, Windows version, the interface language and the kind of setup (model source, AI provider and model family, approval mode, whether Jira, Confluence, the hub, MCP servers and event agents are set up). It never sends the content of conversations, names or ids from the model, file paths, server addresses, error messages or user names. The summaries are public, so everybody can see what is collected.")).wrap());
+        ui.add(egui::Label::new(crate::i18n::tr("At the start Compass sends a random installation id (created on this computer, not derived from it or from you) with the application version, Windows version and language; every hour it sends a summary of the day so far: the kinds of tasks (for example a diagram, a document, a change of the model, a question about the model) and how they ended, how often each function of the assistant was used and how often it failed, ratings of answers, what the assistant could not do, approvals, views opened, tokens and the kind of setup (model source, AI provider and model family, approval mode, whether Jira, Confluence, the hub, MCP servers and event agents are set up). It never sends the content of conversations, names or ids from the model, file paths, server addresses, error messages or user names, and the service does not store addresses (IP). Only the author sees the data; summaries for all users together are published.")).wrap());
         ui.horizontal_wrapped(|ui| {
             ui.hyperlink_to(crate::i18n::tr("Published statistics"), telemetry::STATS_URL);
             ui.label("·");
@@ -4343,7 +4347,7 @@ impl App {
             }
             None => {
                 let mut on = telemetry::enabled();
-                if ui.checkbox(&mut on, crate::i18n::tr("Send anonymous usage statistics (once a day)")).changed() {
+                if ui.checkbox(&mut on, crate::i18n::tr("Send anonymous usage statistics (every hour)")).changed() {
                     self.set_telemetry(on);
                 }
                 ui.label(egui::RichText::new(crate::i18n::tr("Organisations can switch them off for everybody: the environment variable LOONAR_TELEMETRY=0, the registry value Telemetry = 0 (DWORD) under HKLM\\SOFTWARE\\Policies\\Loonar\\Compass, or \"telemetry\": false in the policy of the team hub.")).small().color(theme::HINT));
@@ -4449,7 +4453,7 @@ impl App {
                 ui.set_max_width(field);
                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
                 let tip = if locked { crate::i18n::tr("Switched off by your organisation (the computer's policy or the team hub).") } else { crate::i18n::tr("A plain request to GitHub, without any identifier of this installation; nothing is downloaded or installed by itself. The team hub can switch it off for everybody.") };
-                if ui.add_enabled(!locked, egui::Checkbox::new(&mut check, crate::i18n::tr("Check once a day whether a new version is available"))).on_hover_text(tip).on_disabled_hover_text(tip).changed() {
+                if ui.add_enabled(!locked, egui::Checkbox::new(&mut check, crate::i18n::tr("Check every hour whether a new version is available"))).on_hover_text(tip).on_disabled_hover_text(tip).changed() {
                     c.update_check = check;
                     let _ = config::save_properties(&props_path, &[("app.update_check", check.to_string())]);
                 }
@@ -6346,11 +6350,15 @@ fn row_secret(ui: &mut egui::Ui, label: &str, value: &mut String, stored: bool) 
 }
 
 impl App {
-    /// A newer release: checked once in the background; a bar above the window (in EA: one line in System Output).
+    /// A newer release: checked in the background at the start and then every hour; a bar above the window (in EA:
+    /// one line in System Output per version).
     fn update_bar(&mut self, ctx: &egui::Context) {
-        if !self.update_started {
+        let now = std::time::Instant::now();
+        if let Some(next) = self.update_next.filter(|n| now < *n) {
+            ctx.request_repaint_after(next - now);
+        } else if self.update_rx.is_none() {
             if let Some(cfg) = self.cfg.clone() {
-                self.update_started = true;
+                self.update_next = Some(now + std::time::Duration::from_secs(3600));
                 let (tx, rx) = mpsc::channel();
                 self.update_rx = Some(rx);
                 let repaint = ctx.clone();
@@ -6364,7 +6372,10 @@ impl App {
             self.update_rx = None;
             if let Some(release) = found {
                 if ea::in_ea_tab() {
-                    ea_ui::output(&crate::i18n::fmt("Loonar Compass {0} is available: {1}", &[release.version.clone(), release.url.clone()]));
+                    if self.update_told.as_deref() != Some(release.version.as_str()) {
+                        ea_ui::output(&crate::i18n::fmt("Loonar Compass {0} is available: {1}", &[release.version.clone(), release.url.clone()]));
+                        self.update_told = Some(release.version.clone());
+                    }
                 } else {
                     self.update = Some(release);
                 }
