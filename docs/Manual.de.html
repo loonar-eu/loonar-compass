@@ -195,7 +195,7 @@
   <tr><td>Neue Versionen (Newsletter)</td><td>E-Mail-Adresse und „Ich möchte über neue Versionen informiert werden“, mit einem Hinweis zur Einwilligung und dem Link „Datenschutzerklärung“ (Kapitel 20)</td><td>Bereitet eine Nachricht im E-Mail-Programm vor</td></tr>
   <tr><td>Confluence</td><td>Confluence-Adresse (muss mit <code>https://</code> beginnen; <code>http://</code> nur für einen Server auf demselben Computer), E-Mail (nur Cloud), Token, Bereich (Schlüssel), Übergeordnete Seite (ID) (Kapitel 13)</td><td>„Speichern und Confluence-Verbindung prüfen“ verbindet sich mit dem Token und prüft, ob der Bereich verfügbar ist</td></tr>
   <tr><td>Miro</td><td>Zugriffstoken einer Miro-App mit den Berechtigungen boards:read und boards:write (Kapitel 12)</td><td>Verbindet sich mit Miro und zählt die Boards, die das Token sieht</td></tr>
-  <tr><td>Jira</td><td>Jira-Adresse, E-Mail (nur Cloud), Token, Standard-Projektschlüssel (Kapitel 7). Die Adresse muss mit <code>https://</code> beginnen.</td><td>„Speichern und Jira-Verbindung testen“ verbindet sich mit Jira und prüft das Projekt</td></tr>
+  <tr><td>Jira</td><td>Jira-Adresse, E-Mail (nur Cloud), Token, Standard-Projektschlüssel, Client-Zertifikat, Zertifikatspasswort (Kapitel 7). Die Adresse muss mit <code>https://</code> beginnen.</td><td>„Speichern und Jira-Verbindung testen“ verbindet sich mit Jira und prüft das Projekt</td></tr>
   <tr><td>SharePoint</td><td>Website-Adresse, Dokumentbibliothek (leer = Documents), Mandanten-ID (Verzeichnis), Anwendungs-ID (Client-ID), Geheimer Clientschlüssel (Kapitel 13)</td><td>„Speichern und SharePoint-Verbindung testen“ meldet sich bei Microsoft Graph an und zählt die Einträge in der Bibliothek</td></tr>
   <tr><td>Team (Compass Hub)</td><td>Hub-Adresse, Token, Dieses Modell im Hub (optional) (Kapitel 22)</td><td>„Speichern und Hub-Verbindung testen“ verbindet sich mit dem Hub und zeigt Ihr Konto, die Rolle und die Teamrichtlinie</td></tr>
   <tr><td>MCP-Server</td><td>Liste Ihrer eigenen MCP-Server, gespeichert in der Datei <code>mcp_servers.json</code> neben den Einstellungen, die Liste <b>Fertigen Server hinzufügen</b> und das Feld <b>Token eines MCP-Servers</b> (Kapitel 7)</td><td>„MCP-Server speichern und testen“ verbindet sich mit jedem Server und zeigt die Anzahl seiner Werkzeuge</td></tr>
@@ -457,6 +457,7 @@
   <tr><td>E-Mail (nur Cloud)</td><td>Cloud: die E-Mail des Atlassian-Kontos. Bei einem persönlichen Zugriffstoken (Data Center) leer lassen.</td></tr>
   <tr><td>Token</td><td>Cloud: das API-Token des Kontos (erstellt wie bei Confluence, Kapitel 13). Data Center: ein persönliches Zugriffstoken. Das Token wird in der Windows-Anmeldeinformationsverwaltung gespeichert.</td></tr>
   <tr><td>Standard-Projektschlüssel</td><td>Zum Beispiel <code>ARCH</code>: das Projekt, in dem neue Vorgänge entstehen, wenn Sie kein anderes nennen.</td></tr>
+  <tr><td>Client-Zertifikat, Zertifikatspasswort</td><td>Nur wenn Ihr Firmenserver zusätzlich zum Token ein Client-Zertifikat verlangt (mTLS; ohne es schließt der Server die Verbindung): die .p12/.pfx-Datei (Schaltfläche „…“) und ihr Passwort, gespeichert in der Windows-Anmeldeinformationsverwaltung. Eine PEM-Datei mit Zertifikat und privatem Schlüssel geht auch.</td></tr>
 </table>
 <div class="prompt">Zeichne ein Sequenzdiagramm auf Grundlage des Vorgangs ARCH-123.</div>
 <div class="prompt">Füge dem Vorgang ARCH-123 einen Link zum Element „Warenkorb“ hinzu.</div>
@@ -898,6 +899,7 @@
   <tr><td>Token</td><td>Data Center: persönliches Zugriffstoken (Profil → Personal Access Tokens). Cloud: API-Token des Kontos.</td></tr>
   <tr><td>Bereich (Schlüssel)</td><td>Der Bereichsschlüssel, zum Beispiel <code>ARCH</code></td></tr>
   <tr><td>Übergeordnete Seite (ID)</td><td>Optional: die ID der Seite, unter der neue Seiten angelegt werden</td></tr>
+  <tr><td>Client-Zertifikat, Zertifikatspasswort</td><td>Nur wenn Ihr Firmenserver zusätzlich zum Token ein Client-Zertifikat verlangt (mTLS; ohne es schließt der Server die Verbindung): die .p12/.pfx-Datei (Schaltfläche „…“) und ihr Passwort, gespeichert in der Windows-Anmeldeinformationsverwaltung. Eine PEM-Datei mit Zertifikat und privatem Schlüssel geht auch.</td></tr>
 </table>
 <p><b>Confluence Cloud: woher die Angaben kommen.</b></p>
 <ol>

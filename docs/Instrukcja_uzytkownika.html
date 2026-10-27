@@ -196,7 +196,7 @@
   <tr><td>Nowe wydania (newsletter)</td><td>Adres e-mail i zgoda „Chcę dostawać informacje o nowych wydaniach”, z informacją o wykorzystaniu adresu i linkiem do polityki prywatności (rozdział 20)</td><td>„Zapisz” przygotowuje wiadomość w programie pocztowym</td></tr>
   <tr><td>Confluence</td><td>Adres Confluence, E-mail (tylko Cloud), Token, Przestrzeń (klucz), Strona nadrzędna (ID) (rozdział 13)</td><td>„Zapisz i sprawdź połączenie z Confluence” łączy się z Confluence i sprawdza przestrzeń</td></tr>
   <tr><td>Miro</td><td>Token dostępu aplikacji Miro z uprawnieniami boards:read i boards:write (rozdział 12)</td><td>Łączy się z Miro i liczy tablice, które widzi token</td></tr>
-  <tr><td>Jira</td><td>Adres Jira, E-mail (tylko Cloud), Token, Domyślny klucz projektu (rozdział 7). Adres musi zaczynać się od <code>https://</code>.</td><td>„Zapisz i sprawdź połączenie z Jira” łączy się z Jira i sprawdza projekt</td></tr>
+  <tr><td>Jira</td><td>Adres Jira, E-mail (tylko Cloud), Token, Domyślny klucz projektu, Certyfikat klienta, Hasło certyfikatu (rozdział 7). Adres musi zaczynać się od <code>https://</code>.</td><td>„Zapisz i sprawdź połączenie z Jira” łączy się z Jira i sprawdza projekt</td></tr>
   <tr><td>SharePoint</td><td>Adres witryny, Biblioteka dokumentów (puste = Documents), Identyfikator dzierżawy (katalogu), Identyfikator aplikacji (klienta), Klucz tajny klienta (rozdział 13)</td><td>„Zapisz i sprawdź połączenie z SharePoint” loguje się do Microsoft Graph i liczy pozycje w bibliotece</td></tr>
   <tr><td>Zespół (Compass Hub)</td><td>Adres huba, Token, Ten model w hubie (opcjonalnie) (rozdział 22)</td><td>„Zapisz i sprawdź połączenie z hubem” łączy się z hubem i pokazuje Twoje konto, rolę i politykę zespołu</td></tr>
   <tr><td>Serwery MCP</td><td>Lista własnych serwerów MCP, zapisana w pliku <code>mcp_servers.json</code> obok ustawień, lista <b>Dodaj gotowy serwer</b> i pole <b>Token serwera MCP</b> (rozdział 7)</td><td>„Zapisz i sprawdź serwery MCP” łączy się z każdym serwerem i podaje liczbę jego narzędzi</td></tr>
@@ -459,6 +459,7 @@
   <tr><td>E-mail (tylko Cloud)</td><td>Cloud: e-mail konta Atlassian. Przy osobistym tokenie dostępu (Data Center) zostaw puste.</td></tr>
   <tr><td>Token</td><td>Cloud: token API konta (tworzysz go tak jak dla Confluence, rozdział 13). Data Center: osobisty token dostępu. Token jest zapisywany w Menedżerze poświadczeń Windows.</td></tr>
   <tr><td>Domyślny klucz projektu</td><td>Na przykład <code>ARCH</code>: projekt, w którym powstają nowe zgłoszenia, gdy nie wskażesz innego.</td></tr>
+  <tr><td>Certyfikat klienta, Hasło certyfikatu</td><td>Tylko gdy serwer firmy oprócz tokenu wymaga certyfikatu klienta (mTLS; bez niego serwer zamyka połączenie): plik .p12/.pfx (przycisk „…”) i jego hasło, przechowywane w Menedżerze poświadczeń Windows. Działa też plik PEM z certyfikatem i kluczem prywatnym.</td></tr>
 </table>
 <div class="prompt">Narysuj diagram sekwencji na podstawie zgłoszenia ARCH-123.</div>
 <div class="prompt">Dodaj do zgłoszenia ARCH-123 link do elementu „Koszyk”.</div>
@@ -900,6 +901,7 @@
   <tr><td>Token</td><td>Data Center: token osobisty (Profil → Personal Access Tokens). Cloud: token API konta. Token jest zapisywany w Menedżerze poświadczeń Windows.</td></tr>
   <tr><td>Przestrzeń (klucz)</td><td>Klucz przestrzeni, na przykład <code>ARCH</code></td></tr>
   <tr><td>Strona nadrzędna (ID)</td><td>Opcjonalnie: ID strony, pod którą powstają nowe strony</td></tr>
+  <tr><td>Certyfikat klienta, Hasło certyfikatu</td><td>Tylko gdy serwer firmy oprócz tokenu wymaga certyfikatu klienta (mTLS; bez niego serwer zamyka połączenie): plik .p12/.pfx (przycisk „…”) i jego hasło, przechowywane w Menedżerze poświadczeń Windows. Działa też plik PEM z certyfikatem i kluczem prywatnym.</td></tr>
 </table>
 <p><b>Confluence Cloud: skąd wziąć dane.</b></p>
 <ol>

@@ -194,7 +194,7 @@
   <tr><td>Nouvelles versions (newsletter)</td><td>Adresse e-mail et consentement à recevoir des informations sur les nouvelles versions, avec une note sur l'utilisation de l'adresse et un lien vers la politique de confidentialité (chapitre 20)</td><td>Prépare un message dans le logiciel de messagerie</td></tr>
   <tr><td>Confluence</td><td>Adresse (commençant par https://), e-mail (Cloud uniquement), jeton, clé de l'espace, ID de la page parente (chapitre 13)</td><td>Se connecte à Confluence avec le jeton indiqué et vérifie l'accès à l'espace</td></tr>
   <tr><td>Miro</td><td>Jeton d'accès d'une application Miro avec les autorisations boards:read et boards:write (chapitre 12)</td><td>Se connecte à Miro et compte les tableaux visibles avec le jeton</td></tr>
-  <tr><td>Jira</td><td>Adresse Jira, e-mail (Cloud uniquement), jeton, clé de projet par défaut (chapitre 7). L'adresse doit commencer par <code>https://</code>.</td><td>« Enregistrer et tester la connexion Jira » se connecte à Jira et vérifie le projet</td></tr>
+  <tr><td>Jira</td><td>Adresse Jira, e-mail (Cloud uniquement), jeton, clé de projet par défaut, certificat client, mot de passe du certificat (chapitre 7). L'adresse doit commencer par <code>https://</code>.</td><td>« Enregistrer et tester la connexion Jira » se connecte à Jira et vérifie le projet</td></tr>
   <tr><td>SharePoint</td><td>Adresse du site, Bibliothèque de documents (vide = Documents), ID du locataire (annuaire), ID d’application (client), Secret client (chapitre 13)</td><td>« Enregistrer et tester la connexion SharePoint » se connecte à Microsoft Graph et compte les éléments de la bibliothèque</td></tr>
   <tr><td>Équipe (Compass Hub)</td><td>Adresse du hub, jeton, Ce modèle dans le hub (facultatif) (chapitre 22)</td><td>« Enregistrer et tester la connexion au hub » se connecte au hub et affiche votre compte, votre rôle et la politique de l'équipe</td></tr>
   <tr><td>Serveurs MCP</td><td>Liste de vos propres serveurs MCP, enregistrée dans le fichier <code>mcp_servers.json</code> à côté des paramètres, la liste <b>Ajouter un serveur prêt à l'emploi</b> et le champ <b>Jeton d'un serveur MCP</b> (chapitre 7)</td><td>« Enregistrer et tester les serveurs MCP » se connecte à chaque serveur et affiche le nombre de ses outils</td></tr>
@@ -456,6 +456,7 @@
   <tr><td>E-mail (Cloud uniquement)</td><td>Cloud : l'e-mail du compte Atlassian. Avec un jeton d'accès personnel (Data Center), laissez vide.</td></tr>
   <tr><td>Jeton</td><td>Cloud : le jeton API du compte (créé comme pour Confluence, chapitre 13). Data Center : un jeton d'accès personnel. Le jeton est conservé dans le Gestionnaire d'identification Windows.</td></tr>
   <tr><td>Clé de projet par défaut</td><td>Par exemple <code>ARCH</code> : le projet où les nouveaux tickets sont créés lorsque vous n'en indiquez pas d'autre.</td></tr>
+  <tr><td>Certificat client, Mot de passe du certificat</td><td>Seulement si le serveur de l’entreprise exige un certificat client en plus du jeton (mTLS ; sans lui, le serveur ferme la connexion) : le fichier .p12/.pfx (bouton « … ») et son mot de passe, conservé dans le Gestionnaire d’identification Windows. Un fichier PEM avec le certificat et la clé privée convient aussi.</td></tr>
 </table>
 <div class="prompt">Dessine un diagramme de séquence d'après le ticket ARCH-123.</div>
 <div class="prompt">Ajoute au ticket ARCH-123 un lien vers l'élément « Panier ».</div>
@@ -897,6 +898,7 @@
   <tr><td>Jeton</td><td>Data Center : jeton d'accès personnel (Profil → Personal Access Tokens). Cloud : jeton API du compte. Le jeton est conservé dans le Gestionnaire d'identification Windows.</td></tr>
   <tr><td>Espace (clé)</td><td>La clé de l'espace, par exemple <code>ARCH</code></td></tr>
   <tr><td>Page parente (ID)</td><td>Facultatif : l'ID de la page sous laquelle les nouvelles pages sont créées</td></tr>
+  <tr><td>Certificat client, Mot de passe du certificat</td><td>Seulement si le serveur de l’entreprise exige un certificat client en plus du jeton (mTLS ; sans lui, le serveur ferme la connexion) : le fichier .p12/.pfx (bouton « … ») et son mot de passe, conservé dans le Gestionnaire d’identification Windows. Un fichier PEM avec le certificat et la clé privée convient aussi.</td></tr>
 </table>
 <p><b>Confluence Cloud : d'où viennent les informations.</b></p>
 <ol>

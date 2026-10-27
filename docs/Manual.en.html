@@ -194,7 +194,7 @@
   <tr><td>New releases (newsletter)</td><td>Email address and consent to news about new releases, with an information note and a link to the privacy policy (chapter 20)</td><td>Prepares a message in the mail program</td></tr>
   <tr><td>Confluence</td><td>Confluence address, Email (Cloud only), Token, Space key, Parent page ID (chapter 13). The address must start with https:// (http:// only for a server on the same computer).</td><td>Connects to Confluence with the given token and checks the space</td></tr>
   <tr><td>Miro</td><td>Access token of a Miro app with the boards:read and boards:write permissions (chapter 12)</td><td>Connects to Miro and counts the boards the token can see</td></tr>
-  <tr><td>Jira</td><td>Jira address, Email (Cloud only), Token, Default project key (chapter 7). The address must start with <code>https://</code>.</td><td>“Save and test Jira connection” connects to Jira and checks the project</td></tr>
+  <tr><td>Jira</td><td>Jira address, Email (Cloud only), Token, Default project key, Client certificate, Certificate password (chapter 7). The address must start with <code>https://</code>.</td><td>“Save and test Jira connection” connects to Jira and checks the project</td></tr>
   <tr><td>SharePoint</td><td>Site address, Document library (empty = Documents), Tenant (directory) ID, Application (client) ID, Client secret (chapter 13)</td><td>“Save and test SharePoint connection” signs in to Microsoft Graph and counts the items in the library</td></tr>
   <tr><td>Team (Compass Hub)</td><td>Hub address, Token, This model in the hub (optional) (chapter 22)</td><td>“Save and test hub connection” connects to the hub and shows your account, role and the team policy</td></tr>
   <tr><td>MCP servers</td><td>The list of your own MCP servers, stored in the file <code>mcp_servers.json</code> next to the settings, the list <b>Add a ready-made server</b> and the field <b>Token for an MCP server</b> (chapter 7)</td><td>“Save and test MCP servers” connects to each server and shows the number of its tools</td></tr>
@@ -456,6 +456,7 @@
   <tr><td>Email (Cloud only)</td><td>Cloud: the e-mail of the Atlassian account. With a personal access token (Data Center) leave it empty.</td></tr>
   <tr><td>Token</td><td>Cloud: the account's API token (created as for Confluence, chapter 13). Data Center: a personal access token. The token is stored in Windows Credential Manager.</td></tr>
   <tr><td>Default project key</td><td>For example <code>ARCH</code>: the project where new issues are created when you do not name another one.</td></tr>
+  <tr><td>Client certificate, Certificate password</td><td>Only if your company server asks for a client certificate besides the token (mTLS; without it the server closes the connection): the .p12/.pfx file (button “…”) and its password, kept in Windows Credential Manager. A PEM file with the certificate and its private key works too.</td></tr>
 </table>
 <div class="prompt">Draw a sequence diagram based on the issue ARCH-123.</div>
 <div class="prompt">Add to the issue ARCH-123 a link to the element “Cart”.</div>
@@ -897,6 +898,7 @@
   <tr><td>Token</td><td>Data Center: a personal access token (Profile → Personal Access Tokens). Cloud: the account's API token. The token is stored in Windows Credential Manager.</td></tr>
   <tr><td>Space key</td><td>The space key, for example <code>ARCH</code></td></tr>
   <tr><td>Parent page ID</td><td>Optional: the ID of the page under which new pages are created</td></tr>
+  <tr><td>Client certificate, Certificate password</td><td>Only if your company server asks for a client certificate besides the token (mTLS; without it the server closes the connection): the .p12/.pfx file (button “…”) and its password, kept in Windows Credential Manager. A PEM file with the certificate and its private key works too.</td></tr>
 </table>
 <p><b>Confluence Cloud: where the details come from.</b></p>
 <ol>
