@@ -95,6 +95,8 @@ pub fn definitions() -> Value {
         items.push(crate::cmdb::definition());
         items.push(crate::mdg::definition());
         items.push(crate::sharepoint::definition());
+        items.push(crate::sharepoint::onedrive_definition());
+        items.push(crate::gdrive::definition());
         items.push(crate::instructions::definition());
         items.push(crate::documents::definition());
         items.push(crate::mdg::version_control_definition());
@@ -560,6 +562,8 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "change_sets" => change_sets(input, ctx).map(Into::into),
         "mdg_technologies" => crate::mdg::run(input, ctx.cfg).map(Into::into),
         "sharepoint" => crate::sharepoint::run(input, ctx).map(Into::into),
+        "onedrive" => crate::sharepoint::run_onedrive(input, ctx).map(Into::into),
+        "google_drive" => crate::gdrive::run(input, ctx).map(Into::into),
         "model_instructions" => crate::instructions::run(input, ctx).map(Into::into),
         "read_document" => {
             let path = read_path(ctx, input["file"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["file".to_string()]))?, false)?;

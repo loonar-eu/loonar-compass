@@ -9,6 +9,7 @@ All notable changes to Loonar Compass (named Loonar EA Assistant until version 0
 - **Retrying the installation:** when the installation cannot replace the files because Compass is running, the error page has the buttons “Close Compass and try again” and “Try again” – no need to start over.
 - **Jira and Confluence addresses pasted from the browser:** the part of a page (e.g. “/spaces/…”, “/display/…”, “/browse/…”) is cut off, and when the server sends a web page instead of data, Compass says to check the address (before, the check said “Connected” and pages came back empty).
 - **The assistant reads source code:** new read-only tools – the files of a folder, a search in the code (file:line) and reading a file – in local repository clones. Folders listed in Settings → Enterprise Architect → “Source code folders” are read without asking; for others it asks first. So it finds by itself where a class, operation or table is implemented and what depends on it.
+- **OneDrive and Google Drive:** the assistant lists folders, reads documents (Word, Excel, PowerPoint, PDF, Visio, text; on Google Drive also Google Docs, Sheets and Slides) and, each time with your consent, uploads documents it made. You sign in with your own Microsoft or Google account in the browser once (OAuth with PKCE); the refresh token is kept in Windows Credential Manager. Settings: the “OneDrive” card (an app registration in Entra ID as a public client) and the “Google Drive” card (an OAuth client “Desktop app” in Google Cloud).
 
 ## Version 0.9 (2026-10-27)
 

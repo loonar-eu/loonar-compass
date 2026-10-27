@@ -7,6 +7,8 @@
 mod check;
 mod client_cert;
 mod code_read;
+mod user_oauth;
+mod gdrive;
 mod claude;
 mod cmdb;
 mod auth;
@@ -1134,6 +1136,10 @@ struct Form {
     sharepoint_tenant: String,
     sharepoint_client_id: String,
     sharepoint_secret: String,
+    onedrive_client_id: String,
+    onedrive_tenant: String,
+    gdrive_client_id: String,
+    gdrive_secret: String,
     hub_url: String,
     hub_source: String,
     hub_token: String,
@@ -1190,6 +1196,9 @@ impl Form {
             sharepoint_library: c.sharepoint_library.clone(),
             sharepoint_tenant: c.sharepoint_tenant.clone(),
             sharepoint_client_id: c.sharepoint_client_id.clone(),
+            onedrive_client_id: c.onedrive_client_id.clone(),
+            onedrive_tenant: c.onedrive_tenant.clone(),
+            gdrive_client_id: c.gdrive_client_id.clone(),
             hub_url: c.hub_url.clone(),
             hub_source: c.hub_source.clone(),
             mcp_json: std::fs::read_to_string(mcp_client::config_file(&c.base_dir)).unwrap_or_default(),
@@ -1349,7 +1358,7 @@ struct App {
     /// Conversations in which the assistant finished working in the background and the user has not looked at yet (conversation ids).
     unseen: std::collections::HashSet<String>,
     /// Result of the last save and test of each of the four settings groups.
-    group_status: [GroupStatus; 11],
+    group_status: [GroupStatus; 13],
     /// Findings of the live model check already shown in EA (not repeated).
     live_reported: Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
     /// When each event agent last ran for an object (not more than once a minute).
@@ -2796,6 +2805,21 @@ impl App {
                     self.form.sharepoint_secret.clear();
                 }
             }
+            GROUP_ONEDRIVE => {
+                if f.onedrive_client_id.trim() != self.cfg.as_ref().map(|c| c.onedrive_client_id.trim().to_string()).unwrap_or_default() {
+                    // Another app registration: the sign-in of the earlier one is not valid for it.
+                    let _ = secrets::delete(secrets::ONEDRIVE_REFRESH_TOKEN);
+                }
+                updates.push(("onedrive.client_id", f.onedrive_client_id.trim().to_string()));
+                updates.push(("onedrive.tenant", f.onedrive_tenant.trim().to_string()));
+            }
+            GROUP_GDRIVE => {
+                updates.push(("gdrive.client_id", f.gdrive_client_id.trim().to_string()));
+                if !f.gdrive_secret.is_empty() {
+                    secrets::set(secrets::GDRIVE_CLIENT_SECRET, f.gdrive_secret.trim())?;
+                    self.form.gdrive_secret.clear();
+                }
+            }
             GROUP_JIRA => {
                 let url = if f.jira_url.trim().is_empty() { String::new() } else { jira::base(&f.jira_url) };
                 if !url.is_empty() {
@@ -3622,6 +3646,32 @@ impl App {
             self.group_footer(ui, &ctx2, GROUP_SHAREPOINT, crate::i18n::tr("Save and test SharePoint connection"));
         });
         ui.add_space(12.0);
+        settings_group(ui, "OneDrive", full_width, |ui| {
+            ui.add(egui::Label::new(
+                egui::RichText::new(crate::i18n::tr("Your own OneDrive (Microsoft 365): the assistant lists folders, reads documents and, each time with your consent, uploads documents it made. You sign in with your Microsoft account in the browser once. It needs an app registration in Microsoft Entra ID as a public client (\"Mobile and desktop applications\", redirect URI http://localhost) with the delegated permissions Files.ReadWrite and User.Read."))
+                    .color(theme::MUTED),
+            ).wrap());
+            ui.add_space(6.0);
+            egui::Grid::new("settings_onedrive").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
+                row_hint(ui, crate::i18n::tr("Application (client) ID"), &mut self.form.onedrive_client_id, "00000000-0000-0000-0000-000000000000");
+                row_hint(ui, crate::i18n::tr("Tenant (directory) ID"), &mut self.form.onedrive_tenant, crate::i18n::tr("organizations, consumers (a private account) or the tenant"));
+            });
+            self.group_footer(ui, &ctx2, GROUP_ONEDRIVE, crate::i18n::tr("Save, sign in and test OneDrive"));
+        });
+        ui.add_space(12.0);
+        settings_group(ui, "Google Drive", full_width, |ui| {
+            ui.add(egui::Label::new(
+                egui::RichText::new(crate::i18n::tr("Your Google Drive (Google Workspace): the assistant lists folders, reads files, also Google Docs, Sheets and Slides, and, each time with your consent, uploads documents it made. You sign in with your Google account in the browser once. It needs an OAuth client of the type \"Desktop app\" in a Google Cloud project with the Google Drive API enabled."))
+                    .color(theme::MUTED),
+            ).wrap());
+            ui.add_space(6.0);
+            egui::Grid::new("settings_gdrive").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
+                row_hint(ui, crate::i18n::tr("Client ID"), &mut self.form.gdrive_client_id, "….apps.googleusercontent.com");
+                row_secret(ui, crate::i18n::tr("Client secret"), &mut self.form.gdrive_secret, secrets::exists(secrets::GDRIVE_CLIENT_SECRET));
+            });
+            self.group_footer(ui, &ctx2, GROUP_GDRIVE, crate::i18n::tr("Save, sign in and test Google Drive"));
+        });
+        ui.add_space(12.0);
         settings_group(ui, crate::i18n::tr("Event agents (Compass in EA)"), full_width, |ui| {
             ui.add(egui::Label::new(
                 egui::RichText::new(crate::i18n::tr("Rules for the assistant to react to what happens in EA while Compass is open in its tab: a new element, a changed element, a new relationship or diagram. The assistant reads the model and answers in the \"Loonar Compass\" tab of System Output; it does not change the model on its own. \"applies_to\": an element type, «stereotype» or * (wildcards * ?)."))
@@ -4305,6 +4355,8 @@ const GROUP_HUB: usize = 7;
 const GROUP_MCP: usize = 8;
 const GROUP_AGENTS: usize = 9;
 const GROUP_SHAREPOINT: usize = 10;
+const GROUP_ONEDRIVE: usize = 11;
+const GROUP_GDRIVE: usize = 12;
 
 /// "Send to Miro" window: the diagram, the board, and where on the board the frame goes (shown on a thumbnail
 /// of the board, where the user can move it).
@@ -4657,6 +4709,20 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
             let mode = policy["min_approval"].as_str().unwrap_or("-").to_string();
             let rules = ["naming", "required_tags", "allowed_relations"].iter().filter(|k| policy["governance"][**k].as_array().is_some_and(|a| !a.is_empty())).count();
             Ok(crate::i18n::fmt("Saved. Connected to the hub as {0} ({1}); team policy: minimum approval {2}, rule sets {3}.", &[name, role, mode, rules.to_string()]))
+        }
+        GROUP_ONEDRIVE => {
+            if cfg.onedrive_client_id.trim().is_empty() {
+                return Ok(crate::i18n::tr("Saved. Without a client ID the assistant does not use OneDrive.").into());
+            }
+            let site = sharepoint::Site::onedrive(cfg)?;
+            let items = site.list("")?;
+            Ok(crate::i18n::fmt("Saved. Signed in to OneDrive: {0} items in its root folder.", &[items.len().to_string()]))
+        }
+        GROUP_GDRIVE => {
+            if cfg.gdrive_client_id.trim().is_empty() {
+                return Ok(crate::i18n::tr("Saved. Without a client ID the assistant does not use Google Drive.").into());
+            }
+            gdrive::check(cfg)
         }
         GROUP_SHAREPOINT => {
             if cfg.sharepoint_site.trim().is_empty() {

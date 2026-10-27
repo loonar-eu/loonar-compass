@@ -242,6 +242,12 @@ pub struct AppConfig {
     pub jira_project: String,
     /// Client certificate (mTLS) for a company Jira that asks for one: a .p12/.pfx or PEM file (LC-279).
     pub jira_client_cert: String,
+    /// OneDrive with the user's Microsoft account (LC-281): the app registration (public client) and the tenant
+    /// ("organizations", "common", "consumers" or a tenant id).
+    pub onedrive_client_id: String,
+    pub onedrive_tenant: String,
+    /// Google Drive with the user's Google account (LC-282): the OAuth client (desktop app) of a Google Cloud project.
+    pub gdrive_client_id: String,
     /// Team hub: address and the id of this model among the hub sources (for the audit trail).
     pub hub_url: String,
     pub hub_source: String,
@@ -518,6 +524,9 @@ impl AppConfig {
             jira_user: get_or("jira.user", ""),
             jira_project: get_or("jira.project", ""),
             jira_client_cert: get_or("jira.client_cert", ""),
+            onedrive_client_id: get_or("onedrive.client_id", ""),
+            onedrive_tenant: get_or("onedrive.tenant", "organizations"),
+            gdrive_client_id: get_or("gdrive.client_id", ""),
             hub_url: get_or("hub.url", ""),
             hub_source: get_or("hub.source", ""),
             miro_board: get_or("miro.board", ""),
@@ -613,6 +622,11 @@ pub mod secrets {
     /// Passwords of the client certificates (.p12/.pfx) of Jira and Confluence.
     pub const JIRA_CERT_PASSWORD: &str = "jira_cert_password";
     pub const CONFLUENCE_CERT_PASSWORD: &str = "confluence_cert_password";
+    /// Sign-ins to the user's cloud drives: refresh tokens (OneDrive, Google Drive) and the client secret of the
+    /// Google OAuth client (a desktop app's, which Google issues but does not treat as secret).
+    pub const ONEDRIVE_REFRESH_TOKEN: &str = "onedrive_refresh_token";
+    pub const GDRIVE_REFRESH_TOKEN: &str = "gdrive_refresh_token";
+    pub const GDRIVE_CLIENT_SECRET: &str = "gdrive_client_secret";
     /// The client secret of the app registration for SharePoint (Microsoft Graph).
     pub const SHAREPOINT_SECRET: &str = "sharepoint_client_secret";
     /// The client secret for OAuth2 sign-in to the AI service.
@@ -621,7 +635,7 @@ pub mod secrets {
     pub const OIDC_CLIENT_SECRET: &str = "oidc_client_secret";
     pub const HUB_TOKEN: &str = "hub_token";
     /// Every secret the application stores (removed together on uninstall).
-    pub const ALL: [&str; 13] = [CLAUDE_API_KEY, OPENAI_API_KEY, EA_PASSWORD, DB_PASSWORD, CONFLUENCE_TOKEN, MIRO_TOKEN, JIRA_TOKEN, HUB_TOKEN, SHAREPOINT_SECRET, AI_OAUTH_SECRET, OIDC_CLIENT_SECRET, JIRA_CERT_PASSWORD, CONFLUENCE_CERT_PASSWORD];
+    pub const ALL: [&str; 16] = [CLAUDE_API_KEY, OPENAI_API_KEY, EA_PASSWORD, DB_PASSWORD, CONFLUENCE_TOKEN, MIRO_TOKEN, JIRA_TOKEN, HUB_TOKEN, SHAREPOINT_SECRET, AI_OAUTH_SECRET, OIDC_CLIENT_SECRET, JIRA_CERT_PASSWORD, CONFLUENCE_CERT_PASSWORD, ONEDRIVE_REFRESH_TOKEN, GDRIVE_REFRESH_TOKEN, GDRIVE_CLIENT_SECRET];
 
     /// Secrets from the environment instead of Credential Manager: the team hub as a service or in a container.
     static FROM_ENVIRONMENT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);

@@ -44,3 +44,6 @@ editor/node_modules/
 /tools/regression/config.local.json
 /tools/regression/out/
 target_ora/
+target_gd/
+target2i/
+target2h/
