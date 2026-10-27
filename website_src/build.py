@@ -40,7 +40,7 @@ DATE = {"en": "27 October 2026", "pl": "27 października 2026", "de": "27. Oktob
 # SHA-256 of the installer, shown next to the download button (PowerShell: Get-FileHash <installer>).
 # When the installer is in DIST, the build checks this value against the file and takes the size from it;
 # without the file it uses SHA256 and SIZE_MB as written here and prints a warning.
-SHA256 = "d15d783c066ca9692709bc047a9ef579259aa52b66900ef178ed7bb6d7e78f7c"
+SHA256 = "e146fc050e0928e2b12be54b78f767c0cde556a47e670127382eaf8b14b7fc5b"
 SIZE_MB = 33
 DIST = os.path.join(ROOT, "dist")
 # ---- services used by the website --------------------------------------------------------
