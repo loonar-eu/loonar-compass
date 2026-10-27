@@ -1,5 +1,6 @@
-//! Anonymous usage statistics: once a day, a summary of the previous days goes to the Loonar feedback service, which
-//! publishes it in the public repository loonar-eu/compass-stats.
+//! Anonymous usage statistics: at the start a ping with the random installation id, then every hour the summary of the
+//! day so far (and of ended days not sent yet) goes to the Loonar feedback service (Cloudflare D1, no IP addresses);
+//! only summaries over all installations together are published (GET /v1/summary).
 //!
 //! What is counted: how often each tool of the assistant was used and how often it failed, answers of the assistant,
 //! errors of the AI service, approvals asked / accepted / rejected, views opened, tokens, and the setup of the day
@@ -26,7 +27,7 @@ use std::time::{Duration, Instant};
 /// computer for tests).
 pub const SERVICE_URL: &str = "https://compass-feedback.loonar-eu.workers.dev";
 /// The public repository with the statistics.
-pub const STATS_URL: &str = "https://github.com/loonar-eu/compass-stats";
+pub const STATS_URL: &str = "https://compass-feedback.loonar-eu.workers.dev/v1/summary";
 /// Days kept: sent ones (shown in the view) and unsent ones (waiting for a connection).
 const KEEP_DAYS: i64 = 30;
 /// Counters are written to disk at most this often (and at the end of every answer).

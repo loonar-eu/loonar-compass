@@ -170,7 +170,7 @@ pub struct AppConfig {
     /// Web search and reading web pages through Anthropic's server tools (`claude.web_access`, off by default; the
     /// team policy of the hub can switch it off for everybody).
     pub web_access: bool,
-    /// Checking once a day whether a newer release exists (`app.update_check`, on by default).
+    /// Checking every hour whether a newer release exists (`app.update_check`, on by default).
     pub update_check: bool,
     /// The rules of the computer set by IT (Group Policy, Intune): they win over the settings.
     pub policy: MachinePolicy,
