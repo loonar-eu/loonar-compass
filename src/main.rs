@@ -3596,7 +3596,7 @@ impl App {
                 ui.label(egui::RichText::new(crate::i18n::tr("Agents of the team (from the hub's policy; changed by its administrator):")).small().strong());
                 for a in &team {
                     ui.add(egui::Label::new(egui::RichText::new(format!(
-                        "• {} (team) – {}{}{}",
+                        "• {} – {}{}{}",
                         a["name"].as_str().unwrap_or("?"),
                         a["event"].as_str().unwrap_or("?"),
                         if a["mode"] == "guard" { ", guard" } else { "" },
@@ -4606,6 +4606,7 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
             };
             let (name, role) = client.me()?;
             let policy = client.policy()?;
+            hub::remember_policy(cfg, &client.url, &policy);
             let mode = policy["min_approval"].as_str().unwrap_or("-").to_string();
             let rules = ["naming", "required_tags", "allowed_relations"].iter().filter(|k| policy["governance"][**k].as_array().is_some_and(|a| !a.is_empty())).count();
             Ok(crate::i18n::fmt("Saved. Connected to the hub as {0} ({1}); team policy: minimum approval {2}, rule sets {3}.", &[name, role, mode, rules.to_string()]))

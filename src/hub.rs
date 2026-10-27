@@ -1901,8 +1901,7 @@ pub fn team_policy(cfg: &AppConfig) -> Option<Value> {
     }
     match client.policy() {
         Ok(policy) => {
-            *POLICY.lock().unwrap() = Some((std::time::Instant::now(), client.url.clone(), policy.clone()));
-            let _ = std::fs::write(cfg.base_dir.join("hub_policy_cache.json"), json!({ "url": client.url, "time": chrono::Utc::now().to_rfc3339(), "policy": policy }).to_string());
+            remember_policy(cfg, &client.url, &policy);
             Some(policy)
         }
         Err(e) => {
@@ -1910,6 +1909,13 @@ pub fn team_policy(cfg: &AppConfig) -> Option<Value> {
             cached_policy(cfg, &client.url)
         }
     }
+}
+
+/// Keeps a policy just read from the hub: in memory for 5 minutes and in hub_policy_cache.json (also the settings'
+/// connection check, so a changed policy shows at once).
+pub fn remember_policy(cfg: &AppConfig, url: &str, policy: &Value) {
+    *POLICY.lock().unwrap_or_else(|p| p.into_inner()) = Some((std::time::Instant::now(), url.to_string(), policy.clone()));
+    let _ = std::fs::write(cfg.base_dir.join("hub_policy_cache.json"), json!({ "url": url, "time": chrono::Utc::now().to_rfc3339(), "policy": policy }).to_string());
 }
 
 /// The team policy already received from the hub of the settings, without asking the hub (for the window).
