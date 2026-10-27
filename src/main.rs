@@ -2787,7 +2787,7 @@ impl App {
                 }
             }
             GROUP_JIRA => {
-                let url = f.jira_url.trim().trim_end_matches('/').to_string();
+                let url = if f.jira_url.trim().is_empty() { String::new() } else { jira::base(&f.jira_url) };
                 if !url.is_empty() {
                     jira::check_base_url(&url)?;
                 }
@@ -2805,7 +2805,7 @@ impl App {
                 }
             }
             GROUP_CONFLUENCE => {
-                let url = f.confluence_url.trim().trim_end_matches('/').to_string();
+                let url = if f.confluence_url.trim().is_empty() { String::new() } else { confluence::base(&f.confluence_url) };
                 if !url.is_empty() {
                     confluence::check_base_url(&url)?;
                 }

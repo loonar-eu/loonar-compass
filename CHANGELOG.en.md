@@ -7,6 +7,7 @@ All notable changes to Loonar Compass (named Loonar EA Assistant until version 0
 - **Jira and Confluence with a client certificate:** company servers that ask for a client certificate (mTLS) besides the token now work with Compass. On the Jira and Confluence cards in Settings there are the fields “Client certificate” (path to a .p12/.pfx or PEM file) and “Certificate password” (kept in Windows Credential Manager). Without the certificate such a server closed the connection (“An existing connection was forcibly closed by the remote host”).
 - **Simpler installer:** no “Configuration” page – you enter the key, the model and the EA account in the application, which guides you through the settings at its first start.
 - **Retrying the installation:** when the installation cannot replace the files because Compass is running, the error page has the buttons “Close Compass and try again” and “Try again” – no need to start over.
+- **Jira and Confluence addresses pasted from the browser:** the part of a page (e.g. “/spaces/…”, “/display/…”, “/browse/…”) is cut off, and when the server sends a web page instead of data, Compass says to check the address (before, the check said “Connected” and pages came back empty).
 
 ## Version 0.9 (2026-10-27)
 

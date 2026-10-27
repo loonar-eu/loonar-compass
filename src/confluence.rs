@@ -271,6 +271,11 @@ pub struct Connection {
 
 /// The Confluence address must use HTTPS (the token travels with every request); plain HTTP is accepted only
 /// for a server on this computer.
+/// The Confluence address without the part of a page copied from the browser (".../spaces/...", "/display/...").
+pub fn base(url: &str) -> String {
+    crate::net::site_base(url, &["/spaces", "/display", "/pages", "/rest", "/dashboard.action", "/plugins"])
+}
+
 pub fn check_base_url(url: &str) -> Result<()> {
     if crate::net::check_service_url(url).is_err() {
         bail!("{}", crate::i18n::tr("The Confluence address must start with https://"));
@@ -344,7 +349,7 @@ impl Connection {
     }
 
     fn url(&self, path: &str) -> String {
-        format!("{}{path}", self.base_url.trim().trim_end_matches('/'))
+        format!("{}{path}", base(&self.base_url))
     }
 
     fn send(&self, request: reqwest::blocking::RequestBuilder, what: &str) -> Result<Value> {
@@ -354,6 +359,9 @@ impl Connection {
         if !status.is_success() {
             let message = serde_json::from_str::<Value>(&text).ok().and_then(|v| v["message"].as_str().map(str::to_string)).unwrap_or_else(|| text.chars().take(300).collect());
             bail!("{}", crate::i18n::fmt("{0}: Confluence replied {1}: {2}", &[what.to_string(), status.to_string(), message]));
+        }
+        if crate::net::not_json(&text) {
+            bail!("{}", crate::i18n::fmt("{0}: Confluence answered with a web page instead of data: check the Confluence address in Settings (e.g. https://confluence.company.com or https://company.com/confluence, without /spaces or /display)", &[what.to_string()]));
         }
         Ok(serde_json::from_str(&text).unwrap_or(Value::Null))
     }
@@ -370,7 +378,7 @@ impl Connection {
     pub fn check(&self, space: &str) -> Result<String> {
         let client = self.client()?;
         let value = self.send(client.get(self.url(&format!("/rest/api/space/{}", space.trim()))), crate::i18n::tr("checking the space"))?;
-        Ok(value["name"].as_str().unwrap_or(space).to_string())
+        value["name"].as_str().map(str::to_string).with_context(|| crate::i18n::fmt("{0}: Confluence answered without the space: check the Confluence address in Settings", &[crate::i18n::tr("checking the space").to_string()]))
     }
 
     /// Creates or updates the page (by id, or without an id by title in the space) and uploads the attachments.

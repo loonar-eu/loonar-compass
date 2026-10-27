@@ -85,6 +85,11 @@ pub fn to_adf(text: &str) -> Value {
     json!({ "type": "doc", "version": 1, "content": paragraphs })
 }
 
+/// The Jira address without the part of a page copied from the browser (".../browse/KEY-1", "/projects/...").
+pub fn base(url: &str) -> String {
+    crate::net::site_base(url, &["/browse", "/projects", "/secure", "/rest", "/issues", "/plugins"])
+}
+
 impl Connection {
     /// Jira Cloud (atlassian.net, or an account e-mail with an API token) uses REST API 3, the server editions API 2.
     pub fn cloud(&self) -> bool {
@@ -103,7 +108,7 @@ impl Connection {
     }
 
     fn url(&self, path: &str) -> String {
-        format!("{}{}{path}", self.base_url.trim().trim_end_matches('/'), self.api())
+        format!("{}{}{path}", base(&self.base_url), self.api())
     }
 
     fn send(&self, request: reqwest::blocking::RequestBuilder, what: &str) -> Result<Value> {
@@ -124,6 +129,9 @@ impl Connection {
                 })
                 .unwrap_or_else(|| text.chars().take(300).collect());
             bail!("{}", crate::i18n::fmt("{0}: Jira replied {1}: {2}", &[what.to_string(), status.to_string(), message]));
+        }
+        if crate::net::not_json(&text) {
+            bail!("{}", crate::i18n::fmt("{0}: Jira answered with a web page instead of data: check the Jira address in Settings (e.g. https://jira.company.com or https://company.com/jira, without /browse or /projects)", &[what.to_string()]));
         }
         Ok(serde_json::from_str(&text).unwrap_or(Value::Null))
     }

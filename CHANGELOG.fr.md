@@ -7,6 +7,7 @@ Toutes les modifications importantes de l'application Loonar Compass (nommée Lo
 - **Jira et Confluence avec un certificat client :** les serveurs d’entreprise qui exigent un certificat client (mTLS) en plus du jeton fonctionnent désormais avec Compass. Les cartes Jira et Confluence des Paramètres ont les champs « Certificat client » (chemin d’un fichier .p12/.pfx ou PEM) et « Mot de passe du certificat » (conservé dans le Gestionnaire d’identification Windows). Sans certificat, un tel serveur fermait la connexion (« Une connexion existante a dû être fermée par l’hôte distant »).
 - **Installateur simplifié :** plus de page « Configuration » – la clé, le modèle et le compte EA se saisissent dans l’application, qui vous guide au premier démarrage.
 - **Réessayer l’installation :** quand l’installation ne peut pas remplacer les fichiers parce que Compass est lancé, la page d’erreur propose « Fermer Compass et réessayer » et « Réessayer » – sans tout recommencer.
+- **Adresses Jira et Confluence collées depuis le navigateur :** la partie d’une page (par ex. « /spaces/… », « /display/… », « /browse/… ») est retirée, et quand le serveur renvoie une page web au lieu de données, Compass invite à vérifier l’adresse (auparavant la vérification indiquait « Connecté » et les pages revenaient vides).
 
 ## Version 0.9 (2026-10-27)
 
