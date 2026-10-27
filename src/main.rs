@@ -3571,7 +3571,7 @@ impl App {
                 row_secret(ui, crate::i18n::tr("Token"), &mut self.form.confluence_token, secrets::exists(secrets::CONFLUENCE_TOKEN));
                 row_hint(ui, crate::i18n::tr("Space key"), &mut self.form.confluence_space, crate::i18n::tr("e.g. ARCH"));
                 row_hint(ui, crate::i18n::tr("Parent page ID"), &mut self.form.confluence_parent, crate::i18n::tr("optional, e.g. 123456789"));
-                row_hint(ui, crate::i18n::tr("Client certificate"), &mut self.form.confluence_client_cert, crate::i18n::tr("only if the server asks for one: path to a .p12/.pfx file"));
+                row_cert(ui, &mut self.form.confluence_client_cert);
                 row_secret(ui, crate::i18n::tr("Certificate password"), &mut self.form.confluence_cert_password, secrets::exists(secrets::CONFLUENCE_CERT_PASSWORD));
             });
             self.group_footer(ui, &ctx2, GROUP_CONFLUENCE, crate::i18n::tr("Save and test Confluence connection"));
@@ -3588,7 +3588,7 @@ impl App {
                 row_hint(ui, crate::i18n::tr("Email (Cloud only)"), &mut self.form.jira_user, crate::i18n::tr("leave empty for a personal access token (PAT)"));
                 row_secret(ui, crate::i18n::tr("Token"), &mut self.form.jira_token, secrets::exists(secrets::JIRA_TOKEN));
                 row_hint(ui, crate::i18n::tr("Default project key"), &mut self.form.jira_project, crate::i18n::tr("e.g. ARCH"));
-                row_hint(ui, crate::i18n::tr("Client certificate"), &mut self.form.jira_client_cert, crate::i18n::tr("only if the server asks for one: path to a .p12/.pfx file"));
+                row_cert(ui, &mut self.form.jira_client_cert);
                 row_secret(ui, crate::i18n::tr("Certificate password"), &mut self.form.jira_cert_password, secrets::exists(secrets::JIRA_CERT_PASSWORD));
             });
             self.group_footer(ui, &ctx2, GROUP_JIRA, crate::i18n::tr("Save and test Jira connection"));
@@ -5792,6 +5792,28 @@ fn row(ui: &mut egui::Ui, label: &str, value: &mut String) {
 fn row_hint(ui: &mut egui::Ui, label: &str, value: &mut String, hint: &str) {
     label_cell(ui, label);
     ui.add(egui::TextEdit::singleline(value).hint_text(egui::RichText::new(hint).color(theme::HINT)).desired_width(settings_field_width(ui)));
+    ui.end_row();
+}
+
+/// The client certificate file (LC-279): its path, with "…" to choose the file.
+fn row_cert(ui: &mut egui::Ui, value: &mut String) {
+    label_cell(ui, crate::i18n::tr("Client certificate"));
+    ui.horizontal(|ui| {
+        ui.add(
+            egui::TextEdit::singleline(value)
+                .hint_text(egui::RichText::new(crate::i18n::tr("only if the server asks for one: path to a .p12/.pfx file")).color(theme::HINT))
+                .desired_width(settings_field_width(ui) - 44.0),
+        );
+        if ui.button("…").on_hover_text(crate::i18n::tr("Choose the client certificate")).clicked() {
+            if let Some(file) = rfd::FileDialog::new()
+                .set_title(crate::i18n::tr("Choose the client certificate"))
+                .add_filter(crate::i18n::tr("Certificates (.p12, .pfx, .pem)"), &["p12", "pfx", "pem"])
+                .pick_file()
+            {
+                *value = file.display().to_string();
+            }
+        }
+    });
     ui.end_row();
 }
 
