@@ -986,19 +986,29 @@ fn confluence_connection(cfg: &AppConfig) -> Result<crate::confluence::Connectio
 
 /// Publishes or updates a page in Confluence. Diagrams are exported from EA again, so the page shows the current model.
 /// The Markdown source of a page made by create_confluence_page. The model often gives the name without the unique
-/// prefix or with .md instead of .xml (LC-271), so a missing file is looked up by the end of its name (newest first).
+/// prefix, with .md instead of .xml, or even the page title (LC-271), so a missing file is looked up by the end of its
+/// name (also as the title turned into a file name) or by the title saved in it (newest first).
 fn page_source(dir: &std::path::Path, page: &str) -> std::path::PathBuf {
-    let stem = page.trim_end_matches(".confluence.xml").trim_end_matches(".confluence.md").trim_end_matches(".xml").trim_end_matches(".md");
+    let stem = page.trim_end_matches(".confluence.xml").trim_end_matches(".confluence.md").trim_end_matches(".xml").trim_end_matches(".md").trim();
     let exact = dir.join(format!("{stem}.confluence.md"));
     if exact.is_file() {
         return exact;
     }
-    let wanted = format!("{}.confluence.md", stem.to_lowercase());
+    let ends = [format!("{}.confluence.md", stem.to_lowercase()), format!("{}.confluence.md", crate::history::sanitize_name(stem).to_lowercase())];
+    let titled = |path: &std::path::Path| {
+        std::fs::read_to_string(path).ok().and_then(|s| s.lines().next().map(str::to_string)).is_some_and(|first| {
+            let title = first.trim().trim_start_matches(TITLE_MARKER).trim_start_matches(LEGACY_TITLE_MARKER).trim_end_matches("-->").trim().to_lowercase();
+            title == stem.to_lowercase()
+        })
+    };
     std::fs::read_dir(dir)
         .into_iter()
         .flatten()
         .flatten()
-        .filter(|e| e.file_name().to_string_lossy().to_lowercase().ends_with(&wanted))
+        .filter(|e| {
+            let name = e.file_name().to_string_lossy().to_lowercase();
+            name.ends_with(".confluence.md") && (ends.iter().any(|w| name.ends_with(w.as_str())) || titled(&e.path()))
+        })
         .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok())
         .map(|e| e.path())
         .unwrap_or(exact)
@@ -1557,6 +1567,11 @@ mod tests {
         for given in ["0a1b2c_Domena_lista_klas.confluence.xml", "Domena_lista_klas.confluence.xml", "lista_klas.confluence.md", "LISTA_KLAS"] {
             assert_eq!(page_source(&dir, given), full, "{given}");
         }
+        // The page title instead of a file name (the file name has the title made safe, the title is in the file).
+        let titled = dir.join("9f8e7d_Domena_zamówień_–_klasy.confluence.md");
+        std::fs::write(&titled, "<!-- title: Domena zamówień – klasy -->\n# x").unwrap();
+        assert_eq!(page_source(&dir, "Domena zamówień – klasy.confluence.md"), titled);
+        assert_eq!(page_source(&dir, "Domena zamówień – klasy"), titled);
         assert_eq!(page_source(&dir, "other.confluence.xml"), dir.join("other.confluence.md"));
     }
 
