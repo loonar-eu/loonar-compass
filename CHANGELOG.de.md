@@ -8,6 +8,7 @@ Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen
 - **Einfacheres Installationsprogramm:** ohne die Seite „Konfiguration“ – Schlüssel, Modell und EA-Konto geben Sie in der Anwendung ein, die Sie beim ersten Start durch die Einstellungen führt.
 - **Installation wiederholen:** Kann die Installation die Dateien nicht ersetzen, weil Compass läuft, bietet die Fehlerseite „Compass schließen und erneut versuchen“ und „Erneut versuchen“ – ohne von vorn zu beginnen.
 - **Aus dem Browser eingefügte Jira- und Confluence-Adressen:** Der Teil einer Seite (z. B. „/spaces/…“, „/display/…“, „/browse/…“) wird abgeschnitten, und schickt der Server eine Webseite statt Daten, weist Compass auf die Adresse hin (vorher meldete die Prüfung „Verbunden“ und Seiten kamen leer zurück).
+- **Der Assistent liest Quellcode:** neue Werkzeuge, nur lesend – Dateien eines Ordners, Suche im Code (Datei:Zeile) und Lesen einer Datei – in lokalen Repository-Klonen. In Einstellungen → Enterprise Architect → „Quellcode-Ordner“ eingetragene Ordner liest er ohne Rückfrage, bei anderen fragt er zuerst. So findet er selbst, wo eine Klasse, Operation oder Tabelle implementiert ist und was davon abhängt.
 
 ## Version 0.9 (2026-10-27)
 

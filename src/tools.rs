@@ -91,6 +91,7 @@ pub fn definitions() -> Value {
         items.push(crate::scripts::definition());
         items.push(crate::traceability::definition());
         items.push(crate::code_drift::definition());
+        items.extend(crate::code_read::definitions());
         items.push(crate::cmdb::definition());
         items.push(crate::mdg::definition());
         items.push(crate::sharepoint::definition());
@@ -587,6 +588,16 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             };
             let types: Vec<String> = input["types"].as_array().into_iter().flatten().filter_map(|v| v.as_str()).map(String::from).collect();
             crate::cmdb::compare(ctx.cfg, &text, input["package"].as_i64(), &types).map(|c| crate::cmdb::report(&c).into())
+        }
+        "code_tree" | "code_search" | "code_read" => {
+            let path = crate::code_read::allowed(ctx.cfg, input["path"].as_str().unwrap_or(""), &|question| ctx.approver.confirm_always(question))?;
+            let filter = input["filter"].as_str().unwrap_or("");
+            match name {
+                "code_tree" => crate::code_read::tree(&path, filter),
+                "code_search" => crate::code_read::search(&path, input["query"].as_str().unwrap_or(""), filter),
+                _ => crate::code_read::read(&path, input["from"].as_i64(), input["to"].as_i64()),
+            }
+            .map(Into::into)
         }
         "code_drift" => {
             let path = read_path(ctx, input["path"].as_str().unwrap_or(""), true)?;

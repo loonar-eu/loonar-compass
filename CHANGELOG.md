@@ -8,6 +8,7 @@ Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Lo
 - **Prostszy instalator:** bez ekranu „Konfiguracja” – klucz, model i konto EA podajesz w aplikacji, która przy pierwszym starcie przeprowadzi Cię przez ustawienia.
 - **Ponowienie instalacji:** gdy instalacja nie może podmienić plików, bo Compass jest uruchomiony, ekran błędu ma przyciski „Zamknij Compass i spróbuj ponownie” oraz „Spróbuj ponownie” – bez zaczynania od nowa.
 - **Adres Jira i Confluence wklejony z przeglądarki:** końcówka strony (np. „/spaces/…”, „/display/…”, „/browse/…”) jest obcinana, a gdy serwer zamiast danych odsyła stronę WWW, Compass mówi, że trzeba sprawdzić adres (wcześniej sprawdzenie pokazywało „Połączono”, a strony były puste).
+- **Asystent czyta kod źródłowy:** nowe narzędzia tylko do odczytu – lista plików, wyszukiwanie w kodzie (plik:linia) i odczyt pliku – w lokalnych kopiach repozytoriów. Foldery wpisane w Ustawienia → Enterprise Architect → „Foldery z kodem źródłowym” czyta bez pytania, o inne najpierw pyta. Dzięki temu sam ustali, gdzie jest zaimplementowana klasa, operacja czy tabela i co od niej zależy.
 
 ## Wersja 0.9 (2026-10-27)
 

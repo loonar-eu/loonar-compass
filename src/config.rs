@@ -211,6 +211,8 @@ pub struct AppConfig {
     /// (`db.odbc`, without the password: it is added from the secret).
     pub db_odbc: String,
     pub ea_path: PathBuf,
+    /// Folders with source code the assistant reads without asking (`code.folders`, separated by ';') (LC-286).
+    pub code_folders: Vec<String>,
     pub ea_user: String,
     /// Credential Manager entry with the EA account password (the settings' account, or a conversation's own account).
     pub ea_password_key: String,
@@ -491,6 +493,7 @@ impl AppConfig {
             db_sslmode: SslMode::parse(&get_or("db.sslmode", "prefer")).context("db.sslmode")?,
             db_odbc: get_or("db.odbc", ""),
             // Older files have the path stored with doubled backslashes (C:\\Program Files\\...): convert it to a normal one.
+            code_folders: get_or("code.folders", "").split(';').map(|f| f.trim().trim_matches('"').to_string()).filter(|f| !f.is_empty()).collect(),
             ea_path: PathBuf::from({
                 let raw = get_or("ea.path", r"C:\Program Files\Sparx Systems\EA\EA.exe");
                 if raw.contains(":\\\\") { raw.replace("\\\\", "\\") } else { raw }
