@@ -91,9 +91,12 @@ pub fn definitions() -> Value {
         items.push(crate::scripts::definition());
         items.push(crate::traceability::definition());
         items.push(crate::code_drift::definition());
+        items.extend(crate::code_read::definitions());
         items.push(crate::cmdb::definition());
         items.push(crate::mdg::definition());
         items.push(crate::sharepoint::definition());
+        items.push(crate::sharepoint::onedrive_definition());
+        items.push(crate::gdrive::definition());
         items.push(crate::instructions::definition());
         items.push(crate::documents::definition());
         items.push(crate::mdg::version_control_definition());
@@ -559,6 +562,8 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "change_sets" => change_sets(input, ctx).map(Into::into),
         "mdg_technologies" => crate::mdg::run(input, ctx.cfg).map(Into::into),
         "sharepoint" => crate::sharepoint::run(input, ctx).map(Into::into),
+        "onedrive" => crate::sharepoint::run_onedrive(input, ctx).map(Into::into),
+        "google_drive" => crate::gdrive::run(input, ctx).map(Into::into),
         "model_instructions" => crate::instructions::run(input, ctx).map(Into::into),
         "read_document" => {
             let path = read_path(ctx, input["file"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["file".to_string()]))?, false)?;
@@ -587,6 +592,16 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             };
             let types: Vec<String> = input["types"].as_array().into_iter().flatten().filter_map(|v| v.as_str()).map(String::from).collect();
             crate::cmdb::compare(ctx.cfg, &text, input["package"].as_i64(), &types).map(|c| crate::cmdb::report(&c).into())
+        }
+        "code_tree" | "code_search" | "code_read" => {
+            let path = crate::code_read::allowed(ctx.cfg, input["path"].as_str().unwrap_or(""), &|question| ctx.approver.confirm_always(question))?;
+            let filter = input["filter"].as_str().unwrap_or("");
+            match name {
+                "code_tree" => crate::code_read::tree(&path, filter),
+                "code_search" => crate::code_read::search(&path, input["query"].as_str().unwrap_or(""), filter),
+                _ => crate::code_read::read(&path, input["from"].as_i64(), input["to"].as_i64()),
+            }
+            .map(Into::into)
         }
         "code_drift" => {
             let path = read_path(ctx, input["path"].as_str().unwrap_or(""), true)?;
@@ -864,7 +879,7 @@ fn ea_script(input: &Value, ctx: &ToolContext) -> Result<String> {
 /// Connection to Jira from the settings, or through the hub when the team policy says so.
 fn jira(cfg: &AppConfig) -> Result<crate::jira::Connection> {
     if let Some((hub, token)) = crate::hub::via_hub(cfg, "jira") {
-        return Ok(crate::jira::Connection { base_url: format!("{hub}/proxy/jira"), user: String::new(), token });
+        return Ok(crate::jira::Connection { base_url: format!("{hub}/proxy/jira"), user: String::new(), token, identity: None });
     }
     if cfg.jira_url.trim().is_empty() {
         bail!("{}", crate::i18n::tr("Jira is not configured: enter its address and token in Settings → Jira"));
@@ -872,10 +887,10 @@ fn jira(cfg: &AppConfig) -> Result<crate::jira::Connection> {
     // Tests talk to a Jira imitation with a test token (never the user's).
     #[cfg(test)]
     if let Ok(token) = std::env::var("LOONAR_TEST_JIRA_TOKEN") {
-        return Ok(crate::jira::Connection { base_url: cfg.jira_url.clone(), user: cfg.jira_user.clone(), token });
+        return Ok(crate::jira::Connection { base_url: cfg.jira_url.clone(), user: cfg.jira_user.clone(), token, identity: None });
     }
     let token = crate::config::secrets::get(crate::config::secrets::JIRA_TOKEN).context(crate::i18n::tr("no Jira token in the settings"))?;
-    Ok(crate::jira::Connection { base_url: cfg.jira_url.clone(), user: cfg.jira_user.clone(), token })
+    Ok(crate::jira::Connection { base_url: cfg.jira_url.clone(), user: cfg.jira_user.clone(), token, identity: crate::client_cert::jira(cfg)? })
 }
 
 /// New Jira issue: always with the user's consent (the content leaves the application).
@@ -975,13 +990,13 @@ fn create_confluence_page(input: &Value, ctx: &ToolContext) -> Result<ToolOutput
 
 fn confluence_connection(cfg: &AppConfig) -> Result<crate::confluence::Connection> {
     if let Some((hub, token)) = crate::hub::via_hub(cfg, "confluence") {
-        return Ok(crate::confluence::Connection { base_url: format!("{hub}/proxy/confluence"), user: String::new(), token });
+        return Ok(crate::confluence::Connection { base_url: format!("{hub}/proxy/confluence"), user: String::new(), token, identity: None });
     }
     if cfg.confluence_url.trim().is_empty() {
         bail!("{}", crate::i18n::tr("Confluence is not configured: complete Settings → Confluence (address, space, token)"));
     }
     let token = crate::config::secrets::get(crate::config::secrets::CONFLUENCE_TOKEN).context(crate::i18n::tr("no Confluence token in the settings"))?;
-    Ok(crate::confluence::Connection { base_url: cfg.confluence_url.clone(), user: cfg.confluence_user.clone(), token })
+    Ok(crate::confluence::Connection { base_url: cfg.confluence_url.clone(), user: cfg.confluence_user.clone(), token, identity: crate::client_cert::confluence(cfg)? })
 }
 
 /// Publishes or updates a page in Confluence. Diagrams are exported from EA again, so the page shows the current model.

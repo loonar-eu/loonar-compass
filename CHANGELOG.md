@@ -2,6 +2,15 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
+## Wersja 0.9.1 (2026-10-27)
+
+- **Jira i Confluence z certyfikatem klienta:** serwery firmowe, które oprócz tokenu wymagają certyfikatu klienta (mTLS), działają z Compassem. W Ustawieniach na kartach Jira i Confluence są pola „Certyfikat klienta” (ścieżka do pliku .p12/.pfx albo PEM) i „Hasło certyfikatu” (przechowywane w Menedżerze poświadczeń Windows). Bez certyfikatu taki serwer zamykał połączenie („Istniejące połączenie zostało gwałtownie zamknięte przez zdalnego hosta”).
+- **Prostszy instalator:** bez ekranu „Konfiguracja” – klucz, model i konto EA podajesz w aplikacji, która przy pierwszym starcie przeprowadzi Cię przez ustawienia.
+- **Ponowienie instalacji:** gdy instalacja nie może podmienić plików, bo Compass jest uruchomiony, ekran błędu ma przyciski „Zamknij Compass i spróbuj ponownie” oraz „Spróbuj ponownie” – bez zaczynania od nowa.
+- **Adres Jira i Confluence wklejony z przeglądarki:** końcówka strony (np. „/spaces/…”, „/display/…”, „/browse/…”) jest obcinana, a gdy serwer zamiast danych odsyła stronę WWW, Compass mówi, że trzeba sprawdzić adres (wcześniej sprawdzenie pokazywało „Połączono”, a strony były puste).
+- **Asystent czyta kod źródłowy:** nowe narzędzia tylko do odczytu – lista plików, wyszukiwanie w kodzie (plik:linia) i odczyt pliku – w lokalnych kopiach repozytoriów. Foldery wpisane w Ustawienia → Enterprise Architect → „Foldery z kodem źródłowym” czyta bez pytania, o inne najpierw pyta. Dzięki temu sam ustali, gdzie jest zaimplementowana klasa, operacja czy tabela i co od niej zależy.
+- **OneDrive i Dysk Google:** asystent listuje foldery, czyta dokumenty (Word, Excel, PowerPoint, PDF, Visio, tekst; na Dysku Google także Dokumenty, Arkusze i Prezentacje Google) i – za każdym razem za Twoją zgodą – wysyła przygotowane przez siebie dokumenty. Logujesz się własnym kontem Microsoft albo Google w przeglądarce jeden raz (OAuth z PKCE), token odświeżania jest w Menedżerze poświadczeń Windows. Ustawienia: karty „OneDrive” (rejestracja aplikacji w Entra ID jako klient publiczny) i „Google Drive” (klient OAuth „Aplikacja komputerowa” w Google Cloud).
+
 ## Wersja 0.9 (2026-10-27)
 
 Logowanie kontem firmowym do huba, modele w SQL Server, MySQL i Oracle, instrukcje modelowania zespołu w repozytorium, dokumenty PDF, PowerPoint, Visio i Excel, prezentacje, SharePoint, strażnicy zatrzymujący usuwanie oraz uważniejszy asystent: pytania, plan, podagenci i ochrona przed ukrytymi instrukcjami.

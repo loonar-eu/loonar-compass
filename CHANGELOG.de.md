@@ -2,6 +2,15 @@
 
 Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen Loonar EA Assistant).
 
+## Version 0.9.1 (2026-10-27)
+
+- **Jira und Confluence mit Client-Zertifikat:** Firmenserver, die zusätzlich zum Token ein Client-Zertifikat (mTLS) verlangen, funktionieren jetzt mit Compass. Auf den Karten Jira und Confluence in den Einstellungen gibt es die Felder „Client-Zertifikat“ (Pfad zu einer .p12/.pfx- oder PEM-Datei) und „Zertifikatspasswort“ (in der Windows-Anmeldeinformationsverwaltung gespeichert). Ohne Zertifikat schloss ein solcher Server die Verbindung („Eine vorhandene Verbindung wurde vom Remotehost geschlossen“).
+- **Einfacheres Installationsprogramm:** ohne die Seite „Konfiguration“ – Schlüssel, Modell und EA-Konto geben Sie in der Anwendung ein, die Sie beim ersten Start durch die Einstellungen führt.
+- **Installation wiederholen:** Kann die Installation die Dateien nicht ersetzen, weil Compass läuft, bietet die Fehlerseite „Compass schließen und erneut versuchen“ und „Erneut versuchen“ – ohne von vorn zu beginnen.
+- **Aus dem Browser eingefügte Jira- und Confluence-Adressen:** Der Teil einer Seite (z. B. „/spaces/…“, „/display/…“, „/browse/…“) wird abgeschnitten, und schickt der Server eine Webseite statt Daten, weist Compass auf die Adresse hin (vorher meldete die Prüfung „Verbunden“ und Seiten kamen leer zurück).
+- **Der Assistent liest Quellcode:** neue Werkzeuge, nur lesend – Dateien eines Ordners, Suche im Code (Datei:Zeile) und Lesen einer Datei – in lokalen Repository-Klonen. In Einstellungen → Enterprise Architect → „Quellcode-Ordner“ eingetragene Ordner liest er ohne Rückfrage, bei anderen fragt er zuerst. So findet er selbst, wo eine Klasse, Operation oder Tabelle implementiert ist und was davon abhängt.
+- **OneDrive und Google Drive:** Der Assistent listet Ordner auf, liest Dokumente (Word, Excel, PowerPoint, PDF, Visio, Text; in Google Drive auch Google Docs, Tabellen und Präsentationen) und lädt – jedes Mal mit Ihrer Zustimmung – von ihm erstellte Dokumente hoch. Sie melden sich einmal im Browser mit Ihrem eigenen Microsoft- oder Google-Konto an (OAuth mit PKCE); das Aktualisierungstoken liegt in der Windows-Anmeldeinformationsverwaltung. Einstellungen: Karte „OneDrive“ (App-Registrierung in Entra ID als öffentlicher Client) und Karte „Google Drive“ (OAuth-Client „Desktop-App“ in Google Cloud).
+
 ## Version 0.9 (2026-10-27)
 
 Anmeldung mit dem Firmenkonto am Hub, Modelle auf SQL Server, MySQL und Oracle, die Modellierungsanweisungen des Teams im Repository, Dokumente in PDF, PowerPoint, Visio und Excel, Präsentationen, SharePoint, Wächter, die ein Löschen stoppen, und ein umsichtigerer Assistent: Rückfragen, ein Plan, Sub-Agenten und Schutz vor versteckten Anweisungen.

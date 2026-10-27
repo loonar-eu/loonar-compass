@@ -15,6 +15,8 @@ pub struct Connection {
     /// Account e-mail (Cloud); empty for a personal access token (Server / Data Center).
     pub user: String,
     pub token: String,
+    /// Client certificate for a server that asks for one besides the token (mTLS).
+    pub identity: Option<reqwest::Identity>,
 }
 
 /// The Jira address must use HTTPS (the token travels with every request); plain HTTP only for a server on this computer.
@@ -83,6 +85,11 @@ pub fn to_adf(text: &str) -> Value {
     json!({ "type": "doc", "version": 1, "content": paragraphs })
 }
 
+/// The Jira address without the part of a page copied from the browser (".../browse/KEY-1", "/projects/...").
+pub fn base(url: &str) -> String {
+    crate::net::site_base(url, &["/browse", "/projects", "/secure", "/rest", "/issues", "/plugins"])
+}
+
 impl Connection {
     /// Jira Cloud (atlassian.net, or an account e-mail with an API token) uses REST API 3, the server editions API 2.
     pub fn cloud(&self) -> bool {
@@ -95,11 +102,13 @@ impl Connection {
 
     fn client(&self) -> Result<reqwest::blocking::Client> {
         check_base_url(&self.base_url)?;
-        reqwest::blocking::Client::builder().redirect(crate::net::same_origin_redirects()).timeout(Duration::from_secs(60)).build().context(crate::i18n::tr("HTTP client"))
+        let builder = reqwest::blocking::Client::builder().redirect(crate::net::same_origin_redirects()).timeout(Duration::from_secs(60));
+        let builder = match &self.identity { Some(identity) => builder.identity(identity.clone()), None => builder };
+        builder.build().context(crate::i18n::tr("HTTP client"))
     }
 
     fn url(&self, path: &str) -> String {
-        format!("{}{}{path}", self.base_url.trim().trim_end_matches('/'), self.api())
+        format!("{}{}{path}", base(&self.base_url), self.api())
     }
 
     fn send(&self, request: reqwest::blocking::RequestBuilder, what: &str) -> Result<Value> {
@@ -120,6 +129,9 @@ impl Connection {
                 })
                 .unwrap_or_else(|| text.chars().take(300).collect());
             bail!("{}", crate::i18n::fmt("{0}: Jira replied {1}: {2}", &[what.to_string(), status.to_string(), message]));
+        }
+        if crate::net::not_json(&text) {
+            bail!("{}", crate::i18n::fmt("{0}: Jira answered with a web page instead of data: check the Jira address in Settings (e.g. https://jira.company.com or https://company.com/jira, without /browse or /projects)", &[what.to_string()]));
         }
         Ok(serde_json::from_str(&text).unwrap_or(Value::Null))
     }
@@ -365,7 +377,7 @@ mod tests {
     use super::*;
 
     fn connection(mock: &mock::Mock, cloud: bool, token: &str) -> Connection {
-        Connection { base_url: mock.url.clone(), user: if cloud { "architect@example.com".into() } else { String::new() }, token: token.into() }
+        Connection { base_url: mock.url.clone(), user: if cloud { "architect@example.com".into() } else { String::new() }, token: token.into(), identity: None }
     }
 
     #[test]

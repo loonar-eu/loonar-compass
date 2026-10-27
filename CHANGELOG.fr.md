@@ -2,6 +2,15 @@
 
 Toutes les modifications importantes de l'application Loonar Compass (nommée Loonar EA Assistant jusqu'à la version 0.3).
 
+## Version 0.9.1 (2026-10-27)
+
+- **Jira et Confluence avec un certificat client :** les serveurs d’entreprise qui exigent un certificat client (mTLS) en plus du jeton fonctionnent désormais avec Compass. Les cartes Jira et Confluence des Paramètres ont les champs « Certificat client » (chemin d’un fichier .p12/.pfx ou PEM) et « Mot de passe du certificat » (conservé dans le Gestionnaire d’identification Windows). Sans certificat, un tel serveur fermait la connexion (« Une connexion existante a dû être fermée par l’hôte distant »).
+- **Installateur simplifié :** plus de page « Configuration » – la clé, le modèle et le compte EA se saisissent dans l’application, qui vous guide au premier démarrage.
+- **Réessayer l’installation :** quand l’installation ne peut pas remplacer les fichiers parce que Compass est lancé, la page d’erreur propose « Fermer Compass et réessayer » et « Réessayer » – sans tout recommencer.
+- **Adresses Jira et Confluence collées depuis le navigateur :** la partie d’une page (par ex. « /spaces/… », « /display/… », « /browse/… ») est retirée, et quand le serveur renvoie une page web au lieu de données, Compass invite à vérifier l’adresse (auparavant la vérification indiquait « Connecté » et les pages revenaient vides).
+- **L’assistant lit le code source :** nouveaux outils en lecture seule – fichiers d’un dossier, recherche dans le code (fichier:ligne) et lecture d’un fichier – dans des clones locaux de dépôts. Les dossiers indiqués dans Paramètres → Enterprise Architect → « Dossiers de code source » sont lus sans demander ; pour les autres il demande d’abord. Il trouve ainsi seul où une classe, une opération ou une table est implémentée et ce qui en dépend.
+- **OneDrive et Google Drive :** l’assistant liste les dossiers, lit les documents (Word, Excel, PowerPoint, PDF, Visio, texte ; sur Google Drive aussi Google Docs, Sheets et Slides) et, chaque fois avec votre accord, envoie les documents qu’il a créés. Vous vous connectez une fois dans le navigateur avec votre propre compte Microsoft ou Google (OAuth avec PKCE) ; le jeton d’actualisation est conservé dans le Gestionnaire d’identification Windows. Paramètres : carte « OneDrive » (inscription d’application dans Entra ID comme client public) et carte « Google Drive » (client OAuth « Application de bureau » dans Google Cloud).
+
 ## Version 0.9 (2026-10-27)
 
 Connexion d'entreprise au hub, modèles sur SQL Server, MySQL et Oracle, instructions de modélisation de l'équipe dans le référentiel, documents PDF, PowerPoint, Visio et Excel, présentations, SharePoint, gardiens qui arrêtent les suppressions, et un assistant plus attentif : questions, plan, sous-agents et protection contre les instructions cachées.
