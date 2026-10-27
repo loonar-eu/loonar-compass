@@ -6983,6 +6983,9 @@ impl eframe::App for App {
                                             crate::i18n::fmt("Steps in the last answer: {0}", &[(self.steps.len()).to_string()])
                                         };
                                         let header = ui.horizontal(|ui| {
+                                            // Selectable labels take the click for text selection, so the header did
+                                            // not toggle when clicked on its text (LC-272).
+                                            ui.style_mut().interaction.selectable_labels = false;
                                             ui.label(icons::text(icons::STEPS, "", 13.0).color(theme::MUTED));
                                             ui.label(egui::RichText::new(title).small().color(theme::MUTED));
                                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
