@@ -284,4 +284,23 @@ mod tests {
             Err(e) => panic!("{e:#}"),
         }
     }
+
+    /// A real read-only connection to Confluence with its token and certificate from the settings:
+    /// `LOONAR_TEST_CONFLUENCE=<address>;<space> cargo test confluence_with_certificate -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "requires the user's Confluence, its token and client certificate"]
+    fn confluence_with_certificate() {
+        let spec = std::env::var("LOONAR_TEST_CONFLUENCE").unwrap();
+        let (url, space) = spec.split_once(';').unwrap();
+        let password = secrets::get(secrets::CONFLUENCE_CERT_PASSWORD).or_else(|_| secrets::get(secrets::JIRA_CERT_PASSWORD)).unwrap();
+        let identity = Some(identity("C:/certyfikaty/jira-client.p12", &password).unwrap());
+        for (name, token) in [("Confluence token", secrets::get(secrets::CONFLUENCE_TOKEN)), ("Jira token", secrets::get(secrets::JIRA_TOKEN))] {
+            let Ok(token) = token else { continue };
+            let connection = crate::confluence::Connection { base_url: url.into(), user: String::new(), token, identity: identity.clone() };
+            match connection.check(space) {
+                Ok(n) => println!("{name}: connected, space {space} = {n}"),
+                Err(e) => println!("{name}: {e:#}"),
+            }
+        }
+    }
 }
