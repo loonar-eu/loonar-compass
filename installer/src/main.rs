@@ -648,6 +648,22 @@ fn read_install(product: &Product, scope: Scope) -> Option<Installed> {
     Some(Installed { scope, dir, version: reg::get_string(root, product.uninstall_key, "DisplayVersion").filter(|v| !v.trim().is_empty()) })
 }
 
+/// Closes the application started from `dir` (its windows first, as a person would; whatever is still running after
+/// a few seconds is stopped), so that a failed installation can be retried (LC-284).
+fn close_app_in(dir: &Path) {
+    let exe = dir.join(APP_EXE).display().to_string().replace('\'', "''");
+    let script = format!(
+        "$p = Get-Process -Name LoonarCompass -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -eq '{exe}' }}; \
+         $p | ForEach-Object {{ [void]$_.CloseMainWindow() }}; \
+         for ($i = 0; $i -lt 20 -and ($p | Where-Object {{ -not $_.HasExited }})); $i++) {{ Start-Sleep -Milliseconds 250; $p | ForEach-Object {{ $_.Refresh() }} }}; \
+         $p | Where-Object {{ -not $_.HasExited }} | Stop-Process -Force -ErrorAction SilentlyContinue"
+    );
+    let _ = Command::new(windows_dir().join("System32").join("WindowsPowerShell").join("v1.0").join("powershell.exe"))
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .creation_flags(CREATE_NO_WINDOW)
+        .status();
+}
+
 /// Whether this program is the uninstaller in `dir` (it cannot delete itself while it runs).
 fn running_from(dir: &Path) -> bool {
     std::env::current_exe().is_ok_and(|me| same_path(&me, &dir.join(UNINSTALL_EXE)))
@@ -1880,7 +1896,8 @@ impl Setup {
         let ea_path = if ea_path.contains(":\\\\") { ea_path.replace("\\\\", "\\") } else { ea_path };
         let approval_mode = config::ApprovalMode::parse(&get("approval.mode", "ask")).map_or("ask", |m| m.as_str()).to_string();
         let config = ConfigForm {
-            configure_now: get("db.host", "").is_empty() && get("model.file", "").is_empty(),
+            // The settings are entered in the application (its start wizard), not in the installer (LC-283).
+            configure_now: false,
             model_source: if get("model.source", "postgres") == "file" { "file".to_string() } else { "postgres".to_string() },
             model_file: get("model.file", ""),
             db_host: get("db.host", ""),
@@ -2122,6 +2139,16 @@ impl eframe::App for Setup {
                             if ui.button(crate::i18n::tr("Finish")).clicked() {
                                 close = true;
                             }
+                            // A failed installation can be retried without starting the wizard again (LC-284).
+                            if !self.uninstall && matches!(self.outcome, Some(Err(_))) {
+                                if ui.button(crate::i18n::tr("Try again")).clicked() {
+                                    start = true;
+                                }
+                                if ui.button(bold(&crate::i18n::fmt("Close {0} and try again", &[APP_NAME.to_string()]), 14.0)).clicked() {
+                                    close_app_in(&PathBuf::from(self.dir.trim()));
+                                    start = true;
+                                }
+                            }
                         }
                         _ => {
                             if ui.add_enabled(!working && !old_removal_running, egui::Button::new(crate::i18n::tr("Cancel"))).clicked() {
@@ -2133,7 +2160,7 @@ impl eframe::App for Setup {
                                 (false, Page::Welcome) => (crate::i18n::tr("Next >"), Some(Page::News)),
                                 (_, Page::News) => (crate::i18n::tr("Next >"), Some(Page::License)),
                                 (_, Page::License) => (crate::i18n::tr("Next >"), Some(Page::Folder)),
-                                (_, Page::Folder) => (crate::i18n::tr("Next >"), Some(Page::Config)),
+                                (_, Page::Folder) => (crate::i18n::tr("Next >"), Some(Page::Summary)),
                                 (_, Page::Config) => (crate::i18n::tr("Next >"), Some(Page::Summary)),
                                 (_, Page::Summary) => (crate::i18n::tr("Install"), None),
                                 _ => (crate::i18n::tr("Next >"), None),
@@ -2158,7 +2185,7 @@ impl eframe::App for Setup {
                                 Page::License => Some(Page::News),
                                 Page::Folder => Some(Page::License),
                                 Page::Config => Some(Page::Folder),
-                                Page::Summary => Some(Page::Config),
+                                Page::Summary => Some(Page::Folder),
                                 _ => None,
                             };
                             if !self.uninstall
@@ -2260,7 +2287,7 @@ impl Setup {
             ui.label(line);
         }
         ui.add_space(10.0);
-        ui.add(egui::Label::new(crate::i18n::tr("You can enter these details in the wizard or later in the application, on the \"Settings\" tab. If the application is already installed, the wizard will update it and keep your settings and conversation history.")).wrap());
+        ui.add(egui::Label::new(crate::i18n::tr("You enter these details in the application: at its first start it guides you through them (and they can be changed in Settings). If the application is already installed, the wizard will update it and keep your settings and conversation history.")).wrap());
         ui.add_space(10.0);
         ui.label(egui::RichText::new(crate::i18n::tr("Click \"Next\" to continue.")).color(theme::MUTED));
     }

@@ -5,6 +5,8 @@ Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Lo
 ## Wersja 0.9.1 (2026-10-27)
 
 - **Jira i Confluence z certyfikatem klienta:** serwery firmowe, które oprócz tokenu wymagają certyfikatu klienta (mTLS), działają z Compassem. W Ustawieniach na kartach Jira i Confluence są pola „Certyfikat klienta” (ścieżka do pliku .p12/.pfx albo PEM) i „Hasło certyfikatu” (przechowywane w Menedżerze poświadczeń Windows). Bez certyfikatu taki serwer zamykał połączenie („Istniejące połączenie zostało gwałtownie zamknięte przez zdalnego hosta”).
+- **Prostszy instalator:** bez ekranu „Konfiguracja” – klucz, model i konto EA podajesz w aplikacji, która przy pierwszym starcie przeprowadzi Cię przez ustawienia.
+- **Ponowienie instalacji:** gdy instalacja nie może podmienić plików, bo Compass jest uruchomiony, ekran błędu ma przyciski „Zamknij Loonar Compass i spróbuj ponownie” oraz „Spróbuj ponownie” – bez zaczynania od nowa.
 
 ## Wersja 0.9 (2026-10-27)
 
