@@ -66,14 +66,33 @@ pub fn allowed(cfg: &crate::config::AppConfig, given: &str, ask: &dyn Fn(&str) -
         bail!("{}", crate::i18n::fmt("{0}: give a full path on a local drive; network shares and relative paths are not allowed", &[given.to_string()]));
     }
     let path = PathBuf::from(&text);
-    let inside = cfg.code_folders.iter().any(|root| {
+    // The folders of the settings, also those approved earlier in this conversation (saved to the file since).
+    let mut roots = cfg.code_folders.clone();
+    roots.extend(crate::config::AppConfig::load(&cfg.base_dir.join("app.properties")).map(|c| c.code_folders).unwrap_or_default());
+    let inside = roots.iter().any(|root| {
         let root = root.trim().replace('/', "\\").trim_end_matches('\\').to_lowercase();
         !root.is_empty() && (text.to_lowercase() == root || text.to_lowercase().starts_with(&format!("{root}\\")))
     });
     if !inside {
-        ask(&crate::i18n::fmt("Read the source code in {0}? What is read goes to the AI model of the conversation. (Folders listed in Settings → Source code are read without asking.)", &[text.clone()]))?;
+        // The folder (of a file: the folder it is in) is remembered once approved: no question for it again.
+        let folder = if path.is_file() { path.parent().map(Path::to_path_buf).unwrap_or_else(|| path.clone()) } else { path.clone() };
+        ask(&crate::i18n::fmt(
+            "Read the source code in {0}? What is read goes to the AI model of the conversation. The folder is then remembered in Settings → Enterprise Architect → Source code folders and read without asking.",
+            &[folder.display().to_string()],
+        ))?;
+        remember(cfg, &folder);
     }
     Ok(path)
+}
+
+/// Adds an approved folder to `code.folders` in the settings file (the running conversation reads it from there).
+fn remember(cfg: &crate::config::AppConfig, folder: &Path) {
+    let mut folders = crate::config::AppConfig::load(&cfg.base_dir.join("app.properties")).map(|c| c.code_folders).unwrap_or_else(|_| cfg.code_folders.clone());
+    let new = folder.display().to_string();
+    if !folders.iter().any(|f| f.replace('/', "\\").trim_end_matches('\\').eq_ignore_ascii_case(new.trim_end_matches('\\'))) {
+        folders.push(new);
+        let _ = crate::config::save_properties(&cfg.base_dir.join("app.properties"), &[("code.folders", folders.join(";"))]);
+    }
 }
 
 fn skipped_dir(name: &str) -> bool {
@@ -219,7 +238,9 @@ mod tests {
 
     #[test]
     fn only_full_local_paths_and_folders_from_settings() {
-        let props = std::env::temp_dir().join(format!("loonar-code-{}.properties", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("loonar-code-settings-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let props = dir.join("app.properties");
         std::fs::write(&props, "").unwrap();
         let mut cfg = crate::config::AppConfig::load(&props).unwrap();
         cfg.code_folders = vec!["C:\\repos".into()];
@@ -230,5 +251,10 @@ mod tests {
         assert!(allowed(&cfg, "C:\\repos\\..\\Windows", &never).is_err());
         assert!(allowed(&cfg, "\\\\server\\share", &never).is_err());
         assert!(allowed(&cfg, "C:\\reposX", &never).is_err());
+        // An approved folder is remembered: the next call does not ask.
+        let yes = |_: &str| -> Result<()> { Ok(()) };
+        assert!(allowed(&cfg, "C:\\other\\code", &yes).is_ok());
+        assert!(allowed(&cfg, "C:\\other\\code\\src", &never).is_ok());
+        assert!(std::fs::read_to_string(&props).unwrap().contains("code.folders"));
     }
 }

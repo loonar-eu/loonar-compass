@@ -105,7 +105,13 @@ fn system_prompt(cfg: &AppConfig) -> String {
         docs = docs_url(),
         memories = memory::prompt_section(&cfg.memory_dir, &cfg.model_label()),
         model_instructions = instructions::prompt_section(cfg),
-        MODEL_STORE = format!("{} The model of this conversation: {}.", model_db::dialect(cfg), cfg.model_label()),
+        MODEL_STORE = format!(
+            "{} The model of this conversation: {}.{}",
+            model_db::dialect(cfg),
+            cfg.model_label(),
+            // The source code folders the user listed: the assistant searches them without asking for a path (LC-286).
+            if cfg.code_folders.is_empty() { String::new() } else { format!(" Source code folders (local repository clones; read them with code_tree, code_search and code_read): {}.", cfg.code_folders.join("; ")) }
+        ),
         LANGUAGE_RULE = format!("Response language: {} (the language selected in the application). Answer in it unless the user writes to you in a different language; then answer in the user's language. Create documents, pages and images in the response language unless the user asks for a different one. This applies to everything you write, also short notes between tool calls.", i18n::current().english_name()),
         templates = templates::prompt_section(&cfg.templates_dir),
     )
