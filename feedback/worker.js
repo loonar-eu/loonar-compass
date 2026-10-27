@@ -7,7 +7,11 @@
 //   POST /v1/report  a bug report or a feature request             -> a public GitHub issue; the screenshots and the
 //                                                                     context of the reported answer go to a private
 //                                                                     repository that only the author can read
+//   GET  /v1/summary the summary of a week over all installations together (?week=YYYY-MM-DD, its Monday; default the
+//                    newest); never anything of one installation
 //   GET  /health
+//
+// Once a day (cron): data older than 13 months is deleted; on Mondays the summary of the week that ended is computed.
 //
 // The application never holds a GitHub token: the token is a secret of this Worker (GITHUB_TOKEN). Everything that
 // arrives is checked against a strict schema; unknown fields are refused, so nothing else can be published.
@@ -44,6 +48,10 @@ const VERSION = /^\d{1,3}(\.\d{1,3}){0,3}$/;
 const KEY = /^[a-z0-9_]{1,40}$/;
 const OS = /^[A-Za-z0-9 ().]{1,40}$/;
 const MODEL = /^[a-z0-9._-]{1,40}$/;
+
+const KEEP_MONTHS = 13;
+/** A value shared by fewer installations than this is counted under "other" in a published summary. */
+const MIN_INSTALLS = 3;
 
 function daysBetween(a, b) {
   return Math.round((Date.parse(a + "T00:00:00Z") - Date.parse(b + "T00:00:00Z")) / 86_400_000);
@@ -326,11 +334,140 @@ async function report(request, env) {
   return json(201, { url: issue.data.html_url, number });
 }
 
+/** The Monday (YYYY-MM-DD) of the week before the one that contains `now`. */
+export function lastWeek(now = new Date()) {
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const sinceMonday = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - sinceMonday - 7);
+  return d.toISOString().slice(0, 10);
+}
+
+const addDays = (day, n) => new Date(Date.parse(day + "T00:00:00Z") + n * 86_400_000).toISOString().slice(0, 10);
+
+/**
+ * The summary of a week over all installations together: `starts` and `days` are the rows of that week, `firstSeen`
+ * maps an installation to the day of its first start ever. Values shared by fewer than MIN_INSTALLS installations go
+ * to "other", so that nothing in the published summary describes one installation.
+ */
+export function weekSummary(week, starts, days, firstSeen) {
+  const activeDays = new Map(); // install -> Set of days
+  const last = new Map(); // install -> { app, os, lang } from its latest start
+  const mark = (install, day) => {
+    if (!activeDays.has(install)) activeDays.set(install, new Set());
+    activeDays.get(install).add(day);
+  };
+  for (const s of [...starts].sort((a, b) => a.day.localeCompare(b.day))) {
+    mark(s.install, s.day);
+    last.set(s.install, { app: s.app, os: s.os.replace(/\s*\(.*\)$/, ""), lang: s.lang });
+  }
+  const counters = {};
+  const setups = {};
+  for (const d of days) {
+    mark(d.install, d.day);
+    const data = typeof d.data === "string" ? JSON.parse(d.data) : d.data;
+    if (!last.has(d.install)) last.set(d.install, { app: data.app, os: String(data.os || "").replace(/\s*\(.*\)$/, ""), lang: data.lang });
+    for (const c of COUNTERS) if (isCount(data[c])) counters[c] = (counters[c] || 0) + data[c];
+    for (const g of COUNTER_GROUPS) {
+      if (!isObject(data[g])) continue;
+      counters[g] = counters[g] || {};
+      for (const [k, v] of Object.entries(data[g])) if (isCount(v)) counters[g][k] = (counters[g][k] || 0) + v;
+    }
+    if (isObject(data.setup)) {
+      for (const [k, v] of Object.entries(data.setup)) {
+        if (k === "ai_model") continue; // too fine for a public summary
+        const value = typeof v === "number" ? (v > 0 ? "yes" : "no") : String(v);
+        setups[k] = setups[k] || {};
+        setups[k][value] = setups[k][value] || new Set();
+        setups[k][value].add(d.install);
+      }
+    }
+  }
+  const installs = [...activeDays.keys()];
+  const share = (pick) => {
+    const by = {};
+    for (const i of installs) {
+      const v = pick(i);
+      if (v === undefined || v === "") continue;
+      by[v] = (by[v] || 0) + 1;
+    }
+    return fold(by);
+  };
+  const fold = (by) => {
+    const out = {};
+    for (const [k, n] of Object.entries(by)) {
+      const key = n < MIN_INSTALLS ? "other" : k;
+      out[key] = (out[key] || 0) + n;
+    }
+    return out;
+  };
+  const setup = {};
+  for (const [k, values] of Object.entries(setups)) setup[k] = fold(Object.fromEntries(Object.entries(values).map(([v, s]) => [v, s.size])));
+  const until = addDays(week, 6);
+  return {
+    week,
+    until,
+    installations: installs.length,
+    new_installations: installs.filter((i) => firstSeen[i] && firstSeen[i] >= week && firstSeen[i] <= until).length,
+    returning: installs.filter((i) => activeDays.get(i).size >= 2).length,
+    active_days: installs.reduce((n, i) => n + activeDays.get(i).size, 0),
+    versions: share((i) => last.get(i)?.app),
+    systems: share((i) => last.get(i)?.os),
+    languages: share((i) => last.get(i)?.lang),
+    setup,
+    counters,
+  };
+}
+
+async function weekly(env, now = new Date()) {
+  if (!env.DB) return;
+  const cutoff = new Date(now);
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - KEEP_MONTHS);
+  const oldest = cutoff.toISOString().slice(0, 10);
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM starts WHERE day < ?1").bind(oldest),
+    env.DB.prepare("DELETE FROM days WHERE day < ?1").bind(oldest),
+    env.DB.prepare("DELETE FROM weekly WHERE week < ?1").bind(oldest),
+  ]);
+  const week = lastWeek(now);
+  const done = await env.DB.prepare("SELECT 1 FROM weekly WHERE week = ?1").bind(week).first();
+  if (done) return;
+  const until = addDays(week, 6);
+  const starts = (await env.DB.prepare("SELECT install, day, app, os, lang FROM starts WHERE day BETWEEN ?1 AND ?2").bind(week, until).all()).results;
+  const days = (await env.DB.prepare("SELECT install, day, data FROM days WHERE day BETWEEN ?1 AND ?2").bind(week, until).all()).results;
+  const first = (await env.DB.prepare(
+    "SELECT install, MIN(day) AS first FROM starts WHERE install IN (SELECT install FROM starts WHERE day BETWEEN ?1 AND ?2) GROUP BY install",
+  ).bind(week, until).all()).results;
+  const summary = weekSummary(week, starts, days, Object.fromEntries(first.map((r) => [r.install, r.first])));
+  await env.DB.prepare("INSERT OR REPLACE INTO weekly (week, data, created) VALUES (?1, ?2, ?3)")
+    .bind(week, JSON.stringify(summary), now.toISOString())
+    .run();
+}
+
+async function publicSummary(url, env) {
+  if (!env.DB) return json(503, { error: "no database" });
+  const week = url.searchParams.get("week");
+  if (week !== null) check(/^\d{4}-\d{2}-\d{2}$/.test(week), "bad week");
+  const row = week
+    ? await env.DB.prepare("SELECT data FROM weekly WHERE week = ?1").bind(week).first()
+    : await env.DB.prepare("SELECT data FROM weekly ORDER BY week DESC LIMIT 1").first();
+  if (!row) return json(404, { error: "no summary" });
+  const weeks = (await env.DB.prepare("SELECT week FROM weekly ORDER BY week DESC LIMIT 60").all()).results.map((r) => r.week);
+  return new Response(JSON.stringify({ ...JSON.parse(row.data), weeks }), {
+    status: 200,
+    headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=3600" },
+  });
+}
+
 export default {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(weekly(env, new Date(event.scheduledTime)));
+  },
+
   async fetch(request, env) {
     const url = new URL(request.url);
     try {
       if (request.method === "GET" && url.pathname === "/health") return json(200, { ok: true });
+      if (request.method === "GET" && url.pathname === "/v1/summary") return await publicSummary(url, env);
       if (request.method === "POST" && url.pathname === "/v1/start") return await start(request, env);
       if (request.method === "POST" && url.pathname === "/v1/stats") return await stats(request, env);
       if (request.method === "POST" && url.pathname === "/v1/report") return await report(request, env);

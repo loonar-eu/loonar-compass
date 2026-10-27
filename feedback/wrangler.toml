@@ -25,6 +25,10 @@ name = "REPORT_LIMITER"
 namespace_id = "1002"
 simple = { limit = 3, period = 60 }
 
+# Once a day: data older than 13 months is deleted; on Mondays the summary of the last week is computed.
+[triggers]
+crons = ["17 3 * * *"]
+
 # The statistics (starts and daily summaries); schema in schema.sql.
 [[d1_databases]]
 binding = "DB"

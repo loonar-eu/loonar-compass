@@ -4,7 +4,10 @@ A small Cloudflare Worker between Loonar Compass and GitHub. The application nev
 
 | Request | What happens |
 |---|---|
-| `POST /v1/stats` | The daily usage summary of one installation is checked against a strict schema and stored as `data/YYYY/MM/<day>/<installation>.json` in the **public** repository `loonar-eu/compass-stats`. |
+| `POST /v1/start` | The start of the application (random installation id, version, Windows, language, day) is stored in the D1 database `compass-stats` (table `starts`). |
+| `POST /v1/stats` | The usage summary of a day of one installation (sent every hour, `partial` until the day ends) is checked against a strict schema and stored in D1 (table `days`; the newest replaces the earlier one, a final one is never replaced by a partial one). Without the database binding it goes to the public repository `loonar-eu/compass-stats` as before. |
+| `GET /v1/summary` | The summary of a week over all installations together (`?week=<Monday>`, default the newest); values shared by fewer than 3 installations are counted as `other`. |
+| cron, daily 03:17 UTC | Deletes data older than 13 months; computes the summary of the week that ended (table `weekly`). |
 | `POST /v1/report` | A bug report becomes a **public** issue in `loonar-eu/loonar-compass` (labels `bug`, `from-app`) with the title, the description and the technical information. The screenshots and the context of the reported answer go to the **private** repository `loonar-eu/compass-private` (`reports/YYYY-MM/issue-<n>-<ref>/`). |
 | `GET /health` | `{"ok": true}` |
 
@@ -30,6 +33,11 @@ Limits: 30 summaries and 3 reports a minute per address; a summary up to 32 KB; 
      `wrangler.toml`; the Worker gets `https://compass-feedback.<account>.workers.dev` and the constant
      `SERVICE_URL` in `src/telemetry.rs` must be changed to it.
 4. Check: `curl https://feedback.loonar.eu/health`.
+
+No IP addresses are stored anywhere. The schema: `npx wrangler d1 execute compass-stats --remote --file schema.sql`.
+
+The author's private dashboard: `python tools/stats/dashboard.py` (reads D1 with the Cloudflare API token, writes
+`compass_stats.html` and opens it).
 
 ## Testing
 

@@ -23,3 +23,10 @@ CREATE TABLE IF NOT EXISTS days (
   PRIMARY KEY (install, day)
 );
 CREATE INDEX IF NOT EXISTS days_day ON days (day);
+
+-- The summary of a week over all installations together (computed on Mondays; GET /v1/summary).
+CREATE TABLE IF NOT EXISTS weekly (
+  week    TEXT PRIMARY KEY,
+  data    TEXT NOT NULL,
+  created TEXT NOT NULL
+);
