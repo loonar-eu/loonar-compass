@@ -55,8 +55,11 @@ fn connection_string(cfg: &AppConfig) -> Result<String> {
     }
     // EA's own connection for the background session: `ea.conn` (the text of an EA shortcut, e.g. for MySQL and
     // Oracle through an ODBC data source) or one built for SQL Server (OLE DB) and PostgreSQL (Pro Cloud-style SSDB).
+    // An ea.conn of another kind of database (left from an earlier model) is not used (LC-261).
     if !cfg.ea_conn.trim().is_empty() {
-        return Ok(cfg.ea_conn.trim().to_string());
+        if ea_conn_matches(&cfg.ea_conn, cfg.model_source) {
+            return Ok(cfg.ea_conn.trim().to_string());
+        }
     }
     // MySQL and Oracle: EA opens them through an ODBC data source of its own, which Compass cannot guess (never a
     // PostgreSQL connection to their port).
@@ -65,6 +68,14 @@ fn connection_string(cfg: &AppConfig) -> Result<String> {
     }
     let host = if cfg.db_host.trim().eq_ignore_ascii_case("localhost") { "127.0.0.1" } else { cfg.db_host.trim() };
     if cfg.model_source == crate::config::ModelSource::SqlServer {
+        // No user: Windows authentication, as in Compass's own connection (LC-261).
+        if cfg.db_user.trim().is_empty() {
+            return Ok(format!(
+                "{db} --- DBType=1;Connect=Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog={db};Data Source={host},{port};LazyLoad=1;",
+                db = cfg.db_name,
+                port = cfg.db_port,
+            ));
+        }
         return Ok(format!(
             "{db} --- DBType=1;Connect=Provider=SQLOLEDB.1;Password={pwd};Persist Security Info=True;User ID={user};Initial Catalog={db};Data Source={host},{port};LazyLoad=1;",
             db = cfg.db_name,
@@ -83,6 +94,21 @@ fn connection_string(cfg: &AppConfig) -> Result<String> {
         user = cfg.db_user,
         pwd = cfg.db_password,
     ))
+}
+
+/// Whether EA's connection text is for the kind of database of the model (by its `DBType`; text without it is kept).
+fn ea_conn_matches(conn: &str, source: crate::config::ModelSource) -> bool {
+    use crate::config::ModelSource::*;
+    let Some(t) = conn.split(';').find_map(|p| p.split_once('=').filter(|(k, _)| k.trim().rsplit(' ').next().is_some_and(|k| k.eq_ignore_ascii_case("DBType"))).map(|(_, v)| v.trim().to_string())) else {
+        return true;
+    };
+    match source {
+        MySql => t == "0",
+        SqlServer => t == "1",
+        Oracle => t == "3",
+        Postgres => t == "4",
+        File => false,
+    }
 }
 
 /// After this many minutes without calls the persistent EA session is closed (releasing the license and memory).
@@ -341,6 +367,29 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::path::Path;
+
+    /// LC-261: a PostgreSQL ea.conn left from an earlier model is not used for SQL Server; no user = Windows authentication.
+    #[test]
+    fn ea_conn_of_another_database_is_not_used() {
+        use crate::config::ModelSource;
+        let pg = "ea1 --- DBType=4;Connect=Provider=SSDB;SRC=10.0.0.1,5432@eapx;UID=u;PWD=p;";
+        assert!(ea_conn_matches(pg, ModelSource::Postgres));
+        assert!(!ea_conn_matches(pg, ModelSource::SqlServer));
+        assert!(ea_conn_matches("ea_model --- DBType=0;Connect=Provider=MSDASQL.1;Data Source=x;", ModelSource::MySql));
+        assert!(ea_conn_matches("no type here", ModelSource::Oracle));
+        let dir = std::env::temp_dir().join(format!("loonar-lc261-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("app.properties"), format!("model.source=sqlserver
+db.host=localhost
+db.port=1433
+db.name=ea_lab
+db.user=
+ea.conn={pg}
+")).unwrap();
+        let cfg = AppConfig::load(&dir.join("app.properties")).unwrap();
+        let c = connection_string(&cfg).unwrap();
+        assert!(c.contains("DBType=1") && c.contains("Integrated Security=SSPI") && c.contains("127.0.0.1,1433") && !c.contains("User ID"), "{c}");
+    }
 
     /// LC-228: a message box of the background EA (here "File not found") stops the job within seconds, with its
     /// text, instead of after the time limit. `cargo test background_box_stops_job -- --ignored --nocapture`
