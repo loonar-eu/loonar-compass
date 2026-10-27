@@ -299,7 +299,7 @@ Set-WebConfigurationProperty -PSPath $p -Filter system.webServer/proxy -Name tim
   <tr><td><code>policy.jira_via_hub</code>, <code>confluence_via_hub</code></td><td>Jira/Confluence via le compte de service du hub. Un lecteur (viewer) peut seulement lire  chaque modification est auditée.</td></tr>
   <tr><td><code>policy.min_approval</code></td><td>Le mode de validation le plus faible autorisé dans Compass pour les écritures dans le modèle (<code>ask</code> est le plus strict).</td></tr>
   <tr><td><code>policy.web_access</code>, <code>web_allowed_domains</code></td><td>Si l'assistant peut effectuer des recherches sur le web ou lire des pages, et depuis quels domaines.</td></tr>
-  <tr><td><code>policy.update_check</code></td><td>Si Compass vérifie une fois par jour sur GitHub la présence d'une nouvelle version.</td></tr>
+  <tr><td><code>policy.update_check</code></td><td>Si Compass vérifie toutes les heures sur GitHub la présence d'une nouvelle version.</td></tr>
 </table>
 <p>Les administrateurs modifient ensuite la stratégie dans l'onglet <b>Team policy</b> de la vue web, et la consommation par personne se trouve dans <b>Users → AI usage</b>.</p>
 
