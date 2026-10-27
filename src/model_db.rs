@@ -76,7 +76,10 @@ fn pick_driver(source: crate::config::ModelSource, installed: &[String]) -> Opti
 /// the password is always added from the secret.
 pub fn odbc_connection_string(cfg: &AppConfig) -> Result<String> {
     use crate::config::{ModelSource, SslMode};
-    let password = odbc_value(&cfg.db_password);
+    // Oracle's ODBC driver does not take {braced} values: a braced user or password is sent with the braces
+    // (ORA-01017). It takes the password in double quotes (an Oracle quoted password) and the user as it is.
+    let oracle = cfg.model_source == ModelSource::Oracle;
+    let password = if oracle { format!("\"{}\"", cfg.db_password) } else { odbc_value(&cfg.db_password) };
     if !cfg.db_odbc.trim().is_empty() {
         let base = cfg.db_odbc.trim().trim_end_matches(';');
         return Ok(if cfg.db_password.is_empty() { format!("{base};") } else { format!("{base};PWD={password};") });
@@ -94,7 +97,7 @@ pub fn odbc_connection_string(cfg: &AppConfig) -> Result<String> {
             format!("Driver={{{driver}}};Server={server};Database={};{login}{tls}APP=Loonar Compass;", odbc_value(&cfg.db_name))
         }
         ModelSource::MySql => format!("Driver={{{driver}}};Server={};Port={};Database={};User={user};Password={password};", cfg.db_host, cfg.db_port, odbc_value(&cfg.db_name)),
-        _ => format!("Driver={{{driver}}};DBQ={}:{}/{};UID={user};PWD={password};", cfg.db_host, cfg.db_port, cfg.db_name),
+        _ => format!("Driver={{{driver}}};DBQ={}:{}/{};UID={};PWD={password};", cfg.db_host, cfg.db_port, cfg.db_name, cfg.db_user.trim()),
     })
 }
 
@@ -164,6 +167,95 @@ fn replace_outside_literals(sql: &str, from: &str, to: &str) -> String {
     out
 }
 
+/// Oracle: `coalesce(x, '')` → `coalesce(x, null)`-equivalent without the '' (Oracle's '' is NULL anyway). A '' is
+/// a CHAR, so with a CLOB column (t_object.note, t_package.notes, t_diagram.notes …) it fails with ORA-00932
+/// "expected CLOB got CHAR". `coalesce(a, '')` becomes `(a)`, `coalesce(a, b, '')` becomes `coalesce(a, b)`.
+fn oracle_coalesce_empty(sql: &str) -> String {
+    let lower = sql.to_ascii_lowercase();
+    let bytes = sql.as_bytes();
+    let mut out = String::with_capacity(sql.len());
+    let (mut i, mut quoted) = (0usize, false);
+    while i < sql.len() {
+        let c = bytes[i];
+        if c == b'\'' {
+            quoted = !quoted;
+        }
+        let word_start = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
+        if !quoted && word_start && lower[i..].starts_with("coalesce(") {
+            let open = i + "coalesce".len();
+            // The matching parenthesis and the top-level commas inside.
+            let (mut depth, mut q2, mut j, mut commas, mut close) = (0i32, false, open, Vec::new(), None);
+            while j < sql.len() {
+                match bytes[j] {
+                    b'\'' => q2 = !q2,
+                    b'(' if !q2 => depth += 1,
+                    b')' if !q2 => {
+                        depth -= 1;
+                        if depth == 0 {
+                            close = Some(j);
+                            break;
+                        }
+                    }
+                    b',' if !q2 && depth == 1 => commas.push(j),
+                    _ => {}
+                }
+                j += 1;
+            }
+            if let (Some(close), Some(&last)) = (close, commas.last()) {
+                if sql[last + 1..close].trim() == "''" {
+                    let inner = oracle_coalesce_empty(&sql[open + 1..last]);
+                    if commas.len() == 1 {
+                        out.push_str(&format!("({inner})"));
+                    } else {
+                        out.push_str(&format!("coalesce({inner})"));
+                    }
+                    i = close + 1;
+                    continue;
+                }
+            }
+        }
+        let ch = sql[i..].chars().next().unwrap();
+        out.push(ch);
+        i += ch.len_utf8();
+    }
+    out
+}
+
+/// Oracle allows at most 1000 values in an IN list (ORA-01795); a list of tuples has no such limit, so
+/// `col in (1,2,…)` with more than 1000 numbers becomes `(col, 0) in ((1,0),(2,0),…)`.
+fn oracle_long_in_lists(sql: &str) -> String {
+    let lower = sql.to_ascii_lowercase();
+    let mut out = String::with_capacity(sql.len());
+    let (mut i, mut quoted, mut copied) = (0usize, false, 0usize);
+    let bytes = sql.as_bytes();
+    while i < sql.len() {
+        if bytes[i] == b'\'' {
+            quoted = !quoted;
+        }
+        if !quoted && sql.is_char_boundary(i) && lower[i..].starts_with(" in (") {
+            let start = i + " in (".len();
+            if let Some(len) = sql[start..].find(')') {
+                let list = &sql[start..start + len];
+                let values: Vec<&str> = list.split(',').map(str::trim).collect();
+                let numeric = values.iter().all(|v| !v.is_empty() && v.chars().all(|c| c.is_ascii_digit() || c == '-'));
+                // The column before " in": letters, digits, _ and . (e.g. o.package_id).
+                let col_start = sql[..i].rfind(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '.')).map_or(0, |p| p + 1);
+                if numeric && values.len() > 1000 && col_start < i {
+                    out.push_str(&sql[copied..col_start]);
+                    let tuples: Vec<String> = values.iter().map(|v| format!("({v},0)")).collect();
+                    out.push_str(&format!("({}, 0) in ({})", &sql[col_start..i], tuples.join(",")));
+                    i = start + len + 1;
+                    copied = i;
+                    continue;
+                }
+            }
+        }
+        i += 1;
+    }
+    out.push_str(&sql[copied..]);
+    out
+}
+
 /// The queries of the assistant and of Compass are written in the PostgreSQL / SQLite way; for SQL Server, MySQL and
 /// Oracle the common differences are translated: WITH RECURSIVE, a LIMIT at the end, || for joining text, ILIKE,
 /// CAST AS VARCHAR on MySQL and a SELECT without FROM on Oracle.
@@ -205,6 +297,12 @@ pub fn portable_sql(source: crate::config::ModelSource, sql: &str) -> String {
             }
         }
         ModelSource::Oracle => {
+            q = oracle_coalesce_empty(&q);
+            // Oracle stores '' as NULL: "x <> ''" is never true and "x = ''" never matches.
+            for (from, to) in [(" <> ''", " is not null"), ("<>''", " is not null"), (" != ''", " is not null"), ("!=''", " is not null"), (" = ''", " is null"), ("=''", " is null")] {
+                q = replace_outside_literals(&q, from, to);
+            }
+            q = oracle_long_in_lists(&q);
             if let Some(n) = limit {
                 q.push_str(&format!(" fetch first {n} rows only"));
             }
@@ -789,6 +887,18 @@ mod odbc_tests {
         assert_eq!(super::pick_driver(ModelSource::SqlServer, &have(&["SQL Server"])).as_deref(), Some("SQL Server"));
         assert_eq!(super::pick_driver(ModelSource::MySql, &have(&["SQL Server"])), None);
         assert_eq!(super::portable_sql(Oracle, "select count(*) limit 3"), "select count(*) fetch first 3 rows only from dual");
+        assert_eq!(
+            super::portable_sql(Oracle, "select coalesce(o.note,'') as c4, coalesce(a, coalesce(b, ''), '') x, coalesce(n, 'x') y, 'coalesce(z,'''')' from t_object o"),
+            "select (o.note) as c4, coalesce(a, (b)) x, coalesce(n, 'x') y, 'coalesce(z,'''')' from t_object o"
+        );
+        assert_eq!(
+            super::portable_sql(Oracle, "select 1 from t_object where coalesce(name,'') <> '' and alias = '' and note='ż'"),
+            "select 1 from t_object where (name) is not null and alias is null and note='ż'"
+        );
+        let many = (1..=1001).map(|n| n.to_string()).collect::<Vec<_>>().join(",");
+        let q = super::portable_sql(Oracle, &format!("select name from t_object o where o.package_id in ({many}) and name = 'Łódź'"));
+        assert!(q.starts_with("select name from t_object o where (o.package_id, 0) in ((1,0),(2,0),") && q.ends_with("(1001,0)) and name = 'Łódź'"), "{q}");
+        assert!(super::portable_sql(Oracle, "select 1 from t where id in (1,2)").contains("id in (1,2)"));
         assert_eq!(super::portable_sql(MySql, "select cast(x as varchar(10)) from t limit 2"), "select cast(x as char(10)) from t limit 2");
         assert_eq!(super::portable_sql(Postgres, "select 1 limit 2;"), "select 1 limit 2");
     }
