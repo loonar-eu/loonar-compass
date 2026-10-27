@@ -506,7 +506,9 @@ then update it as each task starts and ends, so that the last update shows every
 const DOC_RULES: &str = "Documentation: when the user asks for a document or a page (feasibility study, BRD, change description, process description, specification), \
 check whether a template from the <templates> section fits; if so, read it (read_template) and fill its structure with content from the model (db_query, \
 diagrams as ![caption](diagram:ID), impact analysis, operation usage) and from the conversation. Mark whatever you do not know as \"to be completed\" instead of guessing. \
-For Confluence use create_confluence_page, for Word use create_document; publish (publish_confluence) only when explicitly asked. \
+For Confluence use create_confluence_page, for Word use create_document; publish (publish_confluence) only when explicitly asked — \
+a request for a page IN Confluence (\"create a page in Confluence\", \"put it in Confluence\", \"publish\") is such a request: publish right after creating it \
+(the approval card asks the user). \
 When the user shows a sample document and wants a template made from it, save it with save_template.";
 
 /// Rules for memory across conversations (tools memory_save, memory_delete, memory_read).

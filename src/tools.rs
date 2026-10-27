@@ -985,10 +985,30 @@ fn confluence_connection(cfg: &AppConfig) -> Result<crate::confluence::Connectio
 }
 
 /// Publishes or updates a page in Confluence. Diagrams are exported from EA again, so the page shows the current model.
+/// The Markdown source of a page made by create_confluence_page. The model often gives the name without the unique
+/// prefix or with .md instead of .xml (LC-271), so a missing file is looked up by the end of its name (newest first).
+fn page_source(dir: &std::path::Path, page: &str) -> std::path::PathBuf {
+    let stem = page.trim_end_matches(".confluence.xml").trim_end_matches(".confluence.md").trim_end_matches(".xml").trim_end_matches(".md");
+    let exact = dir.join(format!("{stem}.confluence.md"));
+    if exact.is_file() {
+        return exact;
+    }
+    let wanted = format!("{}.confluence.md", stem.to_lowercase());
+    std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy().to_lowercase().ends_with(&wanted))
+        .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok())
+        .map(|e| e.path())
+        .unwrap_or(exact)
+}
+
 fn publish_confluence(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
     let page = input["page"].as_str().context(crate::i18n::tr("missing field 'page' (the .confluence.xml file from create_confluence_page)"))?;
     let page = std::path::Path::new(page.trim()).file_name().context(crate::i18n::tr("page file name"))?.to_string_lossy().to_string();
-    let source_file = ctx.cfg.attachments_dir.join(page.replace(".confluence.xml", ".confluence.md"));
+    let source_file = page_source(&ctx.cfg.attachments_dir, &page);
+    let page = source_file.file_name().map(|n| n.to_string_lossy().replace(".confluence.md", ".confluence.xml")).unwrap_or(page);
     let source = std::fs::read_to_string(&source_file).with_context(|| crate::i18n::fmt("the page source {0} does not exist", &[source_file.display().to_string()]))?;
     let (title_line, markdown) = source.split_once('\n').unwrap_or(("", &source));
     let saved_title = title_line.trim().trim_start_matches(TITLE_MARKER).trim_start_matches(LEGACY_TITLE_MARKER).trim_end_matches("-->").trim().to_string();
@@ -1526,6 +1546,19 @@ fn normalize_stamp(s: &str) -> String {
 mod tests {
     use super::*;
     use std::path::Path;
+
+    /// LC-271: the page source is found also by a name without the unique prefix or with .md.
+    #[test]
+    fn page_source_by_short_name() {
+        let dir = std::env::temp_dir().join(format!("loonar-lc271-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let full = dir.join("0a1b2c_Domena_lista_klas.confluence.md");
+        std::fs::write(&full, "<!-- title: x -->\n# x").unwrap();
+        for given in ["0a1b2c_Domena_lista_klas.confluence.xml", "Domena_lista_klas.confluence.xml", "lista_klas.confluence.md", "LISTA_KLAS"] {
+            assert_eq!(page_source(&dir, given), full, "{given}");
+        }
+        assert_eq!(page_source(&dir, "other.confluence.xml"), dir.join("other.confluence.md"));
+    }
 
     /// The developer's app.properties; without it (CI) the default settings, enough for the tests that refuse before touching a model.
     fn test_config() -> AppConfig {
