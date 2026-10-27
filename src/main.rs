@@ -89,7 +89,7 @@ const MAX_FILES: usize = 5;
 /// the application can do comes from the embedded changelog, so the assistant always describes the current version.
 fn system_prompt(cfg: &AppConfig) -> String {
     format!(
-        "{SYSTEM_PROMPT}\n\n{SAFETY_RULES}\n\n{MODEL_STORE}\n\n{LANGUAGE_RULE}\n\n{MEMORY_RULES}\n\n{memories}\n\n{model_instructions}\n\n{DOC_RULES}\n\n{templates}\n\n\
+        "{SYSTEM_PROMPT}\n\n{SAFETY_RULES}\n\n{MODEL_STORE}\n\n{LANGUAGE_RULE}\n\n{MEMORY_RULES}\n\n{memories}\n\n{model_instructions}\n\n{WORK_RULES}\n\n{DOC_RULES}\n\n{templates}\n\n\
          You are running inside the {app} application, version {version} (a desktop AI assistant for Enterprise Architect). \
          Application owner: {OWNER}, {OWNER_ADDRESS}, {OWNER_CONTACT}. Language model: {model}. User guide of this version: {docs}. \
          Answer questions about yourself, this application, its features and limitations based on the changelog below \
@@ -127,7 +127,7 @@ fn external_tool(name: &str) -> bool {
 fn leaks_rules(answer: &str) -> bool {
     let answer: String = answer.split_whitespace().collect::<Vec<_>>().join(" ");
     let mut hits = 0;
-    for rules in [SAFETY_RULES, MEMORY_RULES, DOC_RULES, SYSTEM_PROMPT] {
+    for rules in [SAFETY_RULES, MEMORY_RULES, WORK_RULES, DOC_RULES, SYSTEM_PROMPT] {
         let words: Vec<&str> = rules.split_whitespace().collect();
         for chunk in words.chunks(14).filter(|c| c.len() == 14) {
             if answer.contains(&chunk.join(" ")) {
@@ -492,6 +492,15 @@ fn questions_form(ui: &mut egui::Ui, questions: &[(String, Vec<String>)], answer
         }
     });
 }
+
+/// When to ask with a form and when to show a plan (LC-267: without these rules smaller models guessed and wrote, or
+/// worked through several steps without a visible plan).
+const WORK_RULES: &str = "Asking and planning: when a request to change the model leaves out something you would otherwise have to guess \
+(which package, the name, the attributes, the notation, the scope), FIRST ask with the ask_user tool and end your answer there; do not prepare \
+any change (ea_write) before the answers come, and never ask clarifying questions as plain text. Reading the model first to offer the right \
+options is fine. When the user asks for work in several steps (e.g. \"in 4 steps\", a numbered list of tasks) or the work clearly has 3 or more \
+steps, call task_list with all tasks pending BEFORE the first of them, then update it as each task starts and ends, so that the last update \
+shows every task done.";
 
 /// Rules for preparing documentation (Word, Confluence, templates).
 const DOC_RULES: &str = "Documentation: when the user asks for a document or a page (feasibility study, BRD, change description, process description, specification), \
