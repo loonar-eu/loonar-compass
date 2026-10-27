@@ -1,0 +1,23 @@
+name: Idea or task
+description: A new function or an improvement.
+labels: [idea]
+body:
+  - type: input
+    id: install
+    attributes:
+      label: Installation id
+      description: In the application, About or Usage statistics → "Installation id" → Copy. It lets us see how you use Compass (anonymous statistics) and weigh the idea.
+      placeholder: 7f3c2b1a-1234-4abc-8def-0123456789ab
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to achieve
+      description: The work you do in Enterprise Architect and what is slow or missing today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How Compass could help

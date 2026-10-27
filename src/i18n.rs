@@ -173,6 +173,7 @@ mod tests {
             include_str!("office.rs"),
             include_str!("pptx.rs"),
             include_str!("ea_api.rs"),
+            include_str!("telemetry.rs"),
             include_str!("claude.rs"),
             include_str!("model_db.rs"),
             include_str!("ops.rs"),
