@@ -15,6 +15,8 @@ pub struct Connection {
     /// Account e-mail (Cloud); empty for a personal access token (Server / Data Center).
     pub user: String,
     pub token: String,
+    /// Client certificate for a server that asks for one besides the token (mTLS).
+    pub identity: Option<reqwest::Identity>,
 }
 
 /// The Jira address must use HTTPS (the token travels with every request); plain HTTP only for a server on this computer.
@@ -95,7 +97,9 @@ impl Connection {
 
     fn client(&self) -> Result<reqwest::blocking::Client> {
         check_base_url(&self.base_url)?;
-        reqwest::blocking::Client::builder().redirect(crate::net::same_origin_redirects()).timeout(Duration::from_secs(60)).build().context(crate::i18n::tr("HTTP client"))
+        let builder = reqwest::blocking::Client::builder().redirect(crate::net::same_origin_redirects()).timeout(Duration::from_secs(60));
+        let builder = match &self.identity { Some(identity) => builder.identity(identity.clone()), None => builder };
+        builder.build().context(crate::i18n::tr("HTTP client"))
     }
 
     fn url(&self, path: &str) -> String {
@@ -365,7 +369,7 @@ mod tests {
     use super::*;
 
     fn connection(mock: &mock::Mock, cloud: bool, token: &str) -> Connection {
-        Connection { base_url: mock.url.clone(), user: if cloud { "architect@example.com".into() } else { String::new() }, token: token.into() }
+        Connection { base_url: mock.url.clone(), user: if cloud { "architect@example.com".into() } else { String::new() }, token: token.into(), identity: None }
     }
 
     #[test]

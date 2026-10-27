@@ -1731,7 +1731,7 @@ impl Hub {
         }
         crate::jira::check_base_url(&url).map_err(|e| deny(500, e.to_string()))?;
         let token = crate::config::secrets::get(crate::config::secrets::JIRA_TOKEN).map_err(|e| HttpError(500, format!("{e:#}")))?;
-        let connection = crate::jira::Connection { base_url: url, user: j["user"].as_str().unwrap_or("").trim().to_string(), token };
+        let connection = crate::jira::Connection { base_url: url, user: j["user"].as_str().unwrap_or("").trim().to_string(), token, identity: None };
         let labels = vec!["compass-hub".to_string()];
         connection
             .create_issue(&project, j["issue_type"].as_str().unwrap_or("Task"), summary, description, &labels, None)
@@ -1749,7 +1749,7 @@ impl Hub {
         crate::confluence::check_base_url(&url).map_err(|e| deny(500, e.to_string()))?;
         let token = crate::config::secrets::get(crate::config::secrets::CONFLUENCE_TOKEN).map_err(|e| HttpError(500, format!("{e:#}")))?;
         let parent = c["parent"].as_str().map(|p| p.trim().to_string()).filter(|p| !p.is_empty());
-        Ok((crate::confluence::Connection { base_url: url, user: c["user"].as_str().unwrap_or("").trim().to_string(), token }, space, parent))
+        Ok((crate::confluence::Connection { base_url: url, user: c["user"].as_str().unwrap_or("").trim().to_string(), token, identity: None }, space, parent))
     }
 }
 

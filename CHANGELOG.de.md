@@ -2,6 +2,10 @@
 
 Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen Loonar EA Assistant).
 
+## Version 0.9.1 (2026-10-27)
+
+- **Jira und Confluence mit Client-Zertifikat:** Firmenserver, die zusätzlich zum Token ein Client-Zertifikat (mTLS) verlangen, funktionieren jetzt mit Compass. Auf den Karten Jira und Confluence in den Einstellungen gibt es die Felder „Client-Zertifikat“ (Pfad zu einer .p12/.pfx- oder PEM-Datei) und „Zertifikatspasswort“ (in der Windows-Anmeldeinformationsverwaltung gespeichert). Ohne Zertifikat schloss ein solcher Server die Verbindung („Eine vorhandene Verbindung wurde vom Remotehost geschlossen“).
+
 ## Version 0.9 (2026-10-27)
 
 Anmeldung mit dem Firmenkonto am Hub, Modelle auf SQL Server, MySQL und Oracle, die Modellierungsanweisungen des Teams im Repository, Dokumente in PDF, PowerPoint, Visio und Excel, Präsentationen, SharePoint, Wächter, die ein Löschen stoppen, und ein umsichtigerer Assistent: Rückfragen, ein Plan, Sub-Agenten und Schutz vor versteckten Anweisungen.

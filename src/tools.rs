@@ -864,7 +864,7 @@ fn ea_script(input: &Value, ctx: &ToolContext) -> Result<String> {
 /// Connection to Jira from the settings, or through the hub when the team policy says so.
 fn jira(cfg: &AppConfig) -> Result<crate::jira::Connection> {
     if let Some((hub, token)) = crate::hub::via_hub(cfg, "jira") {
-        return Ok(crate::jira::Connection { base_url: format!("{hub}/proxy/jira"), user: String::new(), token });
+        return Ok(crate::jira::Connection { base_url: format!("{hub}/proxy/jira"), user: String::new(), token, identity: None });
     }
     if cfg.jira_url.trim().is_empty() {
         bail!("{}", crate::i18n::tr("Jira is not configured: enter its address and token in Settings → Jira"));
@@ -872,10 +872,10 @@ fn jira(cfg: &AppConfig) -> Result<crate::jira::Connection> {
     // Tests talk to a Jira imitation with a test token (never the user's).
     #[cfg(test)]
     if let Ok(token) = std::env::var("LOONAR_TEST_JIRA_TOKEN") {
-        return Ok(crate::jira::Connection { base_url: cfg.jira_url.clone(), user: cfg.jira_user.clone(), token });
+        return Ok(crate::jira::Connection { base_url: cfg.jira_url.clone(), user: cfg.jira_user.clone(), token, identity: None });
     }
     let token = crate::config::secrets::get(crate::config::secrets::JIRA_TOKEN).context(crate::i18n::tr("no Jira token in the settings"))?;
-    Ok(crate::jira::Connection { base_url: cfg.jira_url.clone(), user: cfg.jira_user.clone(), token })
+    Ok(crate::jira::Connection { base_url: cfg.jira_url.clone(), user: cfg.jira_user.clone(), token, identity: crate::client_cert::jira(cfg)? })
 }
 
 /// New Jira issue: always with the user's consent (the content leaves the application).
@@ -975,13 +975,13 @@ fn create_confluence_page(input: &Value, ctx: &ToolContext) -> Result<ToolOutput
 
 fn confluence_connection(cfg: &AppConfig) -> Result<crate::confluence::Connection> {
     if let Some((hub, token)) = crate::hub::via_hub(cfg, "confluence") {
-        return Ok(crate::confluence::Connection { base_url: format!("{hub}/proxy/confluence"), user: String::new(), token });
+        return Ok(crate::confluence::Connection { base_url: format!("{hub}/proxy/confluence"), user: String::new(), token, identity: None });
     }
     if cfg.confluence_url.trim().is_empty() {
         bail!("{}", crate::i18n::tr("Confluence is not configured: complete Settings → Confluence (address, space, token)"));
     }
     let token = crate::config::secrets::get(crate::config::secrets::CONFLUENCE_TOKEN).context(crate::i18n::tr("no Confluence token in the settings"))?;
-    Ok(crate::confluence::Connection { base_url: cfg.confluence_url.clone(), user: cfg.confluence_user.clone(), token })
+    Ok(crate::confluence::Connection { base_url: cfg.confluence_url.clone(), user: cfg.confluence_user.clone(), token, identity: crate::client_cert::confluence(cfg)? })
 }
 
 /// Publishes or updates a page in Confluence. Diagrams are exported from EA again, so the page shows the current model.

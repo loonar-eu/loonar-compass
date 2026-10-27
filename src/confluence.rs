@@ -265,6 +265,8 @@ pub struct Connection {
     /// Empty = personal access token (PAT, Confluence Data Center/Server); e-mail = Confluence Cloud (e-mail + API token).
     pub user: String,
     pub token: String,
+    /// Client certificate for a server that asks for one besides the token (mTLS).
+    pub identity: Option<reqwest::Identity>,
 }
 
 /// The Confluence address must use HTTPS (the token travels with every request); plain HTTP is accepted only
@@ -302,7 +304,9 @@ pub struct ExistingPage {
 impl Connection {
     fn client(&self) -> Result<reqwest::blocking::Client> {
         check_base_url(&self.base_url)?;
-        reqwest::blocking::Client::builder().redirect(crate::net::same_origin_redirects()).timeout(Duration::from_secs(60)).build().context(crate::i18n::tr("HTTP client"))
+        let builder = reqwest::blocking::Client::builder().redirect(crate::net::same_origin_redirects()).timeout(Duration::from_secs(60));
+        let builder = match &self.identity { Some(identity) => builder.identity(identity.clone()), None => builder };
+        builder.build().context(crate::i18n::tr("HTTP client"))
     }
 
     /// The page that publishing would update: the given id, or a page with the same title in the space.
@@ -544,7 +548,7 @@ mod tests {
                 }
             }
         });
-        let connection = super::Connection { base_url: format!("http://127.0.0.1:{port}"), user: String::new(), token: "pat-123".into() };
+        let connection = super::Connection { base_url: format!("http://127.0.0.1:{port}"), user: String::new(), token: "pat-123".into(), identity: None };
         let pictures = || vec![super::Attachment { file_name: "Diagram-1.png".into(), png: vec![137, 80, 78, 71] }];
         let (id, url, created) = connection.publish("TEST", "Test page", Some("500"), None, "<p>a</p>", &pictures()).unwrap();
         assert_eq!((id.as_str(), created), ("1001", true));

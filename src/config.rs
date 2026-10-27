@@ -232,10 +232,14 @@ pub struct AppConfig {
     pub confluence_user: String,
     pub confluence_space: String,
     pub confluence_parent: String,
+    /// Client certificate (mTLS) for a company Confluence that asks for one: a .p12/.pfx or PEM file (LC-279).
+    pub confluence_client_cert: String,
     /// Jira: address, account e-mail (Cloud; empty for a personal access token) and the default project key.
     pub jira_url: String,
     pub jira_user: String,
     pub jira_project: String,
+    /// Client certificate (mTLS) for a company Jira that asks for one: a .p12/.pfx or PEM file (LC-279).
+    pub jira_client_cert: String,
     /// Team hub: address and the id of this model among the hub sources (for the audit trail).
     pub hub_url: String,
     pub hub_source: String,
@@ -506,9 +510,11 @@ impl AppConfig {
             confluence_user: get_or("confluence.user", ""),
             confluence_space: get_or("confluence.space", ""),
             confluence_parent: get_or("confluence.parent", ""),
+            confluence_client_cert: get_or("confluence.client_cert", ""),
             jira_url: get_or("jira.url", ""),
             jira_user: get_or("jira.user", ""),
             jira_project: get_or("jira.project", ""),
+            jira_client_cert: get_or("jira.client_cert", ""),
             hub_url: get_or("hub.url", ""),
             hub_source: get_or("hub.source", ""),
             miro_board: get_or("miro.board", ""),
@@ -601,6 +607,9 @@ pub mod secrets {
     pub const CONFLUENCE_TOKEN: &str = "confluence_token";
     pub const MIRO_TOKEN: &str = "miro_token";
     pub const JIRA_TOKEN: &str = "jira_token";
+    /// Passwords of the client certificates (.p12/.pfx) of Jira and Confluence.
+    pub const JIRA_CERT_PASSWORD: &str = "jira_cert_password";
+    pub const CONFLUENCE_CERT_PASSWORD: &str = "confluence_cert_password";
     /// The client secret of the app registration for SharePoint (Microsoft Graph).
     pub const SHAREPOINT_SECRET: &str = "sharepoint_client_secret";
     /// The client secret for OAuth2 sign-in to the AI service.
@@ -609,7 +618,7 @@ pub mod secrets {
     pub const OIDC_CLIENT_SECRET: &str = "oidc_client_secret";
     pub const HUB_TOKEN: &str = "hub_token";
     /// Every secret the application stores (removed together on uninstall).
-    pub const ALL: [&str; 11] = [CLAUDE_API_KEY, OPENAI_API_KEY, EA_PASSWORD, DB_PASSWORD, CONFLUENCE_TOKEN, MIRO_TOKEN, JIRA_TOKEN, HUB_TOKEN, SHAREPOINT_SECRET, AI_OAUTH_SECRET, OIDC_CLIENT_SECRET];
+    pub const ALL: [&str; 13] = [CLAUDE_API_KEY, OPENAI_API_KEY, EA_PASSWORD, DB_PASSWORD, CONFLUENCE_TOKEN, MIRO_TOKEN, JIRA_TOKEN, HUB_TOKEN, SHAREPOINT_SECRET, AI_OAUTH_SECRET, OIDC_CLIENT_SECRET, JIRA_CERT_PASSWORD, CONFLUENCE_CERT_PASSWORD];
 
     /// Secrets from the environment instead of Credential Manager: the team hub as a service or in a container.
     static FROM_ENVIRONMENT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);

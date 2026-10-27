@@ -5,6 +5,7 @@
 //! Attachments: drag files from Explorer and the browser; limit 10 MB per file, 5 files per message.
 
 mod check;
+mod client_cert;
 mod claude;
 mod cmdb;
 mod auth;
@@ -1112,10 +1113,14 @@ struct Form {
     confluence_space: String,
     confluence_parent: String,
     confluence_token: String,
+    confluence_client_cert: String,
+    confluence_cert_password: String,
     jira_url: String,
     jira_user: String,
     jira_project: String,
     jira_token: String,
+    jira_client_cert: String,
+    jira_cert_password: String,
     sharepoint_site: String,
     sharepoint_library: String,
     sharepoint_tenant: String,
@@ -1163,9 +1168,11 @@ impl Form {
             confluence_user: c.confluence_user.clone(),
             confluence_space: c.confluence_space.clone(),
             confluence_parent: c.confluence_parent.clone(),
+            confluence_client_cert: c.confluence_client_cert.clone(),
             jira_url: c.jira_url.clone(),
             jira_user: c.jira_user.clone(),
             jira_project: c.jira_project.clone(),
+            jira_client_cert: c.jira_client_cert.clone(),
             claude_url: c.claude_url.clone(),
             ai_oauth_token_url: c.ai_oauth_token_url.clone(),
             ai_oauth_client_id: c.ai_oauth_client_id.clone(),
@@ -2787,9 +2794,14 @@ impl App {
                 updates.push(("jira.url", url));
                 updates.push(("jira.user", f.jira_user.trim().to_string()));
                 updates.push(("jira.project", f.jira_project.trim().to_uppercase()));
+                updates.push(("jira.client_cert", f.jira_client_cert.trim().trim_matches('"').to_string()));
                 if !f.jira_token.is_empty() {
                     secrets::set(secrets::JIRA_TOKEN, f.jira_token.trim())?;
                     self.form.jira_token.clear();
+                }
+                if !f.jira_cert_password.is_empty() {
+                    secrets::set(secrets::JIRA_CERT_PASSWORD, &f.jira_cert_password)?;
+                    self.form.jira_cert_password.clear();
                 }
             }
             GROUP_CONFLUENCE => {
@@ -2804,6 +2816,11 @@ impl App {
                 if !f.confluence_token.is_empty() {
                     secrets::set(secrets::CONFLUENCE_TOKEN, f.confluence_token.trim())?;
                     self.form.confluence_token.clear();
+                }
+                updates.push(("confluence.client_cert", f.confluence_client_cert.trim().trim_matches('"').to_string()));
+                if !f.confluence_cert_password.is_empty() {
+                    secrets::set(secrets::CONFLUENCE_CERT_PASSWORD, &f.confluence_cert_password)?;
+                    self.form.confluence_cert_password.clear();
                 }
             }
             _ => {
@@ -3554,6 +3571,8 @@ impl App {
                 row_secret(ui, crate::i18n::tr("Token"), &mut self.form.confluence_token, secrets::exists(secrets::CONFLUENCE_TOKEN));
                 row_hint(ui, crate::i18n::tr("Space key"), &mut self.form.confluence_space, crate::i18n::tr("e.g. ARCH"));
                 row_hint(ui, crate::i18n::tr("Parent page ID"), &mut self.form.confluence_parent, crate::i18n::tr("optional, e.g. 123456789"));
+                row_hint(ui, crate::i18n::tr("Client certificate"), &mut self.form.confluence_client_cert, crate::i18n::tr("only if the server asks for one: path to a .p12/.pfx file"));
+                row_secret(ui, crate::i18n::tr("Certificate password"), &mut self.form.confluence_cert_password, secrets::exists(secrets::CONFLUENCE_CERT_PASSWORD));
             });
             self.group_footer(ui, &ctx2, GROUP_CONFLUENCE, crate::i18n::tr("Save and test Confluence connection"));
         });
@@ -3569,6 +3588,8 @@ impl App {
                 row_hint(ui, crate::i18n::tr("Email (Cloud only)"), &mut self.form.jira_user, crate::i18n::tr("leave empty for a personal access token (PAT)"));
                 row_secret(ui, crate::i18n::tr("Token"), &mut self.form.jira_token, secrets::exists(secrets::JIRA_TOKEN));
                 row_hint(ui, crate::i18n::tr("Default project key"), &mut self.form.jira_project, crate::i18n::tr("e.g. ARCH"));
+                row_hint(ui, crate::i18n::tr("Client certificate"), &mut self.form.jira_client_cert, crate::i18n::tr("only if the server asks for one: path to a .p12/.pfx file"));
+                row_secret(ui, crate::i18n::tr("Certificate password"), &mut self.form.jira_cert_password, secrets::exists(secrets::JIRA_CERT_PASSWORD));
             });
             self.group_footer(ui, &ctx2, GROUP_JIRA, crate::i18n::tr("Save and test Jira connection"));
         });
@@ -4638,7 +4659,7 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
                 return Ok(crate::i18n::tr("Saved. Without a Jira address the assistant does not use Jira.").into());
             }
             let token = secrets::get(secrets::JIRA_TOKEN).context(crate::i18n::tr("no Jira token in the settings"))?;
-            let connection = jira::Connection { base_url: cfg.jira_url.clone(), user: cfg.jira_user.clone(), token };
+            let connection = jira::Connection { base_url: cfg.jira_url.clone(), user: cfg.jira_user.clone(), token, identity: client_cert::jira(cfg)? };
             if cfg.jira_project.trim().is_empty() {
                 bail!("{}", crate::i18n::tr("enter the key of the default Jira project (e.g. ARCH)"));
             }
@@ -4650,7 +4671,7 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
                 return Ok(crate::i18n::tr("Saved. Without a Confluence address, pages are prepared for you to paste into the source editor.").into());
             }
             let token = secrets::get(secrets::CONFLUENCE_TOKEN).context(crate::i18n::tr("no Confluence token"))?;
-            let connection = confluence::Connection { base_url: cfg.confluence_url.clone(), user: cfg.confluence_user.clone(), token };
+            let connection = confluence::Connection { base_url: cfg.confluence_url.clone(), user: cfg.confluence_user.clone(), token, identity: client_cert::confluence(cfg)? };
             if cfg.confluence_space.trim().is_empty() {
                 bail!("{}", crate::i18n::fmt("enter the key of the space (e.g. ARCH) the assistant will publish to", &[]));
             }
