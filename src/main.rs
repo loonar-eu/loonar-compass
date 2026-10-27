@@ -396,6 +396,36 @@ fn task_list_text(input: &Value) -> (String, String) {
 }
 
 /// The tool for clarifying questions: a form in the chat instead of questions buried in the text.
+/// What the assistant cannot do, by kind (LC-289): counted in the statistics; the user can request it.
+const GAP_KINDS: [&str; 8] = ["source_code", "file_format", "integration", "diagram_type", "model_operation", "permissions", "data_source", "other"];
+
+fn report_gap_definition() -> Value {
+    json!({
+        "name": "report_gap",
+        "description": "Call it when the user asks for something none of your tools can do (a missing capability, not a tool that merely failed or a question you can answer): pick the kind, then tell the user briefly and honestly what you cannot do and what you can do instead. The user then sees a button under your answer to request the missing feature.",
+        "input_schema": {
+            "type": "object",
+            "properties": { "kind": { "type": "string", "enum": GAP_KINDS } },
+            "required": ["kind"]
+        }
+    })
+}
+
+/// The name of a kind of missing capability for the user.
+fn gap_label(kind: &str) -> String {
+    match kind {
+        "source_code" => crate::i18n::tr("source code"),
+        "file_format" => crate::i18n::tr("a file format"),
+        "integration" => crate::i18n::tr("an integration with another system"),
+        "diagram_type" => crate::i18n::tr("a kind of diagram"),
+        "model_operation" => crate::i18n::tr("an operation on the model"),
+        "permissions" => crate::i18n::tr("access rights"),
+        "data_source" => crate::i18n::tr("a source of data"),
+        _ => crate::i18n::tr("something else"),
+    }
+    .to_string()
+}
+
 fn ask_user_definition() -> Value {
     json!({
         "name": "ask_user",
@@ -1309,6 +1339,8 @@ struct Contact {
     include_context: bool,
     /// Send by e-mail (private) instead of the public issue on GitHub.
     via_email: bool,
+    /// The report is a feature request (from "💡 Request this feature").
+    feature: bool,
     /// The address of the issue created by the last report.
     issue_url: String,
     /// Photos attached to the report and their thumbnails (in the same order).
@@ -1351,6 +1383,11 @@ struct App {
     hub_signin_status: String,
     /// Usage statistics: the view and the first-start notice.
     stats: Stats,
+    /// A missing capability reported in the answer being made, and the answers with one (by their time).
+    pending_gap: Option<String>,
+    gap_marks: HashMap<String, String>,
+    /// Answers already rated (by their time): true = 👍.
+    ratings: HashMap<String, bool>,
     /// Moving memory and templates to the new language: whether it is pending, the result in progress, the last message.
     relang_pending: bool,
     relang_rx: Option<mpsc::Receiver<Result<String, String>>>,
@@ -1503,6 +1540,8 @@ enum WorkerEvent {
     /// The worker thread has taken this many user-added messages from the queue.
     Consumed(usize),
     Approval(ApprovalRequest),
+    /// The assistant reported a missing capability (report_gap): the kind.
+    Gap(String),
     Done,
     Failed(String),
 }
@@ -1582,6 +1621,9 @@ impl App {
             hub_signin_status: String::new(),
             contact: Contact { technical: true, include_context: true, ..Default::default() },
             stats: Stats { notice_open: telemetry_notice, ..Default::default() },
+            pending_gap: None,
+            gap_marks: HashMap::new(),
+            ratings: HashMap::new(),
             relang_pending: false,
             relang_rx: None,
             relang_message: String::new(),
@@ -2538,12 +2580,17 @@ impl App {
                     }
                 }
                 Ok(WorkerEvent::Consumed(n)) => self.consumed += n,
+                Ok(WorkerEvent::Gap(kind)) => self.pending_gap = Some(kind),
                 Ok(WorkerEvent::Approval(request)) => {
                     self.pending_approval = Some(request);
                     self.status = crate::i18n::tr("The assistant is waiting for your approval to save.").into();
                 }
                 Ok(WorkerEvent::Done) => {
                     ea_ui::output(&format!("■ {}", crate::i18n::fmt("Answer ready: \"{0}\"", &[shown_title(&self.session.title).to_string()])));
+                    // The missing capability belongs to the answer just made: its button shows under it.
+                    if let (Some(kind), Some(answer)) = (self.pending_gap.take(), self.session.messages.iter().rev().find(|m| m.role == "assistant")) {
+                        self.gap_marks.insert(answer.created.clone(), kind);
+                    }
                     finished = true;
                     break;
                 }
@@ -4101,6 +4148,7 @@ impl App {
                         technical: c.technical.then(|| technical_public.clone()),
                         private: Some(private).filter(|p| !p.trim().is_empty()),
                         images: c.files.clone(),
+                        feature: c.feature,
                     };
                     let (tx, rx) = mpsc::channel();
                     let wake = ctx.clone();
@@ -4124,6 +4172,26 @@ impl App {
         if !c.issue_url.is_empty() {
             ui.hyperlink_to(&c.issue_url, &c.issue_url);
         }
+    }
+
+    /// "💡 Request this feature" under an answer: the report form as a feature request, with the kind of the missing
+    /// capability; the question goes along only if the user leaves "include the conversation" on (LC-289).
+    fn request_feature(&mut self, index: usize, kind: &str) {
+        let messages = &self.session.messages;
+        let question = messages[..index.min(messages.len())].iter().rev().find(|m| m.role == "user").map(|m| m.text.clone()).unwrap_or_default();
+        let c = &mut self.contact;
+        c.context = format!("{} {}\n{}\n{}", crate::i18n::tr("Missing capability:"), gap_label(kind), crate::i18n::tr("Question:"), question.trim()).chars().take(10_000).collect();
+        c.include_context = false;
+        c.via_email = false;
+        c.feature = true;
+        c.subject = crate::i18n::fmt("Feature request: {0}", &[gap_label(kind)]);
+        c.body = crate::i18n::tr("What I needed: ").to_string();
+        c.status.clear();
+        c.issue_url.clear();
+        c.files.clear();
+        c.thumbnails.clear();
+        telemetry::event(&format!("feature_request_{kind}"));
+        self.view = View::Report;
     }
 
     /// "Report a problem with this answer" in the chat: the report with the question, the answer and its steps
@@ -4154,6 +4222,7 @@ impl App {
         c.context = context.chars().take(30_000).collect();
         c.include_context = true;
         c.via_email = false;
+        c.feature = false;
         c.subject = crate::i18n::tr("Wrong answer of the assistant").into();
         c.body.clear();
         c.status.clear();
@@ -4173,6 +4242,11 @@ impl App {
         if !self.stats.started {
             self.stats.started = true;
             telemetry::event(if ea::in_ea_tab() { "session_ea_tab" } else { "session_standalone" });
+            let cfg_for_ping = self.cfg.clone();
+            std::thread::spawn(move || {
+                let team_off = cfg_for_ping.as_ref().and_then(hub::team_policy).is_some_and(|p| p["telemetry"] == serde_json::Value::Bool(false));
+                telemetry::start_ping(team_off);
+            });
             if let Some(cfg) = &self.cfg {
                 let mcp = std::fs::read_to_string(cfg.base_dir.join("mcp_servers.json"))
                     .ok()
@@ -5462,7 +5536,10 @@ fn run_turn(
     cancel: &AtomicBool,
     emit: &dyn Fn(WorkerEvent),
 ) -> anyhow::Result<()> {
-    run_turn_with(cfg, messages, approver, inbox, cancel, emit, None)
+    let result = run_turn_with(cfg, messages, approver, inbox, cancel, emit, None);
+    // One record of the task: what the request turned into and how it ended (LC-288).
+    telemetry::end_task(result.is_ok(), cancel.load(std::sync::atomic::Ordering::Relaxed));
+    result
 }
 
 /// One answer of the assistant; `allowed` limits the tools (an assistant nobody watches gets reading tools only).
@@ -5515,6 +5592,7 @@ fn run_turn_with(
         None => {
             if let Some(list) = tools.as_array_mut() {
                 list.push(ask_user_definition());
+                list.push(report_gap_definition());
                 list.push(task_list_definition());
                 list.push(delegate_definition());
                 // Calculations and analysis in Anthropic's sandbox: only when switched on, only with Claude.
@@ -5707,6 +5785,11 @@ fn run_turn_with(
                         Err(reason) => Err(anyhow::anyhow!(reason)),
                     }
                 }
+            } else if name == "report_gap" {
+                let kind = block["input"]["kind"].as_str().filter(|k| GAP_KINDS.contains(k)).unwrap_or("other").to_string();
+                telemetry::gap(&kind);
+                emit(WorkerEvent::Gap(kind));
+                Ok(tools::ToolOutput::from("Recorded. Now tell the user briefly what you cannot do and what you can do instead; a button under your answer lets them request the feature.".to_string()))
             } else if name == "ask_user" {
                 // The questions go to the chat as a form; the user's answers come as the next message.
                 match questions_message(&block["input"]) {
@@ -7220,6 +7303,9 @@ impl eframe::App for App {
                 let mut answers_to_send: Option<String> = None;
                 // "Report a problem with this answer" under an answer: the index of the message.
                 let mut report_answer: Option<usize> = None;
+                // "💡 Request this feature" under an answer with a missing capability; ratings of answers.
+                let mut feature_request: Option<(usize, String)> = None;
+                let mut rate: Option<(String, bool, &'static str)> = None;
 
                 let mut open_conn_empty = false;
                 let mut confirm_request = false;
@@ -7433,6 +7519,32 @@ impl eframe::App for App {
                                         ui.label(egui::RichText::new(time).small().color(theme::HINT));
                                         if !is_user {
                                             ui.add_space(8.0);
+                                            match self.ratings.get(&m.created) {
+                                                Some(up) => {
+                                                    ui.label(egui::RichText::new(if *up { "👍" } else { "👎" }).small().color(theme::HINT)).on_hover_text(crate::i18n::tr("Thank you for the rating"));
+                                                }
+                                                None => {
+                                                    if ui.add(egui::Button::new(egui::RichText::new("👍").small()).frame(false)).on_hover_text(crate::i18n::tr("A good answer")).clicked() {
+                                                        rate = Some((m.created.clone(), true, ""));
+                                                    }
+                                                    ui.menu_button(egui::RichText::new("👎").small(), |ui| {
+                                                        for (reason, label) in [("wrong", crate::i18n::tr("Wrong or inaccurate answer")), ("not_asked", crate::i18n::tr("Not what I asked for")), ("slow", crate::i18n::tr("Too slow")), ("model_error", crate::i18n::tr("A mistake in the model"))] {
+                                                            if ui.button(label).clicked() {
+                                                                rate = Some((m.created.clone(), false, reason));
+                                                                ui.close_menu();
+                                                            }
+                                                        }
+                                                    });
+                                                }
+                                            }
+                                            if let Some(kind) = self.gap_marks.get(&m.created) {
+                                                ui.add_space(8.0);
+                                                let request = egui::Button::new(egui::RichText::new(crate::i18n::tr("💡 Request this feature")).small().color(theme::NAV)).frame(false);
+                                                if ui.add(request).on_hover_text(crate::i18n::tr("Tell the author what you needed: a short form opens, nothing is sent until you send it.")).clicked() {
+                                                    feature_request = Some((index, kind.clone()));
+                                                }
+                                            }
+                                            ui.add_space(8.0);
                                             let report = egui::Button::new(egui::RichText::new(crate::i18n::tr("Report a problem with this answer")).small().color(theme::HINT)).frame(false);
                                             if ui.add(report).on_hover_text(crate::i18n::tr("Opens a bug report with this answer, your question and the steps already filled in: just say what is wrong.")).clicked() {
                                                 report_answer = Some(index);
@@ -7577,6 +7689,13 @@ impl eframe::App for App {
                 if let Some(answers) = answers_to_send {
                     self.input = answers;
                     self.send(ctx);
+                }
+                if let Some((index, kind)) = feature_request {
+                    self.request_feature(index, &kind);
+                }
+                if let Some((created, up, reason)) = rate {
+                    telemetry::rating(up, reason);
+                    self.ratings.insert(created, up);
                 }
                 if let Some(index) = report_answer {
                     self.report_answer(index);

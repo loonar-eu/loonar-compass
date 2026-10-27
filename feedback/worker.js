@@ -1,13 +1,17 @@
 // Loonar Compass feedback service (Cloudflare Worker).
 //
-//   POST /v1/stats   the daily usage summary of one installation  -> a JSON file in the public statistics repository
-//   POST /v1/report  a bug report from the application            -> a public GitHub issue; the screenshots and the
+//   POST /v1/start   the start of the application: installation, version, system, language -> the D1 database
+//   POST /v1/stats   the usage summary of a day of one installation (sent every hour, "partial" until the day ends)
+//                    -> the D1 database (the newest summary of a day replaces the earlier one); without the database
+//                       (tests, before the database exists) a JSON file in the public statistics repository
+//   POST /v1/report  a bug report or a feature request             -> a public GitHub issue; the screenshots and the
 //                                                                     context of the reported answer go to a private
 //                                                                     repository that only the author can read
 //   GET  /health
 //
 // The application never holds a GitHub token: the token is a secret of this Worker (GITHUB_TOKEN). Everything that
 // arrives is checked against a strict schema; unknown fields are refused, so nothing else can be published.
+// Addresses (IP) are used only by the rate limiter and are never stored.
 
 const LANGS = ["en", "pl", "de", "fr"];
 const SETUP_ENUMS = {
@@ -16,7 +20,7 @@ const SETUP_ENUMS = {
   ai_provider: ["anthropic", "openai", "azure", "local", "openai_compatible"],
   approval: ["plan", "ask", "auto"],
 };
-const COUNTER_GROUPS = ["tools", "tool_errors", "views", "events", "approvals", "tokens"];
+const COUNTER_GROUPS = ["tools", "tool_errors", "views", "events", "approvals", "tokens", "tasks", "task_steps", "task_tokens", "task_seconds", "gaps", "ratings"];
 const COUNTERS = ["turns", "ai_errors"];
 const MAX_COUNT = 10_000_000;
 const MAX_STATS_BYTES = 32 * 1024;
@@ -48,7 +52,7 @@ function daysBetween(a, b) {
 /** The daily summary, re-built from known fields only (anything unknown is refused). */
 export function validateStats(input, now = new Date()) {
   check(isObject(input), "not an object");
-  const allowed = new Set(["v", "install", "day", "app", "os", "lang", "setup", ...COUNTERS, ...COUNTER_GROUPS]);
+  const allowed = new Set(["v", "install", "day", "app", "os", "lang", "setup", "partial", ...COUNTERS, ...COUNTER_GROUPS]);
   for (const k of Object.keys(input)) check(allowed.has(k), `unknown field ${k}`);
   check(input.v === 1, "unsupported version");
   check(typeof input.install === "string" && UUID.test(input.install), "bad install");
@@ -60,6 +64,10 @@ export function validateStats(input, now = new Date()) {
   check(typeof input.os === "string" && OS.test(input.os), "bad os");
   check(LANGS.includes(input.lang), "bad lang");
   const out = { v: 1, install: input.install, day: input.day, app: input.app, os: input.os, lang: input.lang };
+  if (input.partial !== undefined) {
+    check(typeof input.partial === "boolean", "bad partial");
+    out.partial = input.partial;
+  }
   if (input.setup !== undefined) {
     const s = input.setup;
     check(isObject(s), "bad setup");
@@ -110,6 +118,22 @@ export function validateStats(input, now = new Date()) {
   return out;
 }
 
+/** The start of the application: the installation, its version, system and language, and the day. */
+export function validateStart(input, now = new Date()) {
+  check(isObject(input), "not an object");
+  const allowed = new Set(["v", "install", "app", "os", "lang", "day"]);
+  for (const k of Object.keys(input)) check(allowed.has(k), `unknown field ${k}`);
+  check(input.v === 1, "unsupported version");
+  check(typeof input.install === "string" && UUID.test(input.install), "bad install");
+  check(typeof input.app === "string" && VERSION.test(input.app), "bad app");
+  check(typeof input.os === "string" && OS.test(input.os), "bad os");
+  check(LANGS.includes(input.lang), "bad lang");
+  check(typeof input.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input.day), "bad day");
+  const age = daysBetween(now.toISOString().slice(0, 10), input.day);
+  check(age >= -1 && age <= 2, "day out of range");
+  return { install: input.install, app: input.app, os: input.os, lang: input.lang, day: input.day };
+}
+
 /** A user mention (@name) in a public issue would notify that GitHub user: mentions are broken with a zero-width space. */
 export function noMentions(text) {
   return text.replace(/@(?=[A-Za-z0-9-])/g, "@​");
@@ -128,7 +152,7 @@ function decodeImage(image) {
 /** A bug report, checked: public parts (title, description, technical) and private parts (context, images). */
 export function validateReport(input) {
   check(isObject(input), "not an object");
-  const allowed = new Set(["v", "install", "app", "os", "lang", "title", "description", "technical", "private", "images"]);
+  const allowed = new Set(["v", "install", "app", "os", "lang", "kind", "title", "description", "technical", "private", "images"]);
   for (const k of Object.keys(input)) check(allowed.has(k), `unknown field ${k}`);
   check(input.v === 1, "unsupported version");
   check(typeof input.install === "string" && UUID.test(input.install), "bad install");
@@ -144,7 +168,9 @@ export function validateReport(input) {
     check(!required || v.trim().length > 0, `missing ${name}`);
     return v;
   };
+  check(input.kind === undefined || ["bug", "feature"].includes(input.kind), "bad kind");
   const report = {
+    kind: input.kind || "bug",
     install: input.install,
     app: input.app,
     os: input.os,
@@ -219,10 +245,32 @@ async function stats(request, env) {
   const ip = request.headers.get("CF-Connecting-IP") || "local";
   if (await limited(env.STATS_LIMITER, ip)) return json(429, { error: "too many requests" });
   const summary = validateStats(await readBody(request, MAX_STATS_BYTES));
+  if (env.DB) {
+    // The newest summary of a day of an installation; a final one is not replaced by a late partial one.
+    await env.DB.prepare(
+      `INSERT INTO days (install, day, app, partial, data, updated) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+       ON CONFLICT (install, day) DO UPDATE SET app = excluded.app, partial = excluded.partial, data = excluded.data, updated = excluded.updated
+       WHERE days.partial = 1 OR excluded.partial = 0`,
+    )
+      .bind(summary.install, summary.day, summary.app, summary.partial ? 1 : 0, JSON.stringify(summary), new Date().toISOString())
+      .run();
+    return json(201, { ok: true });
+  }
   const [y, m] = summary.day.split("-");
   const path = `data/${y}/${m}/${summary.day}/${summary.install}.json`;
   const bytes = new TextEncoder().encode(JSON.stringify(summary, null, 2) + "\n");
   await putFile(env, env.STATS_REPO, path, bytes, `stats ${summary.day} ${summary.install.slice(0, 8)}`);
+  return json(201, { ok: true });
+}
+
+async function start(request, env) {
+  const ip = request.headers.get("CF-Connecting-IP") || "local";
+  if (await limited(env.STATS_LIMITER, ip)) return json(429, { error: "too many requests" });
+  const s = validateStart(await readBody(request, 2048));
+  if (!env.DB) return json(503, { error: "no database" });
+  await env.DB.prepare("INSERT INTO starts (install, day, app, os, lang, at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
+    .bind(s.install, s.day, s.app, s.os, s.lang, new Date().toISOString())
+    .run();
   return json(201, { ok: true });
 }
 
@@ -245,7 +293,7 @@ async function report(request, env) {
   const issue = await github(env, "POST", `/repos/${env.ISSUES_REPO}/issues`, {
     title: `[${r.app}] ${r.title}`,
     body: lines.join("\n"),
-    labels: ["bug", "from-app"],
+    labels: [r.kind === "feature" ? "idea" : "bug", "from-app"],
   });
   if (issue.status !== 201) throw new Error(`GitHub ${issue.status} creating the issue`);
   const number = issue.data.number;
@@ -283,6 +331,7 @@ export default {
     const url = new URL(request.url);
     try {
       if (request.method === "GET" && url.pathname === "/health") return json(200, { ok: true });
+      if (request.method === "POST" && url.pathname === "/v1/start") return await start(request, env);
       if (request.method === "POST" && url.pathname === "/v1/stats") return await stats(request, env);
       if (request.method === "POST" && url.pathname === "/v1/report") return await report(request, env);
       return json(404, { error: "not found" });

@@ -1743,3 +1743,22 @@ All summaries are public: ‖ Wszystkie podsumowania są publiczne: ‖ Alle Zus
 Send anonymous usage statistics (recommended) ‖ Wysyłaj anonimowe statystyki użycia (zalecane) ‖ Anonyme Nutzungsstatistik senden (empfohlen) ‖ Envoyer des statistiques d’utilisation anonymes (recommandé)
 on (you can switch them off in the application) ‖ włączone (możesz je wyłączyć w aplikacji) ‖ eingeschaltet (in der Anwendung ausschaltbar) ‖ activées (désactivables dans l’application)
 off ‖ wyłączone ‖ ausgeschaltet ‖ désactivées
+source code ‖ kod źródłowy ‖ Quellcode ‖ code source
+a file format ‖ format pliku ‖ ein Dateiformat ‖ un format de fichier
+an integration with another system ‖ integracja z innym systemem ‖ eine Integration mit einem anderen System ‖ une intégration avec un autre système
+a kind of diagram ‖ rodzaj diagramu ‖ eine Diagrammart ‖ un type de diagramme
+an operation on the model ‖ operacja na modelu ‖ eine Operation am Modell ‖ une opération sur le modèle
+access rights ‖ uprawnienia dostępu ‖ Zugriffsrechte ‖ des droits d’accès
+a source of data ‖ źródło danych ‖ eine Datenquelle ‖ une source de données
+something else ‖ coś innego ‖ etwas anderes ‖ autre chose
+Thank you for the rating ‖ Dziękuję za ocenę ‖ Danke für die Bewertung ‖ Merci pour l’évaluation
+A good answer ‖ Dobra odpowiedź ‖ Eine gute Antwort ‖ Une bonne réponse
+Wrong or inaccurate answer ‖ Błędna lub niedokładna odpowiedź ‖ Falsche oder ungenaue Antwort ‖ Réponse fausse ou imprécise
+Not what I asked for ‖ Nie o to prosiłem ‖ Nicht das, worum ich gebeten habe ‖ Pas ce que j’ai demandé
+Too slow ‖ Za wolno ‖ Zu langsam ‖ Trop lent
+A mistake in the model ‖ Błąd w modelu ‖ Ein Fehler im Modell ‖ Une erreur dans le modèle
+💡 Request this feature ‖ 💡 Zgłoś zapotrzebowanie ‖ 💡 Diese Funktion anfragen ‖ 💡 Demander cette fonction
+Tell the author what you needed: a short form opens, nothing is sent until you send it. ‖ Napisz autorowi, czego potrzebujesz: otworzy się krótki formularz, nic nie zostanie wysłane, dopóki go nie wyślesz. ‖ Sagen Sie dem Autor, was Sie brauchten: Ein kurzes Formular öffnet sich, nichts wird gesendet, bevor Sie es absenden. ‖ Dites à l’auteur ce dont vous aviez besoin : un court formulaire s’ouvre, rien n’est envoyé tant que vous ne l’envoyez pas.
+Missing capability: ‖ Brakująca możliwość: ‖ Fehlende Fähigkeit: ‖ Capacité manquante :
+Feature request: {0} ‖ Zapotrzebowanie: {0} ‖ Funktionswunsch: {0} ‖ Demande de fonction : {0}
+What I needed:  ‖ Czego potrzebowałem:  ‖ Was ich brauchte:  ‖ Ce dont j’avais besoin : 
