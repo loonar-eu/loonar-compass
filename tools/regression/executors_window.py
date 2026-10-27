@@ -386,7 +386,7 @@ def update_check(out: Path, work: Path):
     c.work, c.out, c.shot_no = work, out, 10
     from pywinauto import Application
     c.app = Application(backend="uia").start(str(work / "LoonarCompass.exe"), work_dir=str(work))
-    c.win = c.app.window(title="Loonar Compass")
+    c.win = c.app.window(title="Loonar Compass", found_index=0)
     c.win.wait("visible ready", timeout=60)
     c.win.set_focus()
     c.win.maximize()

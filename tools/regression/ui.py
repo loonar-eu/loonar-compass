@@ -26,7 +26,7 @@ class Compass:
             shutil.copy2(source, work / source.name)
             (work / "app.properties").write_text(f"model.source=file\nmodel.file={source.name}\nui.language=pl\n{settings}", encoding="utf-8")
         self.app = Application(backend="uia").start(str(work / "LoonarCompass.exe"), work_dir=str(work))
-        self.win = self.app.window(title="Loonar Compass")
+        self.win = self.app.window(title="Loonar Compass", found_index=0)  # an inner window (e.g. a picker) has the same title
         self.win.wait("visible ready", timeout=60)
         self.win.set_focus()
         self.win.maximize()  # the same layout on every screen, nothing under the taskbar

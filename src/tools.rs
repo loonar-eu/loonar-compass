@@ -237,7 +237,7 @@ After drawing, look at the result and fix it if anything overlaps.",
             "name": "create_presentation",
             "description": "Creates a PowerPoint presentation (PPTX, 16:9) and shows it in the chat: a title slide, then slides with a title, bullet points (two levels) and/or a picture \
 (diagram:ID for a diagram from EA, image:NAME for an image drawn with render_image; with bullets the picture goes on the right). pdf: true also makes a PDF with Microsoft PowerPoint. \
-Use it when the user asks for slides or a presentation; keep slides short (at most 6 bullets).",
+Use it when the user asks for slides or a presentation; keep slides short (at most 6 bullets). The title slide counts: when the user asks for N slides, give N-1 slides here, so the file has exactly N.",
             "input_schema": {
                 "type": "object",
                 "properties": {
