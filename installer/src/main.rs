@@ -2144,7 +2144,7 @@ impl eframe::App for Setup {
                                 if ui.button(crate::i18n::tr("Try again")).clicked() {
                                     start = true;
                                 }
-                                if ui.button(bold(&crate::i18n::fmt("Close {0} and try again", &[APP_NAME.to_string()]), 14.0)).clicked() {
+                                if ui.button(bold(&crate::i18n::fmt("Close {0} and try again", &["Compass".to_string()]), 14.0)).clicked() {
                                     close_app_in(&PathBuf::from(self.dir.trim()));
                                     start = true;
                                 }

@@ -6,7 +6,7 @@ Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen
 
 - **Jira und Confluence mit Client-Zertifikat:** Firmenserver, die zusätzlich zum Token ein Client-Zertifikat (mTLS) verlangen, funktionieren jetzt mit Compass. Auf den Karten Jira und Confluence in den Einstellungen gibt es die Felder „Client-Zertifikat“ (Pfad zu einer .p12/.pfx- oder PEM-Datei) und „Zertifikatspasswort“ (in der Windows-Anmeldeinformationsverwaltung gespeichert). Ohne Zertifikat schloss ein solcher Server die Verbindung („Eine vorhandene Verbindung wurde vom Remotehost geschlossen“).
 - **Einfacheres Installationsprogramm:** ohne die Seite „Konfiguration“ – Schlüssel, Modell und EA-Konto geben Sie in der Anwendung ein, die Sie beim ersten Start durch die Einstellungen führt.
-- **Installation wiederholen:** Kann die Installation die Dateien nicht ersetzen, weil Compass läuft, bietet die Fehlerseite „Loonar Compass schließen und erneut versuchen“ und „Erneut versuchen“ – ohne von vorn zu beginnen.
+- **Installation wiederholen:** Kann die Installation die Dateien nicht ersetzen, weil Compass läuft, bietet die Fehlerseite „Compass schließen und erneut versuchen“ und „Erneut versuchen“ – ohne von vorn zu beginnen.
 
 ## Version 0.9 (2026-10-27)
 
