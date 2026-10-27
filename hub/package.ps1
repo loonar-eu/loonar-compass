@@ -2,7 +2,8 @@
 # Also writes the third-party notices for Windows and Linux (the Docker image copies the Linux one).
 #   .\hub\package.ps1            build and pack
 #   .\hub\package.ps1 -SkipBuild pack the program already built in hub\target\release
-param([switch]$SkipBuild)
+#   .\hub\package.ps1 -Sign      public release: signs compass-hub.exe (signing\sign.ps1; "az login" first)
+param([switch]$SkipBuild, [switch]$Sign)
 $ErrorActionPreference = 'Stop'
 $hub = $PSScriptRoot
 $root = Split-Path $hub -Parent
@@ -33,6 +34,10 @@ $stage = Join-Path $env:TEMP "compass-hub-$version"
 if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
 New-Item -ItemType Directory -Force $stage | Out-Null
 Copy-Item (Join-Path $hub 'target\release\compass-hub.exe') $stage
+if ($Sign) {
+    . (Join-Path $root 'signing\sign.ps1')
+    Invoke-Sign (Join-Path $stage 'compass-hub.exe')
+}
 Copy-Item (Join-Path $hub 'README.md'), (Join-Path $hub 'hub.example.json'), (Join-Path $hub 'shop.example.properties') $stage
 Copy-Item (Join-Path $root 'LICENSE.en.txt') (Join-Path $stage 'LICENSE.txt')
 Copy-Item (Join-Path $hub 'THIRD-PARTY-NOTICES-windows.txt') (Join-Path $stage 'THIRD-PARTY-NOTICES.txt')
