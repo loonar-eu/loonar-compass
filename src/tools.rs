@@ -955,7 +955,8 @@ fn create_confluence_page(input: &Value, ctx: &ToolContext) -> Result<ToolOutput
     }
     std::fs::write(ctx.cfg.attachments_dir.join(format!("{stem}.confluence.md")), format!("{TITLE_MARKER} {title} -->\n{markdown}")).context(crate::i18n::tr("saving the page source"))?;
     std::fs::write(ctx.cfg.attachments_dir.join(&stored), &storage).context(crate::i18n::tr("saving the page code"))?;
-    let publish_hint = if ctx.cfg.confluence_url.trim().is_empty() {
+    // Confluence of the team hub ("confluence_via_hub") counts as configured too (LC-263).
+    let publish_hint = if ctx.cfg.confluence_url.trim().is_empty() && crate::hub::via_hub(ctx.cfg, "confluence").is_none() {
         "Publishing through the API is not configured (Settings → Confluence), so the user pastes the code into the source editor."
     } else {
         "You can publish it with the publish_confluence tool (page = the file name above) when the user asks for it."
