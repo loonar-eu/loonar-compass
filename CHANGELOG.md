@@ -2,7 +2,7 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
-## Wersja 0.9 (2026-10-25)
+## Wersja 0.9 (2026-10-27)
 
 Logowanie kontem firmowym do huba, modele w SQL Server, MySQL i Oracle, instrukcje modelowania zespołu w repozytorium, dokumenty PDF, PowerPoint, Visio i Excel, prezentacje, SharePoint, strażnicy zatrzymujący usuwanie oraz uważniejszy asystent: pytania, plan, podagenci i ochrona przed ukrytymi instrukcjami.
 
