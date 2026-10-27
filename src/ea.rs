@@ -64,7 +64,11 @@ fn connection_string(cfg: &AppConfig) -> Result<String> {
     // MySQL and Oracle: EA opens them through an ODBC data source of its own, which Compass cannot guess (never a
     // PostgreSQL connection to their port).
     if matches!(cfg.model_source, crate::config::ModelSource::MySql | crate::config::ModelSource::Oracle) {
-        bail!("{}", crate::i18n::tr("EA needs its own connection to save in a MySQL or Oracle model: set ea.conn to the connection text of this repository in EA (e.g. \"ea_model --- DBType=0;Connect=Provider=MSDASQL.1;Persist Security Info=False;Data Source=<ODBC data source>;\"), or work in Compass inside EA with the repository open there."));
+        // The example carries the DBType of this kind of database (EA: MySQL 0, Oracle 3).
+        let kind = if cfg.model_source == crate::config::ModelSource::Oracle { "3" } else { "0" };
+        let other = cfg.ea_conn.split(';').find_map(|p| p.split_once('=').filter(|(k, _)| k.trim().ends_with("DBType")).map(|(_, v)| v.trim().to_string()));
+        let mismatch = other.map(|t| format!("{} ", crate::i18n::fmt("The ea.conn in the settings is for another kind of database than the model (DBType {0}).", &[t]))).unwrap_or_default();
+        bail!("{mismatch}{}", crate::i18n::fmt("EA needs its own connection to save in a MySQL or Oracle model: set ea.conn to the connection text of this repository in EA (e.g. \"ea_model --- DBType={0};Connect=Provider=MSDASQL.1;Persist Security Info=False;Data Source=<ODBC data source>;\"), or work in Compass inside EA with the repository open there.", &[kind.to_string()]));
     }
     let host = if cfg.db_host.trim().eq_ignore_ascii_case("localhost") { "127.0.0.1" } else { cfg.db_host.trim() };
     if cfg.model_source == crate::config::ModelSource::SqlServer {
