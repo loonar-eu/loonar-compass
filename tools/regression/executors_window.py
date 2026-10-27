@@ -265,3 +265,136 @@ def test_model(c):
     rows = con.execute("select name from t_package order by name").fetchall()
     con.close()
     (c.out / "model_packages.txt").write_text("Pakiety w kopii modelu:\n" + "\n".join(r[0] for r in rows), encoding="utf-8")
+
+
+# B. A computer without the organisation's policy (computer B) --------------------------------------------------
+NAV = {"conversations": 144, "settings": 206, "report_problem": 519}  # the icons of the left bar (no names in UI Automation yet)
+
+
+def nav(c, view):
+    r = c.win.rectangle()
+    mouse.move(coords=(r.left + 37, r.top + NAV[view]))
+    time.sleep(0.4)
+    mouse.click(coords=(r.left + 37, r.top + NAV[view]))
+    time.sleep(1.2)
+
+
+def scroll_to(c, text, max_ticks=40):
+    """Scrolls the middle of the window down until `text` is in the visible part."""
+    r = c.win.rectangle()
+    for _ in range(max_ticks):
+        found = [d for d in c.win.descendants() if text in (d.element_info.name or "")]
+        if found and r.top + 40 < found[0].element_info.rectangle.top < r.bottom - 40:
+            return found[0]
+        mouse.scroll(coords=((r.left + r.right) // 2, (r.top + r.bottom) // 2), wheel_dist=-3)
+        time.sleep(0.4)
+    raise RuntimeError(f"\"{text}\" not reached by scrolling")
+
+
+POLICY_KEY = r"SOFTWARE\Policies\Loonar\Compass"
+
+
+def policy_report(c):
+    """Evidence that the computer has no organisation policy for Compass, and the tested copy's settings."""
+    import winreg
+    lines = []
+    for hive, name in ((winreg.HKEY_LOCAL_MACHINE, "HKLM"), (winreg.HKEY_CURRENT_USER, "HKCU")):
+        try:
+            winreg.OpenKey(hive, POLICY_KEY)
+            lines.append(f"{name}\\{POLICY_KEY}: exists")
+        except OSError:
+            lines.append(f"{name}\\{POLICY_KEY}: does not exist (no organisation policy)")
+    props = (c.work / "app.properties").read_text(encoding="utf-8")
+    lines.append("app.properties of the tested copy (no hub, no key in the file; the Claude key is the user's own in Credential Manager):")
+    lines += [l for l in props.splitlines() if "password" not in l and "key" not in l]
+    (c.out / "computer_policy.txt").write_text("\n".join(lines), encoding="utf-8")
+
+
+@executor("Komputer zwykły bez zasad")
+@window_test
+def no_policy(c):
+    policy_report(c)
+    nav(c, "settings")
+    label = scroll_to(c, "Zespół (Compass Hub)")
+    c.evidence("team_hub_settings")
+    top = label.element_info.rectangle.top
+    edits = sorted((e for e in c.win.descendants(control_type="Edit") if e.element_info.rectangle.top > top), key=lambda e: e.element_info.rectangle.top)
+    field = edits[0]
+    field.click_input()
+    from pywinauto import keyboard
+    keyboard.send_keys("https://hub.example.test", with_spaces=True, pause=0.02)
+    time.sleep(0.8)
+    typed = field.get_value() if hasattr(field, "get_value") else ""
+    c.evidence("hub_field_after_typing")
+    (c.out / "hub_field.txt").write_text(f"Hub address field: enabled={field.is_enabled()}, value after typing (not saved): {typed!r}", encoding="utf-8")
+    keyboard.send_keys("^a{BACKSPACE}", pause=0.02)  # nothing is saved
+    nav(c, "conversations")
+    c.start_conversation()
+    c.say("Ile pakietów ma model?")
+    c.evidence("answer_without_hub")
+    c.steps()
+    c.evidence("answer_steps")
+
+
+@executor("Internet (🌐) z Claude")
+@window_test
+def web(c):
+    def state(label):
+        props = (c.work / "app.properties").read_text(encoding="utf-8")
+        value = next((l for l in props.splitlines() if l.startswith("claude.web_access=")), "claude.web_access=(not set: off)")
+        (c.out / f"web_state_{label}.txt").write_text(value, encoding="utf-8")
+    q = "Sprawdź w internecie, jaka jest najnowsza wersja Sparx Enterprise Architect, i podaj źródło."
+    c.start_conversation()
+    c.click("🌐")
+    state("1_switched_on")
+    c.say(q)
+    c.evidence("answer_web_on")
+    c.steps()
+    c.evidence("steps_web_on")
+    c.click("Nowa rozmowa")
+    c.start_conversation()
+    c.click("🌐")
+    state("2_switched_off")
+    c.say(q)
+    c.evidence("answer_web_off")
+    c.steps()
+    c.evidence("steps_web_off")
+
+
+@executor("Informacja o nowej wersji – ustawienie")
+def update_check(out: Path, work: Path):
+    def props(label):
+        text = (work / "app.properties").read_text(encoding="utf-8")
+        value = next((l for l in text.splitlines() if l.startswith("app.update_check=")), "app.update_check=(not set: default on)")
+        (out / f"update_check_{label}.txt").write_text(value, encoding="utf-8")
+    c = Compass(work, out)
+    try:
+        policy_report(c)
+        nav(c, "settings")
+        box = scroll_to(c, "Sprawdzaj raz dziennie, czy jest nowa wersja")
+        c.evidence("new_versions_section")
+        props("1_before")
+        r = box.element_info.rectangle
+        mouse.click(coords=((r.left + r.right) // 2, (r.top + r.bottom) // 2))
+        time.sleep(1)
+        c.evidence("unchecked")
+        props("2_after_unchecking")
+    finally:
+        c.close()
+    # Compass again with the same folder (its settings stay): the setting stays switched off.
+    c = Compass.__new__(Compass)
+    c.work, c.out, c.shot_no = work, out, 10
+    from pywinauto import Application
+    c.app = Application(backend="uia").start(str(work / "LoonarCompass.exe"), work_dir=str(work))
+    c.win = c.app.window(title="Loonar Compass")
+    c.win.wait("visible ready", timeout=60)
+    c.win.set_focus()
+    c.win.maximize()
+    time.sleep(1)
+    try:
+        nav(c, "settings")
+        scroll_to(c, "Sprawdzaj raz dziennie, czy jest nowa wersja")
+        c.evidence("after_restart")
+        props("3_after_restart")
+    finally:
+        c.close()
