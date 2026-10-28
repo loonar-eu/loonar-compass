@@ -1,4 +1,4 @@
-/* Loonar Compass — loonar.eu. No libraries, no external scripts, no cookies.
+/* Loonar Compass - loonar.eu. No libraries, no external scripts, no cookies.
    1) scroll-reveal animations, 2) remembers the chosen language,
    3) on the first visit to the English root page only, suggests (never forces)
       the visitor's browser language in a small dismissible banner,
@@ -134,7 +134,7 @@
     box.hidden = false;
   }
 
-  /* 3. suggestion banner — root (English) page, first visit, no stored choice */
+  /* 3. suggestion banner - root (English) page, first visit, no stored choice */
   if (doc.getAttribute("data-root") !== "1" || getItem(KEY)) return;
   var prefs = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""]);
   var target = null;
