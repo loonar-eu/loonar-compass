@@ -18,6 +18,61 @@ use serde_json::{json, Value};
 use std::cell::Cell;
 
 
+/// The builds of EA scripts the user approved while Compass runs (see `Approver::confirm_script`).
+fn approved_scripts() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
+    static SET: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> = std::sync::OnceLock::new();
+    SET.get_or_init(Default::default)
+}
+
+/// The build of a script: its code without the content of string literals and without numbers, whitespace collapsed.
+/// Two scripts with the same build differ only in their data.
+pub fn script_shape(code: &str) -> String {
+    let mut out = String::new();
+    let mut chars = code.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' | '\'' => {
+                out.push(c);
+                while let Some(d) = chars.next() {
+                    if d == '\\' {
+                        chars.next();
+                    } else if d == c {
+                        break;
+                    }
+                }
+                out.push(c);
+            }
+            c if c.is_ascii_digit() && !out.chars().last().is_some_and(|l| l.is_alphanumeric() || l == '_') => {
+                while chars.peek().is_some_and(|d| d.is_ascii_digit() || *d == '.') {
+                    chars.next();
+                }
+                out.push('0');
+            }
+            c if c.is_whitespace() => {}
+            c => out.push(c),
+        }
+    }
+    // Data of another length has the same build: a run of repeated entries (after the texts and numbers are gone, e.g.
+    // `0:"",0:"",0:""` or `{id:0,a:""},{id:0,a:""}`) collapses into one entry.
+    let mut parts: Vec<&str> = out.split(',').collect();
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for k in 1..=8 {
+            let mut i = 0;
+            while i + 2 * k <= parts.len() {
+                if parts[i..i + k] == parts[i + k..i + 2 * k] {
+                    parts.drain(i + k..i + 2 * k);
+                    changed = true;
+                } else {
+                    i += 1;
+                }
+            }
+        }
+    }
+    parts.join(",")
+}
+
 /// Write approval. `ask` asks the user in a dialog and waits for the answer (called from the worker thread).
 pub struct Approver {
     pub mode: ApprovalMode,
@@ -73,6 +128,21 @@ impl Approver {
     /// Consent for sending a file outside the application (an upload): always asked.
     pub fn confirm_upload(&self, summary: &str) -> Result<()> {
         self.confirm_always(summary)
+    }
+
+    /// Consent for an EA script (saving or running). Once the user approved a script, scripts of the same build (the same
+    /// code with other texts and numbers in it, e.g. the next batch of aliases) are approved without asking again while
+    /// Compass runs; anything else in the code asks again.
+    fn confirm_script(&self, action: &str, code: &str, summary: &str) -> Result<()> {
+        let shape = format!("{action}:{}", script_shape(code));
+        if approved_scripts().lock().map(|s| s.contains(&shape)).unwrap_or(false) {
+            return Ok(());
+        }
+        self.confirm_always(summary)?;
+        if let Ok(mut set) = approved_scripts().lock() {
+            set.insert(shape);
+        }
+        Ok(())
     }
 
     /// Consent regardless of the mode (also in auto): for actions that send content outside the application and the model.
@@ -173,7 +243,7 @@ import_xmi {package, file, keep_guids?} (imports an XMI file into the package; G
 set_linked_document {element, text} (the element's linked document (Ctrl+Alt+D in EA), from plain text, one paragraph per line; replaces an existing one); \
 set_swimlanes {diagram, lanes: [{title, width?, color?}], orientation?} (diagram swimlanes (Diagram → Swimlanes), replaces existing ones; orientation vertical (default) or horizontal); \
 set_composite {element, diagram} (links the element to an existing diagram as its composite diagram (in EA: New Child Diagram → Composite → Select Composite Diagram): when the element is double-clicked, EA opens that diagram instead of the properties; this is how you link a BPMN subprocess to the subprocess diagram, also when the diagram is in an ordinary package; in the database the linked element has t_object.ntype = 8 and the diagram id in the pdata1 column); \
-create_attribute {element, name, type?, visibility?, notes?, default?, stereotype?} (a class attribute, visibility: Public|Private|Protected|Package); create_operation {element, name, return_type?, visibility?, notes?, stereotype?, parameters?: [{name, type}]} (a class operation with parameters); update_attribute {attribute, name?, type?, visibility?, notes?, default?, static?} and delete_attribute {attribute} (attribute = t_attribute.id); update_operation {operation, name?, return_type?, visibility?, notes?, static?} and delete_operation {operation} (operation = t_operation.operationid); clone_package {package, name?, key?} (a copy of the package with all its contents next to the original, e.g. a variant to experiment with); update_scenario {element, scenario, name?, type?, notes?, steps?} (changes an existing structured scenario found by its name or GUID; steps, when given, replace all steps); delete_scenario {element, scenario}; create_scenario {element, name, type?, notes?, steps: [{text, actor?, uses?, results?}]} (a STRUCTURED SCENARIO of an element, e.g. a use case: the Scenarios tab of the element, with numbered steps; ALWAYS use this, never notes, when the user asks for scenarios, flows or structured scenarios; type: Basic Path (default), Alternate or Exception; actor = true for a step done by the actor, false for the system; in the database t_objectscenarios, steps in its xmlcontent); add_glossary_term {term, type?, meaning, forms?: [..]} (a term in the EA PROJECT GLOSSARY, the list EA highlights in notes and documents with its meaning - not a model element; t_glossary holds the terms; EA highlights only the exact written form, so for a Polish term ALWAYS pass in forms every inflected form of it: singular and plural in all seven cases from the nominative to the vocative, for a multi-word term the whole phrase inflected; type: the one the user names, otherwise Glossary (the type appears in EA once used); ask the user for the meaning if they did not give it); create_baseline {package, version, notes?} (saves a version of the package in the model; ALWAYS make a baseline before deleting from or substantially restructuring an existing package that you did not create in this conversation, and tell the user they can restore it in EA: package in the browser → Manage Baselines → Compare/Restore; baselines are in t_document with doctype = 'Baseline'); \
+create_attribute {element, name, type?, visibility?, notes?, default?, stereotype?, alias?} (a class attribute, visibility: Public|Private|Protected|Package); create_operation {element, name, return_type?, visibility?, notes?, stereotype?, alias?, parameters?: [{name, type}]} (a class operation with parameters; alias is the operation's alias in EA, e.g. the REST path of an endpoint: set it here, no script is needed); update_attribute {attribute, name?, type?, visibility?, notes?, default?, stereotype?, alias?, static?} and delete_attribute {attribute} (attribute = t_attribute.id); update_operation {operation, name?, return_type?, visibility?, notes?, stereotype?, alias?, static?} and delete_operation {operation} (operation = t_operation.operationid); clone_package {package, name?, key?} (a copy of the package with all its contents next to the original, e.g. a variant to experiment with); update_scenario {element, scenario, name?, type?, notes?, steps?} (changes an existing structured scenario found by its name or GUID; steps, when given, replace all steps); delete_scenario {element, scenario}; create_scenario {element, name, type?, notes?, steps: [{text, actor?, uses?, results?}]} (a STRUCTURED SCENARIO of an element, e.g. a use case: the Scenarios tab of the element, with numbered steps; ALWAYS use this, never notes, when the user asks for scenarios, flows or structured scenarios; type: Basic Path (default), Alternate or Exception; actor = true for a step done by the actor, false for the system; in the database t_objectscenarios, steps in its xmlcontent); add_glossary_term {term, type?, meaning, forms?: [..]} (a term in the EA PROJECT GLOSSARY, the list EA highlights in notes and documents with its meaning - not a model element; t_glossary holds the terms; EA highlights only the exact written form, so for a Polish term ALWAYS pass in forms every inflected form of it: singular and plural in all seven cases from the nominative to the vocative, for a multi-word term the whole phrase inflected; type: the one the user names, otherwise Glossary (the type appears in EA once used); ask the user for the meaning if they did not give it); create_baseline {package, version, notes?} (saves a version of the package in the model; ALWAYS make a baseline before deleting from or substantially restructuring an existing package that you did not create in this conversation, and tell the user they can restore it in EA: package in the browser → Manage Baselines → Compare/Restore; baselines are in t_document with doctype = 'Baseline'); \
 update_diagram {diagram, name?, notes?, stereotype?} (changes the name, notes or stereotype of an existing diagram); hide_connectors {diagram, connectors, hidden?} (hides the given connectors on this one diagram only, a list of ids from t_connector.connector_id; hidden=false shows them again; the connectors stay in the model and on other diagrams, so this is how you declutter a dense diagram instead of deleting relationships; in the database: t_diagramlinks.hidden); \
 route_connector {diagram, connector, start?, points?, end?} (routes one connector along the given path, e.g. following the user's sketch: start = [x, y] the attachment point on the edge of the source element, end = [x, y] the attachment point on the edge of the target element, points = a list of bend points [[x, y], ...]; coordinates as in place (pixels from the top-left corner of the diagram, Y axis downwards), and take the element positions from t_diagramobjects (rectleft, -recttop, rectright, -rectbottom); for purely horizontal and vertical lines, each successive point (from start through points to end) must have the same x or y coordinate as the previous one; example: from the left side of element B to the left, then up to the bottom side of element A: start at the middle of B's left side, one bend point below the middle of A at the height of start, end at the middle of A's bottom side; connector = t_connector.connector_id); \
 set_line_style {diagram, style, connectors?} (the routing of connector lines on the diagram, as in EA Line Style: style = direct (straight) | auto (automatic) | custom (manually bent) | orthogonal_square (orthogonal) | orthogonal_rounded (orthogonal, rounded) | tree_vertical | tree_horizontal | lateral_vertical | lateral_horizontal; connectors = a list of connector ids (t_connector.connector_id), without it all connectors between the diagram's elements get the style; bend points are cleared; in the database the style is in t_diagramlinks.style as Mode= and TREE=); \
@@ -861,7 +931,7 @@ fn ea_script(input: &Value, ctx: &ToolContext) -> Result<String> {
             let code = input["code"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["code".to_string()]))?.to_string();
             let (statements, updated) = crate::scripts::save_statements(ctx.cfg, &group, &name, &language, &code)?;
             // A script in the model can be run later by anyone from EA: saving it is always asked, with the whole code.
-            ctx.approver.confirm_always(&crate::i18n::fmt("Save the EA script {0}.{1} ({2}, {3} lines){4}:\n{5}", &[
+            ctx.approver.confirm_script("save", &code, &crate::i18n::fmt("Save the EA script {0}.{1} ({2}, {3} lines){4}:\n{5}", &[
                 group.clone(), name.clone(), language.clone(), code.lines().count().to_string(),
                 if updated { crate::i18n::tr(" - REPLACES the existing script").to_string() } else { String::new() }, script_for_approval(&code)?,
             ]))?;
@@ -876,7 +946,7 @@ fn ea_script(input: &Value, ctx: &ToolContext) -> Result<String> {
             let s = crate::scripts::find(ctx.cfg, &name)?;
             // The whole code with its includes is shown, and exactly that code runs.
             let resolved = crate::scripts::resolve_includes(ctx.cfg, &s)?;
-            ctx.approver.confirm_always(&crate::i18n::fmt("Run the EA script {0}.{1} ({2}) in the open EA window? A script can change anything in the model.\n{3}", &[s.group.clone(), s.name.clone(), s.language.clone(), script_for_approval(&resolved)?]))?;
+            ctx.approver.confirm_script("run", &resolved, &crate::i18n::fmt("Run the EA script {0}.{1} ({2}) in the open EA window? A script can change anything in the model.\n{3}", &[s.group.clone(), s.name.clone(), s.language.clone(), script_for_approval(&resolved)?]))?;
             crate::scripts::run(ctx.cfg, &name, &resolved)
         }
         other => bail!("{}", crate::i18n::fmt("unknown ea_script action: {0}", &[other.to_string()])),
@@ -1827,5 +1897,33 @@ mod tests {
         let out = operation_usage(&serde_json::json!({ "element": element }), &cfg).unwrap();
         println!("{out}");
         assert!(out.starts_with("Operation usage"));
+    }
+}
+
+#[cfg(test)]
+mod script_shape_tests {
+    use super::script_shape;
+
+    #[test]
+    fn scripts_differing_only_in_data_have_one_build() {
+        let a = "var map = {535:\"/cart/{cartId}/standard\",536:\"/cart/x\",537:\"/a\"};
+for (var id in map) { var m = Repository.GetMethodByID(id); m.Style = map[id]; m.Update(); }";
+        let b = "var map = {
+ 701:\"/offer/{id}\",
+ 702:\"/offer/y\",
+ 703:\"/b\",
+ 704:\"/c\" };
+for (var id in map) { var m = Repository.GetMethodByID(id); m.Style = map[id]; m.Update(); }";
+        assert_eq!(script_shape(a), script_shape(b));
+        let objects = |n: usize| format!("var rows = [{}]; rows.forEach(function (r) {{ Session.Output(r.name); }});", (0..n).map(|i| format!("{{id:{i},name:\"n{i}\"}}")).collect::<Vec<_>>().join(","));
+        assert_eq!(script_shape(&objects(3)), script_shape(&objects(9)));
+    }
+
+    #[test]
+    fn other_code_is_another_build() {
+        let a = "var map = {1:\"/a\",2:\"/b\",3:\"/c\"}; for (var id in map) { var m = Repository.GetMethodByID(id); m.Style = map[id]; m.Update(); }";
+        let b = "var map = {1:\"/a\",2:\"/b\",3:\"/c\"}; for (var id in map) { var m = Repository.GetMethodByID(id); m.Delete(); }";
+        assert_ne!(script_shape(a), script_shape(b));
+        assert_ne!(script_shape("Session.Output(\"x\");"), script_shape("eval(\"x\");"));
     }
 }

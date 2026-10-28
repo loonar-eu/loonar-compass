@@ -1203,7 +1203,7 @@ impl Job<'_> {
                 let element = self.element(&op["element"])?;
                 let name = text_field(op, "name");
                 let attribute = element.obj("Attributes")?.call_obj("AddNew", &[s(&name), s(&text_field(op, "type"))])?;
-                for (field, property) in [("visibility", "Visibility"), ("notes", "Notes"), ("default", "Default"), ("stereotype", "StereotypeEx")] {
+                for (field, property) in [("visibility", "Visibility"), ("notes", "Notes"), ("default", "Default"), ("stereotype", "StereotypeEx"), ("alias", "Style")] {
                     if !op[field].is_null() {
                         attribute.set(property, s(&text_field(op, field)))?;
                     }
@@ -1217,7 +1217,8 @@ impl Job<'_> {
                 let element = self.element(&op["element"])?;
                 let name = text_field(op, "name");
                 let operation = element.obj("Methods")?.call_obj("AddNew", &[s(&name), s(&text_field(op, "return_type"))])?;
-                for (field, property) in [("visibility", "Visibility"), ("notes", "Notes"), ("stereotype", "StereotypeEx")] {
+                // The alias of an operation is its "Style" in EA (e.g. the REST path of an endpoint).
+                for (field, property) in [("visibility", "Visibility"), ("notes", "Notes"), ("stereotype", "StereotypeEx"), ("alias", "Style")] {
                     if !op[field].is_null() {
                         operation.set(property, s(&text_field(op, field)))?;
                     }
@@ -1253,7 +1254,7 @@ impl Job<'_> {
                 } else {
                     let type_property = if attribute { "Type" } else { "ReturnType" };
                     let type_field = if attribute { "type" } else { "return_type" };
-                    for (field, property) in [("name", "Name"), (type_field, type_property), ("visibility", "Visibility"), ("notes", "Notes"), ("default", "Default")] {
+                    for (field, property) in [("name", "Name"), (type_field, type_property), ("visibility", "Visibility"), ("notes", "Notes"), ("default", "Default"), ("stereotype", "StereotypeEx"), ("alias", "Style")] {
                         if !op[field].is_null() && (attribute || field != "default") {
                             member.set(property, s(&text_field(op, field)))?;
                         }
