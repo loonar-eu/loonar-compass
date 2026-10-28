@@ -170,7 +170,7 @@ pub struct AppConfig {
     /// Web search and reading web pages through Anthropic's server tools (`claude.web_access`, off by default; the
     /// team policy of the hub can switch it off for everybody).
     pub web_access: bool,
-    /// Checking once a day whether a newer release exists (`app.update_check`, on by default).
+    /// Checking every hour whether a newer release exists (`app.update_check`, on by default).
     pub update_check: bool,
     /// The rules of the computer set by IT (Group Policy, Intune): they win over the settings.
     pub policy: MachinePolicy,
@@ -211,6 +211,8 @@ pub struct AppConfig {
     /// (`db.odbc`, without the password: it is added from the secret).
     pub db_odbc: String,
     pub ea_path: PathBuf,
+    /// Folders with source code the assistant reads without asking (`code.folders`, separated by ';') (LC-286).
+    pub code_folders: Vec<String>,
     pub ea_user: String,
     /// Credential Manager entry with the EA account password (the settings' account, or a conversation's own account).
     pub ea_password_key: String,
@@ -232,10 +234,20 @@ pub struct AppConfig {
     pub confluence_user: String,
     pub confluence_space: String,
     pub confluence_parent: String,
+    /// Client certificate (mTLS) for a company Confluence that asks for one: a .p12/.pfx or PEM file (LC-279).
+    pub confluence_client_cert: String,
     /// Jira: address, account e-mail (Cloud; empty for a personal access token) and the default project key.
     pub jira_url: String,
     pub jira_user: String,
     pub jira_project: String,
+    /// Client certificate (mTLS) for a company Jira that asks for one: a .p12/.pfx or PEM file (LC-279).
+    pub jira_client_cert: String,
+    /// OneDrive with the user's Microsoft account (LC-281): the app registration (public client) and the tenant
+    /// ("organizations", "common", "consumers" or a tenant id).
+    pub onedrive_client_id: String,
+    pub onedrive_tenant: String,
+    /// Google Drive with the user's Google account (LC-282): the OAuth client (desktop app) of a Google Cloud project.
+    pub gdrive_client_id: String,
     /// Team hub: address and the id of this model among the hub sources (for the audit trail).
     pub hub_url: String,
     pub hub_source: String,
@@ -487,6 +499,7 @@ impl AppConfig {
             db_sslmode: SslMode::parse(&get_or("db.sslmode", "prefer")).context("db.sslmode")?,
             db_odbc: get_or("db.odbc", ""),
             // Older files have the path stored with doubled backslashes (C:\\Program Files\\...): convert it to a normal one.
+            code_folders: get_or("code.folders", "").split(';').map(|f| f.trim().trim_matches('"').to_string()).filter(|f| !f.is_empty()).collect(),
             ea_path: PathBuf::from({
                 let raw = get_or("ea.path", r"C:\Program Files\Sparx Systems\EA\EA.exe");
                 if raw.contains(":\\\\") { raw.replace("\\\\", "\\") } else { raw }
@@ -506,9 +519,14 @@ impl AppConfig {
             confluence_user: get_or("confluence.user", ""),
             confluence_space: get_or("confluence.space", ""),
             confluence_parent: get_or("confluence.parent", ""),
+            confluence_client_cert: get_or("confluence.client_cert", ""),
             jira_url: get_or("jira.url", ""),
             jira_user: get_or("jira.user", ""),
             jira_project: get_or("jira.project", ""),
+            jira_client_cert: get_or("jira.client_cert", ""),
+            onedrive_client_id: get_or("onedrive.client_id", ""),
+            onedrive_tenant: get_or("onedrive.tenant", "organizations"),
+            gdrive_client_id: get_or("gdrive.client_id", ""),
             hub_url: get_or("hub.url", ""),
             hub_source: get_or("hub.source", ""),
             miro_board: get_or("miro.board", ""),
@@ -601,6 +619,14 @@ pub mod secrets {
     pub const CONFLUENCE_TOKEN: &str = "confluence_token";
     pub const MIRO_TOKEN: &str = "miro_token";
     pub const JIRA_TOKEN: &str = "jira_token";
+    /// Passwords of the client certificates (.p12/.pfx) of Jira and Confluence.
+    pub const JIRA_CERT_PASSWORD: &str = "jira_cert_password";
+    pub const CONFLUENCE_CERT_PASSWORD: &str = "confluence_cert_password";
+    /// Sign-ins to the user's cloud drives: refresh tokens (OneDrive, Google Drive) and the client secret of the
+    /// Google OAuth client (a desktop app's, which Google issues but does not treat as secret).
+    pub const ONEDRIVE_REFRESH_TOKEN: &str = "onedrive_refresh_token";
+    pub const GDRIVE_REFRESH_TOKEN: &str = "gdrive_refresh_token";
+    pub const GDRIVE_CLIENT_SECRET: &str = "gdrive_client_secret";
     /// The client secret of the app registration for SharePoint (Microsoft Graph).
     pub const SHAREPOINT_SECRET: &str = "sharepoint_client_secret";
     /// The client secret for OAuth2 sign-in to the AI service.
@@ -609,7 +635,7 @@ pub mod secrets {
     pub const OIDC_CLIENT_SECRET: &str = "oidc_client_secret";
     pub const HUB_TOKEN: &str = "hub_token";
     /// Every secret the application stores (removed together on uninstall).
-    pub const ALL: [&str; 11] = [CLAUDE_API_KEY, OPENAI_API_KEY, EA_PASSWORD, DB_PASSWORD, CONFLUENCE_TOKEN, MIRO_TOKEN, JIRA_TOKEN, HUB_TOKEN, SHAREPOINT_SECRET, AI_OAUTH_SECRET, OIDC_CLIENT_SECRET];
+    pub const ALL: [&str; 16] = [CLAUDE_API_KEY, OPENAI_API_KEY, EA_PASSWORD, DB_PASSWORD, CONFLUENCE_TOKEN, MIRO_TOKEN, JIRA_TOKEN, HUB_TOKEN, SHAREPOINT_SECRET, AI_OAUTH_SECRET, OIDC_CLIENT_SECRET, JIRA_CERT_PASSWORD, CONFLUENCE_CERT_PASSWORD, ONEDRIVE_REFRESH_TOKEN, GDRIVE_REFRESH_TOKEN, GDRIVE_CLIENT_SECRET];
 
     /// Secrets from the environment instead of Credential Manager: the team hub as a service or in a container.
     static FROM_ENVIRONMENT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);

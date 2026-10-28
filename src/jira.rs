@@ -15,6 +15,8 @@ pub struct Connection {
     /// Account e-mail (Cloud); empty for a personal access token (Server / Data Center).
     pub user: String,
     pub token: String,
+    /// Client certificate for a server that asks for one besides the token (mTLS).
+    pub identity: Option<reqwest::Identity>,
 }
 
 /// The Jira address must use HTTPS (the token travels with every request); plain HTTP only for a server on this computer.
@@ -83,6 +85,11 @@ pub fn to_adf(text: &str) -> Value {
     json!({ "type": "doc", "version": 1, "content": paragraphs })
 }
 
+/// The Jira address without the part of a page copied from the browser (".../browse/KEY-1", "/projects/...").
+pub fn base(url: &str) -> String {
+    crate::net::site_base(url, &["/browse", "/projects", "/secure", "/rest", "/issues", "/plugins"])
+}
+
 impl Connection {
     /// Jira Cloud (atlassian.net, or an account e-mail with an API token) uses REST API 3, the server editions API 2.
     pub fn cloud(&self) -> bool {
@@ -95,11 +102,13 @@ impl Connection {
 
     fn client(&self) -> Result<reqwest::blocking::Client> {
         check_base_url(&self.base_url)?;
-        reqwest::blocking::Client::builder().redirect(crate::net::same_origin_redirects()).timeout(Duration::from_secs(60)).build().context(crate::i18n::tr("HTTP client"))
+        let builder = reqwest::blocking::Client::builder().redirect(crate::net::same_origin_redirects()).timeout(Duration::from_secs(60));
+        let builder = match &self.identity { Some(identity) => builder.identity(identity.clone()), None => builder };
+        builder.build().context(crate::i18n::tr("HTTP client"))
     }
 
     fn url(&self, path: &str) -> String {
-        format!("{}{}{path}", self.base_url.trim().trim_end_matches('/'), self.api())
+        format!("{}{}{path}", base(&self.base_url), self.api())
     }
 
     fn send(&self, request: reqwest::blocking::RequestBuilder, what: &str) -> Result<Value> {
@@ -120,6 +129,9 @@ impl Connection {
                 })
                 .unwrap_or_else(|| text.chars().take(300).collect());
             bail!("{}", crate::i18n::fmt("{0}: Jira replied {1}: {2}", &[what.to_string(), status.to_string(), message]));
+        }
+        if crate::net::not_json(&text) {
+            bail!("{}", crate::i18n::fmt("{0}: Jira answered with a web page instead of data: check the Jira address in Settings (e.g. https://jira.company.com or https://company.com/jira, without /browse or /projects)", &[what.to_string()]));
         }
         Ok(serde_json::from_str(&text).unwrap_or(Value::Null))
     }
@@ -234,11 +246,60 @@ impl Connection {
         }
         if let Some(parent) = parent.map(str::trim).filter(|p| !p.is_empty()) {
             check_issue_key(parent)?;
-            fields["parent"] = json!({ "key": parent });
+            let kind = if issue_type.trim().is_empty() { "Task" } else { issue_type.trim() };
+            if self.cloud() || self.is_subtask_type(kind)? {
+                fields["parent"] = json!({ "key": parent });
+            } else {
+                // Jira Server / Data Center: "parent" is only for sub-tasks; a story or task joins its epic through the
+                // "Epic Link" field ("Issue type … is not a sub-task but a parent is specified" otherwise).
+                let field = self.epic_link_field()?;
+                fields[field.as_str()] = json!(parent);
+            }
         }
         let created = self.send(self.client()?.post(self.url("/issue")).json(&json!({ "fields": fields })), crate::i18n::tr("creating the issue"))?;
         let key = created["key"].as_str().context(crate::i18n::tr("Jira did not return the issue key"))?.to_string();
         Ok((key.clone(), self.browse(&key)))
+    }
+
+    /// Whether the issue type is a sub-task type (Jira Server / Data Center).
+    fn is_subtask_type(&self, name: &str) -> Result<bool> {
+        let types = self.send(self.client()?.get(self.url("/issuetype")), crate::i18n::tr("reading the issue types"))?;
+        Ok(types.as_array().into_iter().flatten().any(|t| t["name"].as_str().is_some_and(|n| n.eq_ignore_ascii_case(name)) && t["subtask"].as_bool() == Some(true)))
+    }
+
+    /// The id of the "Epic Link" field of Jira Server / Data Center (a custom field, e.g. customfield_10006).
+    fn epic_link_field(&self) -> Result<String> {
+        let fields = self.send(self.client()?.get(self.url("/field")), crate::i18n::tr("reading the fields"))?;
+        fields
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|f| f["schema"]["custom"] == "com.pyxis.greenhopper.jira:gh-epic-link" || f["name"].as_str().is_some_and(|n| n.eq_ignore_ascii_case("Epic Link")))
+            .and_then(|f| f["id"].as_str().map(str::to_string))
+            .context(crate::i18n::tr("this Jira has no \"Epic Link\" field, so the issue cannot be joined to the epic: create it without the parent and link it in Jira"))
+    }
+
+    /// Changes an existing issue: the summary, the description (replaced as a whole) and the labels (added and removed).
+    pub fn update_issue(&self, key: &str, summary: Option<&str>, description: Option<&str>, add_labels: &[String], remove_labels: &[String]) -> Result<()> {
+        check_issue_key(key)?;
+        let mut fields = json!({});
+        if let Some(summary) = summary {
+            fields["summary"] = json!(summary);
+        }
+        if let Some(description) = description {
+            fields["description"] = self.text_value(description);
+        }
+        let label = |l: &String| l.trim().replace(' ', "_");
+        let mut update = json!({});
+        let changes: Vec<Value> = add_labels.iter().map(|l| json!({ "add": label(l) })).chain(remove_labels.iter().map(|l| json!({ "remove": label(l) }))).collect();
+        if !changes.is_empty() {
+            update["labels"] = json!(changes);
+        }
+        if fields.as_object().is_some_and(|f| f.is_empty()) && changes.is_empty() {
+            bail!("{}", crate::i18n::tr("nothing to change: give a new summary, description or labels"));
+        }
+        self.send(self.client()?.put(self.url(&format!("/issue/{key}"))).json(&json!({ "fields": fields, "update": update })), crate::i18n::tr("changing the issue"))?;
+        Ok(())
     }
 
     pub fn add_comment(&self, key: &str, text: &str) -> Result<()> {
@@ -346,6 +407,9 @@ pub mod mock {
                                 (201, json!({"id": next.to_string(), "key": format!("ARCH-{next}")}))
                             }
                         }
+                        ("PUT", p) if p.starts_with("/issue/ARCH-7") => (204, json!(null)),
+                        ("GET", "/issuetype") => (200, json!([{"name":"Story","subtask":false},{"name":"Sub-task","subtask":true}])),
+                        ("GET", "/field") => (200, json!([{"id":"summary","name":"Summary","schema":{}},{"id":"customfield_10006","name":"Epic Link","schema":{"custom":"com.pyxis.greenhopper.jira:gh-epic-link"}}])),
                         ("POST", p) if p.ends_with("/comment") => (201, json!({"id":"1"})),
                         ("POST", p) if p.ends_with("/remotelink") => (201, json!({"id":1})),
                         _ => (404, json!({"errorMessages":["not found"]})),
@@ -365,7 +429,7 @@ mod tests {
     use super::*;
 
     fn connection(mock: &mock::Mock, cloud: bool, token: &str) -> Connection {
-        Connection { base_url: mock.url.clone(), user: if cloud { "architect@example.com".into() } else { String::new() }, token: token.into() }
+        Connection { base_url: mock.url.clone(), user: if cloud { "architect@example.com".into() } else { String::new() }, token: token.into(), identity: None }
     }
 
     #[test]
@@ -408,10 +472,27 @@ mod tests {
             assert_eq!(url, format!("{}/browse/ARCH-102", mock.url));
             let bad = jira.create_issue("ARCH", "Story", "", "x", &[], None).unwrap_err().to_string();
             assert!(bad.contains("400") && bad.contains("summary"), "{bad}");
+            // A story under an epic: Cloud sets "parent", Server/Data Center the "Epic Link" field; a sub-task always "parent".
+            jira.create_issue("ARCH", "Story", "Under the epic", "x", &[], Some("ARCH-1")).unwrap();
+            jira.create_issue("ARCH", "Sub-task", "A step", "x", &[], Some("ARCH-7")).unwrap();
             jira.add_comment("ARCH-7", "Checked against the model.").unwrap();
+            jira.update_issue("ARCH-7", None, Some("Clean text"), &["p1805".into()], &["old label".into()]).unwrap();
+            assert!(jira.update_issue("ARCH-7", None, None, &[], &[]).is_err());
             jira.add_web_link("ARCH-7", "ea://{1234}", "EA: PaymentGateway").unwrap();
 
             let requests = mock.requests.lock().unwrap();
+            let under_epic = requests.iter().find(|r| r.0 == "POST" && r.1.ends_with("/issue") && r.2["fields"]["summary"] == "Under the epic").unwrap();
+            if cloud {
+                assert_eq!(under_epic.2["fields"]["parent"]["key"], "ARCH-1");
+            } else {
+                assert_eq!(under_epic.2["fields"]["customfield_10006"], "ARCH-1");
+                assert!(under_epic.2["fields"]["parent"].is_null());
+            }
+            let step = requests.iter().find(|r| r.0 == "POST" && r.1.ends_with("/issue") && r.2["fields"]["summary"] == "A step").unwrap();
+            assert_eq!(step.2["fields"]["parent"]["key"], "ARCH-7");
+            let changed = requests.iter().find(|r| r.0 == "PUT").unwrap();
+            assert_eq!(changed.2["update"]["labels"], json!([{"add":"p1805"},{"remove":"old_label"}]));
+            assert!(changed.2["fields"]["summary"].is_null() && !changed.2["fields"]["description"].is_null());
             let created = requests.iter().find(|r| r.0 == "POST" && r.1.ends_with("/issue")).unwrap();
             assert_eq!(created.2["fields"]["labels"], json!(["from_model"]));
             if cloud {

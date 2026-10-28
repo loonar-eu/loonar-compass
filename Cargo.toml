@@ -1,6 +1,6 @@
 [package]
 name = "loonar-compass"
-version = "0.9.0"
+version = "0.9.1"
 edition = "2021"
 description = "AI assistant for Sparx Enterprise Architect: chat with an EA model stored in PostgreSQL (Claude API)"
 publish = false
@@ -35,7 +35,7 @@ tao = "0.37"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 rfd = "0.15"
 arboard = "3"
-windows = { version = "0.58", features = ["Win32_Foundation", "Win32_Globalization", "Win32_System_Com", "Win32_System_Ole", "Win32_System_Variant"] }
+windows = { version = "0.58", features = ["Win32_Foundation", "Win32_Globalization", "Win32_System_Com", "Win32_System_Ole", "Win32_System_Variant", "Win32_System_Registry"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 # Text of PDF documents read by the assistant.
 pdf-extract = "0.9"
@@ -47,6 +47,7 @@ docx-rs = "0.4"
 rust_xlsxwriter = "0.80"
 sha2 = "0.10"
 ring = "0.17"
+p12-keystore = "0.2"
 
 [build-dependencies]
 winresource = "0.1"

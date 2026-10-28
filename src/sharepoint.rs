@@ -29,7 +29,40 @@ fn encode_path(path: &str) -> String {
         .join("/")
 }
 
+/// The sign-in to OneDrive with the user's Microsoft account (LC-281): an app registration in Entra ID as a public
+/// client ("Mobile and desktop applications", redirect URI http://localhost) with the delegated permissions
+/// Files.ReadWrite, User.Read and offline_access.
+pub fn onedrive_provider(cfg: &crate::config::AppConfig) -> crate::user_oauth::Provider {
+    let tenant = if cfg.onedrive_tenant.trim().is_empty() { "organizations" } else { cfg.onedrive_tenant.trim() };
+    let login = std::env::var("LOONAR_GRAPH_LOGIN_URL").ok().filter(|_| cfg!(debug_assertions) || cfg!(test)).unwrap_or_else(|| format!("https://login.microsoftonline.com/{tenant}/oauth2/v2.0"));
+    crate::user_oauth::Provider {
+        name: "OneDrive",
+        auth_url: format!("{login}/authorize"),
+        token_url: format!("{login}/token"),
+        client_id: cfg.onedrive_client_id.trim().to_string(),
+        client_secret: None,
+        scopes: "offline_access Files.ReadWrite User.Read".into(),
+        loopback_host: "localhost",
+        secret: crate::config::secrets::ONEDRIVE_REFRESH_TOKEN,
+        extra: "&prompt=select_account",
+    }
+}
+
 impl Site {
+    /// The user's own OneDrive, signed in with their Microsoft account in the browser (once; then by the refresh token).
+    pub fn onedrive(cfg: &crate::config::AppConfig) -> Result<Site> {
+        if cfg.onedrive_client_id.trim().is_empty() {
+            bail!("{}", crate::i18n::tr("OneDrive is not set up: give the client ID of the app registration in Settings → OneDrive"));
+        }
+        let token = crate::user_oauth::access_token(&onedrive_provider(cfg))?;
+        let graph = std::env::var("LOONAR_GRAPH_URL").ok().filter(|_| cfg!(debug_assertions) || cfg!(test)).unwrap_or_else(|| GRAPH.to_string());
+        let http = reqwest::blocking::Client::builder().timeout(Duration::from_secs(120)).redirect(crate::net::same_origin_redirects()).build()?;
+        let mut s = Site { graph, token, drive: String::new(), http };
+        let drive = s.get_json("/me/drive")?;
+        s.drive = drive["id"].as_str().context("no OneDrive of this account")?.to_string();
+        Ok(s)
+    }
+
     /// Signs in and finds the document library of the configured site.
     pub fn connect(cfg: &crate::config::AppConfig) -> Result<Site> {
         let site = cfg.sharepoint_site.trim().trim_end_matches('/');
@@ -141,8 +174,19 @@ impl Site {
 
 /// The tool: list, read or upload.
 pub fn run(input: &Value, ctx: &crate::tools::ToolContext) -> Result<String> {
-    let action = input["action"].as_str().unwrap_or("list");
     let site = Site::connect(ctx.cfg)?;
+    let place = format!("{}/{}", ctx.cfg.sharepoint_site.trim(), ctx.cfg.sharepoint_library.trim());
+    act(&site, "SharePoint", &place, input, ctx)
+}
+
+/// The OneDrive tool: the same actions on the user's own OneDrive.
+pub fn run_onedrive(input: &Value, ctx: &crate::tools::ToolContext) -> Result<String> {
+    let site = Site::onedrive(ctx.cfg)?;
+    act(&site, "OneDrive", "OneDrive", input, ctx)
+}
+
+fn act(site: &Site, service: &str, place: &str, input: &Value, ctx: &crate::tools::ToolContext) -> Result<String> {
+    let action = input["action"].as_str().unwrap_or("list");
     match action {
         "list" => {
             let folder = input["folder"].as_str().unwrap_or("");
@@ -154,13 +198,13 @@ pub fn run(input: &Value, ctx: &crate::tools::ToolContext) -> Result<String> {
                     format!("{kind} | {} | {} KB | {}", i["name"].as_str().unwrap_or(""), i["size"].as_u64().unwrap_or(0) / 1024, i["lastModifiedDateTime"].as_str().unwrap_or("").chars().take(16).collect::<String>())
                 })
                 .collect();
-            Ok(format!("SharePoint folder /{} ({} items):\n{}", folder.trim_matches('/'), lines.len(), lines.join("\n")))
+            Ok(format!("{service} folder /{} ({} items):\n{}", folder.trim_matches('/'), lines.len(), lines.join("\n")))
         }
         "read" => {
             let path = input["path"].as_str().context("give path")?;
             let bytes = site.download(path)?;
             let text = crate::documents::text_of(path, &bytes)?;
-            Ok(format!("<external_data source=\"SharePoint {path}\">\n{}\n</external_data>", crate::documents::limited(text)))
+            Ok(format!("<external_data source=\"{service} {path}\">\n{}\n</external_data>", crate::documents::limited(text)))
         }
         "upload" => {
             let given = input["file"].as_str().context("give file (a file in the attachments folder, e.g. one you created)")?.trim();
@@ -172,9 +216,9 @@ pub fn run(input: &Value, ctx: &crate::tools::ToolContext) -> Result<String> {
             let local = ctx.cfg.attachments_dir.join(&file);
             let folder = input["folder"].as_str().unwrap_or("");
             let name = input["name"].as_str().map(String::from).unwrap_or_else(|| crate::history::display_name(&file).to_string());
-            ctx.approver.confirm_upload(&crate::i18n::fmt("Upload {0} to SharePoint: {1}/{2}", &[name.clone(), ctx.cfg.sharepoint_site.trim().to_string(), format!("{}/{}", ctx.cfg.sharepoint_library.trim(), folder.trim_matches('/'))]))?;
+            ctx.approver.confirm_upload(&crate::i18n::fmt(crate::tools::SHAREPOINT_UPLOAD_QUESTION, &[name.clone(), service.to_string(), place.to_string(), folder.trim_matches('/').to_string()]))?;
             let url = site.upload(folder, &name, &std::fs::read(&local)?)?;
-            Ok(format!("Uploaded to SharePoint: {url}"))
+            Ok(format!("Uploaded to {service}: {url}"))
         }
         other => bail!("{}", crate::i18n::fmt("unknown action {0}: use list, read or upload", &[other.to_string()])),
     }
@@ -198,6 +242,25 @@ fn attachment_named(dir: &std::path::Path, given: &str) -> Option<String> {
         })
         .max_by_key(|(modified, _)| *modified)
         .map(|(_, name)| name)
+}
+
+pub fn onedrive_definition() -> Value {
+    json!({
+        "name": "onedrive",
+        "description": "The user's own OneDrive (Microsoft 365; the user signs in in the browser on first use): list a folder (action list, folder; \"\" = the root), read a document's text (action read, path: PDF, Word, PowerPoint, Visio, Excel, text) \
+or upload a file you created in this conversation (action upload, file = its name in the attachments folder, folder, optional name; the user approves every upload).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": { "type": "string", "enum": ["list", "read", "upload"] },
+                "folder": { "type": "string" },
+                "path": { "type": "string" },
+                "file": { "type": "string" },
+                "name": { "type": "string" }
+            },
+            "required": ["action"]
+        }
+    })
 }
 
 pub fn definition() -> Value {
@@ -248,6 +311,8 @@ mod tests {
                     (200, br#"{"access_token":"graph-token","expires_in":3600}"#.to_vec())
                 } else if path.contains("/sites/contoso.sharepoint.com:/sites/Arch") {
                     (200, br#"{"id":"site-1"}"#.to_vec())
+                } else if path.ends_with("/me/drive") {
+                    (200, br#"{"id":"drive-1","name":"OneDrive"}"#.to_vec())
                 } else if path.ends_with("/sites/site-1/drive") {
                     (200, br#"{"id":"drive-1","name":"Dokumenty"}"#.to_vec())
                 } else if path.ends_with("/sites/site-1/drives") {
@@ -300,6 +365,21 @@ mod tests {
         let refusing = crate::tools::Approver::new(crate::config::ApprovalMode::Auto, Box::new(|_| false));
         let ctx2 = crate::tools::ToolContext { cfg: &cfg, approver: &refusing };
         assert!(run(&json!({ "action": "upload", "file": "abc_Review.pptx", "folder": "Reports" }), &ctx2).is_err(), "uploads are always asked");
+        // OneDrive (LC-281): the user's drive by a stored refresh token (no browser), the same actions.
+        std::env::set_var("LOONAR_GRAPH_LOGIN_URL", format!("http://{addr}/organizations/oauth2/v2.0"));
+        std::env::set_var("LOONAR_SECRET_ONEDRIVE_REFRESH_TOKEN", "refresh-1");
+        std::fs::write(&props, "model.source=file
+model.file=C:/none.qea
+onedrive.client_id=od1
+attachments.dir=attachments
+").unwrap();
+        let cfg = crate::config::AppConfig::load(&props).unwrap();
+        let ctx = crate::tools::ToolContext { cfg: &cfg, approver: &approver };
+        let listed = run_onedrive(&json!({ "action": "list", "folder": "Specs" }), &ctx).unwrap();
+        assert!(listed.starts_with("OneDrive folder /Specs") && listed.contains("file | Order.md"), "{listed}");
+        assert!(run_onedrive(&json!({ "action": "read", "path": "Specs/Order.md" }), &ctx).unwrap().contains("W1 The customer"));
+        let up = run_onedrive(&json!({ "action": "upload", "file": "abc_Review.pptx", "folder": "Reports" }), &ctx).unwrap();
+        assert!(up.starts_with("Uploaded to OneDrive: "), "{up}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

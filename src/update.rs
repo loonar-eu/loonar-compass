@@ -1,4 +1,4 @@
-//! Checking for a newer release: once a day, in the background, Compass asks GitHub for the latest release of the
+//! Checking for a newer release: once an hour (LC-237), in the background, Compass asks GitHub for the latest release of the
 //! project (a plain request with no identifier of the installation) and, when it is newer, tells the user with a
 //! bar in the window (in EA: once in System Output). Nothing is downloaded or installed. Off with the setting
 //! `app.update_check=false` or for the whole team with the hub policy `"update_check": false`.
@@ -8,7 +8,8 @@ use serde_json::{json, Value};
 use std::time::Duration;
 
 const LATEST: &str = "https://api.github.com/repos/loonar-eu/loonar-compass/releases/latest";
-const EVERY_HOURS: i64 = 24;
+/// How often GitHub is asked (also while the application stays open).
+const EVERY_MINUTES: i64 = 60;
 
 /// A release newer than this one.
 #[derive(Clone, Debug)]
@@ -57,7 +58,7 @@ fn fetch_latest() -> Result<Release> {
     Ok(Release { version: tag.trim_start_matches(['v', 'V']).to_string(), url: url.to_string() })
 }
 
-/// The newer release to tell the user about, or None: switched off (setting or team policy), checked less than a day
+/// The newer release to tell the user about, or None: switched off (setting or team policy), checked less than an hour
 /// ago with nothing new, the user said "not now" to it, or GitHub does not answer (silently: nothing to report).
 pub fn check(cfg: &AppConfig) -> Option<Release> {
     if !cfg.update_check || crate::hub::team_policy(cfg).is_some_and(|p| p["update_check"] == false) {
@@ -65,7 +66,7 @@ pub fn check(cfg: &AppConfig) -> Option<Release> {
     }
     let mut s = state(cfg);
     let now = chrono::Utc::now();
-    let recent = s["checked"].as_str().and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok()).is_some_and(|t| now.signed_duration_since(t).num_hours() < EVERY_HOURS);
+    let recent = s["checked"].as_str().and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok()).is_some_and(|t| now.signed_duration_since(t).num_minutes() < EVERY_MINUTES);
     let release = if recent {
         Release { version: s["latest"].as_str()?.to_string(), url: s["url"].as_str().unwrap_or("").to_string() }
     } else {

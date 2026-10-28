@@ -25,6 +25,18 @@
     <loc>https://loonar.eu/docs/latest/fr/install.html</loc>
   </url>
   <url>
+    <loc>https://loonar.eu/docs/latest/en/hub.html</loc>
+  </url>
+  <url>
+    <loc>https://loonar.eu/docs/latest/pl/hub.html</loc>
+  </url>
+  <url>
+    <loc>https://loonar.eu/docs/latest/de/hub.html</loc>
+  </url>
+  <url>
+    <loc>https://loonar.eu/docs/latest/fr/hub.html</loc>
+  </url>
+  <url>
     <loc>https://loonar.eu/</loc>
     <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/"/>
     <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/pl/"/>

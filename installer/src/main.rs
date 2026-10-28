@@ -648,6 +648,22 @@ fn read_install(product: &Product, scope: Scope) -> Option<Installed> {
     Some(Installed { scope, dir, version: reg::get_string(root, product.uninstall_key, "DisplayVersion").filter(|v| !v.trim().is_empty()) })
 }
 
+/// Closes the application started from `dir` (its windows first, as a person would; whatever is still running after
+/// a few seconds is stopped), so that a failed installation can be retried (LC-284).
+fn close_app_in(dir: &Path) {
+    let exe = dir.join(APP_EXE).display().to_string().replace('\'', "''");
+    let script = format!(
+        "$p = Get-Process -Name LoonarCompass -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -eq '{exe}' }}; \
+         $p | ForEach-Object {{ [void]$_.CloseMainWindow() }}; \
+         for ($i = 0; $i -lt 20 -and ($p | Where-Object {{ -not $_.HasExited }})); $i++) {{ Start-Sleep -Milliseconds 250; $p | ForEach-Object {{ $_.Refresh() }} }}; \
+         $p | Where-Object {{ -not $_.HasExited }} | Stop-Process -Force -ErrorAction SilentlyContinue"
+    );
+    let _ = Command::new(windows_dir().join("System32").join("WindowsPowerShell").join("v1.0").join("powershell.exe"))
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .creation_flags(CREATE_NO_WINDOW)
+        .status();
+}
+
 /// Whether this program is the uninstaller in `dir` (it cannot delete itself while it runs).
 fn running_from(dir: &Path) -> bool {
     std::env::current_exe().is_ok_and(|me| same_path(&me, &dir.join(UNINSTALL_EXE)))
@@ -1224,6 +1240,8 @@ fn remove_uninstaller_later(dir: &Path) {
 #[derive(Clone, Default)]
 struct ConfigForm {
     configure_now: bool,
+    /// Anonymous usage statistics (own wizard page): on unless the user switches them off there.
+    statistics: bool,
     api_key: String,
     /// "postgres" or "file" (an EA project file .qea/.qeax).
     model_source: String,
@@ -1262,8 +1280,13 @@ impl ConfigForm {
 fn save_user_settings(c: &ConfigForm, lang: Lang) -> Result<Vec<String>> {
     let props = config::user_data_dir().join("app.properties");
     let new_file = !props.is_file();
-    // Language chosen in the wizard: always, also on an update and when configuration is skipped now.
-    config::save_properties(&props, &[("ui.language", lang.code().to_string())])?;
+    // Language and the statistics choice made in the wizard: always, also on an update and when configuration is
+    // skipped now (the choice was made here, so the application does not ask again at its first start).
+    config::save_properties(&props, &[
+        ("ui.language", lang.code().to_string()),
+        ("telemetry.enabled", c.statistics.to_string()),
+        ("telemetry.notice", "shown".to_string()),
+    ])?;
     if !c.configure_now {
         return Ok(vec![crate::i18n::tr("Settings: to be completed in the application, in the \"Settings\" view").to_string()]);
     }
@@ -1551,6 +1574,7 @@ enum Page {
     Welcome,
     News,
     License,
+    Statistics,
     Folder,
     Config,
     Summary,
@@ -1880,7 +1904,8 @@ impl Setup {
         let ea_path = if ea_path.contains(":\\\\") { ea_path.replace("\\\\", "\\") } else { ea_path };
         let approval_mode = config::ApprovalMode::parse(&get("approval.mode", "ask")).map_or("ask", |m| m.as_str()).to_string();
         let config = ConfigForm {
-            configure_now: get("db.host", "").is_empty() && get("model.file", "").is_empty(),
+            // The settings are entered in the application (its start wizard), not in the installer (LC-283).
+            configure_now: false,
             model_source: if get("model.source", "postgres") == "file" { "file".to_string() } else { "postgres".to_string() },
             model_file: get("model.file", ""),
             db_host: get("db.host", ""),
@@ -1890,6 +1915,7 @@ impl Setup {
             ea_path,
             ea_user: get("ea.user", ""),
             approval_mode,
+            statistics: saved.get("telemetry.enabled").is_none_or(|v| v != "false"),
             ..Default::default()
         };
         let lang = i18n::current();
@@ -2122,6 +2148,16 @@ impl eframe::App for Setup {
                             if ui.button(crate::i18n::tr("Finish")).clicked() {
                                 close = true;
                             }
+                            // A failed installation can be retried without starting the wizard again (LC-284).
+                            if !self.uninstall && matches!(self.outcome, Some(Err(_))) {
+                                if ui.button(crate::i18n::tr("Try again")).clicked() {
+                                    start = true;
+                                }
+                                if ui.button(bold(&crate::i18n::fmt("Close {0} and try again", &["Compass".to_string()]), 14.0)).clicked() {
+                                    close_app_in(&PathBuf::from(self.dir.trim()));
+                                    start = true;
+                                }
+                            }
                         }
                         _ => {
                             if ui.add_enabled(!working && !old_removal_running, egui::Button::new(crate::i18n::tr("Cancel"))).clicked() {
@@ -2132,8 +2168,9 @@ impl eframe::App for Setup {
                                 (_, Page::Language) => (crate::i18n::tr("Next >"), Some(Page::Welcome)),
                                 (false, Page::Welcome) => (crate::i18n::tr("Next >"), Some(Page::News)),
                                 (_, Page::News) => (crate::i18n::tr("Next >"), Some(Page::License)),
-                                (_, Page::License) => (crate::i18n::tr("Next >"), Some(Page::Folder)),
-                                (_, Page::Folder) => (crate::i18n::tr("Next >"), Some(Page::Config)),
+                                (_, Page::License) => (crate::i18n::tr("Next >"), Some(Page::Statistics)),
+                                (_, Page::Statistics) => (crate::i18n::tr("Next >"), Some(Page::Folder)),
+                                (_, Page::Folder) => (crate::i18n::tr("Next >"), Some(Page::Summary)),
                                 (_, Page::Config) => (crate::i18n::tr("Next >"), Some(Page::Summary)),
                                 (_, Page::Summary) => (crate::i18n::tr("Install"), None),
                                 _ => (crate::i18n::tr("Next >"), None),
@@ -2156,9 +2193,10 @@ impl eframe::App for Setup {
                                 Page::Welcome => Some(Page::Language),
                                 Page::News => Some(Page::Welcome),
                                 Page::License => Some(Page::News),
-                                Page::Folder => Some(Page::License),
+                                Page::Statistics => Some(Page::License),
+                                Page::Folder => Some(Page::Statistics),
                                 Page::Config => Some(Page::Folder),
-                                Page::Summary => Some(Page::Config),
+                                Page::Summary => Some(Page::Folder),
                                 _ => None,
                             };
                             if !self.uninstall
@@ -2182,6 +2220,7 @@ impl eframe::App for Setup {
                     (false, Page::Welcome) => self.welcome_page(ui),
                     (_, Page::News) => self.news_page(ui, height),
                     (_, Page::License) => self.license_page(ui, height),
+                    (_, Page::Statistics) => self.statistics_page(ui),
                     (_, Page::Folder) => self.folder_page(ui),
                     (_, Page::Config) => self.config_page(ui),
                     (_, Page::Summary) => self.summary_page(ui),
@@ -2260,7 +2299,7 @@ impl Setup {
             ui.label(line);
         }
         ui.add_space(10.0);
-        ui.add(egui::Label::new(crate::i18n::tr("You can enter these details in the wizard or later in the application, on the \"Settings\" tab. If the application is already installed, the wizard will update it and keep your settings and conversation history.")).wrap());
+        ui.add(egui::Label::new(crate::i18n::tr("You enter these details in the application: at its first start it guides you through them (and they can be changed in Settings). If the application is already installed, the wizard will update it and keep your settings and conversation history.")).wrap());
         ui.add_space(10.0);
         ui.label(egui::RichText::new(crate::i18n::tr("Click \"Next\" to continue.")).color(theme::MUTED));
     }
@@ -2318,6 +2357,33 @@ impl Setup {
         ui.add_space(8.0);
         ui.radio_value(&mut self.accepted, true, crate::i18n::tr("I accept the terms of the license agreement"));
         ui.radio_value(&mut self.accepted, false, crate::i18n::tr("I do not accept the terms of the license agreement"));
+    }
+
+    /// Anonymous usage statistics: the user's choice, on by default, with why they matter.
+    fn statistics_page(&mut self, ui: &mut egui::Ui) {
+        ui.label(bold(crate::i18n::tr("Usage statistics"), 21.0));
+        ui.add_space(4.0);
+        ui.add(egui::Label::new(crate::i18n::tr("Loonar Compass can send anonymous usage statistics: at each start and every hour while it is open. It is your choice: the application works exactly the same either way, and you can change your mind at any time in the application, in the Usage statistics view.")).wrap());
+        ui.add_space(10.0);
+        egui::Frame::none().stroke(egui::Stroke::new(1.5_f32, theme::ERROR)).rounding(6.0).inner_margin(egui::Margin::same(12.0)).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(egui::RichText::new(crate::i18n::tr("A request from the author: please leave them on")).size(15.0).strong().color(theme::ERROR));
+            ui.add_space(4.0);
+            ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Loonar Compass is free. The statistics are the only way to see which functions users really use, where the assistant fails and what to fix first. Without them, decisions about the next versions are guesses.")).color(theme::ERROR)).wrap());
+        });
+        ui.add_space(10.0);
+        ui.label(bold(crate::i18n::tr("What is sent"), 14.5));
+        ui.add(egui::Label::new(crate::i18n::tr("A random installation id, the application and Windows version and the language; the kinds of tasks and how they ended, how often each function of the assistant was used and how often it failed, ratings of answers, what the assistant could not do, approvals and the kind of setup.")).wrap());
+        ui.add_space(6.0);
+        ui.label(bold(crate::i18n::tr("What is never sent"), 14.5));
+        ui.add(egui::Label::new(crate::i18n::tr("The content of conversations, names from your model, file paths, server addresses, error messages or user names.")).wrap());
+        ui.add_space(6.0);
+        ui.horizontal_wrapped(|ui| {
+            ui.label(crate::i18n::tr("Only the author sees the data; summaries over all installations together are published:"));
+            ui.hyperlink_to(crate::i18n::tr("Published statistics"), "https://compass-feedback.loonar-eu.workers.dev/v1/summary");
+        });
+        ui.add_space(12.0);
+        ui.checkbox(&mut self.config.statistics, egui::RichText::new(crate::i18n::tr("Send anonymous usage statistics (recommended)")).strong());
     }
 
     fn folder_page(&mut self, ui: &mut egui::Ui) {
@@ -2476,6 +2542,9 @@ impl Setup {
                 shortcuts.push(crate::i18n::tr("desktop"));
             }
             ui.label(if shortcuts.is_empty() { crate::i18n::tr("none").to_string() } else { shortcuts.join(", ") });
+            ui.add_space(6.0);
+            ui.label(bold(crate::i18n::tr("Usage statistics"), 14.5));
+            ui.label(if self.config.statistics { crate::i18n::tr("on (you can switch them off in the application)") } else { crate::i18n::tr("off") });
             ui.add_space(6.0);
             ui.label(bold(crate::i18n::tr("Configuration"), 14.5));
             if self.config.configure_now {

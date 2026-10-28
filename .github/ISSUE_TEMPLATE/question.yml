@@ -1,0 +1,17 @@
+name: Question
+description: How to do something with Loonar Compass.
+labels: [question]
+body:
+  - type: input
+    id: install
+    attributes:
+      label: Installation id
+      description: In the application, About → "Installation id" → Copy.
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true
