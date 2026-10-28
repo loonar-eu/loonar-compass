@@ -17,6 +17,7 @@ Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Lo
 - **Mniej pytań o skrypty EA:** po pierwszej zgodzie kolejne skrypty tej samej budowy – ten sam kod z innymi danymi, np. następna porcja aliasów – zapisują się i uruchamiają bez pytania (do zamknięcia Compassa); inny kod pyta jak dotąd. Alias i stereotyp operacji oraz atrybutu asystent ustawia teraz wprost przy zapisie, więc do aliasów (np. ścieżek REST) skrypt nie jest potrzebny. W karcie zgody na skrypt jest też przycisk „Zatwierdź wszystkie skrypty do zamknięcia Compassa”, a zmiany, które da się zrobić zwykłym zapisem, asystent robi bez skryptów.
 - **Jedna zgoda na serię:** w karcie zgody na zgłoszenie Jira, publikację w Confluence, notatkę pamięci, wywołanie narzędzia MCP, wysyłkę pliku i skrypt EA jest przycisk „Zatwierdź wszystkie … do zamknięcia Compassa”. Dziesięć zgłoszeń Jira to jedno kliknięcie zamiast dziesięciu.
 - **Story i UC pod epikiem w Jira Server / Data Center:** zgłoszenie z rodzicem-epikiem jest dowiązywane przez pole „Epic Link” (pole `parent` jest tam tylko dla pod-zadań). Wcześniej Jira odrzucała je błędem „Issue type … is not a sub-task but a parent is specified”. Jira Cloud działa jak dotąd.
+- **Zmiana zgłoszeń Jira:** asystent poprawia istniejące zgłoszenia – tytuł, opis i etykiety (dodaje i usuwa), np. usuwa z kryteriów akceptacji niepotrzebne oznaczenie we wszystkich zgłoszeniach naraz. Zgoda jak przy zakładaniu, także jedną na wszystkie.
 
 ## Wersja 0.9 (2026-10-27)
 

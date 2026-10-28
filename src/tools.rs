@@ -24,6 +24,7 @@ const SAVE_SCRIPT_QUESTION: &str = "Save the EA script {0}.{1} ({2}, {3} lines){
 const RUN_SCRIPT_QUESTION: &str = "Run the EA script {0}.{1} ({2}) in the open EA window? A script can change anything in the model.\n{3}";
 const JIRA_CREATE_QUESTION: &str = "Create a Jira issue in project {0}:\n{1}: {2}\n\n{3}";
 const JIRA_ADD_QUESTION: &str = "Add to the Jira issue {0}:\n{1}";
+const JIRA_UPDATE_QUESTION: &str = "Change the Jira issue {0}:\n{1}";
 const CONFLUENCE_REPLACE_QUESTION: &str = "Publishing to Confluence will REPLACE the content of an existing page:\n\"{0}\" (ID {1}, version {2}) in space {3}.\nThe previous version stays in the page history.";
 const CONFLUENCE_NEW_QUESTION: &str = "Publishing a new page to Confluence:\n\"{0}\" in space {1}";
 const MEMORY_SAVE_QUESTION: &str = "Save a note to the assistant's memory:\n\"{0}\"\n{1}";
@@ -35,7 +36,7 @@ pub const SHAREPOINT_UPLOAD_QUESTION: &str = "Upload {0} to {1}: {2}/{3}";
 /// Kinds of always-asked actions: (kind, its questions, the button of the approval card).
 const TRUSTABLE: &[(&str, &[&str], &str)] = &[
     ("script", &[SAVE_SCRIPT_QUESTION, RUN_SCRIPT_QUESTION], "Approve all scripts until Compass is closed"),
-    ("jira", &[JIRA_CREATE_QUESTION, JIRA_ADD_QUESTION], "Approve all Jira issues until Compass is closed"),
+    ("jira", &[JIRA_CREATE_QUESTION, JIRA_ADD_QUESTION, JIRA_UPDATE_QUESTION], "Approve all Jira issues until Compass is closed"),
     ("confluence", &[CONFLUENCE_REPLACE_QUESTION, CONFLUENCE_NEW_QUESTION], "Approve all Confluence publishing until Compass is closed"),
     ("memory", &[MEMORY_SAVE_QUESTION, MEMORY_REMOVE_QUESTION], "Approve all memory notes until Compass is closed"),
     ("mcp", &[MCP_QUESTION], "Approve all MCP tool calls until Compass is closed"),
@@ -485,6 +486,23 @@ Optionally adds a web link, e.g. to the model element (title \"EA: name\", url e
             }
         },
         {
+            "name": "jira_update_issue",
+            "description": "Changes an existing Jira issue: a new summary, a new description (it replaces the whole description: read the issue \
+with jira_issue first and send the full corrected text) and labels to add or remove. Use it to correct issues, also ones created earlier in this \
+conversation. The user approves it (once for all Jira changes if they choose).",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "key": { "type": "string" },
+                    "summary": { "type": "string" },
+                    "description": { "type": "string", "description": "The whole new description, plain text; one paragraph per line." },
+                    "add_labels": { "type": "array", "items": { "type": "string" } },
+                    "remove_labels": { "type": "array", "items": { "type": "string" } }
+                },
+                "required": ["key"]
+            }
+        },
+        {
             "name": "jira_comment",
             "description": "Adds a comment and/or a web link to an existing Jira issue. The user always approves it before it is sent.",
             "input_schema": {
@@ -753,6 +771,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "jira_issue" => jira(ctx.cfg)?.issue(input["key"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["key".to_string()]))?.trim()).map(Into::into),
         "jira_create_issue" => jira_create_issue(input, ctx).map(Into::into),
         "jira_comment" => jira_comment(input, ctx).map(Into::into),
+        "jira_update_issue" => jira_update_issue(input, ctx).map(Into::into),
         "gap_analysis" => crate::governance::gap(input, ctx.cfg).map(Into::into),
         "operation_usage" => operation_usage(input, ctx.cfg).map(Into::into),
         "ea_ui" => {
@@ -1068,6 +1087,31 @@ fn jira_create_issue(input: &Value, ctx: &ToolContext) -> Result<String> {
 }
 
 /// Comment or web link on an existing issue: always with the user's consent.
+fn jira_update_issue(input: &Value, ctx: &ToolContext) -> Result<String> {
+    let connection = jira(ctx.cfg)?;
+    let key = input["key"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["key".to_string()]))?.trim().to_string();
+    let summary = input["summary"].as_str().map(str::trim).filter(|s| !s.is_empty());
+    let description = input["description"].as_str();
+    let list = |name: &str| -> Vec<String> { input[name].as_array().into_iter().flatten().filter_map(|v| v.as_str()).map(String::from).collect() };
+    let (add, remove) = (list("add_labels"), list("remove_labels"));
+    let mut what = Vec::new();
+    if let Some(s) = summary {
+        what.push(crate::i18n::fmt("summary: {0}", &[s.to_string()]));
+    }
+    if let Some(d) = description {
+        what.push(crate::i18n::fmt("new description:\n{0}", &[shorten_for_approval(d)]));
+    }
+    if !add.is_empty() {
+        what.push(crate::i18n::fmt("add labels: {0}", &[add.join(", ")]));
+    }
+    if !remove.is_empty() {
+        what.push(crate::i18n::fmt("remove labels: {0}", &[remove.join(", ")]));
+    }
+    ctx.approver.confirm_kind("jira", &crate::i18n::fmt(JIRA_UPDATE_QUESTION, &[key.clone(), what.join("\n")]))?;
+    connection.update_issue(&key, summary, description, &add, &remove)?;
+    Ok(crate::i18n::fmt("Changed the Jira issue {0}: {1}", &[key.clone(), connection.browse(&key)]))
+}
+
 fn jira_comment(input: &Value, ctx: &ToolContext) -> Result<String> {
     let connection = jira(ctx.cfg)?;
     let key = input["key"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["key".to_string()]))?.trim().to_string();

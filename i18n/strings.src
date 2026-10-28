@@ -1803,3 +1803,11 @@ The next ones of this kind go without asking until you close Compass. Other chan
 reading the issue types ‖ odczyt typów zgłoszeń ‖ Lesen der Vorgangstypen ‖ lecture des types de tickets
 reading the fields ‖ odczyt pól ‖ Lesen der Felder ‖ lecture des champs
 this Jira has no "Epic Link" field, so the issue cannot be joined to the epic: create it without the parent and link it in Jira ‖ ta Jira nie ma pola „Epic Link”, więc zgłoszenia nie da się dowiązać do epiku: utwórz je bez rodzica i powiąż w Jirze ‖ dieses Jira hat kein Feld „Epic Link“, daher kann der Vorgang nicht mit dem Epic verknüpft werden: legen Sie ihn ohne übergeordneten Vorgang an und verknüpfen Sie ihn in Jira ‖ ce Jira n’a pas de champ « Epic Link », le ticket ne peut donc pas être rattaché à l’epic : créez-le sans parent et liez-le dans Jira
+Change the Jira issue {0}:\n{1} ‖ Zmienić zgłoszenie Jira {0}:\n{1} ‖ Den Jira-Vorgang {0} ändern:\n{1} ‖ Modifier le ticket Jira {0} :\n{1}
+summary: {0} ‖ tytuł: {0} ‖ Zusammenfassung: {0} ‖ résumé : {0}
+new description:\n{0} ‖ nowy opis:\n{0} ‖ neue Beschreibung:\n{0} ‖ nouvelle description :\n{0}
+add labels: {0} ‖ dodaj etykiety: {0} ‖ Labels hinzufügen: {0} ‖ ajouter les étiquettes : {0}
+remove labels: {0} ‖ usuń etykiety: {0} ‖ Labels entfernen: {0} ‖ retirer les étiquettes : {0}
+Changed the Jira issue {0}: {1} ‖ Zmieniono zgłoszenie Jira {0}: {1} ‖ Jira-Vorgang {0} geändert: {1} ‖ Ticket Jira {0} modifié : {1}
+changing the issue ‖ zmiana zgłoszenia ‖ Ändern des Vorgangs ‖ modification du ticket
+nothing to change: give a new summary, description or labels ‖ nie ma czego zmienić: podaj nowy tytuł, opis albo etykiety ‖ nichts zu ändern: geben Sie eine neue Zusammenfassung, Beschreibung oder Labels an ‖ rien à modifier : donnez un nouveau résumé, une description ou des étiquettes

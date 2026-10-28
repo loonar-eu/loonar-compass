@@ -279,6 +279,29 @@ impl Connection {
             .context(crate::i18n::tr("this Jira has no \"Epic Link\" field, so the issue cannot be joined to the epic: create it without the parent and link it in Jira"))
     }
 
+    /// Changes an existing issue: the summary, the description (replaced as a whole) and the labels (added and removed).
+    pub fn update_issue(&self, key: &str, summary: Option<&str>, description: Option<&str>, add_labels: &[String], remove_labels: &[String]) -> Result<()> {
+        check_issue_key(key)?;
+        let mut fields = json!({});
+        if let Some(summary) = summary {
+            fields["summary"] = json!(summary);
+        }
+        if let Some(description) = description {
+            fields["description"] = self.text_value(description);
+        }
+        let label = |l: &String| l.trim().replace(' ', "_");
+        let mut update = json!({});
+        let changes: Vec<Value> = add_labels.iter().map(|l| json!({ "add": label(l) })).chain(remove_labels.iter().map(|l| json!({ "remove": label(l) }))).collect();
+        if !changes.is_empty() {
+            update["labels"] = json!(changes);
+        }
+        if fields.as_object().is_some_and(|f| f.is_empty()) && changes.is_empty() {
+            bail!("{}", crate::i18n::tr("nothing to change: give a new summary, description or labels"));
+        }
+        self.send(self.client()?.put(self.url(&format!("/issue/{key}"))).json(&json!({ "fields": fields, "update": update })), crate::i18n::tr("changing the issue"))?;
+        Ok(())
+    }
+
     pub fn add_comment(&self, key: &str, text: &str) -> Result<()> {
         check_issue_key(key)?;
         self.send(self.client()?.post(self.url(&format!("/issue/{key}/comment"))).json(&json!({ "body": self.text_value(text) })), crate::i18n::tr("adding the comment"))?;
@@ -384,6 +407,7 @@ pub mod mock {
                                 (201, json!({"id": next.to_string(), "key": format!("ARCH-{next}")}))
                             }
                         }
+                        ("PUT", p) if p.starts_with("/issue/ARCH-7") => (204, json!(null)),
                         ("GET", "/issuetype") => (200, json!([{"name":"Story","subtask":false},{"name":"Sub-task","subtask":true}])),
                         ("GET", "/field") => (200, json!([{"id":"summary","name":"Summary","schema":{}},{"id":"customfield_10006","name":"Epic Link","schema":{"custom":"com.pyxis.greenhopper.jira:gh-epic-link"}}])),
                         ("POST", p) if p.ends_with("/comment") => (201, json!({"id":"1"})),
@@ -452,6 +476,8 @@ mod tests {
             jira.create_issue("ARCH", "Story", "Under the epic", "x", &[], Some("ARCH-1")).unwrap();
             jira.create_issue("ARCH", "Sub-task", "A step", "x", &[], Some("ARCH-7")).unwrap();
             jira.add_comment("ARCH-7", "Checked against the model.").unwrap();
+            jira.update_issue("ARCH-7", None, Some("Clean text"), &["p1805".into()], &["old label".into()]).unwrap();
+            assert!(jira.update_issue("ARCH-7", None, None, &[], &[]).is_err());
             jira.add_web_link("ARCH-7", "ea://{1234}", "EA: PaymentGateway").unwrap();
 
             let requests = mock.requests.lock().unwrap();
@@ -464,6 +490,9 @@ mod tests {
             }
             let step = requests.iter().find(|r| r.0 == "POST" && r.1.ends_with("/issue") && r.2["fields"]["summary"] == "A step").unwrap();
             assert_eq!(step.2["fields"]["parent"]["key"], "ARCH-7");
+            let changed = requests.iter().find(|r| r.0 == "PUT").unwrap();
+            assert_eq!(changed.2["update"]["labels"], json!([{"add":"p1805"},{"remove":"old_label"}]));
+            assert!(changed.2["fields"]["summary"].is_null() && !changed.2["fields"]["description"].is_null());
             let created = requests.iter().find(|r| r.0 == "POST" && r.1.ends_with("/issue")).unwrap();
             assert_eq!(created.2["fields"]["labels"], json!(["from_model"]));
             if cloud {

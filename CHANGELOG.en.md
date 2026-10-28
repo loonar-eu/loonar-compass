@@ -17,6 +17,7 @@ All notable changes to Loonar Compass (named Loonar EA Assistant until version 0
 - **Fewer questions about EA scripts:** after the first approval, further scripts of the same build – the same code with other data, e.g. the next batch of aliases – are saved and run without asking (until Compass is closed); other code asks as before. The assistant now sets the alias and stereotype of operations and attributes directly when writing, so aliases (e.g. REST paths) need no script. The approval card of a script also has the button “Approve all scripts until Compass is closed”, and changes that an ordinary write can make the assistant makes without scripts.
 - **One approval for a series:** the approval card of a Jira issue, Confluence publishing, a memory note, an MCP tool call, an upload and an EA script has the button “Approve all … until Compass is closed”. Ten Jira issues are one click instead of ten.
 - **Stories and use cases under an epic on Jira Server / Data Center:** an issue with an epic as its parent is joined through the “Epic Link” field (`parent` is only for sub-tasks there). Before, Jira rejected it with “Issue type … is not a sub-task but a parent is specified”. Jira Cloud works as before.
+- **Changing Jira issues:** the assistant corrects existing issues – summary, description and labels (added and removed), e.g. removes a needless mark from the acceptance criteria of all issues at once. Approved as when creating, also once for all.
 
 ## Version 0.9 (2026-10-27)
 
