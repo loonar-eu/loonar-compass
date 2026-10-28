@@ -2363,24 +2363,24 @@ impl Setup {
     fn statistics_page(&mut self, ui: &mut egui::Ui) {
         ui.label(bold(crate::i18n::tr("Usage statistics"), 21.0));
         ui.add_space(4.0);
-        ui.add(egui::Label::new(crate::i18n::tr("Loonar Compass can send anonymous usage statistics once a day. It is your choice: the application works exactly the same either way, and you can change your mind at any time in the application, in the Usage statistics view.")).wrap());
+        ui.add(egui::Label::new(crate::i18n::tr("Loonar Compass can send anonymous usage statistics: at each start and every hour while it is open. It is your choice: the application works exactly the same either way, and you can change your mind at any time in the application, in the Usage statistics view.")).wrap());
         ui.add_space(10.0);
         egui::Frame::none().stroke(egui::Stroke::new(1.5_f32, theme::ERROR)).rounding(6.0).inner_margin(egui::Margin::same(12.0)).show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.label(egui::RichText::new(crate::i18n::tr("Important: please leave them on")).size(15.0).strong().color(theme::ERROR));
+            ui.label(egui::RichText::new(crate::i18n::tr("A request from the author: please leave them on")).size(15.0).strong().color(theme::ERROR));
             ui.add_space(4.0);
-            ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Loonar Compass is free and developed by one person. The statistics are the only way to see which functions people really use, where the assistant fails and what to fix first. Without them, decisions about the next versions are guesses.")).color(theme::ERROR)).wrap());
+            ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Loonar Compass is free. The statistics are the only way to see which functions users really use, where the assistant fails and what to fix first. Without them, decisions about the next versions are guesses.")).color(theme::ERROR)).wrap());
         });
         ui.add_space(10.0);
         ui.label(bold(crate::i18n::tr("What is sent"), 14.5));
-        ui.add(egui::Label::new(crate::i18n::tr("How often each function of the assistant was used and how often it failed, the number of answers, approvals, the application and Windows version, the language and the kind of setup, with a random installation id.")).wrap());
+        ui.add(egui::Label::new(crate::i18n::tr("A random installation id, the application and Windows version and the language; the kinds of tasks and how they ended, how often each function of the assistant was used and how often it failed, ratings of answers, what the assistant could not do, approvals and the kind of setup.")).wrap());
         ui.add_space(6.0);
         ui.label(bold(crate::i18n::tr("What is never sent"), 14.5));
         ui.add(egui::Label::new(crate::i18n::tr("The content of conversations, names from your model, file paths, server addresses, error messages or user names.")).wrap());
         ui.add_space(6.0);
         ui.horizontal_wrapped(|ui| {
-            ui.label(crate::i18n::tr("All summaries are public:"));
-            ui.hyperlink_to("github.com/loonar-eu/compass-stats", "https://github.com/loonar-eu/compass-stats");
+            ui.label(crate::i18n::tr("Only the author sees the data; summaries over all installations together are published:"));
+            ui.hyperlink_to(crate::i18n::tr("Published statistics"), "https://compass-feedback.loonar-eu.workers.dev/v1/summary");
         });
         ui.add_space(12.0);
         ui.checkbox(&mut self.config.statistics, egui::RichText::new(crate::i18n::tr("Send anonymous usage statistics (recommended)")).strong());

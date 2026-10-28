@@ -66,9 +66,7 @@ pub fn allowed(cfg: &crate::config::AppConfig, given: &str, ask: &dyn Fn(&str) -
         bail!("{}", crate::i18n::fmt("{0}: give a full path on a local drive; network shares and relative paths are not allowed", &[given.to_string()]));
     }
     let path = PathBuf::from(&text);
-    // The folders of the settings, also those approved earlier in this conversation (saved to the file since).
-    let mut roots = cfg.code_folders.clone();
-    roots.extend(crate::config::AppConfig::load(&cfg.base_dir.join("app.properties")).map(|c| c.code_folders).unwrap_or_default());
+    let roots = folders(cfg);
     let inside = roots.iter().any(|root| {
         let root = root.trim().replace('/', "\\").trim_end_matches('\\').to_lowercase();
         !root.is_empty() && (text.to_lowercase() == root || text.to_lowercase().starts_with(&format!("{root}\\")))
@@ -77,12 +75,25 @@ pub fn allowed(cfg: &crate::config::AppConfig, given: &str, ask: &dyn Fn(&str) -
         // The folder (of a file: the folder it is in) is remembered once approved: no question for it again.
         let folder = if path.is_file() { path.parent().map(Path::to_path_buf).unwrap_or_else(|| path.clone()) } else { path.clone() };
         ask(&crate::i18n::fmt(
-            "Read the source code in {0}? What is read goes to the AI model of the conversation. The folder is then remembered in Settings → Enterprise Architect → Source code folders and read without asking.",
+            "Read the source code in {0}? What is read goes to the AI model of the conversation. The folder is then remembered in Settings → Source code and read without asking.",
             &[folder.display().to_string()],
         ))?;
         remember(cfg, &folder);
     }
     Ok(path)
+}
+
+/// The code folders as the settings file has them now: saved in another window of Compass (e.g. the separate window
+/// while this one runs in EA) or approved earlier in this conversation, together with those loaded at the start.
+pub fn folders(cfg: &crate::config::AppConfig) -> Vec<String> {
+    let mut all = cfg.code_folders.clone();
+    for f in crate::config::AppConfig::load(&cfg.base_dir.join("app.properties")).map(|c| c.code_folders).unwrap_or_default() {
+        let same = |a: &String| a.replace('/', "\\").trim_end_matches('\\').eq_ignore_ascii_case(f.replace('/', "\\").trim_end_matches('\\'));
+        if !all.iter().any(same) {
+            all.push(f);
+        }
+    }
+    all
 }
 
 /// Adds an approved folder to `code.folders` in the settings file (the running conversation reads it from there).

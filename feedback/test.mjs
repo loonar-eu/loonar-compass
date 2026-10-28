@@ -1,6 +1,6 @@
 // Tests of the feedback Worker against a fake GitHub API: node feedback/test.mjs
 import assert from "node:assert/strict";
-import worker, { validateStats, validateReport, noMentions } from "./worker.js";
+import worker, { validateStats, validateReport, noMentions, weekSummary, lastWeek } from "./worker.js";
 
 const calls = [];
 let issueNumber = 41;
@@ -114,4 +114,28 @@ assert.equal(r.status, 429);
 // 7. Health and unknown paths.
 assert.equal((await worker.fetch(new Request("https://feedback.test/health"), env)).status, 200);
 assert.equal((await worker.fetch(new Request("https://feedback.test/v1/other", { method: "POST" }), env)).status, 404);
+// 8. The weekly summary: totals over all installations, rare values folded into "other".
+assert.equal(lastWeek(new Date("2026-10-27T03:17:00Z")), "2026-10-19");
+assert.equal(lastWeek(new Date("2026-11-01T10:00:00Z")), "2026-10-19");
+{
+  const ids = ["a", "b", "c", "d"].map((x) => `7f3c2b1a-1234-4abc-8def-0123456789a${x}`);
+  const starts = [
+    ...ids.slice(0, 3).map((install) => ({ install, day: "2026-10-20", app: "0.9.1", os: "Windows 11 (26200)", lang: "pl" })),
+    { install: ids[0], day: "2026-10-22", app: "0.9.1", os: "Windows 11 (26200)", lang: "pl" },
+    { install: ids[3], day: "2026-10-21", app: "0.9.0", os: "Windows 10 (19045)", lang: "de" },
+  ];
+  const days = ids.map((install) => ({ install, day: "2026-10-20", data: JSON.stringify({ ...summary, install, day: "2026-10-20" }) }));
+  const first = { [ids[0]]: "2026-10-01", [ids[1]]: "2026-10-20", [ids[2]]: "2026-10-21", [ids[3]]: "2026-09-01" };
+  const w = weekSummary("2026-10-19", starts, days, first);
+  assert.equal(w.installations, 4);
+  assert.equal(w.new_installations, 2);
+  assert.equal(w.returning, 2); // a on two days; d started on another day than its summary
+  assert.deepEqual(w.versions, { "0.9.1": 3, other: 1 });
+  assert.deepEqual(w.languages, { pl: 3, other: 1 });
+  assert.deepEqual(w.systems, { "Windows 11": 3, other: 1 });
+  assert.equal(w.counters.turns, 56);
+  assert.equal(w.counters.tools.db_query, 88);
+  assert.deepEqual(w.setup.jira, { true: 4 });
+  assert.ok(!JSON.stringify(w).includes(ids[0]) && !("ai_model" in w.setup));
+}
 console.log("feedback worker: all tests passed");

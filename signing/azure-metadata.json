@@ -1,0 +1,6 @@
+{
+  "Endpoint": "https://plc.codesigning.azure.net/",
+  "CodeSigningAccountName": "loonarcompass",
+  "CertificateProfileName": "loonar-public",
+  "ExcludeCredentials": ["ManagedIdentityCredential", "WorkloadIdentityCredential", "VisualStudioCredential", "VisualStudioCodeCredential", "AzurePowerShellCredential", "AzureDeveloperCliCredential", "InteractiveBrowserCredential"]
+}

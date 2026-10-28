@@ -2,7 +2,7 @@
 <html lang="pl">
 <head>
 <meta charset="utf-8">
-<title>Compass Hub 0.9 - Instrukcja instalacji dla działu IT</title>
+<title>Compass Hub 0.9.1 - Instrukcja instalacji dla działu IT</title>
 <style>
   @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
   body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1f1e1b; }
@@ -34,7 +34,7 @@
   <img src="img/logo.png" alt="Logo Loonar Compass">
   <h1 style="margin-top: 10mm;">Compass Hub</h1>
   <div class="sub">Instrukcja instalacji dla działu IT</div>
-  <div class="sub" style="font-size: 11pt;">wersja 0.9 &middot; październik 2026</div>
+  <div class="sub" style="font-size: 11pt;">wersja 0.9.1 &middot; październik 2026</div>
   <div class="owner">
     Loonar Mariusz Głowacki<br>
     ul. Gombrowicza 12, 73-110 Stargard<br>
@@ -299,7 +299,7 @@ Set-WebConfigurationProperty -PSPath $p -Filter system.webServer/proxy -Name tim
   <tr><td><code>policy.jira_via_hub</code>, <code>confluence_via_hub</code></td><td>Jira/Confluence przez konto serwisowe huba. Viewer może tylko czytać; każda zmiana jest w audycie.</td></tr>
   <tr><td><code>policy.min_approval</code></td><td>Najsłabszy dozwolony w Compass tryb zatwierdzania zapisów do modelu (<code>ask</code> jest najostrzejszy).</td></tr>
   <tr><td><code>policy.web_access</code>, <code>web_allowed_domains</code></td><td>Czy asystent może szukać w internecie i czytać strony, i z jakich domen.</td></tr>
-  <tr><td><code>policy.update_check</code></td><td>Czy Compass raz dziennie sprawdza na GitHubie nową wersję.</td></tr>
+  <tr><td><code>policy.update_check</code></td><td>Czy Compass co godzinę sprawdza na GitHubie nową wersję.</td></tr>
 </table>
 <p>Administratorzy zmieniają później politykę w zakładce <b>Team policy</b> widoku webowego, a zużycie na osobę jest w <b>Users → AI usage</b>.</p>
 

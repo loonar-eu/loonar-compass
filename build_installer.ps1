@@ -5,14 +5,7 @@
 # Output: dist\LoonarCompass-Setup-<version>.exe and its .sha256 file. The version comes from Cargo.toml
 # (shown as major.minor, plus .patch when it is not 0 - the same rule the installer uses).
 #
-# Digital signature (Authenticode) - configured through environment variables:
-#   certificate in the Windows certificate store (e.g. Certum SimplySign):
-#     LOONAR_SIGN_THUMBPRINT  SHA-1 thumbprint of the code-signing certificate
-#     LOONAR_SIGN_TIMESTAMP   timestamp server (default http://time.certum.pl)
-#   Azure Artifact Signing:
-#     LOONAR_SIGN_DLIB        path to Azure.CodeSigning.Dlib.dll
-#     LOONAR_SIGN_METADATA    path to metadata.json (Endpoint, CodeSigningAccountName, CertificateProfileName)
-#     LOONAR_SIGN_TIMESTAMP   default http://timestamp.acs.microsoft.com
+# Digital signature (Authenticode): signing\sign.ps1 (Azure Artifact Signing by default; "az login" first).
 param([switch]$SkipApp, [switch]$Sign)
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
@@ -36,31 +29,11 @@ if ($setupVersion -ne $fullVersion) {
 $version = $fullVersion
 if ($fullVersion -match '^(\d+)\.(\d+)\.(\d+)(.*)$' -and $Matches[3] -eq '0') { $version = "$($Matches[1]).$($Matches[2])$($Matches[4])" }
 
-function Find-SignTool {
-    $kits = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
-    $tool = Get-ChildItem $kits -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
-        Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1
-    if (-not $tool) { throw 'signtool.exe not found (Windows SDK: Windows Kits\10\bin\<version>\x64)' }
-    $tool.FullName
-}
+. (Join-Path $root 'signing\sign.ps1')
 
-# Signs a file (SHA-256 + RFC 3161 timestamp, so the signature stays valid after the certificate expires).
-function Invoke-Sign([string]$file) {
-    if (-not $Sign) { return }
-    $signtool = Find-SignTool
-    if ($env:LOONAR_SIGN_DLIB) {
-        $ts = if ($env:LOONAR_SIGN_TIMESTAMP) { $env:LOONAR_SIGN_TIMESTAMP } else { 'http://timestamp.acs.microsoft.com' }
-        & $signtool sign /v /fd SHA256 /tr $ts /td SHA256 /dlib $env:LOONAR_SIGN_DLIB /dmdf $env:LOONAR_SIGN_METADATA $file
-    } elseif ($env:LOONAR_SIGN_THUMBPRINT) {
-        $ts = if ($env:LOONAR_SIGN_TIMESTAMP) { $env:LOONAR_SIGN_TIMESTAMP } else { 'http://time.certum.pl' }
-        & $signtool sign /fd SHA256 /tr $ts /td SHA256 /sha1 $env:LOONAR_SIGN_THUMBPRINT $file
-    } else {
-        throw 'signing: set LOONAR_SIGN_THUMBPRINT or LOONAR_SIGN_DLIB + LOONAR_SIGN_METADATA'
-    }
-    if ($LASTEXITCODE -ne 0) { throw "signing $file failed" }
-    & $signtool verify /pa $file | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "signature of $file failed verification" }
-    "Signed: $file"
+# Signs a file only for a public release (-Sign).
+function Invoke-ReleaseSign([string]$file) {
+    if ($Sign) { Invoke-Sign $file }
 }
 
 function Invoke-Cargo([string]$dir, [string[]]$cargoArgs) {
@@ -166,12 +139,13 @@ try {
     New-Item -ItemType Directory -Force $payload | Out-Null
     Copy-Item $app (Join-Path $payload 'app.exe') -Force
     # The application is embedded in the installer, so it must be signed before the installer is built.
-    Invoke-Sign (Join-Path $payload 'app.exe')
+    Invoke-ReleaseSign (Join-Path $payload 'app.exe')
     Copy-Item $notices (Join-Path $payload 'THIRD-PARTY-NOTICES.txt') -Force
     # The Enterprise Architect add-in (.NET Framework compiler that comes with Windows).
     & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'eaaddin\build.ps1')
     if ($LASTEXITCODE -ne 0) { throw 'EA add-in build failed' }
     Copy-Item (Join-Path $root 'eaaddin\LoonarCompass.EAAddin.dll') (Join-Path $payload 'LoonarCompass.EAAddin.dll') -Force
+    Invoke-ReleaseSign (Join-Path $payload 'LoonarCompass.EAAddin.dll')
     # License and changelog in 4 languages (pl = the base files without a language suffix); the user guide is on the website.
     foreach ($lang in 'pl', 'en', 'de', 'fr') {
         $suffix = if ($lang -eq 'pl') { '' } else { ".$lang" }
@@ -198,7 +172,7 @@ try {
         throw
     }
     # The uninstaller is a byte-identical copy of the installer, so it carries the same signature.
-    Invoke-Sign $out
+    Invoke-ReleaseSign $out
     $item = Get-Item $out
     "Done: $($item.FullName) ($([math]::Round($item.Length / 1MB, 1)) MB)"
     $hash = (Get-FileHash $out -Algorithm SHA256).Hash.ToLower()

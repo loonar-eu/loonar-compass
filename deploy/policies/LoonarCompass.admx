@@ -11,6 +11,7 @@
   <supportedOn>
     <definitions>
       <definition name="SUPPORTED_Compass09" displayName="$(string.SUPPORTED_Compass09)" />
+      <definition name="SUPPORTED_Compass091" displayName="$(string.SUPPORTED_Compass091)" />
     </definitions>
   </supportedOn>
   <categories>
@@ -42,6 +43,12 @@
     <policy name="UpdateCheck" class="Both" displayName="$(string.UpdateCheck)" explainText="$(string.UpdateCheck_Help)" key="SOFTWARE\Policies\Loonar\Compass" valueName="UpdateCheck">
       <parentCategory ref="Compass" />
       <supportedOn ref="SUPPORTED_Compass09" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+    <policy name="Telemetry" class="Both" displayName="$(string.Telemetry)" explainText="$(string.Telemetry_Help)" key="SOFTWARE\Policies\Loonar\Compass" valueName="Telemetry">
+      <parentCategory ref="Compass" />
+      <supportedOn ref="SUPPORTED_Compass091" />
       <enabledValue><decimal value="1" /></enabledValue>
       <disabledValue><decimal value="0" /></disabledValue>
     </policy>

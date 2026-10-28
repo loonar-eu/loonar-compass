@@ -7,6 +7,8 @@
 mod check;
 mod client_cert;
 mod code_read;
+mod usage;
+mod changelog;
 mod user_oauth;
 mod gdrive;
 mod telemetry;
@@ -97,15 +99,14 @@ fn system_prompt(cfg: &AppConfig) -> String {
         "{SYSTEM_PROMPT}\n\n{SAFETY_RULES}\n\n{MODEL_STORE}\n\n{LANGUAGE_RULE}\n\n{MEMORY_RULES}\n\n{memories}\n\n{model_instructions}\n\n{WORK_RULES}\n\n{DOC_RULES}\n\n{templates}\n\n\
          You are running inside the {app} application, version {version} (a desktop AI assistant for Enterprise Architect). \
          Application owner: {OWNER}, {OWNER_ADDRESS}, {OWNER_CONTACT}. Language model: {model}. User guide of this version: {docs}. \
-         Answer questions about yourself, this application, its features and limitations based on the changelog below \
-         (newest version first; \"Prerequisites\" lists requirements on the EA model without which the application does not work, \
-         \"Known limitations\" lists things the application cannot do). \
-         Do not attribute to the application any features that are not in the changelog.\n\n\
-         <changelog>\n{CHANGELOG_EN}\n</changelog>",
+         The prerequisites are requirements on the EA model without which the application does not work; the known limitations are \
+         things it cannot do.\n{about}",
         app = config::APP_NAME,
         version = app_version(),
         model = config::CLAUDE_MODEL,
         docs = docs_url(),
+        // The changelog itself is a tool (app_changelog): only its contents and the prerequisites stay here (LC-300).
+        about = changelog::prompt_section(),
         memories = memory::prompt_section(&cfg.memory_dir, &cfg.model_label()),
         model_instructions = instructions::prompt_section(cfg),
         MODEL_STORE = format!(
@@ -113,7 +114,11 @@ fn system_prompt(cfg: &AppConfig) -> String {
             model_db::dialect(cfg),
             cfg.model_label(),
             // The source code folders the user listed: the assistant searches them without asking for a path (LC-286).
-            if cfg.code_folders.is_empty() { String::new() } else { format!(" Source code folders (local repository clones; read them with code_tree, code_search and code_read): {}.", cfg.code_folders.join("; ")) }
+            // Read from the settings file now, not from the settings loaded at the start: a folder saved in another window counts.
+            match code_read::folders(cfg) {
+                f if f.is_empty() => String::from(" No source code folders are set: when the user asks about code, ask for the full path of the local repository clone, or tell them to add it in Settings → Source code."),
+                f => format!(" Source code folders (local repository clones; read them with code_tree, code_search and code_read): {}.", f.join("; ")),
+            }
         ),
         LANGUAGE_RULE = format!("Response language: {} (the language selected in the application). Answer in it unless the user writes to you in a different language; then answer in the user's language. Create documents, pages and images in the response language unless the user asks for a different one. This applies to everything you write, also short notes between tool calls.", i18n::current().english_name()),
         templates = templates::prompt_section(&cfg.templates_dir),
@@ -223,6 +228,73 @@ Leave out greetings and repeated tool output. Write in the language of the conve
     Ok(kept)
 }
 
+/// The prompt a turn starts with, at most (estimate, tokens): above it the earlier part of the conversation is
+/// summarised, leaving room for the tool results of the turn below Claude Haiku 5.5's 100k-token price tier (LC-301).
+const TURN_START_BUDGET: u64 = 70_000;
+/// The system prompt and the tools (measured on 2026-10-28: about 31 000-37 000 tokens), rounded up.
+const PREFIX_ESTIMATE: u64 = 40_000;
+/// The newest messages kept word for word when the earlier part is summarised.
+const KEEP_MESSAGES: usize = 8;
+/// Within a turn: above this many prompt tokens the API clears the oldest tool results itself.
+const TOOL_CLEARING_AT: u64 = 85_000;
+
+/// Tokens of the messages, estimated from their text (about 3 characters a token in Polish, German and code; an
+/// attachment as 1 500).
+fn estimated_tokens(messages: &[Message]) -> u64 {
+    messages.iter().map(|m| m.text.chars().count() as u64 / 3 + m.attachments.len() as u64 * 1_500).sum()
+}
+
+/// The messages with their earlier part as a summary, when the turn would start above `TURN_START_BUDGET`; the
+/// summary also goes to the conversation (WorkerEvent::Summary). None when the conversation is short enough or there is
+/// nothing earlier to summarise.
+fn summarise_if_long(client: &claude::ClaudeClient, messages: &[Message], emit: &dyn Fn(WorkerEvent)) -> Option<Vec<Message>> {
+    if PREFIX_ESTIMATE + estimated_tokens(messages) <= TURN_START_BUDGET {
+        return None;
+    }
+    let mut start = messages.len().saturating_sub(KEEP_MESSAGES);
+    while start > 0 && messages[start].role != "user" {
+        start -= 1;
+    }
+    if start < 2 {
+        return None;
+    }
+    emit(WorkerEvent::StepStart(crate::i18n::tr("The conversation is long: summarising its earlier part").into()));
+    let mut transcript = String::new();
+    for m in &messages[..start] {
+        let attachments = if m.attachments.is_empty() { String::new() } else { format!("
+[attachments: {}]", m.attachments.iter().map(|a| history::display_name(a)).collect::<Vec<_>>().join(", ")) };
+        transcript.push_str(&format!("
+## {}
+{}{attachments}
+", m.role, m.text.chars().take(6_000).collect::<String>()));
+        // The summary request itself stays below the 100k-token tier.
+        if transcript.len() > 240_000 {
+            break;
+        }
+    }
+    let system = "You summarise the earlier part of a conversation between a user and an assistant for Enterprise Architect, so that the assistant can continue without it. \
+Keep: what the user wants and decided (also rules for how to work, e.g. naming, formats, what to skip), the elements, packages, diagrams, files, services \
+and issues involved with their names, GUIDs and keys, what was changed in the model, Jira or elsewhere, what is still to do, open questions and promises. \
+Leave out greetings and repeated tool output. Write in the language of the conversation, at most 900 words.";
+    let request = vec![json!({ "role": "user", "content": format!("<conversation>{transcript}</conversation>\nSummarise it.") })];
+    let summary = match client.send_value(system, &request, None).map(|r| text_of(&r["content"])) {
+        Ok(text) if !text.trim().is_empty() => text.trim().to_string(),
+        Ok(_) => {
+            emit(WorkerEvent::StepEnd { ok: false, detail: crate::i18n::tr("empty summary").into() });
+            return None;
+        }
+        Err(e) => {
+            emit(WorkerEvent::StepEnd { ok: false, detail: shorten(&format!("{e:#}"), 200) });
+            return None;
+        }
+    };
+    emit(WorkerEvent::StepEnd { ok: true, detail: crate::i18n::fmt("{0} messages kept, the rest as a summary", &[(messages.len() - start).to_string()]) });
+    emit(WorkerEvent::Summary { from: messages[start].created.clone(), text: summary.clone() });
+    let mut kept = messages[start..].to_vec();
+    kept[0].text = history::with_summary(&summary, &kept[0].text);
+    Some(kept)
+}
+
 /// Texts longer than this in the earlier messages are shortened when there is nothing to summarise.
 const LONG_TEXT: usize = 30_000;
 
@@ -273,6 +345,13 @@ fn shorten_long_messages(msgs: &[Value]) -> Option<Vec<Value>> {
 
 /// One thing found in the model: kind (element, package, diagram), id, name, type, package.
 type Found = (&'static str, i64, String, String, String);
+
+/// The window "Conversations of other models" (LC-292).
+#[derive(Default)]
+struct OtherModels {
+    query: String,
+    pin_notes: bool,
+}
 
 #[derive(Default)]
 struct Picker {
@@ -396,6 +475,36 @@ fn task_list_text(input: &Value) -> (String, String) {
 }
 
 /// The tool for clarifying questions: a form in the chat instead of questions buried in the text.
+/// What the assistant cannot do, by kind (LC-289): counted in the statistics; the user can request it.
+const GAP_KINDS: [&str; 8] = ["source_code", "file_format", "integration", "diagram_type", "model_operation", "permissions", "data_source", "other"];
+
+fn report_gap_definition() -> Value {
+    json!({
+        "name": "report_gap",
+        "description": "Call it when the user asks for something none of your tools can do (a missing capability, not a tool that merely failed or a question you can answer): pick the kind, then tell the user briefly and honestly what you cannot do and what you can do instead. The user then sees a button under your answer to request the missing feature.",
+        "input_schema": {
+            "type": "object",
+            "properties": { "kind": { "type": "string", "enum": GAP_KINDS } },
+            "required": ["kind"]
+        }
+    })
+}
+
+/// The name of a kind of missing capability for the user.
+fn gap_label(kind: &str) -> String {
+    match kind {
+        "source_code" => crate::i18n::tr("source code"),
+        "file_format" => crate::i18n::tr("a file format"),
+        "integration" => crate::i18n::tr("an integration with another system"),
+        "diagram_type" => crate::i18n::tr("a kind of diagram"),
+        "model_operation" => crate::i18n::tr("an operation on the model"),
+        "permissions" => crate::i18n::tr("access rights"),
+        "data_source" => crate::i18n::tr("a source of data"),
+        _ => crate::i18n::tr("something else"),
+    }
+    .to_string()
+}
+
 fn ask_user_definition() -> Value {
     json!({
         "name": "ask_user",
@@ -506,10 +615,18 @@ fn questions_form(ui: &mut egui::Ui, questions: &[(String, Vec<String>)], answer
 
 /// When to ask with a form and when to show a plan (LC-267: without these rules smaller models guessed and wrote, or
 /// worked through several steps without a visible plan).
-const WORK_RULES: &str = "Asking and planning: when a request to change the model leaves out something you would otherwise have to guess \
-(which package, the name, the attributes, the notation, the scope), FIRST ask with the ask_user tool and end your answer there; do not prepare \
-any change (ea_write) before the answers come, and never ask clarifying questions as plain text. Reading the model first to offer the right \
-options is fine. When the user asks for work in several steps (e.g. \"in 4 steps\", a numbered list of tasks) or the work clearly has 3 or more \
+const WORK_RULES: &str = "Working on your own: do the whole task the user asked for in this answer, step after step, and stop only when it is \
+done. Do not stop to report progress, to show a partial result while the next step is clear, or to ask whether to go on (\"shall I continue?\", \
+\"confirm\", \"next one?\"): the user waits for the result, not for status reports, and \"go on\" is already given by the request. Between tool \
+calls write nothing, or one short sentence at most; the full answer comes once, at the end. Reading and analysing (the model, source code, \
+documents, pages) never needs a question. When there is a sensible default (names, which files, the format, the order, edge cases, the \
+level of detail), choose it yourself and name your choices briefly in the final answer, so the user can correct them; when the user already \
+decided something in this conversation, do not ask about it again. Ask with the ask_user tool only when a wrong guess would change or delete \
+much in the model and the request really leaves it open (e.g. which of two packages to write into, whether to replace existing content); then \
+ask everything in one form, once, end your answer there and do not prepare that change (ea_write) before the answers come. Never ask \
+clarifying questions as plain text. A large write goes in batches within the same answer, not one batch per answer. \
+Change the model with ea_write (it sets names, stereotypes, aliases, notes, tagged values and more); an EA script only for what ea_write \
+cannot do, because every script asks the user for approval. When the user asks for work in several steps (e.g. \"in 4 steps\", a numbered list of tasks) or the work clearly has 3 or more \
 steps, call task_list with all tasks pending BEFORE the first of them (when the user named the steps, exactly those steps as the tasks), \
 then update it as each task starts and ends, so that the last update shows every task done.";
 
@@ -670,6 +787,8 @@ mod icons {
     pub const SAVE: &str = "\u{E74E}";
     pub const OPEN: &str = "\u{E8A7}";
     pub const STEPS: &str = "\u{E9D5}";
+    pub const MORE: &str = "\u{E712}";
+    pub const IMPORT: &str = "\u{E8B5}";
 
     pub fn set_loaded(loaded: bool) {
         LOADED.store(loaded, Ordering::Relaxed);
@@ -1309,6 +1428,8 @@ struct Contact {
     include_context: bool,
     /// Send by e-mail (private) instead of the public issue on GitHub.
     via_email: bool,
+    /// The report is a feature request (from "💡 Request this feature").
+    feature: bool,
     /// The address of the issue created by the last report.
     issue_url: String,
     /// Photos attached to the report and their thumbnails (in the same order).
@@ -1344,13 +1465,21 @@ struct App {
     contact: Contact,
     /// The check for a newer release (started once, in the background) and the release to tell the user about.
     update_rx: Option<mpsc::Receiver<Option<update::Release>>>,
-    update_started: bool,
+    /// When to check for a newer release again (every hour while the application is open) and the version already
+    /// announced in EA's System Output.
+    update_next: Option<std::time::Instant>,
+    update_told: Option<String>,
     update: Option<update::Release>,
     /// Signing in to the hub with the company account (in the background) and its last result.
     hub_signin_rx: Option<mpsc::Receiver<Result<(String, String), String>>>,
     hub_signin_status: String,
     /// Usage statistics: the view and the first-start notice.
     stats: Stats,
+    /// A missing capability reported in the answer being made, and the answers with one (by their time).
+    pending_gap: Option<String>,
+    gap_marks: HashMap<String, String>,
+    /// Answers already rated (by their time): true = 👍.
+    ratings: HashMap<String, bool>,
     /// Moving memory and templates to the new language: whether it is pending, the result in progress, the last message.
     relang_pending: bool,
     relang_rx: Option<mpsc::Receiver<Result<String, String>>>,
@@ -1424,7 +1553,7 @@ struct App {
     /// Conversations in which the assistant finished working in the background and the user has not looked at yet (conversation ids).
     unseen: std::collections::HashSet<String>,
     /// Result of the last save and test of each of the four settings groups.
-    group_status: [GroupStatus; 13],
+    group_status: [GroupStatus; 14],
     /// Findings of the live model check already shown in EA (not repeated).
     live_reported: Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
     /// When each event agent last ran for an object (not more than once a minute).
@@ -1440,6 +1569,8 @@ struct App {
     ea_project: Option<ModelChoice>,
     /// In a window of EA: the new name being typed for the current conversation.
     ea_rename: Option<String>,
+    /// The window with the conversations of other models (to continue one with this model, LC-292).
+    other_models: Option<OtherModels>,
     /// The diagram editor window that is open: the diagram and the changes come back when it closes.
     editor_rx: Option<mpsc::Receiver<Result<Option<(Value, Value)>, String>>>,
     /// "Tidy with AI" in the diagram editor: the request goes to the conversation once the editor's changes are saved.
@@ -1503,6 +1634,10 @@ enum WorkerEvent {
     /// The worker thread has taken this many user-added messages from the queue.
     Consumed(usize),
     Approval(ApprovalRequest),
+    /// The assistant reported a missing capability (report_gap): the kind.
+    Gap(String),
+    /// The earlier part of a long conversation was summarised (LC-301): kept with the conversation from now on.
+    Summary { from: String, text: String },
     Done,
     Failed(String),
 }
@@ -1542,6 +1677,7 @@ impl App {
         let telemetry_on = saved.get("telemetry.enabled").is_none_or(|v| v != "false");
         if let Some(dir) = props_path.parent() {
             telemetry::init(dir, telemetry_on);
+            usage::init(dir);
         }
         let telemetry_notice = telemetry_on && telemetry::policy_block().is_none() && !saved.contains_key("telemetry.notice");
 
@@ -1576,12 +1712,16 @@ impl App {
         let (settings_tx, settings_rx) = mpsc::channel();
         Self {
             update_rx: None,
-            update_started: false,
+            update_next: None,
+            update_told: None,
             update: None,
             hub_signin_rx: None,
             hub_signin_status: String::new(),
             contact: Contact { technical: true, include_context: true, ..Default::default() },
             stats: Stats { notice_open: telemetry_notice, ..Default::default() },
+            pending_gap: None,
+            gap_marks: HashMap::new(),
+            ratings: HashMap::new(),
             relang_pending: false,
             relang_rx: None,
             relang_message: String::new(),
@@ -1596,6 +1736,7 @@ impl App {
             confirmed_session: String::new(),
             ea_project: None,
             ea_rename: None,
+            other_models: None,
             editor_rx: None,
             tidy_request: None,
             miro: None,
@@ -2126,7 +2267,7 @@ impl App {
     /// Sets the model of the current conversation; a conversation with messages is saved at once.
     fn set_session_model(&mut self, choice: ModelChoice) {
         let label = choice.label();
-        self.session.model = Some(choice);
+        self.session.record_move(choice);
         if let (Some(cfg), false) = (self.cfg.clone(), self.session.messages.is_empty()) {
             if let Err(e) = self.session.save(&cfg.history_dir) {
                 self.status = crate::i18n::fmt("Could not save the conversation: {0}", &[e.to_string()]);
@@ -2345,6 +2486,161 @@ impl App {
     }
 
     /// Changes the conversation title and saves it in the history.
+    /// The model a continued or imported conversation gets: the project of this EA window, otherwise the model of the
+    /// conversation open now (or the settings' model).
+    fn target_model(&self) -> Option<ModelChoice> {
+        if ea::in_ea_tab() {
+            return self.ea_project.clone();
+        }
+        let base = self.cfg.as_ref()?;
+        Some(self.session.model.clone().unwrap_or_else(|| ModelChoice::of(base)))
+    }
+
+    /// Saves a conversation made from another one (continued or imported) and opens it.
+    fn open_new_copy(&mut self, mut copy: Session, status: String) {
+        let Some(cfg) = self.cfg.clone() else { return };
+        if let Err(e) = copy.save(&cfg.history_dir) {
+            self.status = crate::i18n::fmt("Could not save the conversation: {0}", &[e.to_string()]);
+            return;
+        }
+        self.sessions = Session::list(&cfg.history_dir).into_iter().map(|(_, s)| s).collect();
+        self.confirmed_session = copy.id.clone();
+        self.switch_to(copy);
+        self.renaming = None;
+        self.scroll_to_end = true;
+        self.status = status;
+    }
+
+    /// Continues a conversation of another model with the model of this window: a copy, the original stays (LC-292).
+    /// `pin_notes` also pins the memory notes of the earlier model to this one.
+    fn continue_here(&mut self, source: Session, pin_notes: bool) {
+        let (Some(target), Some(cfg)) = (self.target_model(), self.cfg.clone()) else {
+            self.status = crate::i18n::tr("Open a model in Enterprise Architect first.").into();
+            return;
+        };
+        if pin_notes {
+            if let Some(old) = source.model.as_ref().map(|m| m.label()) {
+                for note in memory::list(&cfg.memory_dir).into_iter().filter(|n| n.model == old) {
+                    let _ = memory::save(&cfg.memory_dir, &note.name, &note.description, &note.content, &target.label());
+                }
+            }
+        }
+        let label = target.label();
+        self.open_new_copy(source.continue_in(target), crate::i18n::fmt("The conversation continues with the model {0}; the original stays with its own model.", &[label]));
+    }
+
+    /// Writes a conversation with its attachments to a file chosen by the user.
+    fn export_session(&mut self, session: &Session) {
+        let Some(cfg) = self.cfg.clone() else { return };
+        let name: String = shown_title(&session.title).chars().map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' { c } else { '_' }).take(60).collect();
+        let Some(target) = rfd::FileDialog::new()
+            .set_title(crate::i18n::tr("Export the conversation"))
+            .set_file_name(format!("{}.{}", name.trim(), history::EXPORT_EXTENSION))
+            .add_filter(crate::i18n::tr("Loonar Compass conversation"), &[history::EXPORT_EXTENSION])
+            .save_file()
+        else {
+            return;
+        };
+        self.status = match history::export(session, &cfg.attachments_dir, &target) {
+            Ok(()) => crate::i18n::fmt("Conversation exported: {0}", &[target.display().to_string()]),
+            Err(e) => crate::i18n::fmt("Could not export the conversation: {0}", &[format!("{e:#}")]),
+        };
+    }
+
+    /// Reads an exported conversation as a new conversation with the model of this window.
+    fn import_session(&mut self) {
+        let (Some(target), Some(cfg)) = (self.target_model(), self.cfg.clone()) else {
+            self.status = crate::i18n::tr("Open a model in Enterprise Architect first.").into();
+            return;
+        };
+        let Some(source) = rfd::FileDialog::new()
+            .set_title(crate::i18n::tr("Import a conversation"))
+            .add_filter(crate::i18n::tr("Loonar Compass conversation"), &[history::EXPORT_EXTENSION])
+            .pick_file()
+        else {
+            return;
+        };
+        let label = target.label();
+        match history::import(&source, &cfg.attachments_dir, target) {
+            Ok(session) => self.open_new_copy(session, crate::i18n::fmt("Conversation imported; it continues with the model {0}.", &[label])),
+            Err(e) => self.status = crate::i18n::fmt("Could not import the conversation: {0}", &[format!("{e:#}")]),
+        }
+    }
+
+    /// The conversations of other models (other files and databases), to continue one here.
+    fn other_models_window(&mut self, ctx: &egui::Context) {
+        let Some(win) = self.other_models.as_mut() else { return };
+        let here = if ea::in_ea_tab() { self.ea_project.clone() } else { self.session.model.clone() };
+        let query = win.query.trim().to_lowercase();
+        let mut open = true;
+        let mut chosen: Option<Session> = None;
+        egui::Window::new(crate::i18n::tr("Conversations of other models")).open(&mut open).default_width(520.0).collapsible(false).show(ctx, |ui| {
+            ui.label(egui::RichText::new(crate::i18n::tr("Continue a conversation with the model open here, e.g. after moving the project from a database to a file. A copy is made; the original stays with its own model.")).small().color(theme::MUTED));
+            ui.add_space(4.0);
+            ui.add(egui::TextEdit::singleline(&mut win.query).hint_text(egui::RichText::new(crate::i18n::tr("Search conversations…")).color(theme::HINT)).desired_width(f32::INFINITY));
+            ui.checkbox(&mut win.pin_notes, crate::i18n::tr("Also pin the memory notes of the earlier model to this model"));
+            ui.add_space(4.0);
+            egui::ScrollArea::vertical().max_height(380.0).show(ui, |ui| {
+                let mut any = false;
+                for s in &self.sessions {
+                    let Some(model) = &s.model else { continue };
+                    if s.messages.is_empty() || here.as_ref().is_some_and(|h| h.same_project(model)) {
+                        continue;
+                    }
+                    if !query.is_empty() && !session_matches(s, &query) && !model.describe().to_lowercase().contains(&query) {
+                        continue;
+                    }
+                    any = true;
+                    ui.horizontal(|ui| {
+                        if ui.button(crate::i18n::tr("Continue here")).clicked() {
+                            chosen = Some(s.clone());
+                        }
+                        ui.add(egui::Label::new(shown_title(&s.title)).truncate()).on_hover_text(model.describe());
+                    });
+                    ui.label(egui::RichText::new(crate::i18n::fmt("Model: {0}", &[model.describe()])).small().color(theme::MUTED));
+                    ui.add_space(4.0);
+                }
+                if !any {
+                    ui.label(egui::RichText::new(crate::i18n::tr("No conversations of other models.")).color(theme::MUTED));
+                }
+            });
+        });
+        let pin_notes = win.pin_notes;
+        if let Some(source) = chosen {
+            self.other_models = None;
+            self.continue_here(source, pin_notes);
+        } else if !open {
+            self.other_models = None;
+        }
+    }
+
+    /// Keeps the steps of the turn that has just ended with its last answer, so the next turns know what was really done
+    /// (read, searched, saved). Returns whether something was recorded.
+    fn record_turn_steps(&mut self) -> bool {
+        let record: Vec<String> = self
+            .steps
+            .iter()
+            .filter(|s| !s.text.starts_with(TASKS_MARK))
+            .take(60)
+            .map(|s| {
+                let result = match &s.result {
+                    Some((true, detail, _)) => format!(" ✓ {}", shorten(detail, 160)),
+                    Some((false, detail, _)) => format!(" ✗ {}", shorten(detail, 160)),
+                    None => " (not finished)".to_string(),
+                };
+                format!("{}{result}", shorten(&s.text, 200))
+            })
+            .collect();
+        if record.is_empty() {
+            return false;
+        }
+        let failed = |m: &Message| i18n::Lang::ALL.iter().any(|lang| m.text.starts_with(i18n::tr_in(*lang, "Could not finish")));
+        let since = self.session.messages.iter().rposition(|m| m.role == "user").map_or(0, |i| i + 1);
+        let Some(answer) = self.session.messages[since..].iter().rev().find(|m| m.role == "assistant" && !failed(m)) else { return false };
+        self.session.steps.insert(answer.created.clone(), record);
+        true
+    }
+
     fn rename_session(&mut self, id: &str, title: String) {
         let Some(cfg) = self.cfg.clone() else { return };
         let result = if self.session.id == id {
@@ -2538,12 +2834,21 @@ impl App {
                     }
                 }
                 Ok(WorkerEvent::Consumed(n)) => self.consumed += n,
+                Ok(WorkerEvent::Gap(kind)) => self.pending_gap = Some(kind),
+                Ok(WorkerEvent::Summary { from, text }) => {
+                    self.session.summary = Some(history::EarlierSummary { from, text });
+                    changed = true;
+                }
                 Ok(WorkerEvent::Approval(request)) => {
                     self.pending_approval = Some(request);
                     self.status = crate::i18n::tr("The assistant is waiting for your approval to save.").into();
                 }
                 Ok(WorkerEvent::Done) => {
                     ea_ui::output(&format!("■ {}", crate::i18n::fmt("Answer ready: \"{0}\"", &[shown_title(&self.session.title).to_string()])));
+                    // The missing capability belongs to the answer just made: its button shows under it.
+                    if let (Some(kind), Some(answer)) = (self.pending_gap.take(), self.session.messages.iter().rev().find(|m| m.role == "assistant")) {
+                        self.gap_marks.insert(answer.created.clone(), kind);
+                    }
                     finished = true;
                     break;
                 }
@@ -2587,6 +2892,9 @@ impl App {
                 crate::i18n::fmt("Could not finish: {0}", &[(error).to_string()])
             };
             self.push_assistant(text, vec![]);
+            changed = true;
+        }
+        if finished && self.record_turn_steps() {
             changed = true;
         }
         if changed {
@@ -2828,6 +3136,8 @@ impl App {
             }
             GROUP_EA => {
                 updates.push(("ea.path", f.ea_path.trim().to_string()));
+            }
+            GROUP_CODE => {
                 updates.push(("code.folders", f.code_folders.split(';').map(|p| p.trim().trim_matches('"')).filter(|p| !p.is_empty()).collect::<Vec<_>>().join(";")));
             }
             GROUP_MIRO => {
@@ -3030,7 +3340,7 @@ impl App {
         let text = expression.clone();
         std::thread::spawn(move || {
             let result = (|| -> anyhow::Result<Vec<String>> {
-                let client = claude::ClaudeClient::from_config(&cfg, 1500)?.with_effort("low");
+                let client = claude::ClaudeClient::from_config(&cfg, 1500)?.with_effort("low").with_purpose("dictionary");
                 let prompt = format!(
                     "Expression: \"{text}\". If it is Polish, list all its inflected forms: singular and plural, in all seven cases \
                      (mianownik, dopełniacz, celownik, biernik, narzędnik, miejscownik, wołacz); inflect a multi-word expression as a \
@@ -3387,7 +3697,7 @@ impl App {
         let (events_tx, events_rx) = mpsc::channel::<WorkerEvent>();
         let (outbox_tx, inbox) = mpsc::channel::<Message>();
         let cancel = Arc::new(AtomicBool::new(false));
-        let messages = self.session.messages.clone();
+        let messages = self.session.messages_for_model();
         let wake = ctx.clone();
         let worker_cancel = cancel.clone();
         std::thread::spawn(move || {
@@ -3657,16 +3967,39 @@ impl App {
                             }
                         });
                         ui.end_row();
-                        row_hint(ui, crate::i18n::tr("Source code folders"), &mut self.form.code_folders, crate::i18n::tr("read without asking, e.g. C:/repos/shop; C:/repos/billing"));
                     });
                     ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("The EA account is set with the model (the Model card): it belongs to the model file or database.")).small().color(theme::MUTED)).wrap());
-                    ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Source code: the assistant can list, search and read the files of local repository clones (read only). Folders listed here are read without asking; for any other folder it asks first, because what it reads goes to the AI model.")).small().color(theme::MUTED)).wrap());
                     self.group_footer(ui, &ctx, GROUP_EA, crate::i18n::tr("Save and test EA access"));
                 });
             });
             }
         });
 
+        // Source code folders (LC-286): a card of their own, because the EA card is not shown in a tab of EA.
+        ui.add_space(12.0);
+        let ctx_code = ui.ctx().clone();
+        settings_group(ui, crate::i18n::tr("Source code"), full_width, |ui| {
+            ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Source code: the assistant can list, search and read the files of local repository clones (read only). Folders listed here are read without asking; for any other folder it asks first, because what it reads goes to the AI model.")).color(theme::MUTED)).wrap());
+            ui.add_space(6.0);
+            egui::Grid::new("settings_code").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
+                        label_cell(ui, crate::i18n::tr("Source code folders"));
+                ui.horizontal(|ui| {
+                    ui.add(egui::TextEdit::singleline(&mut self.form.code_folders).hint_text(egui::RichText::new(crate::i18n::tr("read without asking, e.g. C:/repos/shop; C:/repos/billing")).color(theme::HINT)).desired_width(settings_field_width(ui) - 44.0));
+                    // Adds a folder to the list (several are separated with "; ").
+                    if ui.button("…").on_hover_text(crate::i18n::tr("Add a source code folder")).clicked() {
+                        if let Some(dir) = rfd::FileDialog::new().set_title(crate::i18n::tr("Add a source code folder")).pick_folder() {
+                            let dir = dir.display().to_string();
+                            let list = self.form.code_folders.trim().trim_end_matches(';').trim().to_string();
+                            if !list.split(';').any(|f| f.trim().eq_ignore_ascii_case(&dir)) {
+                                self.form.code_folders = if list.is_empty() { dir } else { format!("{list}; {dir}") };
+                            }
+                        }
+                    }
+                });
+                ui.end_row();
+            });
+            self.group_footer(ui, &ctx_code, GROUP_CODE, crate::i18n::tr("Save and check the folders"));
+        });
         ui.add_space(12.0);
         self.newsletter_ui(ui, full_width);
         ui.add_space(12.0);
@@ -3832,10 +4165,15 @@ impl App {
                 ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Your organisation requires the hub: the assistant works only when you are signed in to it.")).small().color(theme::MUTED)).wrap());
             }
             egui::Grid::new("settings_hub").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
-                ui.add_enabled_ui(fixed_hub.is_none(), |ui| row_hint(ui, crate::i18n::tr("Hub address"), &mut self.form.hub_url, crate::i18n::tr("e.g. https://compass-hub.example.com")));
-                if fixed_hub.is_some() {
-                    ui.end_row();
-                }
+                // The label and the field straight in the grid (a nested ui would swallow the end of the row).
+                label_cell(ui, crate::i18n::tr("Hub address"));
+                ui.add_enabled(
+                    fixed_hub.is_none(),
+                    egui::TextEdit::singleline(&mut self.form.hub_url)
+                        .hint_text(egui::RichText::new(crate::i18n::tr("e.g. https://compass-hub.example.com")).color(theme::HINT))
+                        .desired_width(settings_field_width(ui)),
+                );
+                ui.end_row();
                 row_secret(ui, crate::i18n::tr("Token"), &mut self.form.hub_token, secrets::exists(secrets::HUB_TOKEN));
                 row_hint(ui, crate::i18n::tr("This model in the hub"), &mut self.form.hub_source, crate::i18n::tr("source id, e.g. shop-db (optional)"));
             });
@@ -4101,6 +4439,7 @@ impl App {
                         technical: c.technical.then(|| technical_public.clone()),
                         private: Some(private).filter(|p| !p.trim().is_empty()),
                         images: c.files.clone(),
+                        feature: c.feature,
                     };
                     let (tx, rx) = mpsc::channel();
                     let wake = ctx.clone();
@@ -4124,6 +4463,26 @@ impl App {
         if !c.issue_url.is_empty() {
             ui.hyperlink_to(&c.issue_url, &c.issue_url);
         }
+    }
+
+    /// "💡 Request this feature" under an answer: the report form as a feature request, with the kind of the missing
+    /// capability; the question goes along only if the user leaves "include the conversation" on (LC-289).
+    fn request_feature(&mut self, index: usize, kind: &str) {
+        let messages = &self.session.messages;
+        let question = messages[..index.min(messages.len())].iter().rev().find(|m| m.role == "user").map(|m| m.text.clone()).unwrap_or_default();
+        let c = &mut self.contact;
+        c.context = format!("{} {}\n{}\n{}", crate::i18n::tr("Missing capability:"), gap_label(kind), crate::i18n::tr("Question:"), question.trim()).chars().take(10_000).collect();
+        c.include_context = false;
+        c.via_email = false;
+        c.feature = true;
+        c.subject = crate::i18n::fmt("Feature request: {0}", &[gap_label(kind)]);
+        c.body = crate::i18n::tr("What I needed: ").to_string();
+        c.status.clear();
+        c.issue_url.clear();
+        c.files.clear();
+        c.thumbnails.clear();
+        telemetry::event(&format!("feature_request_{kind}"));
+        self.view = View::Report;
     }
 
     /// "Report a problem with this answer" in the chat: the report with the question, the answer and its steps
@@ -4154,6 +4513,7 @@ impl App {
         c.context = context.chars().take(30_000).collect();
         c.include_context = true;
         c.via_email = false;
+        c.feature = false;
         c.subject = crate::i18n::tr("Wrong answer of the assistant").into();
         c.body.clear();
         c.status.clear();
@@ -4173,6 +4533,11 @@ impl App {
         if !self.stats.started {
             self.stats.started = true;
             telemetry::event(if ea::in_ea_tab() { "session_ea_tab" } else { "session_standalone" });
+            let cfg_for_ping = self.cfg.clone();
+            std::thread::spawn(move || {
+                let team_off = cfg_for_ping.as_ref().and_then(hub::team_policy).is_some_and(|p| p["telemetry"] == serde_json::Value::Bool(false));
+                telemetry::start_ping(team_off);
+            });
             if let Some(cfg) = &self.cfg {
                 let mcp = std::fs::read_to_string(cfg.base_dir.join("mcp_servers.json"))
                     .ok()
@@ -4208,7 +4573,7 @@ impl App {
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                 .show(ctx, |ui| {
                     ui.set_max_width(480.0);
-                    ui.add(egui::Label::new(crate::i18n::tr("Loonar Compass sends anonymous usage statistics once a day: which functions were used and how often they failed, the application version and the kind of setup. Never the content of conversations, names from the model, file paths or server addresses. It is your choice: the application works the same either way. Leaving them on helps a lot, because they are the only way to see what to improve first. Everything that was sent is in the Usage statistics view, where you can also switch them off at any time.")).wrap());
+                    ui.add(egui::Label::new(crate::i18n::tr("Loonar Compass sends anonymous usage statistics: at the start a random installation id with the application version, Windows version and language, and every hour a summary of the day: what kinds of tasks were done and how they ended, which functions were used and how often they failed, ratings of answers and what the assistant could not do. Never the content of conversations, names from the model, file paths or server addresses. It is your choice: the application works the same either way. Leaving them on helps a lot, because they are the only way to see what to improve first. Everything that was sent is in the Usage statistics view, where you can also switch them off at any time.")).wrap());
                     ui.add_space(10.0);
                     ui.horizontal(|ui| {
                         if ui.button(crate::i18n::tr("Keep on")).clicked() {
@@ -4256,7 +4621,7 @@ impl App {
         ui.add_space(10.0);
         ui.label(egui::RichText::new(crate::i18n::tr("Usage statistics")).font(bold(24.0)));
         ui.add_space(6.0);
-        ui.add(egui::Label::new(crate::i18n::tr("Once a day Compass sends a summary of the previous day: how often each function of the assistant was used and how often it failed, answers, AI service errors, approvals, views opened, tokens, the application version, Windows version, the interface language and the kind of setup (model source, AI provider and model family, approval mode, whether Jira, Confluence, the hub, MCP servers and event agents are set up). It never sends the content of conversations, names or ids from the model, file paths, server addresses, error messages or user names. The summaries are public, so everybody can see what is collected.")).wrap());
+        ui.add(egui::Label::new(crate::i18n::tr("At the start Compass sends a random installation id (created on this computer, not derived from it or from you) with the application version, Windows version and language; every hour it sends a summary of the day so far: the kinds of tasks (for example a diagram, a document, a change of the model, a question about the model) and how they ended, how often each function of the assistant was used and how often it failed, ratings of answers, what the assistant could not do, approvals, views opened, tokens and the kind of setup (model source, AI provider and model family, approval mode, whether Jira, Confluence, the hub, MCP servers and event agents are set up). It never sends the content of conversations, names or ids from the model, file paths, server addresses, error messages or user names, and the service does not store addresses (IP). Only the author sees the data; summaries for all users together are published.")).wrap());
         ui.horizontal_wrapped(|ui| {
             ui.hyperlink_to(crate::i18n::tr("Published statistics"), telemetry::STATS_URL);
             ui.label("·");
@@ -4269,7 +4634,7 @@ impl App {
             }
             None => {
                 let mut on = telemetry::enabled();
-                if ui.checkbox(&mut on, crate::i18n::tr("Send anonymous usage statistics (once a day)")).changed() {
+                if ui.checkbox(&mut on, crate::i18n::tr("Send anonymous usage statistics (every hour)")).changed() {
                     self.set_telemetry(on);
                 }
                 ui.label(egui::RichText::new(crate::i18n::tr("Organisations can switch them off for everybody: the environment variable LOONAR_TELEMETRY=0, the registry value Telemetry = 0 (DWORD) under HKLM\\SOFTWARE\\Policies\\Loonar\\Compass, or \"telemetry\": false in the policy of the team hub.")).small().color(theme::HINT));
@@ -4290,7 +4655,7 @@ impl App {
         }
         ui.add_space(14.0);
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new(crate::i18n::tr("Today so far (sent tomorrow)")).font(bold(16.0)));
+            ui.label(egui::RichText::new(crate::i18n::tr("Today so far (sent every hour)")).font(bold(16.0)));
             if ui.small_button(crate::i18n::tr("Refresh")).clicked() {
                 self.stats.loaded = false;
             }
@@ -4375,7 +4740,7 @@ impl App {
                 ui.set_max_width(field);
                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
                 let tip = if locked { crate::i18n::tr("Switched off by your organisation (the computer's policy or the team hub).") } else { crate::i18n::tr("A plain request to GitHub, without any identifier of this installation; nothing is downloaded or installed by itself. The team hub can switch it off for everybody.") };
-                if ui.add_enabled(!locked, egui::Checkbox::new(&mut check, crate::i18n::tr("Check once a day whether a new version is available"))).on_hover_text(tip).on_disabled_hover_text(tip).changed() {
+                if ui.add_enabled(!locked, egui::Checkbox::new(&mut check, crate::i18n::tr("Check every hour whether a new version is available"))).on_hover_text(tip).on_disabled_hover_text(tip).changed() {
                     c.update_check = check;
                     let _ = config::save_properties(&props_path, &[("app.update_check", check.to_string())]);
                 }
@@ -4700,6 +5065,7 @@ const GROUP_AGENTS: usize = 9;
 const GROUP_SHAREPOINT: usize = 10;
 const GROUP_ONEDRIVE: usize = 11;
 const GROUP_GDRIVE: usize = 12;
+const GROUP_CODE: usize = 13;
 
 /// "Send to Miro" window: the diagram, the board, and where on the board the frame goes (shown on a thumbnail
 /// of the board, where the user can move it).
@@ -5020,9 +5386,20 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
     match group {
         GROUP_CLAUDE => {
             // A small answer budget would end in the model's reasoning: the test asks for one word with room to spare.
-            let client = claude::ClaudeClient::from_config(cfg, 400)?.with_effort("low");
+            let client = claude::ClaudeClient::from_config(cfg, 400)?.with_effort("low").with_purpose("check");
             let response = client.send_value("Answer in one word.", &[json!({ "role": "user", "content": "ping" })], None)?;
             Ok(crate::i18n::fmt("Saved. The key works: model {0} replied.", &[(response["model"].as_str().unwrap_or(cfg.ai_model())).to_string()]))
+        }
+        GROUP_CODE => {
+            let missing: Vec<&String> = cfg.code_folders.iter().filter(|f| !Path::new(f.as_str()).is_dir()).collect();
+            if !missing.is_empty() {
+                bail!("{}", crate::i18n::fmt("Saved, but these folders do not exist: {0}", &[missing.iter().map(|f| f.as_str()).collect::<Vec<_>>().join("; ")]));
+            }
+            Ok(if cfg.code_folders.is_empty() {
+                crate::i18n::tr("Saved. No source code folders: the assistant asks before it reads any folder.").to_string()
+            } else {
+                crate::i18n::fmt("Saved. Folders found: {0}.", &[cfg.code_folders.len().to_string()])
+            })
         }
         GROUP_DB => {
             let message = check_model(cfg)?;
@@ -5113,7 +5490,31 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
 }
 
 /// Limit of model calls in one turn. Protects against tool loops.
-const MAX_ROUNDS: usize = 24;
+const MAX_ROUNDS: usize = 40;
+
+/// How many times in one answer the model is sent on after stopping before the end of the work.
+const MAX_SENT_ON: usize = 3;
+
+/// The note that sends the model on (in English, like the other instructions).
+const SEND_ON: &str = "(Note from the application, not from the user: you ended your answer before the work was done, or asked whether to go on. \
+The user's request already covers all the remaining work and the user does not want to be asked. Go on now with the rest, to the end. \
+Questions that really need the user's decision go at the end of your final answer, after everything else is done; anything that does not \
+depend on them is done first.)";
+
+/// Whether an answer ends by asking the user to say "go on" (in any of the application's languages).
+fn asks_to_continue(text: &str) -> bool {
+    let t = text.to_lowercase().replace(['„', '”', '“', '«', '»', '"'], "'");
+    const PHRASES: &[&str] = &[
+        "'dalej'", "'kontynuuj'", "czy kontynuować", "czy mam kontynuować", "mam kontynuować", "czy mam przejść", "czy przejść dalej",
+        "czy kontynuuję", "jeśli chcesz, kontynuuję", "daj znać, czy mam", "czy robić dalej", "czy robię dalej", "w następnej turze",
+        "w kolejnej turze", "w następnej odpowiedzi", "in the next turn", "in my next answer", "in the next answer",
+        "'go on'", "'continue'", "shall i continue", "should i continue", "shall i proceed", "should i proceed", "shall i go on",
+        "want me to continue", "want me to proceed", "let me know if i should continue",
+        "'weiter'", "soll ich weitermachen", "soll ich fortfahren",
+        "'continuer'", "dois-je continuer", "voulez-vous que je continue", "je continue ?",
+    ];
+    PHRASES.iter().any(|p| t.contains(p))
+}
 
 /// Converts the conversation history into Messages API messages. Adjacent messages of the same role
 /// (e.g. two user messages in a row or several assistant texts from one turn) are merged into one.
@@ -5181,6 +5582,7 @@ fn shorten(text: &str, max: usize) -> String {
 fn tool_step(name: &str, input: &Value) -> String {
     match name {
         "db_query" => crate::i18n::fmt("Reading the model database: {0}", &[(shorten(input["sql"].as_str().unwrap_or(""), 160)).to_string()]),
+        "app_changelog" => crate::i18n::tr("Reading the application's changelog").to_string(),
         "ea_write" => {
             let ops = input["ops"].as_array().cloned().unwrap_or_default();
             crate::i18n::fmt("Saving to EA, {0} operations: {1}", &[(ops.len()).to_string(), (ea::describe(&ops).replace('\n', ", ")).to_string()])
@@ -5211,7 +5613,7 @@ fn tool_step(name: &str, input: &Value) -> String {
         "ea_script" => crate::i18n::fmt("EA script ({0}): {1}", &[input["action"].as_str().unwrap_or("list").to_string(), input["name"].as_str().unwrap_or("").to_string()]),
         "jira_issue" => crate::i18n::fmt("Reading the Jira issue {0}", &[input["key"].as_str().unwrap_or("").to_string()]),
         "jira_create_issue" => crate::i18n::fmt("Creating a Jira issue: {0}", &[input["summary"].as_str().unwrap_or("").to_string()]),
-        "jira_comment" => crate::i18n::fmt("Updating the Jira issue {0}", &[input["key"].as_str().unwrap_or("").to_string()]),
+        "jira_comment" | "jira_update_issue" => crate::i18n::fmt("Updating the Jira issue {0}", &[input["key"].as_str().unwrap_or("").to_string()]),
         "model_lint" => crate::i18n::fmt("Model check of package {0}", &[input["package"].to_string()]),
         "gap_analysis" => crate::i18n::fmt("Gap analysis: package {0} (as-is) vs {1} (to-be)", &[input["as_is"].to_string(), input["to_be"].to_string()]),
         "read_template" => crate::i18n::fmt("Reading template: {0}", &[(input["name"].as_str().unwrap_or("")).to_string()]),
@@ -5311,7 +5713,7 @@ fn tool_result_summary(name: &str, text: &str) -> String {
         "ea_show_diagram" | "render_image" => crate::i18n::tr("image ready").into(),
         "create_document" | "create_spreadsheet" | "create_confluence_page" => crate::i18n::tr("file ready").into(),
         "publish_confluence" => crate::i18n::tr("published in Confluence").into(),
-        "jira_create_issue" | "jira_comment" => crate::i18n::tr("saved in Jira").into(),
+        "jira_create_issue" | "jira_comment" | "jira_update_issue" => crate::i18n::tr("saved in Jira").into(),
         "memory_save" | "memory_delete" | "save_template" => crate::i18n::tr("saved").into(),
         _ => crate::i18n::tr("done").into(),
     }
@@ -5333,7 +5735,7 @@ fn tool_status(name: &str, input: &Value) -> String {
         "ea_ui" => crate::i18n::tr("The assistant is looking at the open EA window…").to_string(),
         "operation_usage" => crate::i18n::tr("The assistant is checking where operations are used…").to_string(),
         "jira_search" | "jira_issue" => crate::i18n::tr("The assistant is reading Jira…").to_string(),
-        "jira_create_issue" | "jira_comment" => crate::i18n::tr("The assistant is writing to Jira…").to_string(),
+        "jira_create_issue" | "jira_comment" | "jira_update_issue" => crate::i18n::tr("The assistant is writing to Jira…").to_string(),
         "model_lint" => crate::i18n::tr("The assistant is checking the model quality…").to_string(),
         "gap_analysis" => crate::i18n::tr("The assistant is comparing packages…").to_string(),
         other => crate::i18n::fmt("The assistant is using the tool {0}…", &[(other).to_string()]),
@@ -5462,7 +5864,17 @@ fn run_turn(
     cancel: &AtomicBool,
     emit: &dyn Fn(WorkerEvent),
 ) -> anyhow::Result<()> {
-    run_turn_with(cfg, messages, approver, inbox, cancel, emit, None)
+    usage::begin_answer();
+    let result = run_turn_with(cfg, messages, approver, inbox, cancel, emit, None);
+    // The cost of the whole answer, as its last step (LC-300).
+    let totals = usage::answer_totals();
+    if totals.calls > 0 {
+        emit(WorkerEvent::StepStart(crate::i18n::tr("💲 Cost of this answer").into()));
+        emit(WorkerEvent::StepEnd { ok: true, detail: totals.line() });
+    }
+    // One record of the task: what the request turned into and how it ended (LC-288).
+    telemetry::end_task(result.is_ok(), cancel.load(std::sync::atomic::Ordering::Relaxed));
+    result
 }
 
 /// One answer of the assistant; `allowed` limits the tools (an assistant nobody watches gets reading tools only).
@@ -5488,7 +5900,18 @@ fn run_turn_with(
     } else {
         telemetry::turn();
     }
-    let client = claude::ClaudeClient::from_config(cfg, cfg.claude_max_tokens)?;
+    let client = claude::ClaudeClient::from_config(cfg, cfg.claude_max_tokens)?.with_tool_clearing(TOOL_CLEARING_AT);
+    // A long conversation (LC-301): before the prompt nears Claude Haiku 5.5's 100k-token price tier, the earlier part
+    // becomes a summary, kept with the conversation (the same text in every later turn, so it stays cached). Done
+    // here, at the start of the turn, where the history holds only texts: no earlier reasoning is replayed after it.
+    let summarised;
+    let messages = match summarise_if_long(&client, messages, emit) {
+        Some(shorter) => {
+            summarised = shorter;
+            &summarised[..]
+        }
+        None => messages,
+    };
     let mut msgs = history_to_api(messages, &cfg.attachments_dir)?;
     if conversation_chars(&msgs) > SUMMARY_THRESHOLD {
         emit(WorkerEvent::StepStart(crate::i18n::tr("The conversation is long: summarising its earlier part").into()));
@@ -5515,6 +5938,7 @@ fn run_turn_with(
         None => {
             if let Some(list) = tools.as_array_mut() {
                 list.push(ask_user_definition());
+                list.push(report_gap_definition());
                 list.push(task_list_definition());
                 list.push(delegate_definition());
                 // Calculations and analysis in Anthropic's sandbox: only when switched on, only with Claude.
@@ -5567,6 +5991,12 @@ fn run_turn_with(
     // The plan shown with task_list (done, all): while tasks are open, every round reminds the model to tick them
     // off (LC-270: smaller models showed the plan once and never updated it).
     let mut plan: Option<(usize, usize)> = None;
+    // Notes the model writes between tool calls go to the steps, not to the chat; the last one becomes the answer only
+    // when the model ends without a text of its own.
+    let mut last_note: Option<String> = None;
+    let mut answered = false;
+    // How many times the model stopped before the end of the work and was sent on (LC-295).
+    let mut sent_on = 0;
 
     for round in 1..=MAX_ROUNDS {
         if cancel.load(Ordering::Relaxed) {
@@ -5587,15 +6017,25 @@ fn run_turn_with(
             emit(WorkerEvent::StepStart(crate::i18n::tr("💭 The assistant's reasoning").into()));
             emit(WorkerEvent::StepEnd { ok: true, detail: shorten(thinking.trim(), 1200) });
         }
-        telemetry::tokens(resp["usage"]["input_tokens"].as_u64().unwrap_or(0), resp["usage"]["output_tokens"].as_u64().unwrap_or(0));
+        // What this call cost (recorded by the client): the prompt, its share from the cache and the price.
+        let call = usage::Call::from_usage(&cfg.claude_model, "chat", &resp["usage"], 0, 0);
         let planned: Vec<&str> = resp["content"]
             .as_array()
             .map(|blocks| blocks.iter().filter(|b| b["type"] == "tool_use").filter_map(|b| b["name"].as_str()).collect())
             .unwrap_or_default();
         emit(WorkerEvent::StepEnd {
             ok: true,
-            detail: crate::i18n::fmt("{0}, {1} response tokens", &[(if planned.is_empty() { crate::i18n::tr("final answer").to_string() } else { crate::i18n::fmt("next: {0}", &[(planned.join(", ")).to_string()]) }).to_string(), (resp["usage"]["output_tokens"]).to_string()]),
+            detail: format!(
+                "{} · {}",
+                crate::i18n::fmt("{0}, {1} response tokens", &[(if planned.is_empty() { crate::i18n::tr("final answer").to_string() } else { crate::i18n::fmt("next: {0}", &[(planned.join(", ")).to_string()]) }).to_string(), (resp["usage"]["output_tokens"]).to_string()]),
+                crate::i18n::fmt("prompt {0} tokens, {1}% from the cache", &[call.prompt().to_string(), format!("{:.0}", call.cache_share() * 100.0)])
+            ),
         });
+        // The API cleared old tool results of this turn (LC-301): a step, so it is visible why something is read again.
+        for edit in resp["context_management"]["applied_edits"].as_array().into_iter().flatten() {
+            emit(WorkerEvent::StepStart(crate::i18n::tr("The work is long: the oldest tool results were removed from the model's view").into()));
+            emit(WorkerEvent::StepEnd { ok: true, detail: crate::i18n::fmt("{0} tool results, {1} tokens", &[edit["cleared_tool_uses"].to_string(), edit["cleared_input_tokens"].to_string()]) });
+        }
         claude::check_refusal(&resp)?;
         let content = resp["content"].clone();
         if resp["stop_reason"] == "max_tokens" {
@@ -5606,8 +6046,26 @@ fn run_turn_with(
         if leaks_rules(&text) {
             text = crate::i18n::tr("(The answer repeated the assistant's internal instructions and was withheld. Ask about what the assistant can do instead.)").to_string();
         }
-        if !text.trim().is_empty() {
+        // The model ended its answer although the work is not done (open tasks in its plan, or "write 'go on'" / "shall I
+        // continue?"): the request already covers the rest, so it is sent on instead of the user having to say "go on".
+        let stops_early = allowed.is_none()
+            && sent_on < MAX_SENT_ON
+            && resp["stop_reason"] == "end_turn"
+            && (plan.is_some_and(|(done, all)| done < all) || asks_to_continue(&text));
+        let goes_on = resp["stop_reason"] == "tool_use" || resp["stop_reason"] == "pause_turn" || stops_early;
+        if !text.trim().is_empty() && goes_on {
+            // "Now I read the controllers…": a step of the work, not a message of its own in the chat.
+            emit(WorkerEvent::StepStart(format!("💬 {}", shorten(text.trim(), 300))));
+            emit(WorkerEvent::StepEnd { ok: true, detail: String::new() });
+            last_note = Some(text);
+        } else if !text.trim().is_empty() {
             emit(WorkerEvent::Text(text));
+            answered = true;
+        } else if !goes_on && !answered {
+            if let Some(note) = last_note.take() {
+                emit(WorkerEvent::Text(note));
+                answered = true;
+            }
         }
 
         // The web: every search and every page read, as a step (the query or the URL, and what came back).
@@ -5642,6 +6100,16 @@ fn run_turn_with(
         // A long server tool (code execution) pauses the answer: it goes on with the same content.
         if resp["stop_reason"] == "pause_turn" {
             msgs.push(json!({ "role": "assistant", "content": content.clone() }));
+            continue;
+        }
+        if stops_early {
+            sent_on += 1;
+            emit(WorkerEvent::StepStart(crate::i18n::tr("↻ The work is not finished: the assistant goes on without asking").into()));
+            emit(WorkerEvent::StepEnd { ok: true, detail: String::new() });
+            msgs.push(json!({ "role": "assistant", "content": content.clone() }));
+            let mut next = vec![text_block(SEND_ON)];
+            next.extend(drain_inbox(inbox, &cfg.attachments_dir, emit)?);
+            msgs.push(json!({ "role": "user", "content": next }));
             continue;
         }
         if resp["stop_reason"] != "tool_use" {
@@ -5707,6 +6175,11 @@ fn run_turn_with(
                         Err(reason) => Err(anyhow::anyhow!(reason)),
                     }
                 }
+            } else if name == "report_gap" {
+                let kind = block["input"]["kind"].as_str().filter(|k| GAP_KINDS.contains(k)).unwrap_or("other").to_string();
+                telemetry::gap(&kind);
+                emit(WorkerEvent::Gap(kind));
+                Ok(tools::ToolOutput::from("Recorded. Now tell the user briefly what you cannot do and what you can do instead; a button under your answer lets them request the feature.".to_string()))
             } else if name == "ask_user" {
                 // The questions go to the chat as a form; the user's answers come as the next message.
                 match questions_message(&block["input"]) {
@@ -5769,7 +6242,20 @@ fn run_turn_with(
         results.extend(drain_inbox(inbox, &cfg.attachments_dir, emit)?);
         msgs.push(json!({ "role": "user", "content": results }));
     }
-    bail!("{}", crate::i18n::fmt("the assistant took {0} steps without finishing; stopped to prevent an endless loop", &[(MAX_ROUNDS).to_string()]))
+    // The step limit: no more tools, but the work done so far is not lost: the model says what is done and what is left.
+    if let Some(content) = msgs.last_mut().and_then(|last| last["content"].as_array_mut()) {
+        content.push(text_block(&format!(
+            "(The application's step limit of {MAX_ROUNDS} steps is reached: do not call any more tools. Tell the user in a few lines what is done, \
+             with the results so far, and exactly what is left, so that \"go on\" continues from there.)"
+        )));
+    }
+    let resp = client.send_value(&system, &msgs, Some(&tools))?;
+    let text = text_of(&resp["content"]);
+    if text.trim().is_empty() {
+        bail!("{}", crate::i18n::fmt("the assistant took {0} steps without finishing; stopped to prevent an endless loop", &[(MAX_ROUNDS).to_string()]))
+    }
+    emit(WorkerEvent::Text(text));
+    Ok(())
 }
 
 /// Longer side of an image sent to the model. Larger diagrams are scaled down (only the model's copy;
@@ -6263,11 +6749,15 @@ fn row_secret(ui: &mut egui::Ui, label: &str, value: &mut String, stored: bool) 
 }
 
 impl App {
-    /// A newer release: checked once in the background; a bar above the window (in EA: one line in System Output).
+    /// A newer release: checked in the background at the start and then every hour; a bar above the window (in EA:
+    /// one line in System Output per version).
     fn update_bar(&mut self, ctx: &egui::Context) {
-        if !self.update_started {
+        let now = std::time::Instant::now();
+        if let Some(next) = self.update_next.filter(|n| now < *n) {
+            ctx.request_repaint_after(next - now);
+        } else if self.update_rx.is_none() {
             if let Some(cfg) = self.cfg.clone() {
-                self.update_started = true;
+                self.update_next = Some(now + std::time::Duration::from_secs(3600));
                 let (tx, rx) = mpsc::channel();
                 self.update_rx = Some(rx);
                 let repaint = ctx.clone();
@@ -6281,7 +6771,10 @@ impl App {
             self.update_rx = None;
             if let Some(release) = found {
                 if ea::in_ea_tab() {
-                    ea_ui::output(&crate::i18n::fmt("Loonar Compass {0} is available: {1}", &[release.version.clone(), release.url.clone()]));
+                    if self.update_told.as_deref() != Some(release.version.as_str()) {
+                        ea_ui::output(&crate::i18n::fmt("Loonar Compass {0} is available: {1}", &[release.version.clone(), release.url.clone()]));
+                        self.update_told = Some(release.version.clone());
+                    }
                 } else {
                     self.update = Some(release);
                 }
@@ -6542,6 +7035,7 @@ impl eframe::App for App {
                         let mut new_one = false;
                         let mut delete_current = false;
                         let mut rename_done: Option<String> = None;
+                        let mut more_action: Option<&str> = None;
                         ui.horizontal(|ui| {
                             // Renaming the current conversation: the drop-down becomes a text field (Enter saves, Esc cancels).
                             if let Some(name) = self.ea_rename.as_mut() {
@@ -6583,6 +7077,24 @@ impl eframe::App for App {
                             {
                                 self.ea_rename = Some(shown_title(&self.session.title).to_string());
                             }
+                            // Conversations of other models, export and import (LC-292).
+                            let has_messages = !self.session.messages.is_empty();
+                            ui.menu_button(icons::text(icons::MORE, "⋯", 13.0), |ui| {
+                                if ui.button(crate::i18n::tr("Conversations of other models…")).clicked() {
+                                    more_action = Some("other");
+                                    ui.close_menu();
+                                }
+                                if ui.add_enabled(has_messages, egui::Button::new(crate::i18n::tr("Export the conversation…"))).clicked() {
+                                    more_action = Some("export");
+                                    ui.close_menu();
+                                }
+                                if ui.button(crate::i18n::tr("Import a conversation…")).clicked() {
+                                    more_action = Some("import");
+                                    ui.close_menu();
+                                }
+                            })
+                            .response
+                            .on_hover_text(crate::i18n::tr("More"));
                             // No list here (narrow tab of EA): the current conversation is deleted with its own button.
                             delete_current = ui
                                 .add_enabled(can_rename && !busy, egui::Button::new(icons::text(icons::DELETE, "🗑", 13.0)).min_size(egui::vec2(28.0, 28.0)))
@@ -6606,6 +7118,15 @@ impl eframe::App for App {
                         if let Some(s) = pick {
                             self.switch_to(s);
                         }
+                        match more_action {
+                            Some("other") => self.other_models = Some(OtherModels { pin_notes: true, ..Default::default() }),
+                            Some("export") => {
+                                let current = self.session.clone();
+                                self.export_session(&current);
+                            }
+                            Some("import") => self.import_session(),
+                            _ => {}
+                        }
                         if delete_current {
                             self.move_to_bin(self.session.clone());
                         }
@@ -6616,6 +7137,7 @@ impl eframe::App for App {
                         }
                         return;
                     }
+                    let mut import_now = false;
                     if !narrow {
                     ui.horizontal(|ui| {
                         ui.add_space(4.0);
@@ -6629,6 +7151,9 @@ impl eframe::App for App {
                                 self.switch_to(Session::new());
                                 self.pending.clear();
                                 self.renaming = None;
+                            }
+                            if icon_button(ui, icons::IMPORT, "⇩", crate::i18n::tr("Import a conversation…")).clicked() {
+                                import_now = true;
                             }
                         });
                     });
@@ -6649,6 +7174,8 @@ impl eframe::App for App {
                     let mut rename_commit: Option<(String, String)> = None;
                     let mut rename_cancel = false;
                     let mut to_bin: Option<Session> = None;
+                    let mut to_export: Option<Session> = None;
+                    let mut other_models = false;
                     egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
                         ui.spacing_mut().item_spacing.y = 2.0;
                         let mut shown = 0;
@@ -6716,6 +7243,10 @@ impl eframe::App for App {
                                 // Right click: delete (to the bin folder of the history, nothing is lost for good).
                                 let working_here = (selected && busy) || self.background.iter().any(|run| run.session.id == s.id);
                                 row.context_menu(|ui| {
+                                    if ui.add_enabled(!s.messages.is_empty(), egui::Button::new(crate::i18n::tr("Export the conversation…"))).clicked() {
+                                        to_export = Some(s.clone());
+                                        ui.close_menu();
+                                    }
                                     if ui.add_enabled(!working_here, egui::Button::new(crate::i18n::tr("Delete the conversation"))).on_disabled_hover_text(crate::i18n::tr("The assistant is working in it.")).clicked() {
                                         to_bin = Some(s.clone());
                                         ui.close_menu();
@@ -6734,7 +7265,23 @@ impl eframe::App for App {
                             let text = if query.is_empty() { crate::i18n::tr("No saved conversations") } else { crate::i18n::tr("No conversations match the search") };
                             ui.label(egui::RichText::new(text).color(theme::MUTED));
                         }
+                        // In a tab of EA the list shows this project only: the others are one click away (LC-292).
+                        if ea::in_ea_tab() {
+                            ui.add_space(8.0);
+                            if ui.link(crate::i18n::tr("Conversations of other models…")).clicked() {
+                                other_models = true;
+                            }
+                        }
                     });
+                    if other_models {
+                        self.other_models = Some(OtherModels { pin_notes: true, ..Default::default() });
+                    }
+                    if import_now {
+                        self.import_session();
+                    }
+                    if let Some(session) = to_export {
+                        self.export_session(&session);
+                    }
 
                     if let Some(session) = to_bin {
                         self.move_to_bin(session);
@@ -6850,6 +7397,7 @@ impl eframe::App for App {
                 let mut open_conn = false;
                 self.conn_window(ctx);
                 self.miro_window(ctx);
+                self.other_models_window(ctx);
                 // In a tab of EA the header only shows that Claude is working.
                 if !ea::in_ea_tab() || busy {
                 egui::TopBottomPanel::top("chat_header")
@@ -7197,6 +7745,18 @@ impl eframe::App for App {
                             if ui.button(crate::i18n::tr("Reject")).clicked() {
                                 decision = Some(false);
                             }
+                            // An always-asked kind (scripts, Jira, Confluence, memory, MCP, uploads): one click approves this
+                            // one and every next one of the kind until Compass is closed.
+                            if let Some((kind, label)) = tools::trustable_kind(&request.summary) {
+                                if ui
+                                    .button(label)
+                                    .on_hover_text(crate::i18n::tr("The next ones of this kind go without asking until you close Compass. Other changes still follow the approval mode."))
+                                    .clicked()
+                                {
+                                    tools::trust(kind);
+                                    decision = Some(true);
+                                }
+                            }
                         });
                         ui.add_space(6.0);
                     });
@@ -7220,6 +7780,9 @@ impl eframe::App for App {
                 let mut answers_to_send: Option<String> = None;
                 // "Report a problem with this answer" under an answer: the index of the message.
                 let mut report_answer: Option<usize> = None;
+                // "💡 Request this feature" under an answer with a missing capability; ratings of answers.
+                let mut feature_request: Option<(usize, String)> = None;
+                let mut rate: Option<(String, bool, &'static str)> = None;
 
                 let mut open_conn_empty = false;
                 let mut confirm_request = false;
@@ -7282,6 +7845,21 @@ impl eframe::App for App {
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
                             for (index, m) in self.session.messages.iter().enumerate() {
+                                if self.session.summary.as_ref().is_some_and(|s| s.from == m.created) {
+                                    ui.add_space(6.0);
+                                    ui.vertical_centered(|ui| {
+                                        ui.label(egui::RichText::new(crate::i18n::tr("The assistant sees the conversation above as a summary")).small().color(theme::MUTED));
+                                    });
+                                    ui.add_space(6.0);
+                                }
+                                for mv in self.session.moves.iter().filter(|mv| mv.at == index) {
+                                    ui.add_space(6.0);
+                                    ui.vertical_centered(|ui| {
+                                        ui.label(egui::RichText::new(crate::i18n::fmt("From here on: model {0}", &[mv.to.clone()])).small().color(theme::MUTED))
+                                            .on_hover_text(crate::i18n::fmt("Earlier: {0}", &[mv.from.clone()]));
+                                    });
+                                    ui.add_space(6.0);
+                                }
                                 let is_user = m.role == "user";
                                 // The failure note is saved in the language of that moment: check all languages (the UI language may have changed).
                                 let failed = !is_user && i18n::Lang::ALL.iter().any(|lang| m.text.starts_with(i18n::tr_in(*lang, "Could not finish")));
@@ -7433,6 +8011,33 @@ impl eframe::App for App {
                                         ui.label(egui::RichText::new(time).small().color(theme::HINT));
                                         if !is_user {
                                             ui.add_space(8.0);
+                                            match self.ratings.get(&m.created) {
+                                                Some(up) => {
+                                                    ui.label(egui::RichText::new(if *up { "👍" } else { "👎" }).small().color(theme::HINT)).on_hover_text(crate::i18n::tr("Thank you for the rating"));
+                                                }
+                                                None => {
+                                                    // Both alike (no frame, same colour): the thumb down only opens the reasons first.
+                                                    if ui.add(egui::Button::new(egui::RichText::new("👍").small().color(theme::MUTED)).frame(false)).on_hover_text(crate::i18n::tr("A good answer")).clicked() {
+                                                        rate = Some((m.created.clone(), true, ""));
+                                                    }
+                                                    egui::menu::menu_custom_button(ui, egui::Button::new(egui::RichText::new("👎").small().color(theme::MUTED)).frame(false), |ui| {
+                                                        for (reason, label) in [("wrong", crate::i18n::tr("Wrong or inaccurate answer")), ("not_asked", crate::i18n::tr("Not what I asked for")), ("slow", crate::i18n::tr("Too slow")), ("model_error", crate::i18n::tr("A mistake in the model"))] {
+                                                            if ui.button(label).clicked() {
+                                                                rate = Some((m.created.clone(), false, reason));
+                                                                ui.close_menu();
+                                                            }
+                                                        }
+                                                    });
+                                                }
+                                            }
+                                            if let Some(kind) = self.gap_marks.get(&m.created) {
+                                                ui.add_space(8.0);
+                                                let request = egui::Button::new(egui::RichText::new(crate::i18n::tr("💡 Request this feature")).small().color(theme::NAV)).frame(false);
+                                                if ui.add(request).on_hover_text(crate::i18n::tr("Tell the author what you needed: a short form opens, nothing is sent until you send it.")).clicked() {
+                                                    feature_request = Some((index, kind.clone()));
+                                                }
+                                            }
+                                            ui.add_space(8.0);
                                             let report = egui::Button::new(egui::RichText::new(crate::i18n::tr("Report a problem with this answer")).small().color(theme::HINT)).frame(false);
                                             if ui.add(report).on_hover_text(crate::i18n::tr("Opens a bug report with this answer, your question and the steps already filled in: just say what is wrong.")).clicked() {
                                                 report_answer = Some(index);
@@ -7577,6 +8182,13 @@ impl eframe::App for App {
                 if let Some(answers) = answers_to_send {
                     self.input = answers;
                     self.send(ctx);
+                }
+                if let Some((index, kind)) = feature_request {
+                    self.request_feature(index, &kind);
+                }
+                if let Some((created, up, reason)) = rate {
+                    telemetry::rating(up, reason);
+                    self.ratings.insert(created, up);
                 }
                 if let Some(index) = report_answer {
                     self.report_answer(index);
@@ -7737,6 +8349,94 @@ mod tests {
         let result = run_turn(&cfg, &messages, &approver, &inbox, &cancel, &emit);
         ea::shutdown();
         result.expect("turn");
+    }
+
+    #[test]
+    fn stopping_to_ask_for_go_on_is_recognised() {
+        assert!(asks_to_continue("Zacznę od nasa-crmd-sync-service i będę przechodził po kolei. Napisz „dalej”, a ruszam."));
+        assert!(asks_to_continue("Done 4 of 13 services. Shall I continue with the rest?"));
+        assert!(asks_to_continue("Soll ich weitermachen?"));
+        assert!(asks_to_continue("Zrobię to kolejno, zaczynając od customer-service w następnej turze."));
+        assert!(!asks_to_continue("Zrobione: 13 usług, 412 operacji, wszystkie z aliasami."));
+        assert!(!asks_to_continue("Który pakiet jest właściwy: A czy B?"));
+    }
+
+    /// Code analysis on the cheapest model works to the end alone: one answer, no question, no status messages (the
+    /// P_1805 conversation: a question or "shall I go on?" after every few steps). LOONAR_TEST_PROPS = settings with a code
+    /// folder, LOONAR_PROMPT = the task. Run: `cargo test code_analysis_alone -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "requires an API key and a source code folder"]
+    fn code_analysis_alone() {
+        let mut cfg = AppConfig::load(Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("settings");
+        cfg.claude_model = "claude-haiku-5-5".into();
+        cfg.hub_url = String::new();
+        let prompt = std::env::var("LOONAR_PROMPT").expect("LOONAR_PROMPT");
+        let messages = vec![Message { role: "user".into(), text: prompt, attachments: vec![], created: chrono::Utc::now().to_rfc3339() }];
+        let approver = tools::Approver::new(ApprovalMode::Auto, Box::new(|_| true));
+        let (_tx, inbox) = mpsc::channel();
+        let cancel = AtomicBool::new(false);
+        let answers = std::sync::Mutex::new(Vec::<String>::new());
+        let asked = std::sync::atomic::AtomicBool::new(false);
+        let emit = |event: WorkerEvent| match event {
+            WorkerEvent::Text(text) => {
+                if text.contains("```questions") {
+                    asked.store(true, Ordering::Relaxed);
+                }
+                println!("ANSWER: {text}");
+                answers.lock().unwrap().push(text);
+            }
+            WorkerEvent::StepStart(step) => println!("STEP: {}", step.chars().take(160).collect::<String>()),
+            _ => {}
+        };
+        run_turn(&cfg, &messages, &approver, &inbox, &cancel, &emit).expect("turn");
+        // The cost of the answer (LC-300), for the before/after comparison of the cost changes.
+        let t = usage::answer_totals();
+        println!(
+            "COST calls={} input={} cache_write={} (1h {}) cache_read={} output={} largest_prompt={} over_100k={} retries={} seconds={:.1} usd={:.5}",
+            t.calls, t.input, t.cache_write, t.cache_write_1h, t.cache_read, t.output, t.largest_prompt, t.long_prompts, t.retries, t.millis as f64 / 1000.0, t.usd
+        );
+        assert!(!asked.load(Ordering::Relaxed), "asked a question");
+        assert_eq!(answers.lock().unwrap().len(), 1, "one answer in the chat");
+    }
+
+    /// Long conversations (LC-301), real API: the API clears old tool results above the trigger without an error, and
+    /// a long real conversation (LOONAR_TEST_SESSION = a history file) is summarised below the turn budget.
+    /// Run: `cargo test long_conversations_live -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "requires an API key and a long conversation file"]
+    fn long_conversations_live() {
+        let cfg = AppConfig::load(Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("settings");
+        // 1. Clearing on the server: nine tool results of about 8 000 tokens, trigger 30 000.
+        let client = claude::ClaudeClient::from_config(&cfg, 300).unwrap().with_tool_clearing(30_000);
+        let tools = json!([{ "name": "code_read", "description": "Reads a file.", "input_schema": { "type": "object", "properties": { "path": { "type": "string" } } } }]);
+        let mut msgs = vec![json!({"role": "user", "content": "Read the nine files, then say only how many you read."})];
+        for i in 0..9 {
+            let id = format!("toolu_{i:02}");
+            msgs.push(json!({"role": "assistant", "content": [{"type": "tool_use", "id": id, "name": "code_read", "input": {"path": format!("C:/x/F{i}.java")}}]}));
+            let body: String = (0..1_800).map(|n| format!("int v{n} = {i}; ")).collect();
+            msgs.push(json!({"role": "user", "content": [{"type": "tool_result", "tool_use_id": id, "content": body}]}));
+        }
+        let resp = client.send_value("You answer briefly.", &msgs, Some(&tools)).expect("answer with clearing");
+        println!("CLEAR applied_edits={} usage={}", resp["context_management"]["applied_edits"], resp["usage"]);
+        assert!(resp["context_management"]["applied_edits"].as_array().is_some_and(|a| !a.is_empty()), "the API cleared something");
+        // 2. The summary of a real long conversation.
+        let session = history::Session::load(Path::new(&std::env::var("LOONAR_TEST_SESSION").expect("LOONAR_TEST_SESSION"))).expect("session");
+        let messages = session.messages_for_model();
+        let before = estimated_tokens(&messages);
+        let summaries = std::sync::Mutex::new(Vec::new());
+        let emit = |e: WorkerEvent| match e {
+            WorkerEvent::Summary { from, text } => summaries.lock().unwrap().push((from, text)),
+            WorkerEvent::StepEnd { detail, .. } => println!("STEP {detail}"),
+            _ => {}
+        };
+        let client = claude::ClaudeClient::from_config(&cfg, cfg.claude_max_tokens).unwrap();
+        let shorter = summarise_if_long(&client, &messages, &emit).expect("summarised");
+        let after = estimated_tokens(&shorter);
+        let (from, text) = summaries.lock().unwrap()[0].clone();
+        println!("SUMMARY {} messages, ~{before} -> ~{after} tokens, from {from}
+{}", messages.len(), text.chars().take(1_500).collect::<String>());
+        assert!(PREFIX_ESTIMATE + after <= TURN_START_BUDGET && shorter[0].created == from && shorter[0].role == "user");
+        println!("COST {}", usage::answer_totals().line());
     }
 
     /// The new 0.8 tools in real conversations on the cheapest models: the model check, the gap analysis, reading a

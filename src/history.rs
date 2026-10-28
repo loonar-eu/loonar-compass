@@ -178,6 +178,41 @@ pub struct Session {
     /// The model of this conversation (empty in a new conversation until it is chosen or the first message is sent).
     #[serde(default)]
     pub model: Option<ModelChoice>,
+    /// Places where the conversation went on with another model (continued from another file or database, imported).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub moves: Vec<ModelMove>,
+    /// What the application did while making an answer (tools, reads, saves), by the `created` of that answer. The
+    /// assistant gets it with the history: without it, it cannot know in the next turn what it already read or changed.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub steps: std::collections::BTreeMap<String, Vec<String>>,
+    /// The earlier part of a long conversation as a summary (LC-301): the model gets it instead of the messages before
+    /// `from`. Kept with the conversation, so every later turn sends the same text and reads it from the cache.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<EarlierSummary>,
+}
+
+/// A summary of the messages before the message created at `from`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EarlierSummary {
+    pub from: String,
+    pub text: String,
+}
+
+/// The first kept message as the model gets it: the summary of everything before it, then its own text.
+pub fn with_summary(summary: &str, text: &str) -> String {
+    format!(
+        "<summary_of_earlier_conversation>\n{}\n</summary_of_earlier_conversation>\n(The earlier messages of this conversation were replaced by this summary.)\n\n{text}",
+        summary.trim()
+    )
+}
+
+/// The conversation went on with another model from message `at` on (LC-292).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelMove {
+    pub at: usize,
+    /// The earlier model (`describe()`), as it was then.
+    pub from: String,
+    pub to: String,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -201,7 +236,64 @@ impl Session {
             messages: Vec::new(),
             revision: 0,
             model: None,
+            moves: Vec::new(),
+            steps: Default::default(),
+            summary: None,
         }
+    }
+
+    /// A copy of the conversation that goes on with `model`; the original stays with its own model (LC-292).
+    pub fn continue_in(&self, model: ModelChoice) -> Session {
+        let mut copy = self.clone();
+        copy.id = uuid::Uuid::new_v4().to_string();
+        copy.revision = 0;
+        copy.record_move(model);
+        copy
+    }
+
+    /// The conversation itself goes on with `model`: from the next message on the assistant is told about the change.
+    pub fn record_move(&mut self, model: ModelChoice) {
+        let from = self.model.as_ref().map(|m| m.describe()).unwrap_or_default();
+        if !self.messages.is_empty() && from != model.describe() {
+            let at = self.messages.len();
+            self.moves.retain(|m| m.at != at);
+            self.moves.push(ModelMove { at, from, to: model.describe() });
+        }
+        self.model = Some(model);
+    }
+
+    /// The messages as the language model gets them: after every change of the model, the first user message starts with
+    /// a note of the application, so the assistant does not trust names and ids from the earlier model blindly.
+    pub fn messages_for_model(&self) -> Vec<Message> {
+        let mut out = self.messages.clone();
+        for mv in &self.moves {
+            if let Some(m) = out.iter_mut().skip(mv.at).find(|m| m.role == "user") {
+                let earlier = if mv.from.is_empty() { String::from("another model") } else { mv.from.clone() };
+                m.text = format!(
+                    "[Note from the application, not from the user: from this message on the conversation works with another EA model: {} \
+                     (the messages before were about {earlier}). Packages, elements and diagrams named earlier may be missing here or have \
+                     other ids: check them in this model before you rely on them or change them.]\n\n{}",
+                    mv.to, m.text
+                );
+            }
+        }
+        for m in out.iter_mut().filter(|m| m.role == "assistant") {
+            if let Some(steps) = self.steps.get(&m.created).filter(|s| !s.is_empty()) {
+                m.text = format!(
+                    "{}\n\n[Record of the application, not visible to the user: steps done while making this answer:\n{}]",
+                    m.text.trim_end(),
+                    steps.iter().map(|s| format!("- {s}")).collect::<Vec<_>>().join("\n")
+                );
+            }
+        }
+        // A long conversation: the messages before the summary point are replaced by their summary.
+        if let Some(summary) = &self.summary {
+            if let Some(at) = out.iter().position(|m| m.created == summary.from && m.role == "user") {
+                out.drain(..at);
+                out[0].text = with_summary(&summary.text, &out[0].text);
+            }
+        }
+        out
     }
 
     pub fn path(&self, history_dir: &Path) -> PathBuf {
@@ -304,6 +396,118 @@ fn sanitize(s: &str) -> String {
         .collect()
 }
 
+/// The file type of an exported conversation (a ZIP: `conversation.json` and the attachments).
+pub const EXPORT_EXTENSION: &str = "lcchat";
+const EXPORT_FORMAT: &str = "loonar-compass-conversation";
+const MAX_IMPORT_BYTES: u64 = 200 * 1024 * 1024;
+
+#[derive(Serialize, Deserialize)]
+struct Exported {
+    format: String,
+    version: u32,
+    app: String,
+    exported: String,
+    title: String,
+    /// The model the conversation worked with (`describe()`: the file path or database@server:port, no accounts or passwords).
+    model: String,
+    messages: Vec<Message>,
+    #[serde(default)]
+    moves: Vec<ModelMove>,
+    #[serde(default)]
+    steps: std::collections::BTreeMap<String, Vec<String>>,
+    #[serde(default)]
+    summary: Option<EarlierSummary>,
+}
+
+fn not_exported() -> anyhow::Error {
+    anyhow::anyhow!("{}", crate::i18n::tr("This is not a conversation exported from Loonar Compass."))
+}
+
+/// Writes the conversation with its attachments to `target` (LC-292).
+pub fn export(session: &Session, attachments_dir: &Path, target: &Path) -> Result<()> {
+    use std::io::Write;
+    let exported = Exported {
+        format: EXPORT_FORMAT.into(),
+        version: 1,
+        app: env!("CARGO_PKG_VERSION").into(),
+        exported: chrono::Utc::now().to_rfc3339(),
+        title: session.title.clone(),
+        model: session.model.as_ref().map(|m| m.describe()).unwrap_or_default(),
+        messages: session.messages.clone(),
+        moves: session.moves.clone(),
+        steps: session.steps.clone(),
+        summary: session.summary.clone(),
+    };
+    let tmp = target.with_extension("lcchat.tmp");
+    {
+        let file = std::fs::File::create(&tmp).with_context(|| tmp.display().to_string())?;
+        let mut zip = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default();
+        zip.start_file("conversation.json", options)?;
+        zip.write_all(serde_json::to_string_pretty(&exported)?.as_bytes())?;
+        let mut done = std::collections::HashSet::new();
+        for name in session.messages.iter().flat_map(|m| &m.attachments) {
+            if done.insert(name.clone()) {
+                // An attachment deleted by hand is left out; the message keeps its name.
+                if let Ok(bytes) = std::fs::read(attachments_dir.join(name)) {
+                    zip.start_file(format!("attachments/{name}"), options)?;
+                    zip.write_all(&bytes)?;
+                }
+            }
+        }
+        zip.finish()?;
+    }
+    std::fs::rename(&tmp, target).with_context(|| target.display().to_string())?;
+    Ok(())
+}
+
+/// Reads an exported conversation as a new conversation with `model`; the attachments are stored under new names.
+pub fn import(source: &Path, attachments_dir: &Path, model: ModelChoice) -> Result<Session> {
+    use std::io::Read;
+    let file = std::fs::File::open(source).with_context(|| source.display().to_string())?;
+    anyhow::ensure!(file.metadata()?.len() <= MAX_IMPORT_BYTES, "{}", crate::i18n::tr("The file is too large for an exported conversation."));
+    let mut zip = zip::ZipArchive::new(file).map_err(|_| not_exported())?;
+    let mut text = String::new();
+    zip.by_name("conversation.json").map_err(|_| not_exported())?.take(MAX_IMPORT_BYTES).read_to_string(&mut text)?;
+    let exported: Exported = serde_json::from_str(&text).map_err(|_| not_exported())?;
+    anyhow::ensure!(exported.format == EXPORT_FORMAT, not_exported());
+    anyhow::ensure!(exported.version == 1, "{}", crate::i18n::tr("The conversation was exported by a newer version of Loonar Compass: update the application."));
+    anyhow::ensure!(exported.messages.iter().all(|m| m.role == "user" || m.role == "assistant"), not_exported());
+    let mut renamed = std::collections::HashMap::new();
+    let mut total = 0u64;
+    for i in 0..zip.len() {
+        let mut entry = zip.by_index(i)?;
+        let Some(stored) = entry.name().strip_prefix("attachments/").map(str::to_string) else { continue };
+        // Only a plain file name: nothing is written outside the attachments folder.
+        if stored.is_empty() || stored.contains(['/', '\\', ':']) || stored.contains("..") {
+            continue;
+        }
+        let mut bytes = Vec::new();
+        entry.by_ref().take(MAX_IMPORT_BYTES).read_to_end(&mut bytes)?;
+        total += bytes.len() as u64;
+        anyhow::ensure!(total <= MAX_IMPORT_BYTES, "{}", crate::i18n::tr("The file is too large for an exported conversation."));
+        renamed.insert(stored.clone(), store_bytes(attachments_dir, display_name(&stored), &bytes)?);
+    }
+    let mut session = Session::new();
+    session.title = exported.title.chars().take(200).collect();
+    session.messages = exported.messages;
+    for m in &mut session.messages {
+        m.attachments = m.attachments.iter().map(|a| renamed.get(a).cloned().unwrap_or_else(|| a.clone())).collect();
+    }
+    let count = session.messages.len();
+    session.moves = exported.moves.into_iter().filter(|m| m.at <= count).collect();
+    session.steps = exported.steps;
+    session.summary = exported.summary;
+    let to = model.describe();
+    if count > 0 && exported.model != to {
+        session.moves.retain(|m| m.at != count);
+        session.moves.push(ModelMove { at: count, from: exported.model, to });
+    }
+    session.model = Some(model);
+    Ok(session)
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -349,5 +553,100 @@ mod tests {
         assert_eq!(back.model, Some(other));
         let old: Session = serde_json::from_str(r#"{"id":"x","title":"t","messages":[]}"#).unwrap();
         assert_eq!(old.model, None, "conversations from before 0.5 have no model yet");
+    }
+
+    fn db() -> ModelChoice {
+        ModelChoice::Database { name: "sklep".into(), host: "srv".into(), port: 5432, user: "u".into(), sslmode: String::new(), engine: String::new(), ea_user: String::new(), locks: true }
+    }
+
+    fn file(path: &str) -> ModelChoice {
+        ModelChoice::File { path: path.into(), ea_user: String::new(), locks: true }
+    }
+
+    fn talk() -> Session {
+        let mut s = Session::new();
+        s.model = Some(db());
+        for (role, text) in [("user", "Opisz pakiet Sprzedaż"), ("assistant", "Pakiet ma 3 elementy.")] {
+            s.messages.push(Message { role: role.into(), text: text.into(), attachments: Vec::new(), created: String::new() });
+        }
+        s
+    }
+
+    #[test]
+    fn continued_conversation_is_a_copy_and_tells_the_assistant() {
+        let original = talk();
+        let mut copy = original.continue_in(file("C:/m/sklep.qea"));
+        assert_ne!(copy.id, original.id);
+        assert_eq!(original.model, Some(db()), "the original keeps its model");
+        assert_eq!(copy.moves.len(), 1);
+        assert_eq!(copy.moves[0].at, 2);
+        // No note until the next user message; then it starts with the note, the stored text stays as typed.
+        assert!(copy.messages_for_model().iter().all(|m| !m.text.contains("Note from the application")));
+        copy.messages.push(Message { role: "user".into(), text: "Dodaj element".into(), attachments: Vec::new(), created: String::new() });
+        let sent = copy.messages_for_model();
+        assert!(sent[2].text.starts_with("[Note from the application") && sent[2].text.contains("sklep@srv:5432") && sent[2].text.ends_with("Dodaj element"));
+        assert_eq!(copy.messages[2].text, "Dodaj element");
+        // The steps of an answer go to the model with it, not to the stored text.
+        let mut with_steps = talk();
+        with_steps.steps.insert(with_steps.messages[1].created.clone(), vec!["Reading the Confluence page \"W2\" ✓".into()]);
+        let sent = with_steps.messages_for_model();
+        assert!(sent[1].text.contains("steps done while making this answer") && sent[1].text.contains("Confluence page"));
+        assert_eq!(with_steps.messages[1].text, "Pakiet ma 3 elementy.");
+        // A summary replaces the messages before its point, the same way in every turn; the stored messages stay.
+        let mut long = talk();
+        long.messages.push(Message { role: "user".into(), text: "Dalej".into(), attachments: Vec::new(), created: "t3".into() });
+        long.summary = Some(EarlierSummary { from: "t3".into(), text: "Opisano pakiet Sprzedaż.".into() });
+        let sent = long.messages_for_model();
+        assert_eq!(sent.len(), 1);
+        assert!(sent[0].text.starts_with("<summary_of_earlier_conversation>") && sent[0].text.ends_with("Dalej"));
+        assert_eq!(long.messages_for_model()[0].text, sent[0].text);
+        assert_eq!(long.messages.len(), 3);
+        // The same model again is no move.
+        let mut same = talk();
+        same.record_move(db());
+        assert!(same.moves.is_empty());
+    }
+
+    #[test]
+    fn export_and_import_keep_messages_and_attachments() {
+        let dir = std::env::temp_dir().join(format!("lc292-{}", uuid::Uuid::new_v4().simple()));
+        let (att, other_att) = (dir.join("a"), dir.join("b"));
+        let mut s = talk();
+        let stored = store_bytes(&att, "shot.png", b"png-bytes").unwrap();
+        s.messages[0].attachments.push(stored.clone());
+        let target = dir.join("talk.lcchat");
+        export(&s, &att, &target).unwrap();
+        let back = import(&target, &other_att, file("C:/m/sklep.qea")).unwrap();
+        assert_ne!(back.id, s.id);
+        assert_eq!(back.messages.len(), 2);
+        assert_eq!(back.model, Some(file("C:/m/sklep.qea")));
+        assert_eq!(back.moves.last().map(|m| (m.at, m.from.as_str())), Some((2, "sklep@srv:5432")));
+        let name = &back.messages[0].attachments[0];
+        assert_ne!(name, &stored, "a new name in the attachments folder");
+        assert_eq!(std::fs::read(other_att.join(name)).unwrap(), b"png-bytes");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn import_rejects_other_files_and_paths_outside_the_folder() {
+        use std::io::Write;
+        let dir = std::env::temp_dir().join(format!("lc292-{}", uuid::Uuid::new_v4().simple()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let plain = dir.join("x.lcchat");
+        std::fs::write(&plain, b"not a zip").unwrap();
+        assert!(import(&plain, &dir.join("att"), db()).is_err());
+        // A conversation with an attachment entry that tries to leave the folder: the entry is skipped.
+        let evil = dir.join("evil.lcchat");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&evil).unwrap());
+        let o = zip::write::SimpleFileOptions::default();
+        zip.start_file("conversation.json", o).unwrap();
+        zip.write_all(br#"{"format":"loonar-compass-conversation","version":1,"app":"0.9.1","exported":"","title":"t","model":"m","messages":[{"role":"user","text":"x","attachments":["../../evil.txt"],"created":""}]}"#).unwrap();
+        zip.start_file("attachments/../../evil.txt", o).unwrap();
+        zip.write_all(b"boom").unwrap();
+        zip.finish().unwrap();
+        let back = import(&evil, &dir.join("att"), db()).unwrap();
+        assert_eq!(back.messages.len(), 1);
+        assert!(!dir.join("evil.txt").exists() && !std::env::temp_dir().join("evil.txt").exists());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

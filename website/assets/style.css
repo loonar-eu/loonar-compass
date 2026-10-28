@@ -1,4 +1,4 @@
-/* Loonar Compass — loonar.eu
+/* Loonar Compass - loonar.eu
    Plain CSS, no build step. Colours are defined once in :root. */
 
 :root {
@@ -291,7 +291,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .opt .ticks li::before { background-color: #8AA7BA; }
 .note { margin-top: 16px; font-size: .92rem; color: var(--muted); }
 
-/* FAQ: native <details>/<summary> — keyboard accessible, works without JavaScript */
+/* FAQ: native <details>/<summary> - keyboard accessible, works without JavaScript */
 .faq { max-width: 880px; display: grid; gap: 12px; }
 .qa { background: var(--bg); border: 1px solid var(--line); border-radius: 14px; transition: border-color .2s, box-shadow .2s, background-color .2s; }
 .qa:hover { border-color: var(--navy-100); }

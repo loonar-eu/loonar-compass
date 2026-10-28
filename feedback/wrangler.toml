@@ -5,7 +5,9 @@ compatibility_date = "2026-09-01"
 
 # The address the application uses (https://feedback.loonar.eu). Needs the loonar.eu zone in Cloudflare; without it,
 # remove these lines and use the workers.dev address (set LOONAR_FEEDBACK_URL for tests).
-routes = [{ pattern = "feedback.loonar.eu", custom_domain = true }]
+# routes = [{ pattern = "feedback.loonar.eu", custom_domain = true }]   # when loonar.eu is a Cloudflare zone
+workers_dev = true
+account_id = "e0a393421175420efa254a6a99bb3566"
 
 [vars]
 ISSUES_REPO = "loonar-eu/loonar-compass"
@@ -22,3 +24,14 @@ simple = { limit = 30, period = 60 }
 name = "REPORT_LIMITER"
 namespace_id = "1002"
 simple = { limit = 3, period = 60 }
+
+# Once a day: data older than 13 months is deleted, the summary of the last week is computed and the download counts
+# of the releases are written down.
+[triggers]
+crons = ["17 3 * * *"]
+
+# The statistics (starts and daily summaries); schema in schema.sql.
+[[d1_databases]]
+binding = "DB"
+database_name = "compass-stats"
+database_id = "bc417927-b94e-482b-a254-35529e91ee25"

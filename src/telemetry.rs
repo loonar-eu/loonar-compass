@@ -1,5 +1,6 @@
-//! Anonymous usage statistics: once a day, a summary of the previous days goes to the Loonar feedback service, which
-//! publishes it in the public repository loonar-eu/compass-stats.
+//! Anonymous usage statistics: at the start a ping with the random installation id, then every hour the summary of the
+//! day so far (and of ended days not sent yet) goes to the Loonar feedback service (Cloudflare D1, no IP addresses);
+//! only summaries over all installations together are published (GET /v1/summary).
 //!
 //! What is counted: how often each tool of the assistant was used and how often it failed, answers of the assistant,
 //! errors of the AI service, approvals asked / accepted / rejected, views opened, tokens, and the setup of the day
@@ -24,9 +25,9 @@ use std::time::{Duration, Instant};
 
 /// The feedback service (statistics and bug reports). `LOONAR_FEEDBACK_URL` replaces it (https, or http on this
 /// computer for tests).
-pub const SERVICE_URL: &str = "https://feedback.loonar.eu";
+pub const SERVICE_URL: &str = "https://compass-feedback.loonar-eu.workers.dev";
 /// The public repository with the statistics.
-pub const STATS_URL: &str = "https://github.com/loonar-eu/compass-stats";
+pub const STATS_URL: &str = "https://compass-feedback.loonar-eu.workers.dev/v1/summary";
 /// Days kept: sent ones (shown in the view) and unsent ones (waiting for a connection).
 const KEEP_DAYS: i64 = 30;
 /// Counters are written to disk at most this often (and at the end of every answer).
@@ -178,6 +179,10 @@ fn key_of(name: &str) -> String {
 /// A call of a tool of the assistant and whether it succeeded.
 pub fn tool(name: &str, ok: bool) {
     let key = key_of(name);
+    if let Some(task) = TASK.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
+        task.tools.push(name.to_string());
+        task.failed += !ok as usize;
+    }
     with_state(|s| {
         bump(&mut s.counters, "tools", &key, 1);
         if !ok {
@@ -188,7 +193,106 @@ pub fn tool(name: &str, ok: bool) {
 
 /// An answer of the assistant was started (one user message).
 pub fn turn() {
+    *TASK.lock().unwrap_or_else(|p| p.into_inner()) = Some(Task { started: Some(Instant::now()), ..Default::default() });
     with_state(|s| bump(&mut s.counters, "", "turns", 1));
+}
+
+/// The answer being made: what the user's request turned into (LC-288). No text, only the names of the tools.
+#[derive(Default)]
+struct Task {
+    started: Option<Instant>,
+    tools: Vec<String>,
+    failed: usize,
+    rejected: usize,
+    tokens: u64,
+    gap: bool,
+}
+
+static TASK: Mutex<Option<Task>> = Mutex::new(None);
+
+/// The kind of task, from the tools of the answer: the most telling one wins (a change of the model over the
+/// reading that came before it).
+pub fn task_category(tools: &[String]) -> &'static str {
+    let has = |names: &[&str]| tools.iter().any(|t| names.contains(&t.as_str()));
+    let prefix = |p: &str| tools.iter().any(|t| t.starts_with(p));
+    if has(&["code_tree", "code_search", "code_read", "code_drift"]) {
+        "code"
+    } else if has(&["create_presentation"]) {
+        "presentation"
+    } else if has(&["create_document"]) {
+        "document"
+    } else if has(&["create_spreadsheet"]) {
+        "spreadsheet"
+    } else if has(&["create_confluence_page", "publish_confluence", "confluence_read", "confluence_pages"]) {
+        "confluence"
+    } else if prefix("jira_") {
+        "jira"
+    } else if has(&["sharepoint", "onedrive", "google_drive"]) {
+        "cloud_files"
+    } else if has(&["ea_write", "ea_script", "propose_change", "undo_change", "version_control_status"]) {
+        "model_change"
+    } else if has(&["read_document", "trace_requirements"]) {
+        "requirements"
+    } else if has(&["model_lint", "gap_analysis", "spell_check", "cmdb_compare"]) {
+        "model_check"
+    } else if has(&["impact_analysis", "operation_usage", "estimate_change"]) {
+        "impact"
+    } else if has(&["ea_show_diagram", "render_image"]) {
+        "diagram"
+    } else if has(&["web_search", "web_fetch"]) {
+        "web"
+    } else if prefix("mcp__") {
+        "mcp"
+    } else if tools.iter().any(|t| !matches!(t.as_str(), "task_list" | "ask_user" | "memory_read" | "memory_save" | "memory_delete" | "report_gap")) {
+        "model_question"
+    } else {
+        "chat"
+    }
+}
+
+fn bucket(n: u64, limits: &[u64]) -> String {
+    limits.iter().find(|l| n <= **l).map(|l| format!("le_{l}")).unwrap_or_else(|| format!("gt_{}", limits.last().unwrap_or(&0)))
+}
+
+/// The end of the answer: one record of the task (kind, outcome, steps, tokens and time in ranges).
+pub fn end_task(ok: bool, stopped: bool) {
+    let Some(task) = TASK.lock().unwrap_or_else(|p| p.into_inner()).take() else { return };
+    let category = task_category(&task.tools);
+    let outcome = if stopped {
+        "stopped"
+    } else if !ok {
+        "error"
+    } else if task.gap {
+        "cannot"
+    } else if task.rejected > 0 {
+        "rejected"
+    } else if task.failed > 0 {
+        "partial"
+    } else {
+        "done"
+    };
+    let seconds = task.started.map_or(0, |s| s.elapsed().as_secs());
+    with_state(|s| {
+        bump(&mut s.counters, "tasks", &format!("{category}__{outcome}"), 1);
+        bump(&mut s.counters, "task_steps", &bucket(task.tools.len() as u64, &[0, 2, 5, 10, 20]), 1);
+        bump(&mut s.counters, "task_tokens", &bucket(task.tokens, &[5_000, 20_000, 50_000, 100_000, 300_000]), 1);
+        bump(&mut s.counters, "task_seconds", &bucket(seconds, &[10, 30, 60, 180, 600]), 1);
+    });
+}
+
+/// The assistant could not do something (the report_gap tool, a fixed category; LC-289).
+pub fn gap(category: &str) {
+    if let Some(task) = TASK.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
+        task.gap = true;
+    }
+    let key = key_of(category);
+    with_state(|s| bump(&mut s.counters, "gaps", &key, 1));
+}
+
+/// The user rated an answer (LC-290): up, or down with one of the fixed reasons.
+pub fn rating(up: bool, reason: &str) {
+    let key = if up { "up".to_string() } else { format!("down_{}", key_of(reason)) };
+    with_state(|s| bump(&mut s.counters, "ratings", &key, 1));
 }
 
 /// The AI service failed (connection, limit, refusal, cut-off answer).
@@ -197,15 +301,46 @@ pub fn ai_error() {
 }
 
 /// Tokens of one model response.
-pub fn tokens(input: u64, output: u64) {
+/// One call to the model (LC-300): the tokens of the task (all of the prompt, cache included, and the output) and the
+/// day's counters: input without cache, cache writes and reads, output, calls, calls over Haiku's 100k-token price
+/// tier, and the cost in thousandths of a dollar.
+pub fn usage(call: &crate::usage::Call) {
+    if let Some(task) = TASK.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
+        task.tokens += call.prompt() + call.output;
+    }
     with_state(|s| {
-        bump(&mut s.counters, "tokens", "in", input);
-        bump(&mut s.counters, "tokens", "out", output);
+        bump(&mut s.counters, "tokens", "in", call.input);
+        bump(&mut s.counters, "tokens", "out", call.output);
+        bump(&mut s.counters, "tokens", "cache_write", call.cache_write_5m + call.cache_write_1h);
+        bump(&mut s.counters, "tokens", "cache_read", call.cache_read);
+        bump(&mut s.counters, "tokens", "calls", 1);
+        if call.long_prompt() {
+            bump(&mut s.counters, "tokens", "calls_over_100k", 1);
+        }
+        if let Some(usd) = call.usd() {
+            bump(&mut s.counters, "tokens", "usd_milli", (usd * 1000.0).round() as u64);
+        }
     });
+}
+
+/// The highest count the feedback service accepts: a larger one would make it refuse the whole day.
+const MAX_COUNT: u64 = 10_000_000;
+
+fn clamp_counts(map: &mut Map<String, Value>) {
+    for v in map.values_mut() {
+        match v {
+            Value::Number(n) if n.as_u64().is_some_and(|n| n > MAX_COUNT) => *v = json!(MAX_COUNT),
+            Value::Object(m) => clamp_counts(m),
+            _ => {}
+        }
+    }
 }
 
 /// An approval was asked; `accepted` = the user agreed.
 pub fn approval(accepted: bool) {
+    if let Some(task) = TASK.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
+        task.rejected += !accepted as usize;
+    }
     with_state(|s| {
         bump(&mut s.counters, "approvals", "asked", 1);
         bump(&mut s.counters, "approvals", if accepted { "accepted" } else { "rejected" }, 1);
@@ -371,6 +506,8 @@ pub fn day_summary(day: &str) -> Option<Value> {
     if counters.is_empty() && setup.is_null() {
         return None;
     }
+    // A busy day passes 10 million input tokens: the service would refuse the whole summary.
+    clamp_counts(&mut counters);
     let mut out = Map::new();
     out.insert("v".into(), json!(1));
     out.insert("install".into(), json!(install_id()));
@@ -453,8 +590,53 @@ pub fn send_due(team_off: bool) {
     flush();
     std::thread::spawn(|| {
         let _one = SENDING.lock().unwrap();
-        let result = send_ended_days();
+        // Ended days first, then today so far (sent every hour; the service keeps the newest of a day).
+        let result = send_ended_days().and_then(|_| send_today());
         *LAST_ERROR.lock().unwrap() = result.err().map(|e| format!("{e:#}")).unwrap_or_default();
+    });
+}
+
+/// Today so far, marked partial; the service replaces the earlier summary of the same day and installation.
+fn send_today() -> Result<()> {
+    let Some(dir) = telemetry_dir() else { return Ok(()) };
+    let day = today();
+    let Some(Value::Object(mut summary)) = day_summary(&day) else { return Ok(()) };
+    summary.insert("partial".into(), json!(true));
+    let summary = Value::Object(summary);
+    post("/v1/stats", &summary)?;
+    let sent_dir = dir.join("sent");
+    std::fs::create_dir_all(&sent_dir)?;
+    let record = json!({ "sent": chrono::Local::now().to_rfc3339(), "data": summary });
+    std::fs::write(sent_dir.join(format!("{day}.partial.json")), serde_json::to_vec_pretty(&record)?)?;
+    Ok(())
+}
+
+fn post(path: &str, body: &Value) -> Result<()> {
+    let response = client()?.post(format!("{}{path}", service_url()?)).header("Content-Type", "application/json").body(serde_json::to_string_pretty(body)?).send()?;
+    let status = response.status();
+    if !status.is_success() {
+        bail!("the service answered {status}");
+    }
+    Ok(())
+}
+
+/// At the start of the application: the installation, its version, language and system (LC-287), so that active
+/// installations and their return are known also on days without an answer. Nothing else.
+pub fn start_ping(team_off: bool) {
+    if team_off || !enabled() {
+        return;
+    }
+    let ping = json!({ "v": 1, "install": install_id(), "app": env!("CARGO_PKG_VERSION"), "os": os_name(), "lang": crate::i18n::current().code(), "day": today() });
+    std::thread::spawn(move || {
+        let result = post("/v1/start", &ping);
+        if let (Ok(()), Some(dir)) = (&result, telemetry_dir()) {
+            let _ = std::fs::create_dir_all(dir.join("sent"));
+            let record = json!({ "sent": chrono::Local::now().to_rfc3339(), "data": ping });
+            let _ = std::fs::write(dir.join("sent").join("start.json"), serde_json::to_vec_pretty(&record).unwrap_or_default());
+        }
+        if let Err(e) = result {
+            *LAST_ERROR.lock().unwrap() = format!("{e:#}");
+        }
     });
 }
 
@@ -546,6 +728,8 @@ pub struct BugReport {
     pub technical: Option<String>,
     pub private: Option<String>,
     pub images: Vec<crate::report::File>,
+    /// A feature request ("💡 Request this feature", LC-289) instead of a bug.
+    pub feature: bool,
 }
 
 /// Sends a bug report; returns the address of the new issue on GitHub.
@@ -567,6 +751,7 @@ pub fn send_bug_report(report: &BugReport) -> Result<String> {
         "os": os_name(),
         "lang": crate::i18n::current().code(),
         "title": report.title,
+        "kind": if report.feature { "feature" } else { "bug" },
         "description": report.description,
         "technical": report.technical,
         "private": report.private,
@@ -679,6 +864,7 @@ mod service_tests {
             technical: Some("Loonar Compass 0.9.0".into()),
             private: Some("Question:\nAdd Invoice to ACME\n\nAnswer:\nDone.".into()),
             images: vec![crate::report::File { name: "shot.png".into(), bytes: png }],
+            feature: false,
         })
         .unwrap();
         assert!(url.starts_with("https://github.com/loonar-eu/loonar-compass/issues/"), "{url}");

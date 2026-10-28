@@ -1,13 +1,22 @@
 // Loonar Compass feedback service (Cloudflare Worker).
 //
-//   POST /v1/stats   the daily usage summary of one installation  -> a JSON file in the public statistics repository
-//   POST /v1/report  a bug report from the application            -> a public GitHub issue; the screenshots and the
+//   POST /v1/start   the start of the application: installation, version, system, language -> the D1 database
+//   POST /v1/stats   the usage summary of a day of one installation (sent every hour, "partial" until the day ends)
+//                    -> the D1 database (the newest summary of a day replaces the earlier one); without the database
+//                       (tests, before the database exists) a JSON file in the public statistics repository
+//   POST /v1/report  a bug report or a feature request             -> a public GitHub issue; the screenshots and the
 //                                                                     context of the reported answer go to a private
 //                                                                     repository that only the author can read
+//   GET  /v1/summary the summary of a week over all installations together (?week=YYYY-MM-DD, its Monday; default the
+//                    newest); never anything of one installation
 //   GET  /health
+//
+// Once a day (cron): data older than 13 months is deleted, the summary of the week that ended is computed, and the
+// download counts of the releases (GitHub counts only totals) are written down, so downloads per day can be shown.
 //
 // The application never holds a GitHub token: the token is a secret of this Worker (GITHUB_TOKEN). Everything that
 // arrives is checked against a strict schema; unknown fields are refused, so nothing else can be published.
+// Addresses (IP) are used only by the rate limiter and are never stored.
 
 const LANGS = ["en", "pl", "de", "fr"];
 const SETUP_ENUMS = {
@@ -16,7 +25,7 @@ const SETUP_ENUMS = {
   ai_provider: ["anthropic", "openai", "azure", "local", "openai_compatible"],
   approval: ["plan", "ask", "auto"],
 };
-const COUNTER_GROUPS = ["tools", "tool_errors", "views", "events", "approvals", "tokens"];
+const COUNTER_GROUPS = ["tools", "tool_errors", "views", "events", "approvals", "tokens", "tasks", "task_steps", "task_tokens", "task_seconds", "gaps", "ratings"];
 const COUNTERS = ["turns", "ai_errors"];
 const MAX_COUNT = 10_000_000;
 const MAX_STATS_BYTES = 32 * 1024;
@@ -41,6 +50,10 @@ const KEY = /^[a-z0-9_]{1,40}$/;
 const OS = /^[A-Za-z0-9 ().]{1,40}$/;
 const MODEL = /^[a-z0-9._-]{1,40}$/;
 
+const KEEP_MONTHS = 13;
+/** A value shared by fewer installations than this is counted under "other" in a published summary. */
+const MIN_INSTALLS = 3;
+
 function daysBetween(a, b) {
   return Math.round((Date.parse(a + "T00:00:00Z") - Date.parse(b + "T00:00:00Z")) / 86_400_000);
 }
@@ -48,7 +61,7 @@ function daysBetween(a, b) {
 /** The daily summary, re-built from known fields only (anything unknown is refused). */
 export function validateStats(input, now = new Date()) {
   check(isObject(input), "not an object");
-  const allowed = new Set(["v", "install", "day", "app", "os", "lang", "setup", ...COUNTERS, ...COUNTER_GROUPS]);
+  const allowed = new Set(["v", "install", "day", "app", "os", "lang", "setup", "partial", ...COUNTERS, ...COUNTER_GROUPS]);
   for (const k of Object.keys(input)) check(allowed.has(k), `unknown field ${k}`);
   check(input.v === 1, "unsupported version");
   check(typeof input.install === "string" && UUID.test(input.install), "bad install");
@@ -60,6 +73,10 @@ export function validateStats(input, now = new Date()) {
   check(typeof input.os === "string" && OS.test(input.os), "bad os");
   check(LANGS.includes(input.lang), "bad lang");
   const out = { v: 1, install: input.install, day: input.day, app: input.app, os: input.os, lang: input.lang };
+  if (input.partial !== undefined) {
+    check(typeof input.partial === "boolean", "bad partial");
+    out.partial = input.partial;
+  }
   if (input.setup !== undefined) {
     const s = input.setup;
     check(isObject(s), "bad setup");
@@ -110,6 +127,22 @@ export function validateStats(input, now = new Date()) {
   return out;
 }
 
+/** The start of the application: the installation, its version, system and language, and the day. */
+export function validateStart(input, now = new Date()) {
+  check(isObject(input), "not an object");
+  const allowed = new Set(["v", "install", "app", "os", "lang", "day"]);
+  for (const k of Object.keys(input)) check(allowed.has(k), `unknown field ${k}`);
+  check(input.v === 1, "unsupported version");
+  check(typeof input.install === "string" && UUID.test(input.install), "bad install");
+  check(typeof input.app === "string" && VERSION.test(input.app), "bad app");
+  check(typeof input.os === "string" && OS.test(input.os), "bad os");
+  check(LANGS.includes(input.lang), "bad lang");
+  check(typeof input.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input.day), "bad day");
+  const age = daysBetween(now.toISOString().slice(0, 10), input.day);
+  check(age >= -1 && age <= 2, "day out of range");
+  return { install: input.install, app: input.app, os: input.os, lang: input.lang, day: input.day };
+}
+
 /** A user mention (@name) in a public issue would notify that GitHub user: mentions are broken with a zero-width space. */
 export function noMentions(text) {
   return text.replace(/@(?=[A-Za-z0-9-])/g, "@​");
@@ -128,7 +161,7 @@ function decodeImage(image) {
 /** A bug report, checked: public parts (title, description, technical) and private parts (context, images). */
 export function validateReport(input) {
   check(isObject(input), "not an object");
-  const allowed = new Set(["v", "install", "app", "os", "lang", "title", "description", "technical", "private", "images"]);
+  const allowed = new Set(["v", "install", "app", "os", "lang", "kind", "title", "description", "technical", "private", "images"]);
   for (const k of Object.keys(input)) check(allowed.has(k), `unknown field ${k}`);
   check(input.v === 1, "unsupported version");
   check(typeof input.install === "string" && UUID.test(input.install), "bad install");
@@ -144,7 +177,9 @@ export function validateReport(input) {
     check(!required || v.trim().length > 0, `missing ${name}`);
     return v;
   };
+  check(input.kind === undefined || ["bug", "feature"].includes(input.kind), "bad kind");
   const report = {
+    kind: input.kind || "bug",
     install: input.install,
     app: input.app,
     os: input.os,
@@ -219,10 +254,32 @@ async function stats(request, env) {
   const ip = request.headers.get("CF-Connecting-IP") || "local";
   if (await limited(env.STATS_LIMITER, ip)) return json(429, { error: "too many requests" });
   const summary = validateStats(await readBody(request, MAX_STATS_BYTES));
+  if (env.DB) {
+    // The newest summary of a day of an installation; a final one is not replaced by a late partial one.
+    await env.DB.prepare(
+      `INSERT INTO days (install, day, app, partial, data, updated) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+       ON CONFLICT (install, day) DO UPDATE SET app = excluded.app, partial = excluded.partial, data = excluded.data, updated = excluded.updated
+       WHERE days.partial = 1 OR excluded.partial = 0`,
+    )
+      .bind(summary.install, summary.day, summary.app, summary.partial ? 1 : 0, JSON.stringify(summary), new Date().toISOString())
+      .run();
+    return json(201, { ok: true });
+  }
   const [y, m] = summary.day.split("-");
   const path = `data/${y}/${m}/${summary.day}/${summary.install}.json`;
   const bytes = new TextEncoder().encode(JSON.stringify(summary, null, 2) + "\n");
   await putFile(env, env.STATS_REPO, path, bytes, `stats ${summary.day} ${summary.install.slice(0, 8)}`);
+  return json(201, { ok: true });
+}
+
+async function start(request, env) {
+  const ip = request.headers.get("CF-Connecting-IP") || "local";
+  if (await limited(env.STATS_LIMITER, ip)) return json(429, { error: "too many requests" });
+  const s = validateStart(await readBody(request, 2048));
+  if (!env.DB) return json(503, { error: "no database" });
+  await env.DB.prepare("INSERT INTO starts (install, day, app, os, lang, at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
+    .bind(s.install, s.day, s.app, s.os, s.lang, new Date().toISOString())
+    .run();
   return json(201, { ok: true });
 }
 
@@ -245,7 +302,7 @@ async function report(request, env) {
   const issue = await github(env, "POST", `/repos/${env.ISSUES_REPO}/issues`, {
     title: `[${r.app}] ${r.title}`,
     body: lines.join("\n"),
-    labels: ["bug", "from-app"],
+    labels: [r.kind === "feature" ? "idea" : "bug", "from-app"],
   });
   if (issue.status !== 201) throw new Error(`GitHub ${issue.status} creating the issue`);
   const number = issue.data.number;
@@ -278,11 +335,164 @@ async function report(request, env) {
   return json(201, { url: issue.data.html_url, number });
 }
 
+/** The Monday (YYYY-MM-DD) of the week before the one that contains `now`. */
+export function lastWeek(now = new Date()) {
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const sinceMonday = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - sinceMonday - 7);
+  return d.toISOString().slice(0, 10);
+}
+
+const addDays = (day, n) => new Date(Date.parse(day + "T00:00:00Z") + n * 86_400_000).toISOString().slice(0, 10);
+
+/**
+ * The summary of a week over all installations together: `starts` and `days` are the rows of that week, `firstSeen`
+ * maps an installation to the day of its first start ever. Values shared by fewer than MIN_INSTALLS installations go
+ * to "other", so that nothing in the published summary describes one installation.
+ */
+export function weekSummary(week, starts, days, firstSeen) {
+  const activeDays = new Map(); // install -> Set of days
+  const last = new Map(); // install -> { app, os, lang } from its latest start
+  const mark = (install, day) => {
+    if (!activeDays.has(install)) activeDays.set(install, new Set());
+    activeDays.get(install).add(day);
+  };
+  for (const s of [...starts].sort((a, b) => a.day.localeCompare(b.day))) {
+    mark(s.install, s.day);
+    last.set(s.install, { app: s.app, os: s.os.replace(/\s*\(.*\)$/, ""), lang: s.lang });
+  }
+  const counters = {};
+  const setups = {};
+  for (const d of days) {
+    mark(d.install, d.day);
+    const data = typeof d.data === "string" ? JSON.parse(d.data) : d.data;
+    if (!last.has(d.install)) last.set(d.install, { app: data.app, os: String(data.os || "").replace(/\s*\(.*\)$/, ""), lang: data.lang });
+    for (const c of COUNTERS) if (isCount(data[c])) counters[c] = (counters[c] || 0) + data[c];
+    for (const g of COUNTER_GROUPS) {
+      if (!isObject(data[g])) continue;
+      counters[g] = counters[g] || {};
+      for (const [k, v] of Object.entries(data[g])) if (isCount(v)) counters[g][k] = (counters[g][k] || 0) + v;
+    }
+    if (isObject(data.setup)) {
+      for (const [k, v] of Object.entries(data.setup)) {
+        if (k === "ai_model") continue; // too fine for a public summary
+        const value = typeof v === "number" ? (v > 0 ? "yes" : "no") : String(v);
+        setups[k] = setups[k] || {};
+        setups[k][value] = setups[k][value] || new Set();
+        setups[k][value].add(d.install);
+      }
+    }
+  }
+  const installs = [...activeDays.keys()];
+  const share = (pick) => {
+    const by = {};
+    for (const i of installs) {
+      const v = pick(i);
+      if (v === undefined || v === "") continue;
+      by[v] = (by[v] || 0) + 1;
+    }
+    return fold(by);
+  };
+  const fold = (by) => {
+    const out = {};
+    for (const [k, n] of Object.entries(by)) {
+      const key = n < MIN_INSTALLS ? "other" : k;
+      out[key] = (out[key] || 0) + n;
+    }
+    return out;
+  };
+  const setup = {};
+  for (const [k, values] of Object.entries(setups)) setup[k] = fold(Object.fromEntries(Object.entries(values).map(([v, s]) => [v, s.size])));
+  const until = addDays(week, 6);
+  return {
+    week,
+    until,
+    installations: installs.length,
+    new_installations: installs.filter((i) => firstSeen[i] && firstSeen[i] >= week && firstSeen[i] <= until).length,
+    returning: installs.filter((i) => activeDays.get(i).size >= 2).length,
+    active_days: installs.reduce((n, i) => n + activeDays.get(i).size, 0),
+    versions: share((i) => last.get(i)?.app),
+    systems: share((i) => last.get(i)?.os),
+    languages: share((i) => last.get(i)?.lang),
+    setup,
+    counters,
+  };
+}
+
+async function weekly(env, now = new Date()) {
+  if (!env.DB) return;
+  const cutoff = new Date(now);
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - KEEP_MONTHS);
+  const oldest = cutoff.toISOString().slice(0, 10);
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM starts WHERE day < ?1").bind(oldest),
+    env.DB.prepare("DELETE FROM days WHERE day < ?1").bind(oldest),
+    env.DB.prepare("DELETE FROM weekly WHERE week < ?1").bind(oldest),
+    env.DB.prepare("DELETE FROM downloads WHERE day < ?1").bind(oldest),
+  ]);
+  const week = lastWeek(now);
+  const done = await env.DB.prepare("SELECT 1 FROM weekly WHERE week = ?1").bind(week).first();
+  if (done) return;
+  const until = addDays(week, 6);
+  const starts = (await env.DB.prepare("SELECT install, day, app, os, lang FROM starts WHERE day BETWEEN ?1 AND ?2").bind(week, until).all()).results;
+  const days = (await env.DB.prepare("SELECT install, day, data FROM days WHERE day BETWEEN ?1 AND ?2").bind(week, until).all()).results;
+  const first = (await env.DB.prepare(
+    "SELECT install, MIN(day) AS first FROM starts WHERE install IN (SELECT install FROM starts WHERE day BETWEEN ?1 AND ?2) GROUP BY install",
+  ).bind(week, until).all()).results;
+  const summary = weekSummary(week, starts, days, Object.fromEntries(first.map((r) => [r.install, r.first])));
+  await env.DB.prepare("INSERT OR REPLACE INTO weekly (week, data, created) VALUES (?1, ?2, ?3)")
+    .bind(week, JSON.stringify(summary), now.toISOString())
+    .run();
+}
+
+/** The download counts of all release files today (GitHub keeps only totals; the differences give downloads per day). */
+async function downloads(env, now = new Date()) {
+  if (!env.DB) return;
+  const day = now.toISOString().slice(0, 10);
+  const rows = [];
+  for (let page = 1; page <= 5; page++) {
+    const r = await fetch(`${env.GITHUB_API || "https://api.github.com"}/repos/${env.ISSUES_REPO}/releases?per_page=100&page=${page}`, {
+      headers: { "User-Agent": "compass-feedback", Accept: "application/vnd.github+json" },
+    });
+    if (!r.ok) throw new Error(`GitHub releases: ${r.status}`);
+    const releases = await r.json();
+    for (const rel of releases) for (const a of rel.assets || []) rows.push([rel.tag_name, a.name, a.download_count]);
+    if (releases.length < 100) break;
+  }
+  if (!rows.length) return;
+  await env.DB.batch(rows.map(([tag, asset, count]) =>
+    env.DB.prepare("INSERT OR REPLACE INTO downloads (day, tag, asset, count) VALUES (?1, ?2, ?3, ?4)").bind(day, tag, asset, count)));
+}
+
+async function publicSummary(url, env) {
+  if (!env.DB) return json(503, { error: "no database" });
+  const week = url.searchParams.get("week");
+  if (week !== null) check(/^\d{4}-\d{2}-\d{2}$/.test(week), "bad week");
+  const row = week
+    ? await env.DB.prepare("SELECT data FROM weekly WHERE week = ?1").bind(week).first()
+    : await env.DB.prepare("SELECT data FROM weekly ORDER BY week DESC LIMIT 1").first();
+  if (!row) return json(404, { error: "no summary" });
+  const weeks = (await env.DB.prepare("SELECT week FROM weekly ORDER BY week DESC LIMIT 60").all()).results.map((r) => r.week);
+  return new Response(JSON.stringify({ ...JSON.parse(row.data), weeks }), {
+    status: 200,
+    headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=3600" },
+  });
+}
+
 export default {
+  async scheduled(event, env, ctx) {
+    const now = new Date(event.scheduledTime);
+    ctx.waitUntil(Promise.allSettled([weekly(env, now), downloads(env, now)]).then((results) => {
+      for (const r of results) if (r.status === "rejected") console.error(r.reason);
+    }));
+  },
+
   async fetch(request, env) {
     const url = new URL(request.url);
     try {
       if (request.method === "GET" && url.pathname === "/health") return json(200, { ok: true });
+      if (request.method === "GET" && url.pathname === "/v1/summary") return await publicSummary(url, env);
+      if (request.method === "POST" && url.pathname === "/v1/start") return await start(request, env);
       if (request.method === "POST" && url.pathname === "/v1/stats") return await stats(request, env);
       if (request.method === "POST" && url.pathname === "/v1/report") return await report(request, env);
       return json(404, { error: "not found" });

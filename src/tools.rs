@@ -18,6 +18,115 @@ use serde_json::{json, Value};
 use std::cell::Cell;
 
 
+/// The questions that are asked in every approval mode (they send something outside the model or run code), by kind.
+/// After the first one of a kind, the approval card offers to approve all of that kind until Compass is closed.
+const SAVE_SCRIPT_QUESTION: &str = "Save the EA script {0}.{1} ({2}, {3} lines){4}:\n{5}";
+const RUN_SCRIPT_QUESTION: &str = "Run the EA script {0}.{1} ({2}) in the open EA window? A script can change anything in the model.\n{3}";
+const JIRA_CREATE_QUESTION: &str = "Create a Jira issue in project {0}:\n{1}: {2}\n\n{3}";
+const JIRA_ADD_QUESTION: &str = "Add to the Jira issue {0}:\n{1}";
+const JIRA_UPDATE_QUESTION: &str = "Change the Jira issue {0}:\n{1}";
+const CONFLUENCE_REPLACE_QUESTION: &str = "Publishing to Confluence will REPLACE the content of an existing page:\n\"{0}\" (ID {1}, version {2}) in space {3}.\nThe previous version stays in the page history.";
+const CONFLUENCE_NEW_QUESTION: &str = "Publishing a new page to Confluence:\n\"{0}\" in space {1}";
+const MEMORY_SAVE_QUESTION: &str = "Save a note to the assistant's memory:\n\"{0}\"\n{1}";
+const MEMORY_REMOVE_QUESTION: &str = "Remove the note \"{0}\" from the assistant's memory";
+const MCP_QUESTION: &str = "Call the tool {0} of the MCP server {1}:\n{2}";
+pub const GDRIVE_UPLOAD_QUESTION: &str = "Upload {0} to Google Drive: {1}";
+pub const SHAREPOINT_UPLOAD_QUESTION: &str = "Upload {0} to {1}: {2}/{3}";
+
+/// Kinds of always-asked actions: (kind, its questions, the button of the approval card).
+const TRUSTABLE: &[(&str, &[&str], &str)] = &[
+    ("script", &[SAVE_SCRIPT_QUESTION, RUN_SCRIPT_QUESTION], "Approve all scripts until Compass is closed"),
+    ("jira", &[JIRA_CREATE_QUESTION, JIRA_ADD_QUESTION, JIRA_UPDATE_QUESTION], "Approve all Jira issues until Compass is closed"),
+    ("confluence", &[CONFLUENCE_REPLACE_QUESTION, CONFLUENCE_NEW_QUESTION], "Approve all Confluence publishing until Compass is closed"),
+    ("memory", &[MEMORY_SAVE_QUESTION, MEMORY_REMOVE_QUESTION], "Approve all memory notes until Compass is closed"),
+    ("mcp", &[MCP_QUESTION], "Approve all MCP tool calls until Compass is closed"),
+    ("upload", &[GDRIVE_UPLOAD_QUESTION, SHAREPOINT_UPLOAD_QUESTION], "Approve all uploads until Compass is closed"),
+];
+
+fn trusted() -> &'static std::sync::Mutex<std::collections::HashSet<&'static str>> {
+    static SET: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<&'static str>>> = std::sync::OnceLock::new();
+    SET.get_or_init(Default::default)
+}
+
+/// The kind of an approval question and the label of its "approve all" button (in the interface language).
+pub fn trustable_kind(summary: &str) -> Option<(&'static str, &'static str)> {
+    TRUSTABLE.iter().find_map(|(kind, questions, button)| {
+        questions
+            .iter()
+            .any(|q| {
+                let prefix = crate::i18n::tr(q).split("{0}").next().unwrap_or("").to_string();
+                !prefix.trim().is_empty() && summary.starts_with(&prefix)
+            })
+            .then(|| (*kind, crate::i18n::tr(button)))
+    })
+}
+
+/// The user approved all actions of this kind until Compass is closed.
+pub fn trust(kind: &'static str) {
+    if let Ok(mut set) = trusted().lock() {
+        set.insert(kind);
+    }
+}
+
+fn is_trusted(kind: &str) -> bool {
+    trusted().lock().map(|set| set.contains(kind)).unwrap_or(false)
+}
+
+/// The builds of EA scripts the user approved while Compass runs (see `Approver::confirm_script`).
+fn approved_scripts() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
+    static SET: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> = std::sync::OnceLock::new();
+    SET.get_or_init(Default::default)
+}
+
+/// The build of a script: its code without the content of string literals and without numbers, whitespace collapsed.
+/// Two scripts with the same build differ only in their data.
+pub fn script_shape(code: &str) -> String {
+    let mut out = String::new();
+    let mut chars = code.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' | '\'' => {
+                out.push(c);
+                while let Some(d) = chars.next() {
+                    if d == '\\' {
+                        chars.next();
+                    } else if d == c {
+                        break;
+                    }
+                }
+                out.push(c);
+            }
+            c if c.is_ascii_digit() && !out.chars().last().is_some_and(|l| l.is_alphanumeric() || l == '_') => {
+                while chars.peek().is_some_and(|d| d.is_ascii_digit() || *d == '.') {
+                    chars.next();
+                }
+                out.push('0');
+            }
+            c if c.is_whitespace() => {}
+            c => out.push(c),
+        }
+    }
+    // Data of another length has the same build: a run of repeated entries (after the texts and numbers are gone, e.g.
+    // `0:"",0:"",0:""` or `{id:0,a:""},{id:0,a:""}`) collapses into one entry.
+    let mut parts: Vec<&str> = out.split(',').collect();
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for k in 1..=8 {
+            let mut i = 0;
+            while i + 2 * k <= parts.len() {
+                if parts[i..i + k] == parts[i + k..i + 2 * k] {
+                    parts.drain(i + k..i + 2 * k);
+                    changed = true;
+                } else {
+                    i += 1;
+                }
+            }
+        }
+    }
+    parts.join(",")
+}
+
 /// Write approval. `ask` asks the user in a dialog and waits for the answer (called from the worker thread).
 pub struct Approver {
     pub mode: ApprovalMode,
@@ -70,9 +179,35 @@ impl Approver {
         Ok(())
     }
 
-    /// Consent for sending a file outside the application (an upload): always asked.
+    /// Consent for sending a file outside the application (an upload): always asked, unless the user approved all uploads.
     pub fn confirm_upload(&self, summary: &str) -> Result<()> {
+        self.confirm_kind("upload", summary)
+    }
+
+    /// An always-asked action of a kind the user can approve once for all (see `TRUSTABLE`).
+    pub fn confirm_kind(&self, kind: &str, summary: &str) -> Result<()> {
+        if is_trusted(kind) {
+            return Ok(());
+        }
         self.confirm_always(summary)
+    }
+
+    /// Consent for an EA script (saving or running). Once the user approved a script, scripts of the same build (the same
+    /// code with other texts and numbers in it, e.g. the next batch of aliases) are approved without asking again while
+    /// Compass runs; anything else in the code asks again.
+    fn confirm_script(&self, action: &str, code: &str, summary: &str) -> Result<()> {
+        if is_trusted("script") {
+            return Ok(());
+        }
+        let shape = format!("{action}:{}", script_shape(code));
+        if approved_scripts().lock().map(|s| s.contains(&shape)).unwrap_or(false) {
+            return Ok(());
+        }
+        self.confirm_always(summary)?;
+        if let Ok(mut set) = approved_scripts().lock() {
+            set.insert(shape);
+        }
+        Ok(())
     }
 
     /// Consent regardless of the mode (also in auto): for actions that send content outside the application and the model.
@@ -95,6 +230,7 @@ pub fn definitions() -> Value {
     let mut list = definitions_core();
     if let Some(items) = list.as_array_mut() {
         items.extend(crate::model_db::read_only_definitions());
+        items.push(crate::changelog::definition());
         items.push(crate::scripts::definition());
         items.push(crate::traceability::definition());
         items.push(crate::code_drift::definition());
@@ -173,7 +309,7 @@ import_xmi {package, file, keep_guids?} (imports an XMI file into the package; G
 set_linked_document {element, text} (the element's linked document (Ctrl+Alt+D in EA), from plain text, one paragraph per line; replaces an existing one); \
 set_swimlanes {diagram, lanes: [{title, width?, color?}], orientation?} (diagram swimlanes (Diagram → Swimlanes), replaces existing ones; orientation vertical (default) or horizontal); \
 set_composite {element, diagram} (links the element to an existing diagram as its composite diagram (in EA: New Child Diagram → Composite → Select Composite Diagram): when the element is double-clicked, EA opens that diagram instead of the properties; this is how you link a BPMN subprocess to the subprocess diagram, also when the diagram is in an ordinary package; in the database the linked element has t_object.ntype = 8 and the diagram id in the pdata1 column); \
-create_attribute {element, name, type?, visibility?, notes?, default?, stereotype?} (a class attribute, visibility: Public|Private|Protected|Package); create_operation {element, name, return_type?, visibility?, notes?, stereotype?, parameters?: [{name, type}]} (a class operation with parameters); update_attribute {attribute, name?, type?, visibility?, notes?, default?, static?} and delete_attribute {attribute} (attribute = t_attribute.id); update_operation {operation, name?, return_type?, visibility?, notes?, static?} and delete_operation {operation} (operation = t_operation.operationid); clone_package {package, name?, key?} (a copy of the package with all its contents next to the original, e.g. a variant to experiment with); update_scenario {element, scenario, name?, type?, notes?, steps?} (changes an existing structured scenario found by its name or GUID; steps, when given, replace all steps); delete_scenario {element, scenario}; create_scenario {element, name, type?, notes?, steps: [{text, actor?, uses?, results?}]} (a STRUCTURED SCENARIO of an element, e.g. a use case: the Scenarios tab of the element, with numbered steps; ALWAYS use this, never notes, when the user asks for scenarios, flows or structured scenarios; type: Basic Path (default), Alternate or Exception; actor = true for a step done by the actor, false for the system; in the database t_objectscenarios, steps in its xmlcontent); add_glossary_term {term, type?, meaning, forms?: [..]} (a term in the EA PROJECT GLOSSARY, the list EA highlights in notes and documents with its meaning - not a model element; t_glossary holds the terms; EA highlights only the exact written form, so for a Polish term ALWAYS pass in forms every inflected form of it: singular and plural in all seven cases from the nominative to the vocative, for a multi-word term the whole phrase inflected; type: the one the user names, otherwise Glossary (the type appears in EA once used); ask the user for the meaning if they did not give it); create_baseline {package, version, notes?} (saves a version of the package in the model; ALWAYS make a baseline before deleting from or substantially restructuring an existing package that you did not create in this conversation, and tell the user they can restore it in EA: package in the browser → Manage Baselines → Compare/Restore; baselines are in t_document with doctype = 'Baseline'); \
+create_attribute {element, name, type?, visibility?, notes?, default?, stereotype?, alias?} (a class attribute, visibility: Public|Private|Protected|Package); create_operation {element, name, return_type?, visibility?, notes?, stereotype?, alias?, parameters?: [{name, type}]} (a class operation with parameters; alias is the operation's alias in EA, e.g. the REST path of an endpoint: set it here, no script is needed); update_attribute {attribute, name?, type?, visibility?, notes?, default?, stereotype?, alias?, static?} and delete_attribute {attribute} (attribute = t_attribute.id); update_operation {operation, name?, return_type?, visibility?, notes?, stereotype?, alias?, static?} and delete_operation {operation} (operation = t_operation.operationid); clone_package {package, name?, key?} (a copy of the package with all its contents next to the original, e.g. a variant to experiment with); update_scenario {element, scenario, name?, type?, notes?, steps?} (changes an existing structured scenario found by its name or GUID; steps, when given, replace all steps); delete_scenario {element, scenario}; create_scenario {element, name, type?, notes?, steps: [{text, actor?, uses?, results?}]} (a STRUCTURED SCENARIO of an element, e.g. a use case: the Scenarios tab of the element, with numbered steps; ALWAYS use this, never notes, when the user asks for scenarios, flows or structured scenarios; type: Basic Path (default), Alternate or Exception; actor = true for a step done by the actor, false for the system; in the database t_objectscenarios, steps in its xmlcontent); add_glossary_term {term, type?, meaning, forms?: [..]} (a term in the EA PROJECT GLOSSARY, the list EA highlights in notes and documents with its meaning - not a model element; t_glossary holds the terms; EA highlights only the exact written form, so for a Polish term ALWAYS pass in forms every inflected form of it: singular and plural in all seven cases from the nominative to the vocative, for a multi-word term the whole phrase inflected; type: the one the user names, otherwise Glossary (the type appears in EA once used); ask the user for the meaning if they did not give it); create_baseline {package, version, notes?} (saves a version of the package in the model; ALWAYS make a baseline before deleting from or substantially restructuring an existing package that you did not create in this conversation, and tell the user they can restore it in EA: package in the browser → Manage Baselines → Compare/Restore; baselines are in t_document with doctype = 'Baseline'); \
 update_diagram {diagram, name?, notes?, stereotype?} (changes the name, notes or stereotype of an existing diagram); hide_connectors {diagram, connectors, hidden?} (hides the given connectors on this one diagram only, a list of ids from t_connector.connector_id; hidden=false shows them again; the connectors stay in the model and on other diagrams, so this is how you declutter a dense diagram instead of deleting relationships; in the database: t_diagramlinks.hidden); \
 route_connector {diagram, connector, start?, points?, end?} (routes one connector along the given path, e.g. following the user's sketch: start = [x, y] the attachment point on the edge of the source element, end = [x, y] the attachment point on the edge of the target element, points = a list of bend points [[x, y], ...]; coordinates as in place (pixels from the top-left corner of the diagram, Y axis downwards), and take the element positions from t_diagramobjects (rectleft, -recttop, rectright, -rectbottom); for purely horizontal and vertical lines, each successive point (from start through points to end) must have the same x or y coordinate as the previous one; example: from the left side of element B to the left, then up to the bottom side of element A: start at the middle of B's left side, one bend point below the middle of A at the height of start, end at the middle of A's bottom side; connector = t_connector.connector_id); \
 set_line_style {diagram, style, connectors?} (the routing of connector lines on the diagram, as in EA Line Style: style = direct (straight) | auto (automatic) | custom (manually bent) | orthogonal_square (orthogonal) | orthogonal_rounded (orthogonal, rounded) | tree_vertical | tree_horizontal | lateral_vertical | lateral_horizontal; connectors = a list of connector ids (t_connector.connector_id), without it all connectors between the diagram's elements get the style; bend points are cleared; in the database the style is in t_diagramlinks.style as Mode= and TREE=); \
@@ -351,6 +487,23 @@ Optionally adds a web link, e.g. to the model element (title \"EA: name\", url e
             }
         },
         {
+            "name": "jira_update_issue",
+            "description": "Changes an existing Jira issue: a new summary, a new description (it replaces the whole description: read the issue \
+with jira_issue first and send the full corrected text) and labels to add or remove. Use it to correct issues, also ones created earlier in this \
+conversation. The user approves it (once for all Jira changes if they choose).",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "key": { "type": "string" },
+                    "summary": { "type": "string" },
+                    "description": { "type": "string", "description": "The whole new description, plain text; one paragraph per line." },
+                    "add_labels": { "type": "array", "items": { "type": "string" } },
+                    "remove_labels": { "type": "array", "items": { "type": "string" } }
+                },
+                "required": ["key"]
+            }
+        },
+        {
             "name": "jira_comment",
             "description": "Adds a comment and/or a web link to an existing Jira issue. The user always approves it before it is sent.",
             "input_schema": {
@@ -511,7 +664,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         let (ask, server, tool) = crate::mcp_client::needs_consent(&ctx.cfg.base_dir, name)?;
         if ask {
             let args = serde_json::to_string_pretty(input).unwrap_or_default();
-            ctx.approver.confirm_always(&crate::i18n::fmt("Call the tool {0} of the MCP server {1}:\n{2}", &[tool, server, args.chars().take(1500).collect()]))?;
+            ctx.approver.confirm_kind("mcp", &crate::i18n::fmt(MCP_QUESTION, &[tool, server, args.chars().take(1500).collect()]))?;
         }
         return crate::mcp_client::call(&ctx.cfg.base_dir, name, input).map(Into::into);
     }
@@ -526,7 +679,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
                 bail!("{}", crate::i18n::fmt("the text is too long to approve ({0} characters, at most {1}): make it shorter", &[content.chars().count().to_string(), LONGEST_APPROVAL.to_string()]));
             }
             // Memory goes into every later conversation: always asked, with the whole text.
-            ctx.approver.confirm_always(&crate::i18n::fmt("Save a note to the assistant's memory:\n\"{0}\"\n{1}", &[name.to_string(), shorten_long(content)]))?;
+            ctx.approver.confirm_kind("memory", &crate::i18n::fmt(MEMORY_SAVE_QUESTION, &[name.to_string(), shorten_long(content)]))?;
             let model = if input["only_this_model"] == true { ctx.cfg.model_label() } else { String::new() };
             let file = memory::save(&ctx.cfg.memory_dir, name, input["description"].as_str().unwrap_or(""), content, &model)?;
             let scope = if model.is_empty() { "for all models".to_string() } else { format!("only for the model {model}") };
@@ -534,7 +687,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         }
         "memory_delete" => {
             let name = input["name"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["name".to_string()]))?;
-            ctx.approver.confirm_always(&crate::i18n::fmt("Remove the note \"{0}\" from the assistant's memory", &[name.to_string()]))?;
+            ctx.approver.confirm_kind("memory", &crate::i18n::fmt(MEMORY_REMOVE_QUESTION, &[name.to_string()]))?;
             memory::delete(&ctx.cfg.memory_dir, name)?;
             Ok(format!("Removed note '{name}' from memory.").into())
         }
@@ -615,10 +768,12 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             crate::code_drift::compare(ctx.cfg, &path, input["package"].as_i64()).map(Into::into)
         }
         "spell_check" => crate::model_spell::check(ctx.cfg, input["package"].as_i64(), crate::i18n::current().code()).map(Into::into),
+        "app_changelog" => Ok(crate::changelog::lookup(input).into()),
         "jira_search" => jira(ctx.cfg)?.search(input["jql"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["jql".to_string()]))?, input["max"].as_u64().unwrap_or(30) as usize).map(Into::into),
         "jira_issue" => jira(ctx.cfg)?.issue(input["key"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["key".to_string()]))?.trim()).map(Into::into),
         "jira_create_issue" => jira_create_issue(input, ctx).map(Into::into),
         "jira_comment" => jira_comment(input, ctx).map(Into::into),
+        "jira_update_issue" => jira_update_issue(input, ctx).map(Into::into),
         "gap_analysis" => crate::governance::gap(input, ctx.cfg).map(Into::into),
         "operation_usage" => operation_usage(input, ctx.cfg).map(Into::into),
         "ea_ui" => {
@@ -861,7 +1016,7 @@ fn ea_script(input: &Value, ctx: &ToolContext) -> Result<String> {
             let code = input["code"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["code".to_string()]))?.to_string();
             let (statements, updated) = crate::scripts::save_statements(ctx.cfg, &group, &name, &language, &code)?;
             // A script in the model can be run later by anyone from EA: saving it is always asked, with the whole code.
-            ctx.approver.confirm_always(&crate::i18n::fmt("Save the EA script {0}.{1} ({2}, {3} lines){4}:\n{5}", &[
+            ctx.approver.confirm_script("save", &code, &crate::i18n::fmt(SAVE_SCRIPT_QUESTION, &[
                 group.clone(), name.clone(), language.clone(), code.lines().count().to_string(),
                 if updated { crate::i18n::tr(" - REPLACES the existing script").to_string() } else { String::new() }, script_for_approval(&code)?,
             ]))?;
@@ -876,7 +1031,7 @@ fn ea_script(input: &Value, ctx: &ToolContext) -> Result<String> {
             let s = crate::scripts::find(ctx.cfg, &name)?;
             // The whole code with its includes is shown, and exactly that code runs.
             let resolved = crate::scripts::resolve_includes(ctx.cfg, &s)?;
-            ctx.approver.confirm_always(&crate::i18n::fmt("Run the EA script {0}.{1} ({2}) in the open EA window? A script can change anything in the model.\n{3}", &[s.group.clone(), s.name.clone(), s.language.clone(), script_for_approval(&resolved)?]))?;
+            ctx.approver.confirm_script("run", &resolved, &crate::i18n::fmt(RUN_SCRIPT_QUESTION, &[s.group.clone(), s.name.clone(), s.language.clone(), script_for_approval(&resolved)?]))?;
             crate::scripts::run(ctx.cfg, &name, &resolved)
         }
         other => bail!("{}", crate::i18n::fmt("unknown ea_script action: {0}", &[other.to_string()])),
@@ -925,7 +1080,7 @@ fn jira_create_issue(input: &Value, ctx: &ToolContext) -> Result<String> {
     if let Some(l) = link {
         extra.push(format!("🔗 {l}"));
     }
-    ctx.approver.confirm_always(&crate::i18n::fmt("Create a Jira issue in project {0}:\n{1}: {2}\n\n{3}", &[project.clone(), issue_type.clone(), summary.clone(), format!("{}{}", shorten_for_approval(&description), if extra.is_empty() { String::new() } else { format!("\n\n{}", extra.join("\n")) })]))?;
+    ctx.approver.confirm_kind("jira", &crate::i18n::fmt(JIRA_CREATE_QUESTION, &[project.clone(), issue_type.clone(), summary.clone(), format!("{}{}", shorten_for_approval(&description), if extra.is_empty() { String::new() } else { format!("\n\n{}", extra.join("\n")) })]))?;
     let (key, url) = connection.create_issue(&project, &issue_type, &summary, &description, &labels, parent)?;
     if let Some(link) = link {
         connection.add_web_link(&key, link, input["link_title"].as_str().unwrap_or(link))?;
@@ -934,6 +1089,31 @@ fn jira_create_issue(input: &Value, ctx: &ToolContext) -> Result<String> {
 }
 
 /// Comment or web link on an existing issue: always with the user's consent.
+fn jira_update_issue(input: &Value, ctx: &ToolContext) -> Result<String> {
+    let connection = jira(ctx.cfg)?;
+    let key = input["key"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["key".to_string()]))?.trim().to_string();
+    let summary = input["summary"].as_str().map(str::trim).filter(|s| !s.is_empty());
+    let description = input["description"].as_str();
+    let list = |name: &str| -> Vec<String> { input[name].as_array().into_iter().flatten().filter_map(|v| v.as_str()).map(String::from).collect() };
+    let (add, remove) = (list("add_labels"), list("remove_labels"));
+    let mut what = Vec::new();
+    if let Some(s) = summary {
+        what.push(crate::i18n::fmt("summary: {0}", &[s.to_string()]));
+    }
+    if let Some(d) = description {
+        what.push(crate::i18n::fmt("new description:\n{0}", &[shorten_for_approval(d)]));
+    }
+    if !add.is_empty() {
+        what.push(crate::i18n::fmt("add labels: {0}", &[add.join(", ")]));
+    }
+    if !remove.is_empty() {
+        what.push(crate::i18n::fmt("remove labels: {0}", &[remove.join(", ")]));
+    }
+    ctx.approver.confirm_kind("jira", &crate::i18n::fmt(JIRA_UPDATE_QUESTION, &[key.clone(), what.join("\n")]))?;
+    connection.update_issue(&key, summary, description, &add, &remove)?;
+    Ok(crate::i18n::fmt("Changed the Jira issue {0}: {1}", &[key.clone(), connection.browse(&key)]))
+}
+
 fn jira_comment(input: &Value, ctx: &ToolContext) -> Result<String> {
     let connection = jira(ctx.cfg)?;
     let key = input["key"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["key".to_string()]))?.trim().to_string();
@@ -949,7 +1129,7 @@ fn jira_comment(input: &Value, ctx: &ToolContext) -> Result<String> {
     if let Some(link) = &link {
         what.push(format!("🔗 {link}"));
     }
-    ctx.approver.confirm_always(&crate::i18n::fmt("Add to the Jira issue {0}:\n{1}", &[key.clone(), what.join("\n")]))?;
+    ctx.approver.confirm_kind("jira", &crate::i18n::fmt(JIRA_ADD_QUESTION, &[key.clone(), what.join("\n")]))?;
     if !comment.is_empty() {
         connection.add_comment(&key, &comment)?;
     }
@@ -1057,13 +1237,10 @@ fn publish_confluence(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
     // The approval dialog says plainly whether an existing page will be overwritten (also one found by its title).
     let existing = connection.existing_page(&space, &title, page_id.as_deref())?;
     let question = match &existing {
-        Some(page) => crate::i18n::fmt(
-            "Publishing to Confluence will REPLACE the content of an existing page:\n\"{0}\" (ID {1}, version {2}) in space {3}.\nThe previous version stays in the page history.",
-            &[page.title.clone(), page.id.clone(), page.version.to_string(), space.clone()],
-        ),
-        None => crate::i18n::fmt("Publishing a new page to Confluence:\n\"{0}\" in space {1}", &[title.clone(), space.clone()]),
+        Some(page) => crate::i18n::fmt(CONFLUENCE_REPLACE_QUESTION, &[page.title.clone(), page.id.clone(), page.version.to_string(), space.clone()]),
+        None => crate::i18n::fmt(CONFLUENCE_NEW_QUESTION, &[title.clone(), space.clone()]),
     };
-    ctx.approver.confirm_always(&question)?;
+    ctx.approver.confirm_kind("confluence", &question)?;
     let (storage, attachments) = crate::confluence::to_storage(markdown, |source| picture(ctx, source))?;
     let target_id = existing.as_ref().map(|page| page.id.clone());
     let (id, link, created) = connection.publish(&space, &title, Some(&parent), target_id.as_deref(), &storage, &attachments)?;
@@ -1827,5 +2004,45 @@ mod tests {
         let out = operation_usage(&serde_json::json!({ "element": element }), &cfg).unwrap();
         println!("{out}");
         assert!(out.starts_with("Operation usage"));
+    }
+}
+
+#[cfg(test)]
+mod script_shape_tests {
+    use super::script_shape;
+
+    #[test]
+    fn scripts_differing_only_in_data_have_one_build() {
+        let a = "var map = {535:\"/cart/{cartId}/standard\",536:\"/cart/x\",537:\"/a\"};
+for (var id in map) { var m = Repository.GetMethodByID(id); m.Style = map[id]; m.Update(); }";
+        let b = "var map = {
+ 701:\"/offer/{id}\",
+ 702:\"/offer/y\",
+ 703:\"/b\",
+ 704:\"/c\" };
+for (var id in map) { var m = Repository.GetMethodByID(id); m.Style = map[id]; m.Update(); }";
+        assert_eq!(script_shape(a), script_shape(b));
+        let objects = |n: usize| format!("var rows = [{}]; rows.forEach(function (r) {{ Session.Output(r.name); }});", (0..n).map(|i| format!("{{id:{i},name:\"n{i}\"}}")).collect::<Vec<_>>().join(","));
+        assert_eq!(script_shape(&objects(3)), script_shape(&objects(9)));
+    }
+
+    #[test]
+    fn other_code_is_another_build() {
+        let a = "var map = {1:\"/a\",2:\"/b\",3:\"/c\"}; for (var id in map) { var m = Repository.GetMethodByID(id); m.Style = map[id]; m.Update(); }";
+        let b = "var map = {1:\"/a\",2:\"/b\",3:\"/c\"}; for (var id in map) { var m = Repository.GetMethodByID(id); m.Delete(); }";
+        assert_ne!(script_shape(a), script_shape(b));
+        assert_ne!(script_shape("Session.Output(\"x\");"), script_shape("eval(\"x\");"));
+    }
+}
+
+#[cfg(test)]
+mod trust_tests {
+    #[test]
+    fn approval_questions_are_recognised_by_kind() {
+        let jira = crate::i18n::fmt(super::JIRA_CREATE_QUESTION, &["ITSPX".into(), "Story".into(), "US-05".into(), "text".into()]);
+        assert_eq!(super::trustable_kind(&jira).map(|k| k.0), Some("jira"));
+        let page = crate::i18n::fmt(super::CONFLUENCE_NEW_QUESTION, &["T".into(), "PM".into()]);
+        assert_eq!(super::trustable_kind(&page).map(|k| k.0), Some("confluence"));
+        assert_eq!(super::trustable_kind("Delete 5 elements with their relationships"), None);
     }
 }
