@@ -40,6 +40,13 @@ mod oidc;
 mod openai;
 #[path = "../../src/ops.rs"]
 mod ops;
+#[path = "../../src/usage.rs"]
+mod usage;
+
+/// The hub sends no usage statistics: the cost of its model calls is only in the call totals (LC-300).
+mod telemetry {
+    pub fn usage(_: &crate::usage::Call) {}
+}
 
 /// The hub reads the models directly: there is no EA window to read through.
 mod ea_ui {

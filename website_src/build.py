@@ -32,16 +32,16 @@ OWNER = "Loonar Mariusz Głowacki"
 EMAIL = "mariusz@loonar.eu"
 
 # ---- current release: change these lines for a new version (see website/README.md) ----
-VER = "0.9"
+VER = "0.9.1"
 # The only link to the installer: a GitHub release asset. The file name and the repository are taken from it.
-SETUP_URL = "https://github.com/loonar-eu/loonar-compass/releases/download/v0.9.0/LoonarCompass-Setup-0.9.exe"
-RELEASE = "2026-10-27"
-DATE = {"en": "27 October 2026", "pl": "27 października 2026", "de": "27. Oktober 2026", "fr": "27 octobre 2026"}
+SETUP_URL = "https://github.com/loonar-eu/loonar-compass/releases/download/v0.9.1/LoonarCompass-Setup-0.9.1.exe"
+RELEASE = "2026-10-28"
+DATE = {"en": "28 October 2026", "pl": "28 października 2026", "de": "28. Oktober 2026", "fr": "28 octobre 2026"}
 # SHA-256 of the installer, shown next to the download button (PowerShell: Get-FileHash <installer>).
 # When the installer is in DIST, the build checks this value against the file and takes the size from it;
 # without the file it uses SHA256 and SIZE_MB as written here and prints a warning.
-SHA256 = "e146fc050e0928e2b12be54b78f767c0cde556a47e670127382eaf8b14b7fc5b"
-SIZE_MB = 33
+SHA256 = "8feefe8cb1934523f81f00f37ec0e9ae7e4f649b6b49184b46d5a52542652074"
+SIZE_MB = 34
 DIST = os.path.join(ROOT, "dist")
 # ---- services used by the website --------------------------------------------------------
 GOATCOUNTER = "loonar"   # GoatCounter site code (https://loonar.goatcounter.com); "" switches the statistics off
