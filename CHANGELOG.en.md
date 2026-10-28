@@ -2,6 +2,10 @@
 
 All notable changes to Loonar Compass (named Loonar EA Assistant until version 0.3).
 
+## Version 0.9.2 (in preparation)
+
+- **Visible arrows on diagrams:** connectors that are not messages of a sequence diagram are no longer bound to one diagram (before, e.g. a dependency drawn on the diagram “Dependent systems” showed on no other diagram). Showing a hidden connector removes its duplicate entries on the diagram, and the new repair “connectors not visible on a diagram” unbinds bound connectors, removes duplicates and, on request, shows hidden ones. When arrows are missing, the assistant checks these causes first.
+
 ## Version 0.9.1 (2026-10-28)
 
 - **Jira and Confluence with a client certificate:** company servers that ask for a client certificate (mTLS) besides the token now work with Compass. On the Jira and Confluence cards in Settings there are the fields “Client certificate” (path to a .p12/.pfx or PEM file) and “Certificate password” (kept in Windows Credential Manager). Without the certificate such a server closed the connection (“An existing connection was forcibly closed by the remote host”).

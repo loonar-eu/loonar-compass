@@ -2,6 +2,10 @@
 
 Toutes les modifications importantes de l'application Loonar Compass (nommée Loonar EA Assistant jusqu'à la version 0.3).
 
+## Version 0.9.2 (en préparation)
+
+- **Flèches visibles dans les diagrammes :** les connecteurs qui ne sont pas des messages d’un diagramme de séquence ne sont plus liés à un seul diagramme (auparavant, par exemple, une dépendance dessinée dans le diagramme « Systèmes dépendants » n’apparaissait dans aucun autre). Afficher un connecteur masqué supprime ses entrées en double sur le diagramme, et la nouvelle réparation « connecteurs invisibles sur un diagramme » délie les connecteurs liés, supprime les doublons et, sur demande, affiche les connecteurs masqués. Quand des flèches manquent, l’assistant vérifie d’abord ces causes.
+
 ## Version 0.9.1 (2026-10-28)
 
 - **Jira et Confluence avec un certificat client :** les serveurs d’entreprise qui exigent un certificat client (mTLS) en plus du jeton fonctionnent désormais avec Compass. Les cartes Jira et Confluence des Paramètres ont les champs « Certificat client » (chemin d’un fichier .p12/.pfx ou PEM) et « Mot de passe du certificat » (conservé dans le Gestionnaire d’identification Windows). Sans certificat, un tel serveur fermait la connexion (« Une connexion existante a dû être fermée par l’hôte distant »).

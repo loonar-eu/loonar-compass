@@ -581,6 +581,61 @@ model.file=C:/nie-ma/takiego/pliku.qea
         assert_eq!(connectors[0][0], "1");
     }
 
+    /// Duplicate links of one connector on a diagram (LC-303): a hidden link left by hide_connectors plus a visible one
+    /// added by a script kept the arrow invisible (EA uses the first). Showing the connector and repair_diagram_links
+    /// leave one visible link. Run with: `cargo test ea_duplicate_links -- --ignored --nocapture` (LOONAR_TEST_PROPS = a
+    /// file copy, e.g. of EABase.qea).
+    #[test]
+    #[ignore = "requires EA, a license and a test model (LOONAR_TEST_PROPS)"]
+    fn ea_duplicate_links() {
+        let cfg = test_config();
+        let _ea = CloseEa;
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).expect(sql);
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id limit 1")[0][0].parse().unwrap();
+        let ops = vec![
+            json!({"op":"create_package","key":"pkg","parent":root,"name":"ZZ_test_links"}),
+            json!({"op":"create_diagram","key":"dia","package":"#pkg","name":"Links","type":"Logical"}),
+            json!({"op":"create_element","key":"a","package":"#pkg","name":"Requirement A","type":"Requirement"}),
+            json!({"op":"create_element","key":"b","package":"#pkg","name":"System B","type":"Component"}),
+            json!({"op":"create_connector","key":"c","source":"#a","target":"#b","type":"Dependency"}),
+            // A dependency created with a diagram given (as the model did): it must not be bound to that diagram.
+            json!({"op":"create_connector","key":"d","source":"#b","target":"#a","type":"Dependency","diagram":"#dia"}),
+            json!({"op":"place","diagram":"#dia","element":"#a","left":40,"top":40,"width":120,"height":60}),
+            json!({"op":"place","diagram":"#dia","element":"#b","left":320,"top":40,"width":120,"height":60}),
+        ];
+        let created = run_batch(&cfg, &ops, &BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("creation");
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).expect(key)["id"].as_i64().unwrap();
+        let (pkg, dia, c, d) = (id_of("pkg"), id_of("dia"), id_of("c"), id_of("d"));
+        let unbound = q(&format!("select diagramid from t_connector where connector_id = {d}"));
+        let rows = |label: &str| {
+            let r = q(&format!("select instance_id, hidden from t_diagramlinks where diagramid = {dia} and connectorid = {c} order by instance_id"));
+            println!("{label}: {r:?}");
+            r
+        };
+        let visible = |r: &Vec<Vec<String>>| r.len() == 1 && matches!(r[0][1].as_str(), "0" | "f" | "false");
+        // The broken state: hidden by Compass, then a second, visible row from a script.
+        let duplicate = format!("INSERT INTO t_diagramlinks (DiagramID, ConnectorID, Hidden) VALUES ({dia}, {c}, 0)");
+        let bind = format!("UPDATE t_connector SET DiagramID = {dia} WHERE Connector_ID = {c}");
+        run_batch(&cfg, &[json!({"op":"hide_connectors","diagram":dia,"connectors":[c]}), json!({"op":"execute_sql","statements":[duplicate]})], &BatchOptions::default()).expect("broken state");
+        assert_eq!(rows("hidden + duplicate").len(), 2);
+        // Showing the connector leaves one visible link.
+        run_batch(&cfg, &[json!({"op":"hide_connectors","diagram":dia,"connectors":[c],"hidden":false})], &BatchOptions::default()).expect("show");
+        let shown = rows("after hide_connectors hidden=false");
+        // The repair operation: duplicates removed, a hidden link with both ends on the diagram shown.
+        run_batch(&cfg, &[json!({"op":"hide_connectors","diagram":dia,"connectors":[c]}), json!({"op":"execute_sql","statements":[duplicate, bind]})], &BatchOptions::default()).expect("broken again");
+        let repaired = run_batch(&cfg, &[json!({"op":"repair_diagram_links","diagram":dia,"show_hidden":true})], &BatchOptions::default()).expect("repair");
+        println!("repair result: {}", repaired["created"]);
+        let after = rows("after repair_diagram_links");
+        let bound_after = q(&format!("select diagramid from t_connector where connector_id = {c}"));
+        println!("created with a diagram: diagramid {unbound:?}; bound one after repair: {bound_after:?}");
+        run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &BatchOptions::default()).expect("deleting the test package");
+        shutdown();
+        assert!(visible(&shown), "{shown:?}");
+        assert!(visible(&after), "{after:?}");
+        assert_eq!(unbound[0][0], "0", "a dependency is not bound to a diagram");
+        assert_eq!(bound_after[0][0], "0", "repair unbinds it");
+    }
+
     /// Connector route (route_connector): from the left side of B to the left, then up to the bottom side of A.
     /// Run with: `cargo test ea_route_connector -- --ignored --nocapture` (image in %TEMP%\loonar_route.png).
     #[test]
