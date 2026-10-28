@@ -6430,8 +6430,8 @@ fn run_turn_with(
             emit(WorkerEvent::StepStart(format!("💬 {}", shorten(text.trim(), 300))));
             emit(WorkerEvent::StepEnd { ok: true, detail: String::new() });
             last_note = Some(text);
-        } else if !text.trim().is_empty() {
-            emit(WorkerEvent::Text(text));
+        } else if !history::without_app_notes(&text).trim().is_empty() {
+            emit(WorkerEvent::Text(history::without_app_notes(&text)));
             answered = true;
         } else if !goes_on && !answered {
             if let Some(note) = last_note.take() {
@@ -6626,7 +6626,7 @@ fn run_turn_with(
     if text.trim().is_empty() {
         bail!("{}", crate::i18n::fmt("the assistant took {0} steps without finishing; stopped to prevent an endless loop", &[(MAX_ROUNDS).to_string()]))
     }
-    emit(WorkerEvent::Text(text));
+    emit(WorkerEvent::Text(history::without_app_notes(&text)));
     Ok(())
 }
 

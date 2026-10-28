@@ -1146,6 +1146,7 @@ fn ea_script(input: &Value, ctx: &ToolContext) -> Result<String> {
             let group = input["group"].as_str().filter(|g| !g.trim().is_empty()).unwrap_or("Compass").to_string();
             let language = input["language"].as_str().unwrap_or("JScript").to_string();
             let code = input["code"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["code".to_string()]))?.to_string();
+            refuse_alias_script(&code)?;
             let (statements, updated) = crate::scripts::save_statements(ctx.cfg, &group, &name, &language, &code)?;
             // A script in the model can be run later by anyone from EA: saving it is always asked, with the whole code.
             ctx.approver.confirm_script("save", &code, &crate::i18n::fmt(SAVE_SCRIPT_QUESTION, &[
@@ -1163,6 +1164,7 @@ fn ea_script(input: &Value, ctx: &ToolContext) -> Result<String> {
             let s = crate::scripts::find(ctx.cfg, &name)?;
             // The whole code with its includes is shown, and exactly that code runs.
             let resolved = crate::scripts::resolve_includes(ctx.cfg, &s)?;
+            refuse_alias_script(&resolved)?;
             ctx.approver.confirm_script("run", &resolved, &crate::i18n::fmt(RUN_SCRIPT_QUESTION, &[s.group.clone(), s.name.clone(), s.language.clone(), script_for_approval(&resolved)?]))?;
             crate::scripts::run(ctx.cfg, &name, &resolved)
         }
@@ -1268,6 +1270,19 @@ thread_local! {
 /// A new answer: images shown in earlier answers are not in the model's view any more (the history keeps texts).
 pub fn begin_answer() {
     SHOWN_IN_ANSWER.with(|s| s.borrow_mut().clear());
+}
+
+/// Aliases of attributes and operations are written by ea_write, not by a script (found in the 0.9.2 lab tests: a
+/// small model wrote alias scripts again and again, each asking for approval, and the aliases were not saved).
+fn refuse_alias_script(code: &str) -> Result<()> {
+    let lower = code.to_lowercase();
+    let sets_alias = [".alias", ".styleex"].iter().any(|p| lower.split(p).skip(1).any(|rest| rest.trim_start().starts_with('=') && !rest.trim_start().starts_with("==")));
+    if sets_alias && (lower.contains("attribute") || lower.contains("method") || lower.contains("operation")) {
+        bail!("Not saved and not run: aliases of attributes and operations are set with ea_write, without a script and without approval cards: \
+update_attribute {{attribute, alias}} and update_operation {{operation, alias}} (ids from t_attribute.id and t_operation.operationid; many in one ea_write call). \
+Element aliases: update_element {{element, alias}}.");
+    }
+    Ok(())
 }
 
 /// Images the model sees from one jira_download_attachments call (each costs about 1 500 tokens in every later round).
@@ -2099,6 +2114,14 @@ mod tests {
     }
 
     /// LC-308: a document is made only when every request of the user and every heading of its template is in it.
+    #[test]
+    fn alias_scripts_are_refused() {
+        assert!(refuse_alias_script("var a = el.Attributes.GetAt(0); a.Alias = 'GET /x'; a.Update();").is_err());
+        assert!(refuse_alias_script("op = el.Methods.GetAt(i); op.StyleEx = 'alias=x'; op.Update();").is_err());
+        assert!(refuse_alias_script("if (el.Alias == 'x') Session.Output(el.Name);").is_ok());
+        assert!(refuse_alias_script("Session.Output(Repository.Models.Count);").is_ok());
+    }
+
     #[test]
     fn document_discipline() {
         let mut cfg = test_config();

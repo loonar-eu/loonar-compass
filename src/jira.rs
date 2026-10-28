@@ -183,7 +183,10 @@ impl Connection {
             crate::i18n::tr("reading the issue"),
         )?;
         let f = &value["fields"];
-        let mut out = vec![format!("{key}: {}", f["summary"].as_str().unwrap_or("")), format!("{}: {}", crate::i18n::tr("Link"), self.browse(key))];
+        // The link from the issue's own address ("self"): right also through the team hub, whose proxy address is no
+        // page for a person (found in the 0.9.2 lab tests).
+        let link = value["self"].as_str().and_then(|u| u.find("/rest/").map(|i| format!("{}/browse/{key}", &u[..i]))).unwrap_or_else(|| self.browse(key));
+        let mut out = vec![format!("{key}: {}", f["summary"].as_str().unwrap_or("")), format!("{}: {link}", crate::i18n::tr("Link"))];
         let names = |list: &Value| list.as_array().into_iter().flatten().filter_map(|v| v["name"].as_str().or(v.as_str())).collect::<Vec<_>>().join(", ");
         out.push(format!(
             "{}: {} | {}: {} | {}: {} | {}: {}",

@@ -277,12 +277,19 @@ impl Session {
                 );
             }
         }
-        for m in out.iter_mut().filter(|m| m.role == "assistant") {
-            if let Some(steps) = self.steps.get(&m.created).filter(|s| !s.is_empty()) {
-                m.text = format!(
-                    "{}\n\n[Record of the application, not visible to the user: steps done while making this answer:\n{}]",
-                    m.text.trim_end(),
-                    steps.iter().map(|s| format!("- {s}")).collect::<Vec<_>>().join("\n")
+        // The steps of an answer go to the next message of the user as a note of the application, not into the answer
+        // itself: written into its own earlier answers, the model copied the record into its next visible answer
+        // (found in the 0.9.2 lab tests).
+        for i in 0..out.len() {
+            if out[i].role != "assistant" {
+                continue;
+            }
+            let Some(steps) = self.steps.get(&out[i].created).filter(|s| !s.is_empty()) else { continue };
+            if let Some(next) = out[i + 1..].iter_mut().find(|m| m.role == "user") {
+                next.text = format!(
+                    "{STEPS_NOTE}\n{}]\n\n{}",
+                    steps.iter().map(|s| format!("- {s}")).collect::<Vec<_>>().join("\n"),
+                    next.text
                 );
             }
         }
@@ -363,6 +370,21 @@ pub fn store_bytes(attachments_dir: &Path, original: &str, bytes: &[u8]) -> Resu
 }
 
 /// Original file name from the stored name (without the uuid prefix).
+/// The start of the application's note with the steps of the previous answer (see `messages_for_model`).
+pub const STEPS_NOTE: &str = "[Note from the application, not from the user and not to be repeated in your answer: steps done while making your previous answer:";
+
+/// An answer without notes of the application the model may have copied into it (its steps record).
+pub fn without_app_notes(text: &str) -> String {
+    let mut out = text.to_string();
+    for start in [STEPS_NOTE, "[Note from the application, not from the user", "[Record of the application"] {
+        while let Some(i) = out.find(start) {
+            let end = out[i..].find(']').map_or(out.len(), |e| i + e + 1);
+            out.replace_range(i..end, "");
+        }
+    }
+    out.trim_end().to_string()
+}
+
 pub fn display_name(stored: &str) -> &str {
     if stored.len() > 33 && stored.as_bytes()[32] == b'_' {
         &stored[33..]
@@ -586,12 +608,17 @@ mod tests {
         let sent = copy.messages_for_model();
         assert!(sent[2].text.starts_with("[Note from the application") && sent[2].text.contains("sklep@srv:5432") && sent[2].text.ends_with("Dodaj element"));
         assert_eq!(copy.messages[2].text, "Dodaj element");
-        // The steps of an answer go to the model with it, not to the stored text.
+        // The steps of an answer go to the model with the next user message (not into the answer, which the model would
+        // copy), not to the stored text.
         let mut with_steps = talk();
         with_steps.steps.insert(with_steps.messages[1].created.clone(), vec!["Reading the Confluence page \"W2\" ✓".into()]);
+        with_steps.messages.push(Message { role: "user".into(), text: "Czy czytałeś Confluence?".into(), attachments: Vec::new(), created: "t9".into() });
         let sent = with_steps.messages_for_model();
-        assert!(sent[1].text.contains("steps done while making this answer") && sent[1].text.contains("Confluence page"));
+        assert_eq!(sent[1].text, "Pakiet ma 3 elementy.");
+        assert!(sent[2].text.starts_with(STEPS_NOTE) && sent[2].text.contains("Confluence page") && sent[2].text.ends_with("Czy czytałeś Confluence?"));
         assert_eq!(with_steps.messages[1].text, "Pakiet ma 3 elementy.");
+        assert_eq!(without_app_notes(&format!("Gotowe.\n\n{STEPS_NOTE}\n- db_query ✓]")), "Gotowe.");
+        assert_eq!(without_app_notes("Gotowe. [Record of the application, not visible to the user: steps]"), "Gotowe.");
         // A summary replaces the messages before its point, the same way in every turn; the stored messages stay.
         let mut long = talk();
         long.messages.push(Message { role: "user".into(), text: "Dalej".into(), attachments: Vec::new(), created: "t3".into() });
