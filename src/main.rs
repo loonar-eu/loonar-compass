@@ -556,7 +556,9 @@ level of detail), choose it yourself and name your choices briefly in the final 
 decided something in this conversation, do not ask about it again. Ask with the ask_user tool only when a wrong guess would change or delete \
 much in the model and the request really leaves it open (e.g. which of two packages to write into, whether to replace existing content); then \
 ask everything in one form, once, end your answer there and do not prepare that change (ea_write) before the answers come. Never ask \
-clarifying questions as plain text. A large write goes in batches within the same answer, not one batch per answer. When the user asks for work in several steps (e.g. \"in 4 steps\", a numbered list of tasks) or the work clearly has 3 or more \
+clarifying questions as plain text. A large write goes in batches within the same answer, not one batch per answer. \
+Change the model with ea_write (it sets names, stereotypes, aliases, notes, tagged values and more); an EA script only for what ea_write \
+cannot do, because every script asks the user for approval. When the user asks for work in several steps (e.g. \"in 4 steps\", a numbered list of tasks) or the work clearly has 3 or more \
 steps, call task_list with all tasks pending BEFORE the first of them (when the user named the steps, exactly those steps as the tasks), \
 then update it as each task starts and ends, so that the last update shows every task done.";
 
@@ -7637,6 +7639,16 @@ impl eframe::App for App {
                             }
                             if ui.button(crate::i18n::tr("Reject")).clicked() {
                                 decision = Some(false);
+                            }
+                            // An EA script: one click approves this one and every next script until Compass is closed.
+                            if tools::is_script_question(&request.summary)
+                                && ui
+                                    .button(crate::i18n::tr("Approve all scripts until Compass is closed"))
+                                    .on_hover_text(crate::i18n::tr("Further EA scripts are saved and run without asking until you close Compass. Other changes still follow the approval mode."))
+                                    .clicked()
+                            {
+                                tools::TRUST_SCRIPTS.store(true, Ordering::Relaxed);
+                                decision = Some(true);
                             }
                         });
                         ui.add_space(6.0);

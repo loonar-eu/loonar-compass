@@ -18,6 +18,21 @@ use serde_json::{json, Value};
 use std::cell::Cell;
 
 
+/// The user approved all EA scripts until Compass is closed (a button of the approval card).
+pub static TRUST_SCRIPTS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The templates of the questions about EA scripts (to recognise them in the approval card).
+const SAVE_SCRIPT_QUESTION: &str = "Save the EA script {0}.{1} ({2}, {3} lines){4}:\n{5}";
+const RUN_SCRIPT_QUESTION: &str = "Run the EA script {0}.{1} ({2}) in the open EA window? A script can change anything in the model.\n{3}";
+
+/// Whether an approval question is about an EA script (then the card offers to approve all scripts).
+pub fn is_script_question(summary: &str) -> bool {
+    [SAVE_SCRIPT_QUESTION, RUN_SCRIPT_QUESTION].iter().any(|q| {
+        let prefix = crate::i18n::tr(q).split("{0}").next().unwrap_or("").to_string();
+        !prefix.is_empty() && summary.starts_with(&prefix)
+    })
+}
+
 /// The builds of EA scripts the user approved while Compass runs (see `Approver::confirm_script`).
 fn approved_scripts() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
     static SET: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> = std::sync::OnceLock::new();
@@ -134,6 +149,9 @@ impl Approver {
     /// code with other texts and numbers in it, e.g. the next batch of aliases) are approved without asking again while
     /// Compass runs; anything else in the code asks again.
     fn confirm_script(&self, action: &str, code: &str, summary: &str) -> Result<()> {
+        if TRUST_SCRIPTS.load(std::sync::atomic::Ordering::Relaxed) {
+            return Ok(());
+        }
         let shape = format!("{action}:{}", script_shape(code));
         if approved_scripts().lock().map(|s| s.contains(&shape)).unwrap_or(false) {
             return Ok(());
@@ -931,7 +949,7 @@ fn ea_script(input: &Value, ctx: &ToolContext) -> Result<String> {
             let code = input["code"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["code".to_string()]))?.to_string();
             let (statements, updated) = crate::scripts::save_statements(ctx.cfg, &group, &name, &language, &code)?;
             // A script in the model can be run later by anyone from EA: saving it is always asked, with the whole code.
-            ctx.approver.confirm_script("save", &code, &crate::i18n::fmt("Save the EA script {0}.{1} ({2}, {3} lines){4}:\n{5}", &[
+            ctx.approver.confirm_script("save", &code, &crate::i18n::fmt(SAVE_SCRIPT_QUESTION, &[
                 group.clone(), name.clone(), language.clone(), code.lines().count().to_string(),
                 if updated { crate::i18n::tr(" - REPLACES the existing script").to_string() } else { String::new() }, script_for_approval(&code)?,
             ]))?;
@@ -946,7 +964,7 @@ fn ea_script(input: &Value, ctx: &ToolContext) -> Result<String> {
             let s = crate::scripts::find(ctx.cfg, &name)?;
             // The whole code with its includes is shown, and exactly that code runs.
             let resolved = crate::scripts::resolve_includes(ctx.cfg, &s)?;
-            ctx.approver.confirm_script("run", &resolved, &crate::i18n::fmt("Run the EA script {0}.{1} ({2}) in the open EA window? A script can change anything in the model.\n{3}", &[s.group.clone(), s.name.clone(), s.language.clone(), script_for_approval(&resolved)?]))?;
+            ctx.approver.confirm_script("run", &resolved, &crate::i18n::fmt(RUN_SCRIPT_QUESTION, &[s.group.clone(), s.name.clone(), s.language.clone(), script_for_approval(&resolved)?]))?;
             crate::scripts::run(ctx.cfg, &name, &resolved)
         }
         other => bail!("{}", crate::i18n::fmt("unknown ea_script action: {0}", &[other.to_string()])),
