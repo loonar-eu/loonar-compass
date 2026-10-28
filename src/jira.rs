@@ -246,11 +246,37 @@ impl Connection {
         }
         if let Some(parent) = parent.map(str::trim).filter(|p| !p.is_empty()) {
             check_issue_key(parent)?;
-            fields["parent"] = json!({ "key": parent });
+            let kind = if issue_type.trim().is_empty() { "Task" } else { issue_type.trim() };
+            if self.cloud() || self.is_subtask_type(kind)? {
+                fields["parent"] = json!({ "key": parent });
+            } else {
+                // Jira Server / Data Center: "parent" is only for sub-tasks; a story or task joins its epic through the
+                // "Epic Link" field ("Issue type … is not a sub-task but a parent is specified" otherwise).
+                let field = self.epic_link_field()?;
+                fields[field.as_str()] = json!(parent);
+            }
         }
         let created = self.send(self.client()?.post(self.url("/issue")).json(&json!({ "fields": fields })), crate::i18n::tr("creating the issue"))?;
         let key = created["key"].as_str().context(crate::i18n::tr("Jira did not return the issue key"))?.to_string();
         Ok((key.clone(), self.browse(&key)))
+    }
+
+    /// Whether the issue type is a sub-task type (Jira Server / Data Center).
+    fn is_subtask_type(&self, name: &str) -> Result<bool> {
+        let types = self.send(self.client()?.get(self.url("/issuetype")), crate::i18n::tr("reading the issue types"))?;
+        Ok(types.as_array().into_iter().flatten().any(|t| t["name"].as_str().is_some_and(|n| n.eq_ignore_ascii_case(name)) && t["subtask"].as_bool() == Some(true)))
+    }
+
+    /// The id of the "Epic Link" field of Jira Server / Data Center (a custom field, e.g. customfield_10006).
+    fn epic_link_field(&self) -> Result<String> {
+        let fields = self.send(self.client()?.get(self.url("/field")), crate::i18n::tr("reading the fields"))?;
+        fields
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|f| f["schema"]["custom"] == "com.pyxis.greenhopper.jira:gh-epic-link" || f["name"].as_str().is_some_and(|n| n.eq_ignore_ascii_case("Epic Link")))
+            .and_then(|f| f["id"].as_str().map(str::to_string))
+            .context(crate::i18n::tr("this Jira has no \"Epic Link\" field, so the issue cannot be joined to the epic: create it without the parent and link it in Jira"))
     }
 
     pub fn add_comment(&self, key: &str, text: &str) -> Result<()> {
@@ -358,6 +384,8 @@ pub mod mock {
                                 (201, json!({"id": next.to_string(), "key": format!("ARCH-{next}")}))
                             }
                         }
+                        ("GET", "/issuetype") => (200, json!([{"name":"Story","subtask":false},{"name":"Sub-task","subtask":true}])),
+                        ("GET", "/field") => (200, json!([{"id":"summary","name":"Summary","schema":{}},{"id":"customfield_10006","name":"Epic Link","schema":{"custom":"com.pyxis.greenhopper.jira:gh-epic-link"}}])),
                         ("POST", p) if p.ends_with("/comment") => (201, json!({"id":"1"})),
                         ("POST", p) if p.ends_with("/remotelink") => (201, json!({"id":1})),
                         _ => (404, json!({"errorMessages":["not found"]})),
@@ -420,10 +448,22 @@ mod tests {
             assert_eq!(url, format!("{}/browse/ARCH-102", mock.url));
             let bad = jira.create_issue("ARCH", "Story", "", "x", &[], None).unwrap_err().to_string();
             assert!(bad.contains("400") && bad.contains("summary"), "{bad}");
+            // A story under an epic: Cloud sets "parent", Server/Data Center the "Epic Link" field; a sub-task always "parent".
+            jira.create_issue("ARCH", "Story", "Under the epic", "x", &[], Some("ARCH-1")).unwrap();
+            jira.create_issue("ARCH", "Sub-task", "A step", "x", &[], Some("ARCH-7")).unwrap();
             jira.add_comment("ARCH-7", "Checked against the model.").unwrap();
             jira.add_web_link("ARCH-7", "ea://{1234}", "EA: PaymentGateway").unwrap();
 
             let requests = mock.requests.lock().unwrap();
+            let under_epic = requests.iter().find(|r| r.0 == "POST" && r.1.ends_with("/issue") && r.2["fields"]["summary"] == "Under the epic").unwrap();
+            if cloud {
+                assert_eq!(under_epic.2["fields"]["parent"]["key"], "ARCH-1");
+            } else {
+                assert_eq!(under_epic.2["fields"]["customfield_10006"], "ARCH-1");
+                assert!(under_epic.2["fields"]["parent"].is_null());
+            }
+            let step = requests.iter().find(|r| r.0 == "POST" && r.1.ends_with("/issue") && r.2["fields"]["summary"] == "A step").unwrap();
+            assert_eq!(step.2["fields"]["parent"]["key"], "ARCH-7");
             let created = requests.iter().find(|r| r.0 == "POST" && r.1.ends_with("/issue")).unwrap();
             assert_eq!(created.2["fields"]["labels"], json!(["from_model"]));
             if cloud {
