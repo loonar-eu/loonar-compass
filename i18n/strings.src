@@ -1836,3 +1836,9 @@ Attached to the Jira issue {0}: {1} ‖ Dołączono do zgłoszenia Jira {0}: {1}
 Attached: {0} ‖ Załączniki: {0} ‖ Angehängt: {0} ‖ Pièces jointes : {0}
 EA did not save the diagram as a metafile ‖ EA nie zapisał diagramu jako metapliku ‖ EA hat das Diagramm nicht als Metadatei gespeichert ‖ EA n’a pas enregistré le diagramme en métafichier
 Windows could not draw the diagram's metafile ‖ Windows nie narysował metapliku diagramu ‖ Windows konnte die Metadatei des Diagramms nicht zeichnen ‖ Windows n’a pas pu dessiner le métafichier du diagramme
+Attachments ‖ Załączniki ‖ Anhänge ‖ Pièces jointes
+Attachments of the Jira issue {0} ‖ Załączniki zgłoszenia Jira {0} ‖ Anhänge des Jira-Vorgangs {0} ‖ Pièces jointes du ticket Jira {0}
+downloading the attachment ‖ pobieranie załącznika ‖ Herunterladen des Anhangs ‖ téléchargement de la pièce jointe
+the attachment {0} is not in this Jira ‖ załącznik {0} nie pochodzi z tej Jiry ‖ der Anhang {0} stammt nicht aus diesem Jira ‖ la pièce jointe {0} ne provient pas de ce Jira
+{0}: Jira sent the file from another address ({1}) ‖ {0}: Jira wysłała plik z innego adresu ({1}) ‖ {0}: Jira hat die Datei von einer anderen Adresse gesendet ({1}) ‖ {0} : Jira a envoyé le fichier depuis une autre adresse ({1})
+{0}: the file is larger than {1} MB ‖ {0}: plik jest większy niż {1} MB ‖ {0}: Die Datei ist größer als {1} MB ‖ {0} : le fichier dépasse {1} Mo
