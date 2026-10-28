@@ -302,6 +302,32 @@ impl Connection {
         Ok(())
     }
 
+    /// Adds a file to an issue (LC-304), e.g. the image of a diagram. Returns the file name Jira stored it under.
+    pub fn add_attachment(&self, key: &str, name: &str, bytes: Vec<u8>) -> Result<String> {
+        check_issue_key(key)?;
+        let lower = name.to_lowercase();
+        let mime = match lower.rsplit('.').next().unwrap_or("") {
+            "png" => "image/png",
+            "jpg" | "jpeg" => "image/jpeg",
+            "gif" => "image/gif",
+            "svg" => "image/svg+xml",
+            "pdf" => "application/pdf",
+            "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "txt" | "md" | "csv" => "text/plain",
+            _ => "application/octet-stream",
+        };
+        let part = reqwest::blocking::multipart::Part::bytes(bytes).file_name(name.to_string()).mime_str(mime).context(crate::i18n::tr("adding the attachment"))?;
+        let form = reqwest::blocking::multipart::Form::new().part("file", part);
+        // Jira refuses uploads without this header (XSRF protection).
+        let added = self.send(
+            self.client()?.post(self.url(&format!("/issue/{key}/attachments"))).header("X-Atlassian-Token", "no-check").multipart(form),
+            crate::i18n::tr("adding the attachment"),
+        )?;
+        Ok(added[0]["filename"].as_str().unwrap_or(name).to_string())
+    }
+
     pub fn add_comment(&self, key: &str, text: &str) -> Result<()> {
         check_issue_key(key)?;
         self.send(self.client()?.post(self.url(&format!("/issue/{key}/comment"))).json(&json!({ "body": self.text_value(text) })), crate::i18n::tr("adding the comment"))?;
@@ -408,6 +434,7 @@ pub mod mock {
                             }
                         }
                         ("PUT", p) if p.starts_with("/issue/ARCH-7") => (204, json!(null)),
+                        ("POST", p) if p.ends_with("/attachments") => (200, json!([{"id": "10001", "filename": "Order process.png"}])),
                         ("GET", "/issuetype") => (200, json!([{"name":"Story","subtask":false},{"name":"Sub-task","subtask":true}])),
                         ("GET", "/field") => (200, json!([{"id":"summary","name":"Summary","schema":{}},{"id":"customfield_10006","name":"Epic Link","schema":{"custom":"com.pyxis.greenhopper.jira:gh-epic-link"}}])),
                         ("POST", p) if p.ends_with("/comment") => (201, json!({"id":"1"})),
@@ -477,6 +504,7 @@ mod tests {
             jira.create_issue("ARCH", "Sub-task", "A step", "x", &[], Some("ARCH-7")).unwrap();
             jira.add_comment("ARCH-7", "Checked against the model.").unwrap();
             jira.update_issue("ARCH-7", None, Some("Clean text"), &["p1805".into()], &["old label".into()]).unwrap();
+            assert_eq!(jira.add_attachment("ARCH-7", "Order process.png", vec![137, 80, 78, 71]).unwrap(), "Order process.png");
             assert!(jira.update_issue("ARCH-7", None, None, &[], &[]).is_err());
             jira.add_web_link("ARCH-7", "ea://{1234}", "EA: PaymentGateway").unwrap();
 

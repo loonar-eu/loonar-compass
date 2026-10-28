@@ -1826,3 +1826,11 @@ The work is long: the oldest tool results were removed from the model's view ‖
 The assistant sees the conversation above as a summary ‖ Asystent widzi rozmowę powyżej jako streszczenie ‖ Der Assistent sieht die Unterhaltung oben als Zusammenfassung ‖ L’assistant voit la conversation ci-dessus sous forme de résumé
 diagram links repaired (duplicates removed, hidden connectors shown) ‖ naprawione połączenia na diagramach (usunięte duplikaty, pokazane ukryte połączenia) ‖ reparierte Diagrammverbindungen (Duplikate entfernt, verborgene Konnektoren angezeigt) ‖ liens de diagramme réparés (doublons supprimés, connecteurs masqués affichés)
 The link of connector id={0} disappeared from the diagram. ‖ Połączenie id={0} zniknęło z diagramu. ‖ Die Verbindung id={0} ist aus dem Diagramm verschwunden. ‖ Le lien du connecteur id={0} a disparu du diagramme.
+Attach to the Jira issue {0}:\n{1} ‖ Dołączyć do zgłoszenia Jira {0}:\n{1} ‖ An den Jira-Vorgang {0} anhängen:\n{1} ‖ Joindre au ticket Jira {0} :\n{1}
+adding the attachment ‖ dodawanie załącznika ‖ Hinzufügen des Anhangs ‖ ajout de la pièce jointe
+there is no file {0} in this conversation ‖ w tej rozmowie nie ma pliku {0} ‖ in dieser Unterhaltung gibt es keine Datei {0} ‖ il n’y a pas de fichier {0} dans cette conversation
+unknown attachment '{0}' (use diagram:ID, image:FILE_NAME or file:FILE_NAME) ‖ nieznany załącznik '{0}' (użyj diagram:ID, image:NAZWA_PLIKU albo file:NAZWA_PLIKU) ‖ unbekannter Anhang '{0}' (diagram:ID, image:DATEINAME oder file:DATEINAME verwenden) ‖ pièce jointe inconnue '{0}' (utilisez diagram:ID, image:NOM_FICHIER ou file:NOM_FICHIER)
+at most 20 files at once ‖ najwyżej 20 plików naraz ‖ höchstens 20 Dateien auf einmal ‖ 20 fichiers au maximum à la fois
+no files to attach ‖ brak plików do dołączenia ‖ keine Dateien zum Anhängen ‖ aucun fichier à joindre
+Attached to the Jira issue {0}: {1} ‖ Dołączono do zgłoszenia Jira {0}: {1} ‖ An den Jira-Vorgang {0} angehängt: {1} ‖ Joint au ticket Jira {0} : {1}
+Attached: {0} ‖ Załączniki: {0} ‖ Angehängt: {0} ‖ Pièces jointes : {0}

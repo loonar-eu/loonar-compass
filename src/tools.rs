@@ -18,6 +18,12 @@ use serde_json::{json, Value};
 use std::cell::Cell;
 
 
+/// The attachments of the Jira tools (LC-304).
+static ATTACHMENTS_SCHEMA: std::sync::LazyLock<Value> = std::sync::LazyLock::new(|| {
+    json!({ "type": "array", "items": { "type": "string" },
+            "description": "Files to attach: diagram:ID (an image of the diagram exported from the model), image:FILE_NAME (an image shown in this conversation) or file:FILE_NAME (another file of the conversation, e.g. a document you made)." })
+});
+
 /// The questions that are asked in every approval mode (they send something outside the model or run code), by kind.
 /// After the first one of a kind, the approval card offers to approve all of that kind until Compass is closed.
 const SAVE_SCRIPT_QUESTION: &str = "Save the EA script {0}.{1} ({2}, {3} lines){4}:\n{5}";
@@ -25,6 +31,7 @@ const RUN_SCRIPT_QUESTION: &str = "Run the EA script {0}.{1} ({2}) in the open E
 const JIRA_CREATE_QUESTION: &str = "Create a Jira issue in project {0}:\n{1}: {2}\n\n{3}";
 const JIRA_ADD_QUESTION: &str = "Add to the Jira issue {0}:\n{1}";
 const JIRA_UPDATE_QUESTION: &str = "Change the Jira issue {0}:\n{1}";
+const JIRA_ATTACH_QUESTION: &str = "Attach to the Jira issue {0}:\n{1}";
 const CONFLUENCE_REPLACE_QUESTION: &str = "Publishing to Confluence will REPLACE the content of an existing page:\n\"{0}\" (ID {1}, version {2}) in space {3}.\nThe previous version stays in the page history.";
 const CONFLUENCE_NEW_QUESTION: &str = "Publishing a new page to Confluence:\n\"{0}\" in space {1}";
 const MEMORY_SAVE_QUESTION: &str = "Save a note to the assistant's memory:\n\"{0}\"\n{1}";
@@ -36,7 +43,7 @@ pub const SHAREPOINT_UPLOAD_QUESTION: &str = "Upload {0} to {1}: {2}/{3}";
 /// Kinds of always-asked actions: (kind, its questions, the button of the approval card).
 const TRUSTABLE: &[(&str, &[&str], &str)] = &[
     ("script", &[SAVE_SCRIPT_QUESTION, RUN_SCRIPT_QUESTION], "Approve all scripts until Compass is closed"),
-    ("jira", &[JIRA_CREATE_QUESTION, JIRA_ADD_QUESTION, JIRA_UPDATE_QUESTION], "Approve all Jira issues until Compass is closed"),
+    ("jira", &[JIRA_CREATE_QUESTION, JIRA_ADD_QUESTION, JIRA_UPDATE_QUESTION, JIRA_ATTACH_QUESTION], "Approve all Jira issues until Compass is closed"),
     ("confluence", &[CONFLUENCE_REPLACE_QUESTION, CONFLUENCE_NEW_QUESTION], "Approve all Confluence publishing until Compass is closed"),
     ("memory", &[MEMORY_SAVE_QUESTION, MEMORY_REMOVE_QUESTION], "Approve all memory notes until Compass is closed"),
     ("mcp", &[MCP_QUESTION], "Approve all MCP tool calls until Compass is closed"),
@@ -489,10 +496,26 @@ Optionally adds a web link, e.g. to the model element (title \"EA: name\", url e
                     "description": { "type": "string", "description": "Plain text; one paragraph per line." },
                     "labels": { "type": "array", "items": { "type": "string" } },
                     "parent": { "type": "string", "description": "Optionally the parent issue (epic or story) key." },
+                    "attachments": ATTACHMENTS_SCHEMA.clone(),
                     "link_url": { "type": "string" },
                     "link_title": { "type": "string" }
                 },
                 "required": ["summary"]
+            }
+        },
+        {
+            "name": "jira_attach",
+            "description": "Adds files to an existing Jira issue: images of diagrams straight from the model (diagram:ID), images shown in this \
+conversation (image:FILE_NAME) or other files of the conversation (file:FILE_NAME, e.g. a Word document you made). On Jira Server / Data Center the \
+images are also shown in the description. jira_create_issue and jira_update_issue take the same attachments, so a new issue gets its diagrams in the \
+same step. The user approves it (once for all Jira changes if they choose).",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "key": { "type": "string" },
+                    "attachments": ATTACHMENTS_SCHEMA.clone()
+                },
+                "required": ["key", "attachments"]
             }
         },
         {
@@ -507,7 +530,8 @@ conversation. The user approves it (once for all Jira changes if they choose).",
                     "summary": { "type": "string" },
                     "description": { "type": "string", "description": "The whole new description, plain text; one paragraph per line." },
                     "add_labels": { "type": "array", "items": { "type": "string" } },
-                    "remove_labels": { "type": "array", "items": { "type": "string" } }
+                    "remove_labels": { "type": "array", "items": { "type": "string" } },
+                    "attachments": ATTACHMENTS_SCHEMA.clone()
                 },
                 "required": ["key"]
             }
@@ -783,6 +807,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "jira_create_issue" => jira_create_issue(input, ctx).map(Into::into),
         "jira_comment" => jira_comment(input, ctx).map(Into::into),
         "jira_update_issue" => jira_update_issue(input, ctx).map(Into::into),
+        "jira_attach" => jira_attach(input, ctx).map(Into::into),
         "gap_analysis" => crate::governance::gap(input, ctx.cfg).map(Into::into),
         "operation_usage" => operation_usage(input, ctx.cfg).map(Into::into),
         "ea_ui" => {
@@ -1075,7 +1100,15 @@ fn jira_create_issue(input: &Value, ctx: &ToolContext) -> Result<String> {
     }
     let summary = input["summary"].as_str().unwrap_or("").trim().to_string();
     let issue_type = input["type"].as_str().unwrap_or("Task").to_string();
-    let description = input["description"].as_str().unwrap_or("").to_string();
+    let mut description = input["description"].as_str().unwrap_or("").to_string();
+    let files = jira_files(ctx, input)?;
+    // Jira Server / Data Center shows attached images in the description through wiki markup.
+    if !connection.cloud() {
+        let markup = jira_image_markup(&files.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>());
+        if !markup.is_empty() {
+            description = format!("{}\n\n{markup}", description.trim_end());
+        }
+    }
     let labels: Vec<String> = input["labels"].as_array().into_iter().flatten().filter_map(|v| v.as_str()).map(String::from).collect();
     let parent = input["parent"].as_str();
     let link = input["link_url"].as_str().filter(|s| !s.trim().is_empty());
@@ -1089,20 +1122,99 @@ fn jira_create_issue(input: &Value, ctx: &ToolContext) -> Result<String> {
     if let Some(l) = link {
         extra.push(format!("🔗 {l}"));
     }
+    if !files.is_empty() {
+        extra.push(jira_files_lines(&files));
+    }
     ctx.approver.confirm_kind("jira", &crate::i18n::fmt(JIRA_CREATE_QUESTION, &[project.clone(), issue_type.clone(), summary.clone(), format!("{}{}", shorten_for_approval(&description), if extra.is_empty() { String::new() } else { format!("\n\n{}", extra.join("\n")) })]))?;
     let (key, url) = connection.create_issue(&project, &issue_type, &summary, &description, &labels, parent)?;
+    let attached = jira_upload(&connection, &key, files)?;
     if let Some(link) = link {
         connection.add_web_link(&key, link, input["link_title"].as_str().unwrap_or(link))?;
     }
-    Ok(crate::i18n::fmt("Created the Jira issue {0}: {1}", &[key, url]))
+    let note = if attached.is_empty() { String::new() } else { format!(" {}", crate::i18n::fmt("Attached: {0}", &[attached.join(", ")])) };
+    Ok(format!("{}{note}", crate::i18n::fmt("Created the Jira issue {0}: {1}", &[key, url])))
 }
 
 /// Comment or web link on an existing issue: always with the user's consent.
+/// The files to attach to a Jira issue (LC-304): diagram:ID (an image exported from the model), image:NAME or file:NAME (a
+/// file of the conversation's attachments). Returns (file name, bytes).
+fn jira_files(ctx: &ToolContext, input: &Value) -> Result<Vec<(String, Vec<u8>)>> {
+    let mut files = Vec::new();
+    for source in input["attachments"].as_array().into_iter().flatten().filter_map(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty()) {
+        if let Some(id) = source.strip_prefix("diagram:") {
+            let id: i64 = id.trim().parse().context(crate::i18n::tr("diagram id"))?;
+            let name = query_rows(ctx.cfg, &format!("select name from t_diagram where diagram_id = {id}"))?
+                .first()
+                .and_then(|r| r.first().cloned())
+                .with_context(|| crate::i18n::fmt("there is no diagram with id {0}", &[id.to_string()]))?;
+            files.push((format!("{}.png", crate::history::sanitize_name(&name)), picture(ctx, source)?));
+        } else if let Some(stored) = source.strip_prefix("image:").or_else(|| source.strip_prefix("file:")) {
+            let stored = std::path::Path::new(stored.trim()).file_name().context(crate::i18n::tr("image name"))?.to_string_lossy().to_string();
+            let bytes = std::fs::read(ctx.cfg.attachments_dir.join(&stored)).with_context(|| crate::i18n::fmt("there is no file {0} in this conversation", &[stored.clone()]))?;
+            files.push((crate::history::display_name(&stored).to_string(), bytes));
+        } else {
+            bail!("{}", crate::i18n::fmt("unknown attachment '{0}' (use diagram:ID, image:FILE_NAME or file:FILE_NAME)", &[source.to_string()]));
+        }
+    }
+    if files.len() > 20 {
+        bail!("{}", crate::i18n::tr("at most 20 files at once"));
+    }
+    Ok(files)
+}
+
+/// The files of `jira_files` as lines of the approval question.
+fn jira_files_lines(files: &[(String, Vec<u8>)]) -> String {
+    files.iter().map(|(name, bytes)| format!("📎 {name} ({} KB)", bytes.len().div_ceil(1024))).collect::<Vec<_>>().join("\n")
+}
+
+/// Uploads the files to the issue; on Jira Server / Data Center the images are also shown in the description (wiki
+/// markup !name!) when `show_in` holds the description to extend. Returns the names Jira stored.
+fn jira_upload(connection: &crate::jira::Connection, key: &str, files: Vec<(String, Vec<u8>)>) -> Result<Vec<String>> {
+    let mut stored = Vec::new();
+    for (name, bytes) in files {
+        stored.push(connection.add_attachment(key, &name, bytes)?);
+    }
+    Ok(stored)
+}
+
+/// Wiki markup that shows the images in the description of a Jira Server / Data Center issue.
+fn jira_image_markup(names: &[String]) -> String {
+    names
+        .iter()
+        .filter(|n| matches!(n.to_lowercase().rsplit('.').next(), Some("png" | "jpg" | "jpeg" | "gif")))
+        .map(|n| format!("!{n}|thumbnail!"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn jira_attach(input: &Value, ctx: &ToolContext) -> Result<String> {
+    let connection = jira(ctx.cfg)?;
+    let key = input["key"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["key".to_string()]))?.trim().to_string();
+    let files = jira_files(ctx, input)?;
+    if files.is_empty() {
+        bail!("{}", crate::i18n::tr("no files to attach"));
+    }
+    ctx.approver.confirm_kind("jira", &crate::i18n::fmt(JIRA_ATTACH_QUESTION, &[key.clone(), jira_files_lines(&files)]))?;
+    let names: Vec<String> = files.iter().map(|(n, _)| n.clone()).collect();
+    let stored = jira_upload(&connection, &key, files)?;
+    let _ = names;
+    Ok(format!("{} ({})", crate::i18n::fmt("Attached to the Jira issue {0}: {1}", &[key.clone(), stored.join(", ")]), connection.browse(&key)))
+}
+
 fn jira_update_issue(input: &Value, ctx: &ToolContext) -> Result<String> {
     let connection = jira(ctx.cfg)?;
     let key = input["key"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["key".to_string()]))?.trim().to_string();
     let summary = input["summary"].as_str().map(str::trim).filter(|s| !s.is_empty());
-    let description = input["description"].as_str();
+    let files = jira_files(ctx, input)?;
+    let with_images;
+    let description = match input["description"].as_str() {
+        // A new description on Jira Server / Data Center shows the attached images too.
+        Some(d) if !connection.cloud() && !jira_image_markup(&files.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>()).is_empty() => {
+            with_images = format!("{}\n\n{}", d.trim_end(), jira_image_markup(&files.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>()));
+            Some(with_images.as_str())
+        }
+        other => other,
+    };
     let list = |name: &str| -> Vec<String> { input[name].as_array().into_iter().flatten().filter_map(|v| v.as_str()).map(String::from).collect() };
     let (add, remove) = (list("add_labels"), list("remove_labels"));
     let mut what = Vec::new();
@@ -1118,8 +1230,14 @@ fn jira_update_issue(input: &Value, ctx: &ToolContext) -> Result<String> {
     if !remove.is_empty() {
         what.push(crate::i18n::fmt("remove labels: {0}", &[remove.join(", ")]));
     }
+    if !files.is_empty() {
+        what.push(jira_files_lines(&files));
+    }
     ctx.approver.confirm_kind("jira", &crate::i18n::fmt(JIRA_UPDATE_QUESTION, &[key.clone(), what.join("\n")]))?;
-    connection.update_issue(&key, summary, description, &add, &remove)?;
+    if summary.is_some() || description.is_some() || !add.is_empty() || !remove.is_empty() {
+        connection.update_issue(&key, summary, description, &add, &remove)?;
+    }
+    jira_upload(&connection, &key, files)?;
     Ok(crate::i18n::fmt("Changed the Jira issue {0}: {1}", &[key.clone(), connection.browse(&key)]))
 }
 
