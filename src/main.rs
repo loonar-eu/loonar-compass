@@ -228,6 +228,73 @@ Leave out greetings and repeated tool output. Write in the language of the conve
     Ok(kept)
 }
 
+/// The prompt a turn starts with, at most (estimate, tokens): above it the earlier part of the conversation is
+/// summarised, leaving room for the tool results of the turn below Claude Haiku 5.5's 100k-token price tier (LC-301).
+const TURN_START_BUDGET: u64 = 70_000;
+/// The system prompt and the tools (measured on 2026-10-28: about 31 000-37 000 tokens), rounded up.
+const PREFIX_ESTIMATE: u64 = 40_000;
+/// The newest messages kept word for word when the earlier part is summarised.
+const KEEP_MESSAGES: usize = 8;
+/// Within a turn: above this many prompt tokens the API clears the oldest tool results itself.
+const TOOL_CLEARING_AT: u64 = 85_000;
+
+/// Tokens of the messages, estimated from their text (about 3 characters a token in Polish, German and code; an
+/// attachment as 1 500).
+fn estimated_tokens(messages: &[Message]) -> u64 {
+    messages.iter().map(|m| m.text.chars().count() as u64 / 3 + m.attachments.len() as u64 * 1_500).sum()
+}
+
+/// The messages with their earlier part as a summary, when the turn would start above `TURN_START_BUDGET`; the
+/// summary also goes to the conversation (WorkerEvent::Summary). None when the conversation is short enough or there is
+/// nothing earlier to summarise.
+fn summarise_if_long(client: &claude::ClaudeClient, messages: &[Message], emit: &dyn Fn(WorkerEvent)) -> Option<Vec<Message>> {
+    if PREFIX_ESTIMATE + estimated_tokens(messages) <= TURN_START_BUDGET {
+        return None;
+    }
+    let mut start = messages.len().saturating_sub(KEEP_MESSAGES);
+    while start > 0 && messages[start].role != "user" {
+        start -= 1;
+    }
+    if start < 2 {
+        return None;
+    }
+    emit(WorkerEvent::StepStart(crate::i18n::tr("The conversation is long: summarising its earlier part").into()));
+    let mut transcript = String::new();
+    for m in &messages[..start] {
+        let attachments = if m.attachments.is_empty() { String::new() } else { format!("
+[attachments: {}]", m.attachments.iter().map(|a| history::display_name(a)).collect::<Vec<_>>().join(", ")) };
+        transcript.push_str(&format!("
+## {}
+{}{attachments}
+", m.role, m.text.chars().take(6_000).collect::<String>()));
+        // The summary request itself stays below the 100k-token tier.
+        if transcript.len() > 240_000 {
+            break;
+        }
+    }
+    let system = "You summarise the earlier part of a conversation between a user and an assistant for Enterprise Architect, so that the assistant can continue without it. \
+Keep: what the user wants and decided (also rules for how to work, e.g. naming, formats, what to skip), the elements, packages, diagrams, files, services \
+and issues involved with their names, GUIDs and keys, what was changed in the model, Jira or elsewhere, what is still to do, open questions and promises. \
+Leave out greetings and repeated tool output. Write in the language of the conversation, at most 900 words.";
+    let request = vec![json!({ "role": "user", "content": format!("<conversation>{transcript}</conversation>\nSummarise it.") })];
+    let summary = match client.send_value(system, &request, None).map(|r| text_of(&r["content"])) {
+        Ok(text) if !text.trim().is_empty() => text.trim().to_string(),
+        Ok(_) => {
+            emit(WorkerEvent::StepEnd { ok: false, detail: crate::i18n::tr("empty summary").into() });
+            return None;
+        }
+        Err(e) => {
+            emit(WorkerEvent::StepEnd { ok: false, detail: shorten(&format!("{e:#}"), 200) });
+            return None;
+        }
+    };
+    emit(WorkerEvent::StepEnd { ok: true, detail: crate::i18n::fmt("{0} messages kept, the rest as a summary", &[(messages.len() - start).to_string()]) });
+    emit(WorkerEvent::Summary { from: messages[start].created.clone(), text: summary.clone() });
+    let mut kept = messages[start..].to_vec();
+    kept[0].text = history::with_summary(&summary, &kept[0].text);
+    Some(kept)
+}
+
 /// Texts longer than this in the earlier messages are shortened when there is nothing to summarise.
 const LONG_TEXT: usize = 30_000;
 
@@ -1569,6 +1636,8 @@ enum WorkerEvent {
     Approval(ApprovalRequest),
     /// The assistant reported a missing capability (report_gap): the kind.
     Gap(String),
+    /// The earlier part of a long conversation was summarised (LC-301): kept with the conversation from now on.
+    Summary { from: String, text: String },
     Done,
     Failed(String),
 }
@@ -2766,6 +2835,10 @@ impl App {
                 }
                 Ok(WorkerEvent::Consumed(n)) => self.consumed += n,
                 Ok(WorkerEvent::Gap(kind)) => self.pending_gap = Some(kind),
+                Ok(WorkerEvent::Summary { from, text }) => {
+                    self.session.summary = Some(history::EarlierSummary { from, text });
+                    changed = true;
+                }
                 Ok(WorkerEvent::Approval(request)) => {
                     self.pending_approval = Some(request);
                     self.status = crate::i18n::tr("The assistant is waiting for your approval to save.").into();
@@ -5827,7 +5900,18 @@ fn run_turn_with(
     } else {
         telemetry::turn();
     }
-    let client = claude::ClaudeClient::from_config(cfg, cfg.claude_max_tokens)?;
+    let client = claude::ClaudeClient::from_config(cfg, cfg.claude_max_tokens)?.with_tool_clearing(TOOL_CLEARING_AT);
+    // A long conversation (LC-301): before the prompt nears Claude Haiku 5.5's 100k-token price tier, the earlier part
+    // becomes a summary, kept with the conversation (the same text in every later turn, so it stays cached). Done
+    // here, at the start of the turn, where the history holds only texts: no earlier reasoning is replayed after it.
+    let summarised;
+    let messages = match summarise_if_long(&client, messages, emit) {
+        Some(shorter) => {
+            summarised = shorter;
+            &summarised[..]
+        }
+        None => messages,
+    };
     let mut msgs = history_to_api(messages, &cfg.attachments_dir)?;
     if conversation_chars(&msgs) > SUMMARY_THRESHOLD {
         emit(WorkerEvent::StepStart(crate::i18n::tr("The conversation is long: summarising its earlier part").into()));
@@ -5947,6 +6031,11 @@ fn run_turn_with(
                 crate::i18n::fmt("prompt {0} tokens, {1}% from the cache", &[call.prompt().to_string(), format!("{:.0}", call.cache_share() * 100.0)])
             ),
         });
+        // The API cleared old tool results of this turn (LC-301): a step, so it is visible why something is read again.
+        for edit in resp["context_management"]["applied_edits"].as_array().into_iter().flatten() {
+            emit(WorkerEvent::StepStart(crate::i18n::tr("The work is long: the oldest tool results were removed from the model's view").into()));
+            emit(WorkerEvent::StepEnd { ok: true, detail: crate::i18n::fmt("{0} tool results, {1} tokens", &[edit["cleared_tool_uses"].to_string(), edit["cleared_input_tokens"].to_string()]) });
+        }
         claude::check_refusal(&resp)?;
         let content = resp["content"].clone();
         if resp["stop_reason"] == "max_tokens" {
@@ -7756,6 +7845,13 @@ impl eframe::App for App {
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
                             for (index, m) in self.session.messages.iter().enumerate() {
+                                if self.session.summary.as_ref().is_some_and(|s| s.from == m.created) {
+                                    ui.add_space(6.0);
+                                    ui.vertical_centered(|ui| {
+                                        ui.label(egui::RichText::new(crate::i18n::tr("The assistant sees the conversation above as a summary")).small().color(theme::MUTED));
+                                    });
+                                    ui.add_space(6.0);
+                                }
                                 for mv in self.session.moves.iter().filter(|mv| mv.at == index) {
                                     ui.add_space(6.0);
                                     ui.vertical_centered(|ui| {
@@ -8301,6 +8397,46 @@ mod tests {
         );
         assert!(!asked.load(Ordering::Relaxed), "asked a question");
         assert_eq!(answers.lock().unwrap().len(), 1, "one answer in the chat");
+    }
+
+    /// Long conversations (LC-301), real API: the API clears old tool results above the trigger without an error, and
+    /// a long real conversation (LOONAR_TEST_SESSION = a history file) is summarised below the turn budget.
+    /// Run: `cargo test long_conversations_live -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "requires an API key and a long conversation file"]
+    fn long_conversations_live() {
+        let cfg = AppConfig::load(Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("settings");
+        // 1. Clearing on the server: nine tool results of about 8 000 tokens, trigger 30 000.
+        let client = claude::ClaudeClient::from_config(&cfg, 300).unwrap().with_tool_clearing(30_000);
+        let tools = json!([{ "name": "code_read", "description": "Reads a file.", "input_schema": { "type": "object", "properties": { "path": { "type": "string" } } } }]);
+        let mut msgs = vec![json!({"role": "user", "content": "Read the nine files, then say only how many you read."})];
+        for i in 0..9 {
+            let id = format!("toolu_{i:02}");
+            msgs.push(json!({"role": "assistant", "content": [{"type": "tool_use", "id": id, "name": "code_read", "input": {"path": format!("C:/x/F{i}.java")}}]}));
+            let body: String = (0..1_800).map(|n| format!("int v{n} = {i}; ")).collect();
+            msgs.push(json!({"role": "user", "content": [{"type": "tool_result", "tool_use_id": id, "content": body}]}));
+        }
+        let resp = client.send_value("You answer briefly.", &msgs, Some(&tools)).expect("answer with clearing");
+        println!("CLEAR applied_edits={} usage={}", resp["context_management"]["applied_edits"], resp["usage"]);
+        assert!(resp["context_management"]["applied_edits"].as_array().is_some_and(|a| !a.is_empty()), "the API cleared something");
+        // 2. The summary of a real long conversation.
+        let session = history::Session::load(Path::new(&std::env::var("LOONAR_TEST_SESSION").expect("LOONAR_TEST_SESSION"))).expect("session");
+        let messages = session.messages_for_model();
+        let before = estimated_tokens(&messages);
+        let summaries = std::sync::Mutex::new(Vec::new());
+        let emit = |e: WorkerEvent| match e {
+            WorkerEvent::Summary { from, text } => summaries.lock().unwrap().push((from, text)),
+            WorkerEvent::StepEnd { detail, .. } => println!("STEP {detail}"),
+            _ => {}
+        };
+        let client = claude::ClaudeClient::from_config(&cfg, cfg.claude_max_tokens).unwrap();
+        let shorter = summarise_if_long(&client, &messages, &emit).expect("summarised");
+        let after = estimated_tokens(&shorter);
+        let (from, text) = summaries.lock().unwrap()[0].clone();
+        println!("SUMMARY {} messages, ~{before} -> ~{after} tokens, from {from}
+{}", messages.len(), text.chars().take(1_500).collect::<String>());
+        assert!(PREFIX_ESTIMATE + after <= TURN_START_BUDGET && shorter[0].created == from && shorter[0].role == "user");
+        println!("COST {}", usage::answer_totals().line());
     }
 
     /// The new 0.8 tools in real conversations on the cheapest models: the model check, the gap analysis, reading a

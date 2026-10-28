@@ -1820,3 +1820,7 @@ cost unknown ‖ koszt nieznany ‖ Kosten unbekannt ‖ coût inconnu
 💲 Cost of this answer ‖ 💲 Koszt tej odpowiedzi ‖ 💲 Kosten dieser Antwort ‖ 💲 Coût de cette réponse
 prompt {0} tokens, {1}% from the cache ‖ prompt {0} tokenów, {1}% z cache ‖ Prompt {0} Tokens, {1} % aus dem Cache ‖ prompt {0} jetons, {1} % depuis le cache
 Reading the application's changelog ‖ Czytanie listy zmian aplikacji ‖ Lesen des Änderungsprotokolls der Anwendung ‖ Lecture du journal des modifications de l’application
+empty summary ‖ puste streszczenie ‖ leere Zusammenfassung ‖ résumé vide
+The work is long: the oldest tool results were removed from the model's view ‖ Praca jest długa: najstarsze wyniki narzędzi usunięto z widoku modelu ‖ Die Arbeit ist lang: Die ältesten Werkzeugergebnisse wurden aus der Sicht des Modells entfernt ‖ Le travail est long : les plus anciens résultats d’outils ont été retirés de la vue du modèle
+{0} tool results, {1} tokens ‖ wyniki narzędzi: {0}, tokeny: {1} ‖ {0} Werkzeugergebnisse, {1} Tokens ‖ {0} résultats d’outils, {1} jetons
+The assistant sees the conversation above as a summary ‖ Asystent widzi rozmowę powyżej jako streszczenie ‖ Der Assistent sieht die Unterhaltung oben als Zusammenfassung ‖ L’assistant voit la conversation ci-dessus sous forme de résumé

@@ -7,6 +7,12 @@ use std::time::Duration;
 pub const API_URL: &str = "https://api.anthropic.com/v1/messages";
 pub const API_VERSION: &str = "2023-06-01";
 
+/// Clearing old tool results on the server (LC-301): the beta, how many of the newest tool uses stay, and the least
+/// a clear must remove to be worth the cache it rewrites.
+const CONTEXT_MANAGEMENT_BETA: &str = "context-management-2025-06-27";
+const TOOL_USES_KEPT: u64 = 6;
+const CLEAR_AT_LEAST: u64 = 20_000;
+
 /// Attempts for temporary errors (rate limit, overload, server or network errors).
 const ATTEMPTS: u32 = 4;
 /// Longest wait between attempts, also when the API asks for a longer one (retry-after).
@@ -70,6 +76,9 @@ pub struct ClaudeClient {
     via_hub: bool,
     /// What the calls are for, in the cost log (chat, summary, agent, translation…).
     purpose: &'static str,
+    /// Above this many prompt tokens the API itself clears the oldest tool results (context editing), see
+    /// `with_tool_clearing`.
+    tool_clearing: Option<u64>,
 }
 
 impl ClaudeClient {
@@ -78,7 +87,7 @@ impl ClaudeClient {
             .timeout(Duration::from_secs(300))
             .connect_timeout(Duration::from_secs(20))
             .build()?;
-        Ok(Self { http, api_key, model, max_tokens, workspace_id: workspace_id.trim().to_string(), effort: String::new(), show_thinking: false, base_url: String::new(), oauth: None, openai: false, openai_url: String::new(), via_hub: false, purpose: "chat" })
+        Ok(Self { http, api_key, model, max_tokens, workspace_id: workspace_id.trim().to_string(), effort: String::new(), show_thinking: false, base_url: String::new(), oauth: None, openai: false, openai_url: String::new(), via_hub: false, purpose: "chat", tool_clearing: None })
     }
 
     /// The client of the provider chosen in the settings (Claude or OpenAI), with its key, model and effort.
@@ -135,6 +144,15 @@ impl ClaudeClient {
     /// The reasoning summary in the answer (thinking blocks with text); the model thinks either way.
     pub fn with_thinking(mut self, show: bool) -> Self {
         self.show_thinking = show;
+        self
+    }
+
+    /// Long tool loops (LC-301): when the prompt passes `trigger` tokens, the API clears the oldest tool results itself
+    /// (the newest stay, and the calls stay visible), so a request does not cross Claude Haiku 5.5's 100k-token price
+    /// tier. Done on the server, this is not an edit of the conversation: the model's earlier reasoning stays valid,
+    /// which clearing on the client would break. Only towards Anthropic directly (gateways may not know the beta).
+    pub fn with_tool_clearing(mut self, trigger: u64) -> Self {
+        self.tool_clearing = Some(trigger);
         self
     }
 
@@ -198,6 +216,15 @@ impl ClaudeClient {
             }
             body["tools"] = tools;
         }
+        if let (Some(trigger), true) = (self.tool_clearing, tools.is_some() && self.base_url.is_empty() && !self.via_hub && !self.openai) {
+            body["context_management"] = json!({ "edits": [{
+                "type": "clear_tool_uses_20250919",
+                "trigger": { "type": "input_tokens", "value": trigger },
+                "keep": { "type": "tool_uses", "value": TOOL_USES_KEPT },
+                "clear_at_least": { "type": "input_tokens", "value": CLEAR_AT_LEAST },
+                "exclude_tools": ["ask_user", "task_list", "report_gap"]
+            }] });
+        }
         if !self.effort.is_empty() {
             body["output_config"] = json!({ "effort": self.effort });
         }
@@ -222,6 +249,9 @@ impl ClaudeClient {
         }
         if !self.workspace_id.is_empty() {
             request = request.header("anthropic-workspace-id", &self.workspace_id);
+        }
+        if body.get("context_management").is_some() {
+            request = request.header("anthropic-beta", CONTEXT_MANAGEMENT_BETA);
         }
         let response = request.json(body).send();
         let response = match response {
@@ -351,6 +381,18 @@ mod cache_tests {
             Value::Array(a) => a.iter_mut().for_each(strip),
             _ => {}
         }
+    }
+
+    #[test]
+    fn tool_clearing_only_towards_anthropic_with_tools() {
+        let tools = json!([{"name": "a", "input_schema": {}}]);
+        let m = [json!({"role": "user", "content": "x"})];
+        let on = client().with_tool_clearing(85_000).request_body("s", &m, Some(&tools));
+        let edit = &on["context_management"]["edits"][0];
+        assert_eq!((edit["type"].as_str(), edit["trigger"]["value"].as_u64()), (Some("clear_tool_uses_20250919"), Some(85_000)));
+        assert!(edit["exclude_tools"].as_array().unwrap().contains(&json!("ask_user")));
+        assert!(client().with_tool_clearing(85_000).request_body("s", &m, None).get("context_management").is_none(), "no tools, nothing to clear");
+        assert!(client().request_body("s", &m, Some(&tools)).get("context_management").is_none());
     }
 
     #[test]

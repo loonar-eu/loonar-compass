@@ -185,6 +185,25 @@ pub struct Session {
     /// assistant gets it with the history: without it, it cannot know in the next turn what it already read or changed.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub steps: std::collections::BTreeMap<String, Vec<String>>,
+    /// The earlier part of a long conversation as a summary (LC-301): the model gets it instead of the messages before
+    /// `from`. Kept with the conversation, so every later turn sends the same text and reads it from the cache.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<EarlierSummary>,
+}
+
+/// A summary of the messages before the message created at `from`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EarlierSummary {
+    pub from: String,
+    pub text: String,
+}
+
+/// The first kept message as the model gets it: the summary of everything before it, then its own text.
+pub fn with_summary(summary: &str, text: &str) -> String {
+    format!(
+        "<summary_of_earlier_conversation>\n{}\n</summary_of_earlier_conversation>\n(The earlier messages of this conversation were replaced by this summary.)\n\n{text}",
+        summary.trim()
+    )
 }
 
 /// The conversation went on with another model from message `at` on (LC-292).
@@ -219,6 +238,7 @@ impl Session {
             model: None,
             moves: Vec::new(),
             steps: Default::default(),
+            summary: None,
         }
     }
 
@@ -264,6 +284,13 @@ impl Session {
                     m.text.trim_end(),
                     steps.iter().map(|s| format!("- {s}")).collect::<Vec<_>>().join("\n")
                 );
+            }
+        }
+        // A long conversation: the messages before the summary point are replaced by their summary.
+        if let Some(summary) = &self.summary {
+            if let Some(at) = out.iter().position(|m| m.created == summary.from && m.role == "user") {
+                out.drain(..at);
+                out[0].text = with_summary(&summary.text, &out[0].text);
             }
         }
         out
@@ -388,6 +415,8 @@ struct Exported {
     moves: Vec<ModelMove>,
     #[serde(default)]
     steps: std::collections::BTreeMap<String, Vec<String>>,
+    #[serde(default)]
+    summary: Option<EarlierSummary>,
 }
 
 fn not_exported() -> anyhow::Error {
@@ -407,6 +436,7 @@ pub fn export(session: &Session, attachments_dir: &Path, target: &Path) -> Resul
         messages: session.messages.clone(),
         moves: session.moves.clone(),
         steps: session.steps.clone(),
+        summary: session.summary.clone(),
     };
     let tmp = target.with_extension("lcchat.tmp");
     {
@@ -467,6 +497,7 @@ pub fn import(source: &Path, attachments_dir: &Path, model: ModelChoice) -> Resu
     let count = session.messages.len();
     session.moves = exported.moves.into_iter().filter(|m| m.at <= count).collect();
     session.steps = exported.steps;
+    session.summary = exported.summary;
     let to = model.describe();
     if count > 0 && exported.model != to {
         session.moves.retain(|m| m.at != count);
@@ -561,6 +592,15 @@ mod tests {
         let sent = with_steps.messages_for_model();
         assert!(sent[1].text.contains("steps done while making this answer") && sent[1].text.contains("Confluence page"));
         assert_eq!(with_steps.messages[1].text, "Pakiet ma 3 elementy.");
+        // A summary replaces the messages before its point, the same way in every turn; the stored messages stay.
+        let mut long = talk();
+        long.messages.push(Message { role: "user".into(), text: "Dalej".into(), attachments: Vec::new(), created: "t3".into() });
+        long.summary = Some(EarlierSummary { from: "t3".into(), text: "Opisano pakiet Sprzedaż.".into() });
+        let sent = long.messages_for_model();
+        assert_eq!(sent.len(), 1);
+        assert!(sent[0].text.starts_with("<summary_of_earlier_conversation>") && sent[0].text.ends_with("Dalej"));
+        assert_eq!(long.messages_for_model()[0].text, sent[0].text);
+        assert_eq!(long.messages.len(), 3);
         // The same model again is no move.
         let mut same = talk();
         same.record_move(db());
