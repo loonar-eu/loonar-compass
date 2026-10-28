@@ -279,7 +279,7 @@ pub fn run(input: &Value, ctx: &crate::tools::ToolContext) -> Result<String> {
             let folder = input["folder"].as_str().unwrap_or("").trim().trim_matches('/');
             let name = input["name"].as_str().map(str::trim).filter(|n| !n.is_empty()).map(String::from).unwrap_or_else(|| crate::history::display_name(&file).to_string());
             let shown = if folder.is_empty() || folder.eq_ignore_ascii_case("root") { crate::i18n::tr("My Drive").to_string() } else { folder.to_string() };
-            ctx.approver.confirm_upload(&crate::i18n::fmt("Upload {0} to Google Drive: {1}", &[name.clone(), shown]))?;
+            ctx.approver.confirm_upload(&crate::i18n::fmt(crate::tools::GDRIVE_UPLOAD_QUESTION, &[name.clone(), shown]))?;
             let parent = drive.folder_id(folder)?;
             let url = drive.upload(&parent, &name, &std::fs::read(&local)?)?;
             Ok(format!("Uploaded to Google Drive: {url}"))

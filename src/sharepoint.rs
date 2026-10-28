@@ -216,7 +216,7 @@ fn act(site: &Site, service: &str, place: &str, input: &Value, ctx: &crate::tool
             let local = ctx.cfg.attachments_dir.join(&file);
             let folder = input["folder"].as_str().unwrap_or("");
             let name = input["name"].as_str().map(String::from).unwrap_or_else(|| crate::history::display_name(&file).to_string());
-            ctx.approver.confirm_upload(&crate::i18n::fmt("Upload {0} to {1}: {2}/{3}", &[name.clone(), service.to_string(), place.to_string(), folder.trim_matches('/').to_string()]))?;
+            ctx.approver.confirm_upload(&crate::i18n::fmt(crate::tools::SHAREPOINT_UPLOAD_QUESTION, &[name.clone(), service.to_string(), place.to_string(), folder.trim_matches('/').to_string()]))?;
             let url = site.upload(folder, &name, &std::fs::read(&local)?)?;
             Ok(format!("Uploaded to {service}: {url}"))
         }

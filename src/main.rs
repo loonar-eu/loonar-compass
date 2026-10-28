@@ -7641,15 +7641,17 @@ impl eframe::App for App {
                             if ui.button(crate::i18n::tr("Reject")).clicked() {
                                 decision = Some(false);
                             }
-                            // An EA script: one click approves this one and every next script until Compass is closed.
-                            if tools::is_script_question(&request.summary)
-                                && ui
-                                    .button(crate::i18n::tr("Approve all scripts until Compass is closed"))
-                                    .on_hover_text(crate::i18n::tr("Further EA scripts are saved and run without asking until you close Compass. Other changes still follow the approval mode."))
+                            // An always-asked kind (scripts, Jira, Confluence, memory, MCP, uploads): one click approves this
+                            // one and every next one of the kind until Compass is closed.
+                            if let Some((kind, label)) = tools::trustable_kind(&request.summary) {
+                                if ui
+                                    .button(label)
+                                    .on_hover_text(crate::i18n::tr("The next ones of this kind go without asking until you close Compass. Other changes still follow the approval mode."))
                                     .clicked()
-                            {
-                                tools::TRUST_SCRIPTS.store(true, Ordering::Relaxed);
-                                decision = Some(true);
+                                {
+                                    tools::trust(kind);
+                                    decision = Some(true);
+                                }
                             }
                         });
                         ui.add_space(6.0);
