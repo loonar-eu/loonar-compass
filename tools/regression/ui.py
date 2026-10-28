@@ -96,8 +96,9 @@ class Compass:
         field = self._message_field()
         field.click_input()
         keyboard.send_keys("^a{BACKSPACE}", pause=0.02)
-        field.type_keys(message.replace("{", "{{}").replace("}", "{}}").replace("+", "{+}").replace("^", "{^}").replace("%", "{%}").replace("~", "{~}").replace("(", "{(}").replace(")", "{)}"),
-                        with_spaces=True, pause=0.005)
+        special = set("{}+^%~()")
+        escaped = "".join("{" + ch + "}" if ch in special else ch for ch in message)
+        field.type_keys(escaped, with_spaces=True, pause=0.005)
         self.click(SEND, expect=lambda: not (self._message_field().get_value() or "").strip())
         return self.wait_idle(timeout, watch)
 

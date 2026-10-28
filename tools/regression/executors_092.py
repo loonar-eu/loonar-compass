@@ -71,6 +71,25 @@ def in_window(fn, **kw):
     return runner
 
 
+def click_text(c: Compass, text, exact=True, timeout=15):
+    """Clicks a visible text of any kind (button, link, card title), scrolling the middle of the window to it."""
+    r = c.win.rectangle()
+    end = time.time() + timeout
+    while time.time() < end:
+        found = [d for d in c.win.descendants() if ((d.element_info.name or "") == text if exact else text in (d.element_info.name or ""))]
+        visible = [d for d in found if r.top + 40 < d.element_info.rectangle.top < r.bottom - 40]
+        if visible:
+            box = visible[0].element_info.rectangle
+            mouse.move(coords=((box.left + box.right) // 2, (box.top + box.bottom) // 2))
+            time.sleep(0.4)
+            mouse.click(coords=((box.left + box.right) // 2, (box.top + box.bottom) // 2))
+            time.sleep(1.2)
+            return
+        mouse.scroll(coords=((r.left + r.right) // 2, (r.top + r.bottom) // 2), wheel_dist=-3)
+        time.sleep(0.4)
+    raise RuntimeError(f"text \"{text}\" not found in the window")
+
+
 def nav(c: Compass, name):
     c.click(name)
     time.sleep(1.5)
@@ -183,7 +202,7 @@ def sample_services(root: Path):
 def first_run_notice(out: Path, work: Path):
     def body(c):
         c.evidence("first_start")
-        c.click("Pokaż szczegóły", timeout=10)
+        click_text(c, "Pokaż szczegóły")
         c.evidence("details_view")
         restart(c)
         c.evidence("second_start_no_notice")
@@ -337,12 +356,8 @@ def service_urls(out: Path, work: Path):
     def body(c):
         nav(c, "Ustawienia")
         c.evidence("settings")
-        try:
-            c.click("Confluence", contains=False, timeout=5)
-            time.sleep(1)
-            c.evidence("confluence_card")
-        except RuntimeError:
-            pass
+        click_text(c, "Confluence")
+        c.evidence("confluence_card")
     in_window(body)(out, work)
 
 
@@ -351,8 +366,7 @@ def source_code(out: Path, work: Path):
     repo = sample_services(work / "repos")
     def body(c):
         nav(c, "Ustawienia")
-        c.click("Kod źródłowy", contains=True, timeout=10)
-        time.sleep(1)
+        click_text(c, "Kod źródłowy")
         c.evidence("source_code_card")
         nav(c, "Czat")
         c.start_conversation()
@@ -422,8 +436,9 @@ def cost_and_cache(out: Path, work: Path):
         logs = sorted((c.work / "usage").glob("*.jsonl")) if (c.work / "usage").exists() else sorted(c.work.rglob("usage/*.jsonl"))
         (out / "usage_log.txt").write_text("\n\n".join(f"{p}:\n{p.read_text(encoding='utf-8')}" for p in logs) or "no usage log found", encoding="utf-8")
     in_window(body)(out, work)
+    # The user's own settings (memory, templates and instructions are part of the prompt the threshold is about).
     session = max(Path(os.environ["APPDATA"], "Loonar Compass", "history").glob("*.json"), key=lambda p: p.stat().st_size)
-    cargo_live(out, "long_conversations_live", "long_conversation_live_test", {"LOONAR_TEST_PROPS": str(test_props(out)), "LOONAR_TEST_SESSION": str(session)})
+    cargo_live(out, "long_conversations_live", "long_conversation_live_test", {"LOONAR_TEST_PROPS": str(Path(os.environ["APPDATA"], "Loonar Compass", "app.properties")), "LOONAR_TEST_SESSION": str(session)})
 
 
 # 0.9.2 (LC-303 … LC-311) ---------------------------------------------------------------------------------------

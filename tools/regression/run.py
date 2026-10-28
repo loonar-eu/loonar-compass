@@ -20,7 +20,16 @@ from services import CONFIG, Jira, Zephyr, secret
 PRICE_IN, PRICE_OUT = 0.10, 0.50  # USD per million tokens of the judge model (prompts under 100K tokens)
 
 
+def keep_screen_on():
+    """The window tests need an unlocked, lit screen: the run asks Windows not to turn the display off or start the
+    screen saver (which locks the computer) while it lasts."""
+    import ctypes
+    ES_CONTINUOUS, ES_SYSTEM_REQUIRED, ES_DISPLAY_REQUIRED = 0x80000000, 0x00000001, 0x00000002
+    ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED)
+
+
 def main(argv):
+    keep_screen_on()
     cycle, names = argv[0], [a for a in argv[1:] if not a.startswith("--")]
     dry = "--dry-run" in argv
     zephyr, jira = Zephyr(), (None if dry else Jira())
