@@ -314,7 +314,7 @@ def daily_bars(rows, index, title, label):
     step = (w - pad) / len(rows)
     bar = max(step - 2, 1)
     out = [f'<figure><figcaption>{esc(title)}</figcaption><svg viewBox="0 0 {w} {h + 22}" role="img" aria-label="{esc(title)}">']
-    for frac in (0.5, 1):
+    for frac in ((0.5, 1) if peak >= 4 else (1,)):  # a half line would read "0" or repeat a small peak
         y = h - frac * (h - 10)
         out.append(f'<line class="grid" x1="{pad}" x2="{w}" y1="{y:.1f}" y2="{y:.1f}"/><text class="axis" x="{pad - 6}" y="{y + 4:.1f}" text-anchor="end">{round(peak * frac)}</text>')
     out.append(f'<line class="base" x1="{pad}" x2="{w}" y1="{h}" y2="{h}"/>')
