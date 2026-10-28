@@ -243,6 +243,9 @@ const DOCUMENT_MODEL_QUESTION: &str = "📄 A document: {0} writes documents cle
 const TURN_START_BUDGET: u64 = 70_000;
 /// The newest messages kept word for word when the earlier part is summarised.
 const KEEP_MESSAGES: usize = 8;
+/// About how many tokens of the newest messages are kept word for word (the rest of the turn's budget is the system
+/// prompt, the tools and the summary).
+const KEPT_TOKENS: u64 = 22_000;
 /// Within a turn: above this many prompt tokens the API clears the oldest tool results itself.
 const TOOL_CLEARING_AT: u64 = 85_000;
 
@@ -311,13 +314,32 @@ fn prompt_tokens(client: &claude::ClaudeClient, system: &str, msgs: &[Value], to
 /// The messages with their earlier part as a summary, when the turn would start (`prompt_tokens`) above
 /// `TURN_START_BUDGET`; the summary also goes to the conversation (WorkerEvent::Summary). None when the conversation is
 /// short enough or there is nothing earlier to summarise.
-fn summarise_if_long(client: &claude::ClaudeClient, messages: &[Message], prompt_tokens: u64, emit: &dyn Fn(WorkerEvent)) -> Option<Vec<Message>> {
+fn summarise_if_long(client: &claude::ClaudeClient, messages: &[Message], prompt_tokens: u64, attachments_dir: &Path, emit: &dyn Fn(WorkerEvent)) -> Option<Vec<Message>> {
     if prompt_tokens <= TURN_START_BUDGET {
         return None;
     }
-    let mut start = messages.len().saturating_sub(KEEP_MESSAGES);
-    while start > 0 && messages[start].role != "user" {
+    // The newest messages stay word for word: at most KEEP_MESSAGES and about KEPT_TOKENS (found in the 0.9.2 tests: eight
+    // long messages kept whole left the turn at 87 000 tokens after the summary), starting with a message of the user.
+    // A message as it goes to the model: an attached document is its text there, often far longer than the message.
+    let tokens_of = |m: &Message| match history_to_api(std::slice::from_ref(m), attachments_dir) {
+        Ok(api) => claude::estimated_tokens("", &api, None),
+        Err(_) => m.text.chars().count() as u64 * 5 / 11 + m.attachments.len() as u64 * 1_500,
+    };
+    let mut start = messages.len();
+    let mut kept = 0u64;
+    while start > 0 && messages.len() - start < KEEP_MESSAGES {
+        let t = tokens_of(&messages[start - 1]);
+        if messages.len() - start >= 1 && kept + t > KEPT_TOKENS {
+            break;
+        }
+        kept += t;
         start -= 1;
+    }
+    while start < messages.len() && messages[start].role != "user" {
+        start += 1;
+    }
+    if start == messages.len() {
+        start = messages.iter().rposition(|m| m.role == "user").unwrap_or(0);
     }
     if start < 2 {
         return None;
@@ -6348,7 +6370,7 @@ fn run_turn_with(
     // here, at the start of the turn, where the history holds only texts: no earlier reasoning is replayed after it.
     let mut msgs = history_to_api(messages, &cfg.attachments_dir)?;
     let tokens = prompt_tokens(&client, &system, &msgs, Some(&tools));
-    if let Some(shorter) = summarise_if_long(&client, messages, tokens, emit) {
+    if let Some(shorter) = summarise_if_long(&client, messages, tokens, &cfg.attachments_dir, emit) {
         msgs = history_to_api(&shorter, &cfg.attachments_dir)?;
     }
     if conversation_chars(&msgs) > SUMMARY_THRESHOLD {
@@ -8832,12 +8854,17 @@ mod tests {
             _ => {}
         };
         let client = claude::ClaudeClient::from_config(&cfg, cfg.claude_max_tokens).unwrap();
-        let shorter = summarise_if_long(&client, &messages, before, &emit).expect("summarised");
+        let shorter = summarise_if_long(&client, &messages, before, &cfg.attachments_dir, &emit).expect("summarised");
         let after = count(&shorter);
+        let base = count(&[Message { role: "user".into(), text: "x".into(), attachments: vec![], created: String::new() }]);
+        println!("PREFIX ~{base} tokens (system prompt + tools); kept {} messages: {:?}", shorter.len(), shorter.iter().map(|m| (m.role.clone(), m.text.chars().count(), m.attachments.len())).collect::<Vec<_>>());
         let (from, text) = summaries.lock().unwrap()[0].clone();
         println!("SUMMARY {} messages, ~{before} -> ~{after} tokens, from {from}
 {}", messages.len(), text.chars().take(1_500).collect::<String>());
-        assert!(after <= TURN_START_BUDGET && shorter[0].created == from && shorter[0].role == "user");
+        // Under the budget, unless what is kept is only the newest message of the user (with its attachments), which
+        // always goes whole.
+        let only_latest = shorter.iter().filter(|m| m.role == "user").count() == 1;
+        assert!((after <= TURN_START_BUDGET || only_latest) && after < before && shorter[0].created == from && shorter[0].role == "user");
         println!("COST {}", usage::answer_totals().line());
     }
 
