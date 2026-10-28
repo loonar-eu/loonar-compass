@@ -5415,6 +5415,29 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
 /// Limit of model calls in one turn. Protects against tool loops.
 const MAX_ROUNDS: usize = 40;
 
+/// How many times in one answer the model is sent on after stopping before the end of the work.
+const MAX_SENT_ON: usize = 3;
+
+/// The note that sends the model on (in English, like the other instructions).
+const SEND_ON: &str = "(Note from the application, not from the user: you ended your answer before the work was done, or asked whether to go on. \
+The user's request already covers all the remaining work and the user does not want to be asked. Go on now with the rest, to the end. \
+Questions that really need the user's decision go at the end of your final answer, after everything else is done; anything that does not \
+depend on them is done first.)";
+
+/// Whether an answer ends by asking the user to say "go on" (in any of the application's languages).
+fn asks_to_continue(text: &str) -> bool {
+    let t = text.to_lowercase().replace(['„', '”', '“', '«', '»', '"'], "'");
+    const PHRASES: &[&str] = &[
+        "'dalej'", "'kontynuuj'", "czy kontynuować", "czy mam kontynuować", "mam kontynuować", "czy mam przejść", "czy przejść dalej",
+        "czy kontynuuję", "jeśli chcesz, kontynuuję", "daj znać, czy mam", "czy robić dalej", "czy robię dalej",
+        "'go on'", "'continue'", "shall i continue", "should i continue", "shall i proceed", "should i proceed", "shall i go on",
+        "want me to continue", "want me to proceed", "let me know if i should continue",
+        "'weiter'", "soll ich weitermachen", "soll ich fortfahren",
+        "'continuer'", "dois-je continuer", "voulez-vous que je continue", "je continue ?",
+    ];
+    PHRASES.iter().any(|p| t.contains(p))
+}
+
 /// Converts the conversation history into Messages API messages. Adjacent messages of the same role
 /// (e.g. two user messages in a row or several assistant texts from one turn) are merged into one.
 fn history_to_api(messages: &[Message], attachments_dir: &Path) -> anyhow::Result<Vec<Value>> {
@@ -5875,6 +5898,8 @@ fn run_turn_with(
     // when the model ends without a text of its own.
     let mut last_note: Option<String> = None;
     let mut answered = false;
+    // How many times the model stopped before the end of the work and was sent on (LC-295).
+    let mut sent_on = 0;
 
     for round in 1..=MAX_ROUNDS {
         if cancel.load(Ordering::Relaxed) {
@@ -5914,7 +5939,13 @@ fn run_turn_with(
         if leaks_rules(&text) {
             text = crate::i18n::tr("(The answer repeated the assistant's internal instructions and was withheld. Ask about what the assistant can do instead.)").to_string();
         }
-        let goes_on = resp["stop_reason"] == "tool_use" || resp["stop_reason"] == "pause_turn";
+        // The model ended its answer although the work is not done (open tasks in its plan, or "write 'go on'" / "shall I
+        // continue?"): the request already covers the rest, so it is sent on instead of the user having to say "go on".
+        let stops_early = allowed.is_none()
+            && sent_on < MAX_SENT_ON
+            && resp["stop_reason"] == "end_turn"
+            && (plan.is_some_and(|(done, all)| done < all) || asks_to_continue(&text));
+        let goes_on = resp["stop_reason"] == "tool_use" || resp["stop_reason"] == "pause_turn" || stops_early;
         if !text.trim().is_empty() && goes_on {
             // "Now I read the controllers…": a step of the work, not a message of its own in the chat.
             emit(WorkerEvent::StepStart(format!("💬 {}", shorten(text.trim(), 300))));
@@ -5962,6 +5993,16 @@ fn run_turn_with(
         // A long server tool (code execution) pauses the answer: it goes on with the same content.
         if resp["stop_reason"] == "pause_turn" {
             msgs.push(json!({ "role": "assistant", "content": content.clone() }));
+            continue;
+        }
+        if stops_early {
+            sent_on += 1;
+            emit(WorkerEvent::StepStart(crate::i18n::tr("↻ The work is not finished: the assistant goes on without asking").into()));
+            emit(WorkerEvent::StepEnd { ok: true, detail: String::new() });
+            msgs.push(json!({ "role": "assistant", "content": content.clone() }));
+            let mut next = vec![text_block(SEND_ON)];
+            next.extend(drain_inbox(inbox, &cfg.attachments_dir, emit)?);
+            msgs.push(json!({ "role": "user", "content": next }));
             continue;
         }
         if resp["stop_reason"] != "tool_use" {
@@ -8182,6 +8223,15 @@ mod tests {
         let result = run_turn(&cfg, &messages, &approver, &inbox, &cancel, &emit);
         ea::shutdown();
         result.expect("turn");
+    }
+
+    #[test]
+    fn stopping_to_ask_for_go_on_is_recognised() {
+        assert!(asks_to_continue("Zacznę od nasa-crmd-sync-service i będę przechodził po kolei. Napisz „dalej”, a ruszam."));
+        assert!(asks_to_continue("Done 4 of 13 services. Shall I continue with the rest?"));
+        assert!(asks_to_continue("Soll ich weitermachen?"));
+        assert!(!asks_to_continue("Zrobione: 13 usług, 412 operacji, wszystkie z aliasami."));
+        assert!(!asks_to_continue("Który pakiet jest właściwy: A czy B?"));
     }
 
     /// Code analysis on the cheapest model works to the end alone: one answer, no question, no status messages (the
