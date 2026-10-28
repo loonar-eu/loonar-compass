@@ -302,6 +302,17 @@ impl Connection {
         Ok(())
     }
 
+    /// The description of an issue as stored (wiki text on Server / Data Center; on Cloud the ADF as JSON text).
+    pub fn description(&self, key: &str) -> Result<String> {
+        check_issue_key(key)?;
+        let issue = self.send(self.client()?.get(self.url(&format!("/issue/{key}"))).query(&[("fields", "description")]), crate::i18n::tr("reading the issue"))?;
+        Ok(match &issue["fields"]["description"] {
+            Value::String(text) => text.clone(),
+            Value::Null => String::new(),
+            other => other.to_string(),
+        })
+    }
+
     /// Adds a file to an issue (LC-304), e.g. the image of a diagram. Returns the file name Jira stored it under.
     pub fn add_attachment(&self, key: &str, name: &str, bytes: Vec<u8>) -> Result<String> {
         check_issue_key(key)?;

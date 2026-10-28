@@ -18,6 +18,11 @@ use serde_json::{json, Value};
 use std::cell::Cell;
 
 
+/// The width of attached images in the description (LC-305).
+static IMAGE_WIDTH_SCHEMA: std::sync::LazyLock<Value> = std::sync::LazyLock::new(|| {
+    json!({ "type": "integer", "description": "Jira Server / Data Center: the width in pixels the images are shown with in the description; omitted = their own size (diagram images are exported at twice the size, sharp). To resize an image already in the description, change its markup there with jira_update_issue: !file.png|width=900!" })
+});
+
 /// The attachments of the Jira tools (LC-304).
 static ATTACHMENTS_SCHEMA: std::sync::LazyLock<Value> = std::sync::LazyLock::new(|| {
     json!({ "type": "array", "items": { "type": "string" },
@@ -497,6 +502,7 @@ Optionally adds a web link, e.g. to the model element (title \"EA: name\", url e
                     "labels": { "type": "array", "items": { "type": "string" } },
                     "parent": { "type": "string", "description": "Optionally the parent issue (epic or story) key." },
                     "attachments": ATTACHMENTS_SCHEMA.clone(),
+                    "image_width": IMAGE_WIDTH_SCHEMA.clone(),
                     "link_url": { "type": "string" },
                     "link_title": { "type": "string" }
                 },
@@ -513,7 +519,9 @@ same step. The user approves it (once for all Jira changes if they choose).",
                 "type": "object",
                 "properties": {
                     "key": { "type": "string" },
-                    "attachments": ATTACHMENTS_SCHEMA.clone()
+                    "attachments": ATTACHMENTS_SCHEMA.clone(),
+                    "image_width": IMAGE_WIDTH_SCHEMA.clone(),
+                    "show_in_description": { "type": "boolean", "description": "Jira Server / Data Center: also show the images at the end of the description (default true)." }
                 },
                 "required": ["key", "attachments"]
             }
@@ -531,7 +539,8 @@ conversation. The user approves it (once for all Jira changes if they choose).",
                     "description": { "type": "string", "description": "The whole new description, plain text; one paragraph per line." },
                     "add_labels": { "type": "array", "items": { "type": "string" } },
                     "remove_labels": { "type": "array", "items": { "type": "string" } },
-                    "attachments": ATTACHMENTS_SCHEMA.clone()
+                    "attachments": ATTACHMENTS_SCHEMA.clone(),
+                    "image_width": IMAGE_WIDTH_SCHEMA.clone()
                 },
                 "required": ["key"]
             }
@@ -855,7 +864,8 @@ fn picture(ctx: &ToolContext, source: &str) -> Result<Vec<u8>> {
     if let Some(id) = source.strip_prefix("diagram:") {
         let id: i64 = id.trim().parse().context(crate::i18n::tr("diagram id"))?;
         let path = std::env::temp_dir().join(format!("loonar_img_{}.png", uuid::Uuid::new_v4().simple()));
-        let op = json!({ "op": "export_diagram", "diagram": id, "path": path.to_string_lossy() });
+        // Images for Jira, Confluence and documents: twice the size, drawn from the diagram's vectors (LC-305).
+        let op = json!({ "op": "export_diagram", "diagram": id, "path": path.to_string_lossy(), "scale": 2.0 });
         ea::run_batch(ctx.cfg, &[op], &BatchOptions::default())?;
         let png = std::fs::read(&path).with_context(|| crate::i18n::fmt("EA did not save the image of diagram {0}", &[id.to_string()]))?;
         let _ = std::fs::remove_file(&path);
@@ -1104,7 +1114,7 @@ fn jira_create_issue(input: &Value, ctx: &ToolContext) -> Result<String> {
     let files = jira_files(ctx, input)?;
     // Jira Server / Data Center shows attached images in the description through wiki markup.
     if !connection.cloud() {
-        let markup = jira_image_markup(&files.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>());
+        let markup = jira_image_markup(&files.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>(), input["image_width"].as_u64());
         if !markup.is_empty() {
             description = format!("{}\n\n{markup}", description.trim_end());
         }
@@ -1178,11 +1188,15 @@ fn jira_upload(connection: &crate::jira::Connection, key: &str, files: Vec<(Stri
 }
 
 /// Wiki markup that shows the images in the description of a Jira Server / Data Center issue.
-fn jira_image_markup(names: &[String]) -> String {
+/// `width`: the width in pixels the image is shown with; None = its own size (LC-305: thumbnails were too small to read).
+fn jira_image_markup(names: &[String], width: Option<u64>) -> String {
     names
         .iter()
         .filter(|n| matches!(n.to_lowercase().rsplit('.').next(), Some("png" | "jpg" | "jpeg" | "gif")))
-        .map(|n| format!("!{n}|thumbnail!"))
+        .map(|n| match width {
+            Some(w) => format!("!{n}|width={w}!"),
+            None => format!("!{n}!"),
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -1197,6 +1211,16 @@ fn jira_attach(input: &Value, ctx: &ToolContext) -> Result<String> {
     ctx.approver.confirm_kind("jira", &crate::i18n::fmt(JIRA_ATTACH_QUESTION, &[key.clone(), jira_files_lines(&files)]))?;
     let names: Vec<String> = files.iter().map(|(n, _)| n.clone()).collect();
     let stored = jira_upload(&connection, &key, files)?;
+    // Jira Server / Data Center: the images also at the end of the description (unless the model says not to).
+    if !connection.cloud() && input["show_in_description"] != false {
+        let markup = jira_image_markup(&stored, input["image_width"].as_u64());
+        if !markup.is_empty() {
+            let current = connection.description(&key)?;
+            connection.update_issue(&key, None, Some(&format!("{}
+
+{markup}", current.trim_end())), &[], &[])?;
+        }
+    }
     let _ = names;
     Ok(format!("{} ({})", crate::i18n::fmt("Attached to the Jira issue {0}: {1}", &[key.clone(), stored.join(", ")]), connection.browse(&key)))
 }
@@ -1209,8 +1233,8 @@ fn jira_update_issue(input: &Value, ctx: &ToolContext) -> Result<String> {
     let with_images;
     let description = match input["description"].as_str() {
         // A new description on Jira Server / Data Center shows the attached images too.
-        Some(d) if !connection.cloud() && !jira_image_markup(&files.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>()).is_empty() => {
-            with_images = format!("{}\n\n{}", d.trim_end(), jira_image_markup(&files.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>()));
+        Some(d) if !connection.cloud() && !jira_image_markup(&files.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>(), input["image_width"].as_u64()).is_empty() => {
+            with_images = format!("{}\n\n{}", d.trim_end(), jira_image_markup(&files.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>(), input["image_width"].as_u64()));
             Some(with_images.as_str())
         }
         other => other,

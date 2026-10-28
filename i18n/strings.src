@@ -1834,3 +1834,5 @@ at most 20 files at once ‖ najwyżej 20 plików naraz ‖ höchstens 20 Dateie
 no files to attach ‖ brak plików do dołączenia ‖ keine Dateien zum Anhängen ‖ aucun fichier à joindre
 Attached to the Jira issue {0}: {1} ‖ Dołączono do zgłoszenia Jira {0}: {1} ‖ An den Jira-Vorgang {0} angehängt: {1} ‖ Joint au ticket Jira {0} : {1}
 Attached: {0} ‖ Załączniki: {0} ‖ Angehängt: {0} ‖ Pièces jointes : {0}
+EA did not save the diagram as a metafile ‖ EA nie zapisał diagramu jako metapliku ‖ EA hat das Diagramm nicht als Metadatei gespeichert ‖ EA n’a pas enregistré le diagramme en métafichier
+Windows could not draw the diagram's metafile ‖ Windows nie narysował metapliku diagramu ‖ Windows konnte die Metadatei des Diagramms nicht zeichnen ‖ Windows n’a pas pu dessiner le métafichier du diagramme

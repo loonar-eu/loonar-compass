@@ -581,6 +581,35 @@ model.file=C:/nie-ma/takiego/pliku.qea
         assert_eq!(connectors[0][0], "1");
     }
 
+    /// The size of an exported diagram image (LC-305). Run with: `cargo test ea_export_size -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "requires EA, a license and a test model (LOONAR_TEST_PROPS)"]
+    fn ea_export_size() {
+        let cfg = test_config();
+        let _ea = CloseEa;
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).expect(sql);
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id limit 1")[0][0].parse().unwrap();
+        let ops = vec![
+            json!({"op":"create_package","key":"pkg","parent":root,"name":"ZZ_test_export"}),
+            json!({"op":"create_diagram","key":"dia","package":"#pkg","name":"Export","type":"Logical"}),
+            json!({"op":"create_element","key":"a","package":"#pkg","name":"Requirement A","type":"Requirement"}),
+            json!({"op":"place","diagram":"#dia","element":"#a","left":40,"top":40,"width":200,"height":80}),
+        ];
+        let created = run_batch(&cfg, &ops, &BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("creation");
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).expect(key)["id"].as_i64().unwrap();
+        let (pkg, dia) = (id_of("pkg"), id_of("dia"));
+        let path = std::env::temp_dir().join("loonar_export_size.png");
+        run_batch(&cfg, &[json!({"op":"export_diagram","diagram":dia,"path":path.to_string_lossy()})], &BatchOptions::default()).expect("export");
+        let size = image::image_dimensions(&path).expect("png");
+        let sharp = std::env::temp_dir().join("loonar_export_size_x2.png");
+        run_batch(&cfg, &[json!({"op":"export_diagram","diagram":dia,"path":sharp.to_string_lossy(),"scale":2.0})], &BatchOptions::default()).expect("export x2");
+        let size2 = image::image_dimensions(&sharp).expect("png x2");
+        println!("EXPORT {}x{} | scale 2 from the metafile: {}x{} ({})", size.0, size.1, size2.0, size2.1, sharp.display());
+        assert!(size2.0 >= size.0 * 3 / 2 && size2.1 >= size.1 * 3 / 2, "twice as large");
+        run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &BatchOptions::default()).expect("deleting the test package");
+        shutdown();
+    }
+
     /// Duplicate links of one connector on a diagram (LC-303): a hidden link left by hide_connectors plus a visible one
     /// added by a script kept the arrow invisible (EA uses the first). Showing the connector and repair_diagram_links
     /// leave one visible link. Run with: `cargo test ea_duplicate_links -- --ignored --nocapture` (LOONAR_TEST_PROPS = a

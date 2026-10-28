@@ -6,6 +6,7 @@ Alle wesentlichen Änderungen an Loonar Compass (bis Version 0.3 unter dem Namen
 
 - **Sichtbare Pfeile in Diagrammen:** Konnektoren, die keine Nachrichten eines Sequenzdiagramms sind, werden nicht mehr an ein einziges Diagramm gebunden (bisher erschien z. B. eine im Diagramm „Abhängige Systeme“ gezeichnete Abhängigkeit in keinem anderen). Das Einblenden eines verborgenen Konnektors entfernt seine doppelten Einträge im Diagramm, und die neue Reparatur „Konnektoren im Diagramm nicht sichtbar“ löst gebundene Konnektoren, entfernt Duplikate und blendet auf Wunsch verborgene ein. Bei fehlenden Pfeilen prüft der Assistent zuerst diese Ursachen.
 - **Anhänge in Jira:** Der Assistent hängt Diagrammbilder direkt aus dem Modell sowie Bilder und Dateien der Unterhaltung an Vorgänge an – mit einem neuen Werkzeug oder gleich beim Anlegen und Ändern eines Vorgangs. In Jira Server / Data Center erscheinen die Bilder auch in der Beschreibung.
+- **Scharfe Diagrammbilder in Jira und Confluence:** An Vorgänge, Seiten und Dokumente angehängte Diagramme werden in doppelter Auflösung exportiert, aus Vektoren gezeichnet (EA-Metadatei), sodass sie beim Vergrößern nicht unscharf werden. In der Beschreibung eines Jira-Server-Vorgangs hat das Bild seine volle Größe statt einer Miniatur, und eine Breite lässt sich angeben (z. B. 900 px).
 
 ## Version 0.9.1 (2026-10-28)
 

@@ -8,6 +8,7 @@ mod check;
 mod client_cert;
 mod code_read;
 mod usage;
+mod emf;
 mod changelog;
 mod user_oauth;
 mod gdrive;

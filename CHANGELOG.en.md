@@ -6,6 +6,7 @@ All notable changes to Loonar Compass (named Loonar EA Assistant until version 0
 
 - **Visible arrows on diagrams:** connectors that are not messages of a sequence diagram are no longer bound to one diagram (before, e.g. a dependency drawn on the diagram “Dependent systems” showed on no other diagram). Showing a hidden connector removes its duplicate entries on the diagram, and the new repair “connectors not visible on a diagram” unbinds bound connectors, removes duplicates and, on request, shows hidden ones. When arrows are missing, the assistant checks these causes first.
 - **Attachments in Jira:** the assistant attaches images of diagrams straight from the model, and images and files of the conversation, to issues – with a new tool or right when it creates or changes an issue. On Jira Server / Data Center the images are also shown in the issue’s description.
+- **Sharp diagram images in Jira and Confluence:** diagrams attached to issues, pages and documents are exported at twice the resolution, drawn from vectors (EA’s metafile), so they are not blurred when enlarged. In the description of a Jira Server issue the image has its full size instead of a thumbnail, and a width can be given (e.g. 900 px).
 
 ## Version 0.9.1 (2026-10-28)
 

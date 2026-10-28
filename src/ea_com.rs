@@ -1723,7 +1723,21 @@ impl Job<'_> {
                     }
                 };
                 let project = self.repo.call_obj("GetProjectInterface", &[])?;
-                project.call("PutDiagramImageToFile", &[s(&diagram.text("DiagramGUID")?), s(&text_field(op, "path")), i(1)])?;
+                let scale = op["scale"].as_f64().unwrap_or(1.0) as f32;
+                if scale > 1.0 {
+                    // A sharper image (LC-305): EA saves the diagram as a metafile (vector) and Windows draws it larger.
+                    // The size of EA's own bitmap is the base: the metafile is drawn `scale` times larger.
+                    let path = text_field(op, "path");
+                    project.call("PutDiagramImageToFile", &[s(&diagram.text("DiagramGUID")?), s(&path), i(1)])?;
+                    let (w, h) = image::image_dimensions(&path).map_err(|e| anyhow!("{e}"))?;
+                    let emf = std::env::temp_dir().join(format!("loonar_{}.emf", uuid::Uuid::new_v4().simple()));
+                    project.call("PutDiagramImageToFile", &[s(&diagram.text("DiagramGUID")?), s(&emf.to_string_lossy()), i(0)])?;
+                    let drawn = crate::emf::emf_to_png(&emf, std::path::Path::new(&path), (w as f32 * scale) as u32, (h as f32 * scale) as u32);
+                    let _ = std::fs::remove_file(&emf);
+                    drawn?;
+                } else {
+                    project.call("PutDiagramImageToFile", &[s(&diagram.text("DiagramGUID")?), s(&text_field(op, "path")), i(1)])?;
+                }
             }
             "delete_package" => {
                 let package = self.package(&op["package"])?;

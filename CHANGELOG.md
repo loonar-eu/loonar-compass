@@ -6,6 +6,7 @@ Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Lo
 
 - **Widoczne strzałki na diagramach:** połączenia, które nie są komunikatami diagramu sekwencji, nie są już przypinane do jednego diagramu (wcześniej np. zależność narysowana na diagramie „Systemy zależne” nie pokazywała się na żadnym innym). Pokazanie ukrytego połączenia usuwa jego zdublowane wpisy na diagramie, a nowa naprawa „połączenia niewidoczne na diagramie” odpina przypięte połączenia, usuwa duplikaty i – na życzenie – pokazuje ukryte. Asystent przy brakujących strzałkach sprawdza najpierw te przyczyny.
 - **Załączniki w Jirze:** asystent dołącza do zgłoszeń obrazy diagramów prosto z modelu oraz obrazy i pliki z rozmowy – nowym narzędziem albo od razu przy zakładaniu i zmianie zgłoszenia. W Jira Server / Data Center obrazy pokazują się też w opisie zgłoszenia.
+- **Ostre obrazy diagramów w Jirze i Confluence:** diagramy dołączane do zgłoszeń, stron i dokumentów są eksportowane w 2× większej rozdzielczości, rysowane z wektorów (metaplik EA), więc po powiększeniu nie są rozmyte. W opisie zgłoszenia Jira Server obraz ma pełny rozmiar zamiast miniatury, a szerokość można podać (np. 900 px).
 
 ## Wersja 0.9.1 (2026-10-28)
 
