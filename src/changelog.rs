@@ -146,7 +146,7 @@ mod tests {
     fn the_prompt_part_is_short_and_keeps_prerequisites() {
         let section = prompt_section();
         assert!(section.len() < CHANGELOG_EN.len() / 4, "{} of {}", section.len(), CHANGELOG_EN.len());
-        assert!(section.contains("Version 0.9.1") && section.contains("Version 0.1"));
+        assert!(section.contains(versions()[0].0) && section.contains("Version 0.1"));
         assert!(!subsection("Prerequisites").is_empty() && section.contains(&subsection("Prerequisites")));
         assert!(section.contains(&subsection("Known limitations")));
     }
@@ -154,7 +154,7 @@ mod tests {
     #[test]
     fn versions_and_searches() {
         let latest = lookup(&json!({}));
-        assert!(latest.starts_with("## Version 0.9.1"), "{}", &latest[..60]);
+        assert!(latest.starts_with(&format!("## {}", versions()[0].0)), "{}", &latest[..60]);
         assert_eq!(lookup(&json!({"version": "latest"})), latest);
         let older = lookup(&json!({"version": "0.8.2"}));
         assert!(older.starts_with("## Version 0.8.2") && !older.contains("## Version 0.8.1"));
