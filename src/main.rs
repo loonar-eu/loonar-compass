@@ -113,7 +113,11 @@ fn system_prompt(cfg: &AppConfig) -> String {
             model_db::dialect(cfg),
             cfg.model_label(),
             // The source code folders the user listed: the assistant searches them without asking for a path (LC-286).
-            if cfg.code_folders.is_empty() { String::new() } else { format!(" Source code folders (local repository clones; read them with code_tree, code_search and code_read): {}.", cfg.code_folders.join("; ")) }
+            // Read from the settings file now, not from the settings loaded at the start: a folder saved in another window counts.
+            match code_read::folders(cfg) {
+                f if f.is_empty() => String::from(" No source code folders are set: when the user asks about code, ask for the full path of the local repository clone, or tell them to add it in Settings → Source code."),
+                f => format!(" Source code folders (local repository clones; read them with code_tree, code_search and code_read): {}.", f.join("; ")),
+            }
         ),
         LANGUAGE_RULE = format!("Response language: {} (the language selected in the application). Answer in it unless the user writes to you in a different language; then answer in the user's language. Create documents, pages and images in the response language unless the user asks for a different one. This applies to everything you write, also short notes between tool calls.", i18n::current().english_name()),
         templates = templates::prompt_section(&cfg.templates_dir),
@@ -1473,7 +1477,7 @@ struct App {
     /// Conversations in which the assistant finished working in the background and the user has not looked at yet (conversation ids).
     unseen: std::collections::HashSet<String>,
     /// Result of the last save and test of each of the four settings groups.
-    group_status: [GroupStatus; 13],
+    group_status: [GroupStatus; 14],
     /// Findings of the live model check already shown in EA (not repeated).
     live_reported: Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
     /// When each event agent last ran for an object (not more than once a minute).
@@ -3049,6 +3053,8 @@ impl App {
             }
             GROUP_EA => {
                 updates.push(("ea.path", f.ea_path.trim().to_string()));
+            }
+            GROUP_CODE => {
                 updates.push(("code.folders", f.code_folders.split(';').map(|p| p.trim().trim_matches('"')).filter(|p| !p.is_empty()).collect::<Vec<_>>().join(";")));
             }
             GROUP_MIRO => {
@@ -3878,30 +3884,39 @@ impl App {
                             }
                         });
                         ui.end_row();
-                        label_cell(ui, crate::i18n::tr("Source code folders"));
-                        ui.horizontal(|ui| {
-                            ui.add(egui::TextEdit::singleline(&mut self.form.code_folders).hint_text(egui::RichText::new(crate::i18n::tr("read without asking, e.g. C:/repos/shop; C:/repos/billing")).color(theme::HINT)).desired_width(settings_field_width(ui) - 44.0));
-                            // Adds a folder to the list (several are separated with "; ").
-                            if ui.button("…").on_hover_text(crate::i18n::tr("Add a source code folder")).clicked() {
-                                if let Some(dir) = rfd::FileDialog::new().set_title(crate::i18n::tr("Add a source code folder")).pick_folder() {
-                                    let dir = dir.display().to_string();
-                                    let list = self.form.code_folders.trim().trim_end_matches(';').trim().to_string();
-                                    if !list.split(';').any(|f| f.trim().eq_ignore_ascii_case(&dir)) {
-                                        self.form.code_folders = if list.is_empty() { dir } else { format!("{list}; {dir}") };
-                                    }
-                                }
-                            }
-                        });
-                        ui.end_row();
                     });
                     ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("The EA account is set with the model (the Model card): it belongs to the model file or database.")).small().color(theme::MUTED)).wrap());
-                    ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Source code: the assistant can list, search and read the files of local repository clones (read only). Folders listed here are read without asking; for any other folder it asks first, because what it reads goes to the AI model.")).small().color(theme::MUTED)).wrap());
                     self.group_footer(ui, &ctx, GROUP_EA, crate::i18n::tr("Save and test EA access"));
                 });
             });
             }
         });
 
+        // Source code folders (LC-286): a card of their own, because the EA card is not shown in a tab of EA.
+        ui.add_space(12.0);
+        let ctx_code = ui.ctx().clone();
+        settings_group(ui, crate::i18n::tr("Source code"), full_width, |ui| {
+            ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Source code: the assistant can list, search and read the files of local repository clones (read only). Folders listed here are read without asking; for any other folder it asks first, because what it reads goes to the AI model.")).color(theme::MUTED)).wrap());
+            ui.add_space(6.0);
+            egui::Grid::new("settings_code").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
+                        label_cell(ui, crate::i18n::tr("Source code folders"));
+                ui.horizontal(|ui| {
+                    ui.add(egui::TextEdit::singleline(&mut self.form.code_folders).hint_text(egui::RichText::new(crate::i18n::tr("read without asking, e.g. C:/repos/shop; C:/repos/billing")).color(theme::HINT)).desired_width(settings_field_width(ui) - 44.0));
+                    // Adds a folder to the list (several are separated with "; ").
+                    if ui.button("…").on_hover_text(crate::i18n::tr("Add a source code folder")).clicked() {
+                        if let Some(dir) = rfd::FileDialog::new().set_title(crate::i18n::tr("Add a source code folder")).pick_folder() {
+                            let dir = dir.display().to_string();
+                            let list = self.form.code_folders.trim().trim_end_matches(';').trim().to_string();
+                            if !list.split(';').any(|f| f.trim().eq_ignore_ascii_case(&dir)) {
+                                self.form.code_folders = if list.is_empty() { dir } else { format!("{list}; {dir}") };
+                            }
+                        }
+                    }
+                });
+                ui.end_row();
+            });
+            self.group_footer(ui, &ctx_code, GROUP_CODE, crate::i18n::tr("Save and check the folders"));
+        });
         ui.add_space(12.0);
         self.newsletter_ui(ui, full_width);
         ui.add_space(12.0);
@@ -4967,6 +4982,7 @@ const GROUP_AGENTS: usize = 9;
 const GROUP_SHAREPOINT: usize = 10;
 const GROUP_ONEDRIVE: usize = 11;
 const GROUP_GDRIVE: usize = 12;
+const GROUP_CODE: usize = 13;
 
 /// "Send to Miro" window: the diagram, the board, and where on the board the frame goes (shown on a thumbnail
 /// of the board, where the user can move it).
@@ -5290,6 +5306,17 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
             let client = claude::ClaudeClient::from_config(cfg, 400)?.with_effort("low");
             let response = client.send_value("Answer in one word.", &[json!({ "role": "user", "content": "ping" })], None)?;
             Ok(crate::i18n::fmt("Saved. The key works: model {0} replied.", &[(response["model"].as_str().unwrap_or(cfg.ai_model())).to_string()]))
+        }
+        GROUP_CODE => {
+            let missing: Vec<&String> = cfg.code_folders.iter().filter(|f| !Path::new(f.as_str()).is_dir()).collect();
+            if !missing.is_empty() {
+                bail!("{}", crate::i18n::fmt("Saved, but these folders do not exist: {0}", &[missing.iter().map(|f| f.as_str()).collect::<Vec<_>>().join("; ")]));
+            }
+            Ok(if cfg.code_folders.is_empty() {
+                crate::i18n::tr("Saved. No source code folders: the assistant asks before it reads any folder.").to_string()
+            } else {
+                crate::i18n::fmt("Saved. Folders found: {0}.", &[cfg.code_folders.len().to_string()])
+            })
         }
         GROUP_DB => {
             let message = check_model(cfg)?;
