@@ -3878,7 +3878,21 @@ impl App {
                             }
                         });
                         ui.end_row();
-                        row_hint(ui, crate::i18n::tr("Source code folders"), &mut self.form.code_folders, crate::i18n::tr("read without asking, e.g. C:/repos/shop; C:/repos/billing"));
+                        label_cell(ui, crate::i18n::tr("Source code folders"));
+                        ui.horizontal(|ui| {
+                            ui.add(egui::TextEdit::singleline(&mut self.form.code_folders).hint_text(egui::RichText::new(crate::i18n::tr("read without asking, e.g. C:/repos/shop; C:/repos/billing")).color(theme::HINT)).desired_width(settings_field_width(ui) - 44.0));
+                            // Adds a folder to the list (several are separated with "; ").
+                            if ui.button("…").on_hover_text(crate::i18n::tr("Add a source code folder")).clicked() {
+                                if let Some(dir) = rfd::FileDialog::new().set_title(crate::i18n::tr("Add a source code folder")).pick_folder() {
+                                    let dir = dir.display().to_string();
+                                    let list = self.form.code_folders.trim().trim_end_matches(';').trim().to_string();
+                                    if !list.split(';').any(|f| f.trim().eq_ignore_ascii_case(&dir)) {
+                                        self.form.code_folders = if list.is_empty() { dir } else { format!("{list}; {dir}") };
+                                    }
+                                }
+                            }
+                        });
+                        ui.end_row();
                     });
                     ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("The EA account is set with the model (the Model card): it belongs to the model file or database.")).small().color(theme::MUTED)).wrap());
                     ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Source code: the assistant can list, search and read the files of local repository clones (read only). Folders listed here are read without asking; for any other folder it asks first, because what it reads goes to the AI model.")).small().color(theme::MUTED)).wrap());
