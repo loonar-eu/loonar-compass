@@ -23,6 +23,75 @@ static IMAGE_WIDTH_SCHEMA: std::sync::LazyLock<Value> = std::sync::LazyLock::new
     json!({ "type": "integer", "description": "Jira Server / Data Center: the width in pixels the images are shown with in the description; omitted = their own size (diagram images are exported at twice the size, sharp). To resize an image already in the description, change its markup there with jira_update_issue: !file.png|width=900!" })
 });
 
+/// What the user asked for in a document and where the document covers it (LC-308).
+static DOC_CHECKLIST_SCHEMA: std::sync::LazyLock<Value> = std::sync::LazyLock::new(|| {
+    json!({ "type": "array", "minItems": 1,
+            "items": { "type": "object", "properties": {
+                "ask": { "type": "string", "description": "One thing the user asked for, in their words." },
+                "where": { "type": "string", "description": "The heading of the section that covers it, exactly as in the markdown (or a phrase quoted from the document)." }
+            }, "required": ["ask", "where"] },
+            "description": "Every request of the user about this document from the whole conversation (content, sections, each requirement or item they named, sources such as Jira issues or pages, images, diagrams, format, language, length), one item each, with where the document covers it. Write it BEFORE the markdown, then make the markdown cover every item. An item you cannot cover still gets a section marked \"to be completed\" with the reason." })
+});
+
+/// The template a document follows (LC-308).
+static DOC_TEMPLATE_SCHEMA: std::sync::LazyLock<Value> = std::sync::LazyLock::new(|| {
+    json!({ "type": "string", "description": "The name of the template from <templates> that the document follows (read it with read_template first and keep every heading of it, in its order), or \"none\" when no template fits." })
+});
+
+/// Normalised heading or phrase: lower case, without #, numbering and punctuation at the ends.
+fn doc_key(text: &str) -> String {
+    let t = text.trim().trim_start_matches('#').trim();
+    let t = t.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.' || c == ')').trim();
+    t.trim_matches(|c: char| c.is_ascii_punctuation() || c.is_whitespace()).replace("**", "").to_lowercase()
+}
+
+/// Document discipline (LC-308): before a document or page is made, every request of the user has a place in it and
+/// every heading of the chosen template is there. Returns a line for the result, or an error telling what is missing.
+fn doc_discipline(input: &Value, markdown: &str, ctx: &ToolContext) -> Result<String> {
+    let items = input["checklist"].as_array().filter(|a| !a.is_empty()).with_context(|| {
+        "Not made: first list in \"checklist\" every request of the user about this document (from the whole conversation: content, sections, each requirement or item they named, sources, images, format) with the section that covers it, then call again."
+    })?;
+    let text = markdown.to_lowercase();
+    let headings: Vec<String> = markdown.lines().filter(|l| l.trim_start().starts_with('#')).map(doc_key).collect();
+    let mut missing = Vec::new();
+    for item in items {
+        let ask = item["ask"].as_str().unwrap_or("").trim();
+        let place = doc_key(item["where"].as_str().unwrap_or(""));
+        if ask.is_empty() || place.is_empty() || !(headings.iter().any(|h| h.contains(&place)) || text.contains(&place)) {
+            missing.push(format!("- {ask} → \"{}\"", item["where"].as_str().unwrap_or("")));
+        }
+    }
+    let mut problems = Vec::new();
+    if !missing.is_empty() {
+        problems.push(format!("These requests have no place in the document (the section or phrase is not in the markdown):
+{}", missing.join("
+")));
+    }
+    let template = input["template"].as_str().unwrap_or("").trim();
+    if !template.is_empty() && !template.eq_ignore_ascii_case("none") {
+        let content = crate::templates::read(&ctx.cfg.templates_dir, template)?;
+        let lacking: Vec<String> = content
+            .lines()
+            .filter(|l| l.trim_start().starts_with('#'))
+            .map(|l| (l.trim().to_string(), doc_key(l)))
+            .filter(|(_, k)| !k.is_empty() && !k.contains(['<', '{', '[']))
+            .filter(|(_, k)| !headings.iter().any(|h| h.contains(k.as_str())))
+            .map(|(l, _)| format!("- {l}"))
+            .collect();
+        if !lacking.is_empty() {
+            problems.push(format!("Headings of the template \"{template}\" missing in the document (keep each, in order; mark what you do not know \"to be completed\"):
+{}", lacking.join("
+")));
+        }
+    }
+    if !problems.is_empty() {
+        bail!("Not made yet - complete the document and call again.
+{}", problems.join("
+"));
+    }
+    Ok(format!("Checked: {} requests of the user have their place in the document{}.", items.len(), if template.is_empty() || template.eq_ignore_ascii_case("none") { String::new() } else { format!(", all headings of the template \"{template}\" are there") }))
+}
+
 /// The attachments of the Jira tools (LC-304).
 static ATTACHMENTS_SCHEMA: std::sync::LazyLock<Value> = std::sync::LazyLock::new(|| {
     json!({ "type": "array", "items": { "type": "string" },
@@ -440,9 +509,11 @@ drawn earlier with render_image (NAME from its result). Use it when the user ask
                     "file_name": { "type": "string", "description": "File name without extension." },
                     "title": { "type": "string", "description": "Title at the beginning of the document (optional)." },
                     "markdown": { "type": "string", "description": "Document content in Markdown." },
-                    "format": { "type": "string", "enum": ["docx", "pdf", "both"], "description": "docx (default), pdf (made with Microsoft Word on this computer) or both." }
+                    "format": { "type": "string", "enum": ["docx", "pdf", "both"], "description": "docx (default), pdf (made with Microsoft Word on this computer) or both." },
+                    "checklist": DOC_CHECKLIST_SCHEMA.clone(),
+                    "template": DOC_TEMPLATE_SCHEMA.clone(),
                 },
-                "required": ["file_name", "markdown"]
+                "required": ["file_name", "markdown", "checklist", "template"]
             }
         },
         {
@@ -560,6 +631,20 @@ conversation. The user approves it (once for all Jira changes if they choose).",
             }
         },
         {
+            "name": "jira_download_attachments",
+            "description": "Downloads the attachments of a Jira issue (jira_issue lists them) into this conversation: images come back so you can see them \
+and go into documents and pages as ![caption](image:NAME) (create_document, create_confluence_page) or to other issues as image:NAME (jira_attach); \
+other files as file:NAME. Use it when a document, page or analysis should include or describe pictures from Jira (screens, mock-ups, diagrams).",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "key": { "type": "string", "description": "Issue key, e.g. PRJ-123." },
+                    "names": { "type": "array", "items": { "type": "string" }, "description": "Only these file names (default: all, at most 20)." }
+                },
+                "required": ["key"]
+            }
+        },
+        {
             "name": "create_confluence_page",
             "description": "Prepares a Confluence page: the page code in the source editor format (storage XHTML) and the images as attachments. The user gets a card \
 with the \"Copy page code\" and \"Open images folder\" buttons. Content in Markdown: # headings, paragraphs, **bold**, `code`, lists, tables, [link](url), \
@@ -571,9 +656,11 @@ and stick to its structure; template lines starting with \"> \" are hints for yo
                 "type": "object",
                 "properties": {
                     "title": { "type": "string", "description": "Page title." },
-                    "markdown": { "type": "string", "description": "Page content." }
+                    "markdown": { "type": "string", "description": "Page content." },
+                    "checklist": DOC_CHECKLIST_SCHEMA.clone(),
+                    "template": DOC_TEMPLATE_SCHEMA.clone(),
                 },
-                "required": ["title", "markdown"]
+                "required": ["title", "markdown", "checklist", "template"]
             }
         },
         {
@@ -738,6 +825,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "create_presentation" => create_presentation(input, ctx),
         "create_spreadsheet" => create_spreadsheet(input, ctx),
         "create_confluence_page" => create_confluence_page(input, ctx),
+        "jira_download_attachments" => jira_download_attachments(input, ctx),
         "publish_confluence" => publish_confluence(input, ctx),
         "confluence_pages" => confluence_pages(ctx.cfg).map(Into::into),
         "confluence_read" => confluence_read(input, ctx.cfg).map(Into::into),
@@ -1172,6 +1260,41 @@ fn jira_files(ctx: &ToolContext, input: &Value) -> Result<Vec<(String, Vec<u8>)>
     Ok(files)
 }
 
+/// Images the model sees from one jira_download_attachments call (each costs about 1 500 tokens).
+const DOWNLOADED_IMAGES_SHOWN: usize = 8;
+
+/// Downloads attachments of an issue into the conversation's files (LC-309).
+fn jira_download_attachments(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
+    let key = input["key"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["key".to_string()]))?.trim().to_string();
+    let wanted: Vec<String> = input["names"].as_array().into_iter().flatten().filter_map(|v| v.as_str()).map(|n| n.trim().to_lowercase()).filter(|n| !n.is_empty()).collect();
+    let connection = jira(ctx.cfg)?;
+    let all = connection.attachments(&key)?;
+    let chosen: Vec<_> = all.iter().filter(|(name, _, _)| wanted.is_empty() || wanted.contains(&name.to_lowercase())).take(20).collect();
+    if chosen.is_empty() {
+        let names = all.iter().map(|(n, _, _)| n.as_str()).collect::<Vec<_>>().join(", ");
+        return Ok(format!("{key} has no such attachments. Attachments: {}", if names.is_empty() { "none" } else { &names }).into());
+    }
+    std::fs::create_dir_all(&ctx.cfg.attachments_dir).context(crate::i18n::tr("attachments folder"))?;
+    let (mut lines, mut images) = (Vec::new(), Vec::new());
+    for (name, url, _) in chosen {
+        match connection.download(url) {
+            Ok(bytes) => {
+                let stored = format!("{}_{}_{}", uuid::Uuid::new_v4().simple(), key, crate::history::sanitize_name(name));
+                std::fs::write(ctx.cfg.attachments_dir.join(&stored), &bytes).with_context(|| crate::i18n::fmt("saving {0}", &[name.clone()]))?;
+                let lower = name.to_lowercase();
+                let image = [".png", ".jpg", ".jpeg", ".gif"].iter().any(|e| lower.ends_with(e));
+                if image && images.len() < DOWNLOADED_IMAGES_SHOWN {
+                    images.push(stored.clone());
+                }
+                lines.push(format!("- {name}: {}:{stored}", if image { "image" } else { "file" }));
+            }
+            Err(e) => lines.push(format!("- {name}: not downloaded ({e:#})")),
+        }
+    }
+    let note = if images.len() == DOWNLOADED_IMAGES_SHOWN { format!(" You see the first {DOWNLOADED_IMAGES_SHOWN} images.") } else { String::new() };
+    Ok(ToolOutput { text: format!("Attachments of {key} in this conversation:\n{}{note}", lines.join("\n")), images, files: Vec::new() })
+}
+
 /// The files of `jira_files` as lines of the approval question.
 fn jira_files_lines(files: &[(String, Vec<u8>)]) -> String {
     files.iter().map(|(name, bytes)| format!("📎 {name} ({} KB)", bytes.len().div_ceil(1024))).collect::<Vec<_>>().join("\n")
@@ -1297,6 +1420,7 @@ fn shorten_for_approval(text: &str) -> String {
 fn create_confluence_page(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
     let title = input["title"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["title".to_string()]))?;
     let markdown = input["markdown"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["markdown".to_string()]))?;
+    let checked = doc_discipline(input, markdown, ctx)?;
     std::fs::create_dir_all(&ctx.cfg.attachments_dir).context(crate::i18n::tr("attachments folder"))?;
     let (storage, attachments) = crate::confluence::to_storage(markdown, |source| picture(ctx, source))?;
     let stem = format!("{}_{}", uuid::Uuid::new_v4().simple(), crate::history::sanitize_name(title));
@@ -1317,7 +1441,7 @@ fn create_confluence_page(input: &Value, ctx: &ToolContext) -> Result<ToolOutput
     Ok(ToolOutput {
         text: format!(
             "Page \"{title}\" is ready: file {stored} ({} KB of code, images: {}). In the chat the user sees a card with the buttons \
-             \"Copy page code\" (to paste into the Confluence source editor) and \"Open images folder\" (to attach the images). {publish_hint}",
+             \"Copy page code\" (to paste into the Confluence source editor) and \"Open images folder\" (to attach the images). {publish_hint} {checked}",
             storage.len() / 1024,
             attachments.len()
         ),
@@ -1458,6 +1582,7 @@ fn create_document(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
     let markdown = input["markdown"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["markdown".to_string()]))?;
     let file_name = input["file_name"].as_str().unwrap_or(crate::i18n::tr("Document"));
     let title = input["title"].as_str().unwrap_or("");
+    let checked = doc_discipline(input, markdown, ctx)?;
     std::fs::create_dir_all(&ctx.cfg.attachments_dir).context(crate::i18n::tr("attachments folder"))?;
     let mut pictures = 0;
     let bytes = crate::docx::build(title, markdown, |source, caption| {
@@ -1477,11 +1602,11 @@ fn create_document(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         } else {
             let _ = std::fs::remove_file(ctx.cfg.attachments_dir.join(&stored));
         }
-        return Ok(ToolOutput { text: format!("Document \"{file_name}\" is ready as PDF{} (images: {pictures}). The user sees it in the chat.", if format == "both" { " and DOCX" } else { "" }), images: Vec::new(), files });
+        return Ok(ToolOutput { text: format!("Document \"{file_name}\" is ready as PDF{} (images: {pictures}). The user sees it in the chat. {checked}", if format == "both" { " and DOCX" } else { "" }), images: Vec::new(), files });
     }
     Ok(ToolOutput {
         text: format!(
-            "Document \"{file_name}.docx\" is ready ({} KB, images: {pictures}). The user sees it in the chat with the \"Open\" and \"Save as…\" buttons. It is kept only in Compass: do not name a folder or path for it; the user chooses where to keep it with \"Save as…\".",
+            "Document \"{file_name}.docx\" is ready ({} KB, images: {pictures}). The user sees it in the chat with the \"Open\" and \"Save as…\" buttons. It is kept only in Compass: do not name a folder or path for it; the user chooses where to keep it with \"Save as…\". {checked}",
             bytes.len() / 1024
         ),
         images: Vec::new(),
@@ -1935,6 +2060,39 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("app.properties"), "").unwrap();
         AppConfig::load(&dir.join("app.properties")).unwrap()
+    }
+
+    /// LC-308: a document is made only when every request of the user and every heading of its template is in it.
+    #[test]
+    fn document_discipline() {
+        let mut cfg = test_config();
+        cfg.templates_dir = std::env::temp_dir().join(format!("loonar-doc-discipline-{}", std::process::id()));
+        std::fs::create_dir_all(&cfg.templates_dir).unwrap();
+        std::fs::write(cfg.templates_dir.join("Spec.md"), "# Spec
+## 1. Goal
+> hint
+## 2. Requirements
+## 3. Screens of <system>
+").unwrap();
+        let approver = Approver::new(ApprovalMode::Auto, Box::new(|_| true));
+        let ctx = ToolContext { cfg: &cfg, approver: &approver };
+        let md = "# Spec
+## 1. Goal
+Text.
+## 2. Requirements
+- W1 Login
+![Screen](image:a.png)
+";
+        let ask = |checklist: Value, template: &str| doc_discipline(&json!({ "checklist": checklist, "template": template }), md, &ctx);
+        assert!(ask(json!([]), "none").unwrap_err().to_string().contains("checklist"));
+        let missing = ask(json!([{ "ask": "W1", "where": "Requirements" }, { "ask": "W2 Logout", "where": "W2 Logout" }]), "none").unwrap_err().to_string();
+        assert!(missing.contains("W2 Logout") && !missing.contains("- W1"), "{missing}");
+        let ok = ask(json!([{ "ask": "each requirement", "where": "2. Requirements" }, { "ask": "screens from Jira", "where": "![Screen]" }]), "Spec").unwrap();
+        assert!(ok.contains("2 requests") && ok.contains("Spec"), "{ok}");
+        let lacking = doc_discipline(&json!({ "checklist": [{ "ask": "goal", "where": "Goal" }], "template": "Spec" }), "# Spec
+## Goal
+", &ctx).unwrap_err().to_string();
+        assert!(lacking.contains("## 2. Requirements") && !lacking.contains("<system>"), "{lacking}");
     }
 
     /// Persistent EA session: the first call starts EA (tens of seconds), the following ones reuse the open session.

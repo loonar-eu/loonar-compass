@@ -86,6 +86,9 @@ pub fn to_adf(text: &str) -> Value {
 }
 
 /// The Jira address without the part of a page copied from the browser (".../browse/KEY-1", "/projects/...").
+/// The largest attachment downloaded (bytes).
+const MAX_DOWNLOAD: usize = 25 << 20;
+
 pub fn base(url: &str) -> String {
     crate::net::site_base(url, &["/browse", "/projects", "/secure", "/rest", "/issues", "/plugins"])
 }
@@ -176,7 +179,7 @@ impl Connection {
         check_issue_key(key)?;
         let client = self.client()?;
         let value = self.send(
-            client.get(self.url(&format!("/issue/{key}"))).query(&[("fields", "summary,status,issuetype,priority,assignee,reporter,labels,description,issuelinks,comment,parent,fixVersions,components,updated")]),
+            client.get(self.url(&format!("/issue/{key}"))).query(&[("fields", "summary,status,issuetype,priority,assignee,reporter,labels,description,issuelinks,comment,parent,fixVersions,components,updated,attachment")]),
             crate::i18n::tr("reading the issue"),
         )?;
         let f = &value["fields"];
@@ -216,6 +219,15 @@ impl Connection {
             if !web.is_empty() {
                 out.push(format!("\n{}:\n{}", crate::i18n::tr("Web links"), web.join("\n")));
             }
+        }
+        let attached: Vec<String> = f["attachment"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|a| format!("- {} ({} KB)", a["filename"].as_str().unwrap_or(""), a["size"].as_u64().unwrap_or(0).div_ceil(1024)))
+            .collect();
+        if !attached.is_empty() {
+            out.push(format!("\n{} (jira_download_attachments):\n{}", crate::i18n::tr("Attachments"), attached.join("\n")));
         }
         let comments = f["comment"]["comments"].as_array().cloned().unwrap_or_default();
         if !comments.is_empty() {
@@ -337,6 +349,49 @@ impl Connection {
             crate::i18n::tr("adding the attachment"),
         )?;
         Ok(added[0]["filename"].as_str().unwrap_or(name).to_string())
+    }
+
+    /// The attachments of an issue: file name, address of the content, size in bytes (LC-309).
+    pub fn attachments(&self, key: &str) -> Result<Vec<(String, String, u64)>> {
+        check_issue_key(key)?;
+        let value = self.send(self.client()?.get(self.url(&format!("/issue/{key}"))).query(&[("fields", "attachment")]), crate::i18n::tr("reading the issue"))?;
+        Ok(value["fields"]["attachment"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|a| Some((a["filename"].as_str()?.to_string(), a["content"].as_str()?.to_string(), a["size"].as_u64().unwrap_or(0))))
+            .collect())
+    }
+
+    /// The content of an attachment. Only from this Jira (with the sign-in); Jira Cloud then sends the file from
+    /// Atlassian's media service (a signed address, fetched without the sign-in).
+    pub fn download(&self, content_url: &str) -> Result<Vec<u8>> {
+        let site = base(&self.base_url).trim_end_matches('/').to_lowercase();
+        if !content_url.to_lowercase().starts_with(&format!("{site}/")) {
+            bail!("{}", crate::i18n::fmt("the attachment {0} is not in this Jira", &[content_url.to_string()]));
+        }
+        let what = crate::i18n::tr("downloading the attachment");
+        let request = self.client()?.get(content_url);
+        let request = if self.user.trim().is_empty() { request.bearer_auth(&self.token) } else { request.basic_auth(self.user.trim(), Some(&self.token)) };
+        let mut response = request.send().with_context(|| crate::i18n::fmt("{0}: no connection to Jira", &[what.to_string()]))?;
+        if response.status().is_redirection() {
+            let target = response.headers().get("location").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+            let url = reqwest::Url::parse(&target).with_context(|| what.to_string())?;
+            let host = url.host_str().unwrap_or("").to_lowercase();
+            if url.scheme() != "https" || !(host.ends_with(".atlassian.com") || host.ends_with(".atlassian.net")) {
+                bail!("{}", crate::i18n::fmt("{0}: Jira sent the file from another address ({1})", &[what.to_string(), host]));
+            }
+            let media = reqwest::blocking::Client::builder().redirect(reqwest::redirect::Policy::none()).timeout(Duration::from_secs(120)).build()?;
+            response = media.get(url).send().with_context(|| what.to_string())?;
+        }
+        if !response.status().is_success() {
+            bail!("{}", crate::i18n::fmt("{0}: Jira replied {1}: {2}", &[what.to_string(), response.status().to_string(), String::new()]));
+        }
+        let bytes = response.bytes().with_context(|| what.to_string())?;
+        if bytes.len() > MAX_DOWNLOAD {
+            bail!("{}", crate::i18n::fmt("{0}: the file is larger than {1} MB", &[what.to_string(), (MAX_DOWNLOAD >> 20).to_string()]));
+        }
+        Ok(bytes.to_vec())
     }
 
     pub fn add_comment(&self, key: &str, text: &str) -> Result<()> {
@@ -464,6 +519,23 @@ pub mod mock {
 
 #[cfg(test)]
 mod tests {
+    /// LC-309 on a real Jira Cloud (the file comes from Atlassian's media service): LOONAR_TEST_JIRA_URL, _USER, _TOKEN and
+    /// LOONAR_TEST_JIRA_ISSUE (an issue with a PNG attachment).
+    #[test]
+    #[ignore = "requires a Jira account (LOONAR_TEST_JIRA_*)"]
+    fn attachments_download_live() {
+        let env = |k: &str| std::env::var(k).unwrap();
+        let c = Connection { base_url: env("LOONAR_TEST_JIRA_URL"), user: env("LOONAR_TEST_JIRA_USER"), token: env("LOONAR_TEST_JIRA_TOKEN"), identity: None };
+        let key = env("LOONAR_TEST_JIRA_ISSUE");
+        assert!(c.issue(&key).unwrap().contains("jira_download_attachments"));
+        let list = c.attachments(&key).unwrap();
+        let (name, url, size) = list.iter().find(|(n, _, _)| n.ends_with(".png")).expect("a PNG");
+        let bytes = c.download(url).unwrap();
+        println!("DOWNLOADED {name} {} of {size} bytes", bytes.len());
+        assert!(bytes.starts_with(&[0x89, b'P', b'N', b'G']) && bytes.len() as u64 == *size);
+        assert!(c.download("https://example.com/x.png").is_err());
+    }
+
     use super::*;
 
     fn connection(mock: &mock::Mock, cloud: bool, token: &str) -> Connection {
