@@ -5,6 +5,36 @@ use serde_json::{json, Value};
 use std::time::Duration;
 
 pub const API_URL: &str = "https://api.anthropic.com/v1/messages";
+const COUNT_URL: &str = "https://api.anthropic.com/v1/messages/count_tokens";
+
+/// The prompt's tokens when they cannot be counted (OpenAI, the hub, a gateway): 2.2 characters a token over the text
+/// of the request (measured 2026-10-28 on a Polish conversation with the tools: 2.23; the earlier 3 left calls above
+/// 100k), an image or document as 1 500.
+pub fn estimated_tokens(system: &str, messages: &[Value], tools: Option<&Value>) -> u64 {
+    fn walk(v: &Value, chars: &mut u64, files: &mut u64) {
+        match v {
+            Value::String(t) => *chars += t.chars().count() as u64,
+            Value::Array(list) => list.iter().for_each(|x| walk(x, chars, files)),
+            Value::Object(map) => {
+                if matches!(map.get("type").and_then(Value::as_str), Some("image" | "document")) {
+                    *files += 1;
+                    return;
+                }
+                for (key, x) in map {
+                    *chars += key.len() as u64;
+                    walk(x, chars, files);
+                }
+            }
+            _ => *chars += 4,
+        }
+    }
+    let (mut chars, mut files) = (system.chars().count() as u64, 0);
+    messages.iter().for_each(|m| walk(m, &mut chars, &mut files));
+    if let Some(t) = tools {
+        walk(t, &mut chars, &mut files);
+    }
+    chars * 5 / 11 + files * 1_500
+}
 pub const API_VERSION: &str = "2023-06-01";
 
 /// Clearing old tool results on the server (LC-301): the beta, how many of the newest tool uses stay, and the least
@@ -198,6 +228,35 @@ impl ClaudeClient {
                 Err(Failure::Retry { error, .. }) | Err(Failure::Final(error)) => return Err(error),
             }
         }
+    }
+
+    /// The prompt's size in tokens as the model counts them (LC-306): Anthropic's count_tokens endpoint, free and exact
+    /// (Polish text, code and tool schemas take far more tokens than characters / 3 suggest). None through OpenAI, the
+    /// hub or a gateway, or when the count fails: then `estimated_tokens` is used.
+    pub fn count_tokens(&self, system: &str, messages: &[Value], tools: Option<&Value>) -> Option<u64> {
+        if self.openai || self.via_hub || !self.base_url.is_empty() {
+            return None;
+        }
+        let mut body = self.request_body(system, messages, tools);
+        if let Some(map) = body.as_object_mut() {
+            for key in ["max_tokens", "context_management", "output_config"] {
+                map.remove(key);
+            }
+        }
+        let mut request = self.http.post(COUNT_URL).header("anthropic-version", API_VERSION).timeout(Duration::from_secs(30));
+        if let Some((token_url, client_id, scope, secret)) = &self.oauth {
+            request = request.bearer_auth(crate::auth::client_credentials(token_url, client_id, secret, scope).ok()?);
+        } else {
+            request = request.header("x-api-key", &self.api_key);
+        }
+        if !self.workspace_id.is_empty() {
+            request = request.header("anthropic-workspace-id", &self.workspace_id);
+        }
+        let response = request.json(&body).send().ok()?;
+        if !response.status().is_success() {
+            return None;
+        }
+        response.json::<Value>().ok()?["input_tokens"].as_u64()
     }
 
     /// The Messages API request: the system prompt and the tools cached, the conversation with its cache marks.

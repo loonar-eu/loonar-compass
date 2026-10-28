@@ -229,27 +229,25 @@ Leave out greetings and repeated tool output. Write in the language of the conve
     Ok(kept)
 }
 
-/// The prompt a turn starts with, at most (estimate, tokens): above it the earlier part of the conversation is
-/// summarised, leaving room for the tool results of the turn below Claude Haiku 5.5's 100k-token price tier (LC-301).
+/// The prompt a turn starts with, at most (tokens, with the system prompt and the tools): above it the earlier part of
+/// the conversation is summarised, leaving room for the tool results of the turn below Claude Haiku 5.5's 100k-token
+/// price tier (LC-301). Counted by the API (LC-306), estimated only where it cannot count.
 const TURN_START_BUDGET: u64 = 70_000;
-/// The system prompt and the tools (measured on 2026-10-28: about 31 000-37 000 tokens), rounded up.
-const PREFIX_ESTIMATE: u64 = 40_000;
 /// The newest messages kept word for word when the earlier part is summarised.
 const KEEP_MESSAGES: usize = 8;
 /// Within a turn: above this many prompt tokens the API clears the oldest tool results itself.
 const TOOL_CLEARING_AT: u64 = 85_000;
 
-/// Tokens of the messages, estimated from their text (about 3 characters a token in Polish, German and code; an
-/// attachment as 1 500).
-fn estimated_tokens(messages: &[Message]) -> u64 {
-    messages.iter().map(|m| m.text.chars().count() as u64 / 3 + m.attachments.len() as u64 * 1_500).sum()
+/// The tokens of a request: counted by Anthropic, or estimated (LC-306).
+fn prompt_tokens(client: &claude::ClaudeClient, system: &str, msgs: &[Value], tools: Option<&Value>) -> u64 {
+    client.count_tokens(system, msgs, tools).unwrap_or_else(|| claude::estimated_tokens(system, msgs, tools))
 }
 
-/// The messages with their earlier part as a summary, when the turn would start above `TURN_START_BUDGET`; the
-/// summary also goes to the conversation (WorkerEvent::Summary). None when the conversation is short enough or there is
-/// nothing earlier to summarise.
-fn summarise_if_long(client: &claude::ClaudeClient, messages: &[Message], emit: &dyn Fn(WorkerEvent)) -> Option<Vec<Message>> {
-    if PREFIX_ESTIMATE + estimated_tokens(messages) <= TURN_START_BUDGET {
+/// The messages with their earlier part as a summary, when the turn would start (`prompt_tokens`) above
+/// `TURN_START_BUDGET`; the summary also goes to the conversation (WorkerEvent::Summary). None when the conversation is
+/// short enough or there is nothing earlier to summarise.
+fn summarise_if_long(client: &claude::ClaudeClient, messages: &[Message], prompt_tokens: u64, emit: &dyn Fn(WorkerEvent)) -> Option<Vec<Message>> {
+    if prompt_tokens <= TURN_START_BUDGET {
         return None;
     }
     let mut start = messages.len().saturating_sub(KEEP_MESSAGES);
@@ -5902,33 +5900,6 @@ fn run_turn_with(
         telemetry::turn();
     }
     let client = claude::ClaudeClient::from_config(cfg, cfg.claude_max_tokens)?.with_tool_clearing(TOOL_CLEARING_AT);
-    // A long conversation (LC-301): before the prompt nears Claude Haiku 5.5's 100k-token price tier, the earlier part
-    // becomes a summary, kept with the conversation (the same text in every later turn, so it stays cached). Done
-    // here, at the start of the turn, where the history holds only texts: no earlier reasoning is replayed after it.
-    let summarised;
-    let messages = match summarise_if_long(&client, messages, emit) {
-        Some(shorter) => {
-            summarised = shorter;
-            &summarised[..]
-        }
-        None => messages,
-    };
-    let mut msgs = history_to_api(messages, &cfg.attachments_dir)?;
-    if conversation_chars(&msgs) > SUMMARY_THRESHOLD {
-        emit(WorkerEvent::StepStart(crate::i18n::tr("The conversation is long: summarising its earlier part").into()));
-        match summarize_earlier(&client, &msgs) {
-            Ok(shorter) => {
-                let detail = if shorter.len() == msgs.len() {
-                    crate::i18n::tr("long earlier messages shortened in the middle").to_string()
-                } else {
-                    crate::i18n::fmt("{0} messages kept, the rest as a summary", &[(shorter.len().saturating_sub(1)).to_string()])
-                };
-                emit(WorkerEvent::StepEnd { ok: true, detail });
-                msgs = shorter;
-            }
-            Err(e) => emit(WorkerEvent::StepEnd { ok: false, detail: shorten(&format!("{e:#}"), 200) }),
-        }
-    }
     let mut tools = tools::definitions();
     match allowed {
         Some(names) => {
@@ -5989,6 +5960,35 @@ fn run_turn_with(
     // for a specific prompt and the API rejects them when the prompt changes midway (e.g. after memory_save).
     // The model knows notes saved during this response from the tool results; in the next response they go into the prompt.
     let system = system_prompt(&cfg);
+    // A long conversation (LC-301): before the prompt nears Claude Haiku 5.5's 100k-token price tier, the earlier part
+    // becomes a summary, kept with the conversation (the same text in every later turn, so it stays cached). Done
+    // here, at the start of the turn, where the history holds only texts: no earlier reasoning is replayed after it.
+    let mut msgs = history_to_api(messages, &cfg.attachments_dir)?;
+    let tokens = prompt_tokens(&client, &system, &msgs, Some(&tools));
+    let summarised;
+    let messages = match summarise_if_long(&client, messages, tokens, emit) {
+        Some(shorter) => {
+            summarised = shorter;
+            msgs = history_to_api(&summarised, &cfg.attachments_dir)?;
+            &summarised[..]
+        }
+        None => messages,
+    };
+    if conversation_chars(&msgs) > SUMMARY_THRESHOLD {
+        emit(WorkerEvent::StepStart(crate::i18n::tr("The conversation is long: summarising its earlier part").into()));
+        match summarize_earlier(&client, &msgs) {
+            Ok(shorter) => {
+                let detail = if shorter.len() == msgs.len() {
+                    crate::i18n::tr("long earlier messages shortened in the middle").to_string()
+                } else {
+                    crate::i18n::fmt("{0} messages kept, the rest as a summary", &[(shorter.len().saturating_sub(1)).to_string()])
+                };
+                emit(WorkerEvent::StepEnd { ok: true, detail });
+                msgs = shorter;
+            }
+            Err(e) => emit(WorkerEvent::StepEnd { ok: false, detail: shorten(&format!("{e:#}"), 200) }),
+        }
+    }
     // The plan shown with task_list (done, all): while tasks are open, every round reminds the model to tick them
     // off (LC-270: smaller models showed the plan once and never updated it).
     let mut plan: Option<(usize, usize)> = None;
@@ -8423,7 +8423,9 @@ mod tests {
         // 2. The summary of a real long conversation.
         let session = history::Session::load(Path::new(&std::env::var("LOONAR_TEST_SESSION").expect("LOONAR_TEST_SESSION"))).expect("session");
         let messages = session.messages_for_model();
-        let before = estimated_tokens(&messages);
+        let cfg2 = cfg.clone();
+        let count = |m: &[Message]| prompt_tokens(&claude::ClaudeClient::from_config(&cfg2, 300).unwrap(), &system_prompt(&cfg2), &history_to_api(m, &cfg2.attachments_dir).unwrap(), Some(&tools::definitions()));
+        let before = count(&messages);
         let summaries = std::sync::Mutex::new(Vec::new());
         let emit = |e: WorkerEvent| match e {
             WorkerEvent::Summary { from, text } => summaries.lock().unwrap().push((from, text)),
@@ -8431,13 +8433,29 @@ mod tests {
             _ => {}
         };
         let client = claude::ClaudeClient::from_config(&cfg, cfg.claude_max_tokens).unwrap();
-        let shorter = summarise_if_long(&client, &messages, &emit).expect("summarised");
-        let after = estimated_tokens(&shorter);
+        let shorter = summarise_if_long(&client, &messages, before, &emit).expect("summarised");
+        let after = count(&shorter);
         let (from, text) = summaries.lock().unwrap()[0].clone();
         println!("SUMMARY {} messages, ~{before} -> ~{after} tokens, from {from}
 {}", messages.len(), text.chars().take(1_500).collect::<String>());
-        assert!(PREFIX_ESTIMATE + after <= TURN_START_BUDGET && shorter[0].created == from && shorter[0].role == "user");
+        assert!(after <= TURN_START_BUDGET && shorter[0].created == from && shorter[0].role == "user");
         println!("COST {}", usage::answer_totals().line());
+    }
+
+    /// LC-306: the real prompt of a turn counted by the API, and the estimate used where it cannot be counted (not below
+    /// the count by more than a tenth). LOONAR_TEST_PROPS = settings with a Claude key; LOONAR_TEST_SESSION = a conversation.
+    #[test]
+    #[ignore = "requires an API key (LOONAR_TEST_PROPS, LOONAR_TEST_SESSION)"]
+    fn prompt_tokens_counted_live() {
+        let cfg = config::AppConfig::load(Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("settings");
+        let session = history::Session::load(Path::new(&std::env::var("LOONAR_TEST_SESSION").expect("LOONAR_TEST_SESSION"))).expect("session");
+        let client = claude::ClaudeClient::from_config(&cfg, 300).unwrap();
+        let (system, tools) = (system_prompt(&cfg), tools::definitions());
+        let msgs = history_to_api(&session.messages_for_model(), &cfg.attachments_dir).unwrap();
+        let counted = client.count_tokens(&system, &msgs, Some(&tools)).expect("counted");
+        let estimated = claude::estimated_tokens(&system, &msgs, Some(&tools));
+        println!("COUNTED {counted} ESTIMATED {estimated} ({} messages)", msgs.len());
+        assert!(estimated * 10 >= counted * 9, "the estimate is too low");
     }
 
     /// The new 0.8 tools in real conversations on the cheapest models: the model check, the gap analysis, reading a
