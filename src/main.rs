@@ -547,10 +547,16 @@ fn questions_form(ui: &mut egui::Ui, questions: &[(String, Vec<String>)], answer
 
 /// When to ask with a form and when to show a plan (LC-267: without these rules smaller models guessed and wrote, or
 /// worked through several steps without a visible plan).
-const WORK_RULES: &str = "Asking and planning: when a request to change the model leaves out something you would otherwise have to guess \
-(which package, the name, the attributes, the notation, the scope), FIRST ask with the ask_user tool and end your answer there; do not prepare \
-any change (ea_write) before the answers come, and never ask clarifying questions as plain text. Reading the model first to offer the right \
-options is fine. When the user asks for work in several steps (e.g. \"in 4 steps\", a numbered list of tasks) or the work clearly has 3 or more \
+const WORK_RULES: &str = "Working on your own: do the whole task the user asked for in this answer, step after step, and stop only when it is \
+done. Do not stop to report progress, to show a partial result while the next step is clear, or to ask whether to go on (\"shall I continue?\", \
+\"confirm\", \"next one?\"): the user waits for the result, not for status reports, and \"go on\" is already given by the request. Between tool \
+calls write nothing, or one short sentence at most; the full answer comes once, at the end. Reading and analysing (the model, source code, \
+documents, pages) never needs a question. When there is a sensible default (names, which files, the format, the order, edge cases, the \
+level of detail), choose it yourself and name your choices briefly in the final answer, so the user can correct them; when the user already \
+decided something in this conversation, do not ask about it again. Ask with the ask_user tool only when a wrong guess would change or delete \
+much in the model and the request really leaves it open (e.g. which of two packages to write into, whether to replace existing content); then \
+ask everything in one form, once, end your answer there and do not prepare that change (ea_write) before the answers come. Never ask \
+clarifying questions as plain text. A large write goes in batches within the same answer, not one batch per answer. When the user asks for work in several steps (e.g. \"in 4 steps\", a numbered list of tasks) or the work clearly has 3 or more \
 steps, call task_list with all tasks pending BEFORE the first of them (when the user named the steps, exactly those steps as the tasks), \
 then update it as each task starts and ends, so that the last update shows every task done.";
 
@@ -5407,7 +5413,7 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
 }
 
 /// Limit of model calls in one turn. Protects against tool loops.
-const MAX_ROUNDS: usize = 24;
+const MAX_ROUNDS: usize = 40;
 
 /// Converts the conversation history into Messages API messages. Adjacent messages of the same role
 /// (e.g. two user messages in a row or several assistant texts from one turn) are merged into one.
@@ -5865,6 +5871,10 @@ fn run_turn_with(
     // The plan shown with task_list (done, all): while tasks are open, every round reminds the model to tick them
     // off (LC-270: smaller models showed the plan once and never updated it).
     let mut plan: Option<(usize, usize)> = None;
+    // Notes the model writes between tool calls go to the steps, not to the chat; the last one becomes the answer only
+    // when the model ends without a text of its own.
+    let mut last_note: Option<String> = None;
+    let mut answered = false;
 
     for round in 1..=MAX_ROUNDS {
         if cancel.load(Ordering::Relaxed) {
@@ -5904,8 +5914,20 @@ fn run_turn_with(
         if leaks_rules(&text) {
             text = crate::i18n::tr("(The answer repeated the assistant's internal instructions and was withheld. Ask about what the assistant can do instead.)").to_string();
         }
-        if !text.trim().is_empty() {
+        let goes_on = resp["stop_reason"] == "tool_use" || resp["stop_reason"] == "pause_turn";
+        if !text.trim().is_empty() && goes_on {
+            // "Now I read the controllers…": a step of the work, not a message of its own in the chat.
+            emit(WorkerEvent::StepStart(format!("💬 {}", shorten(text.trim(), 300))));
+            emit(WorkerEvent::StepEnd { ok: true, detail: String::new() });
+            last_note = Some(text);
+        } else if !text.trim().is_empty() {
             emit(WorkerEvent::Text(text));
+            answered = true;
+        } else if !goes_on && !answered {
+            if let Some(note) = last_note.take() {
+                emit(WorkerEvent::Text(note));
+                answered = true;
+            }
         }
 
         // The web: every search and every page read, as a step (the query or the URL, and what came back).
@@ -6072,7 +6094,20 @@ fn run_turn_with(
         results.extend(drain_inbox(inbox, &cfg.attachments_dir, emit)?);
         msgs.push(json!({ "role": "user", "content": results }));
     }
-    bail!("{}", crate::i18n::fmt("the assistant took {0} steps without finishing; stopped to prevent an endless loop", &[(MAX_ROUNDS).to_string()]))
+    // The step limit: no more tools, but the work done so far is not lost: the model says what is done and what is left.
+    if let Some(content) = msgs.last_mut().and_then(|last| last["content"].as_array_mut()) {
+        content.push(text_block(&format!(
+            "(The application's step limit of {MAX_ROUNDS} steps is reached: do not call any more tools. Tell the user in a few lines what is done, \
+             with the results so far, and exactly what is left, so that \"go on\" continues from there.)"
+        )));
+    }
+    let resp = client.send_value(&system, &msgs, Some(&tools))?;
+    let text = text_of(&resp["content"]);
+    if text.trim().is_empty() {
+        bail!("{}", crate::i18n::fmt("the assistant took {0} steps without finishing; stopped to prevent an endless loop", &[(MAX_ROUNDS).to_string()]))
+    }
+    emit(WorkerEvent::Text(text));
+    Ok(())
 }
 
 /// Longer side of an image sent to the model. Larger diagrams are scaled down (only the model's copy;
@@ -8147,6 +8182,38 @@ mod tests {
         let result = run_turn(&cfg, &messages, &approver, &inbox, &cancel, &emit);
         ea::shutdown();
         result.expect("turn");
+    }
+
+    /// Code analysis on the cheapest model works to the end alone: one answer, no question, no status messages (the
+    /// P_1805 conversation: a question or "shall I go on?" after every few steps). LOONAR_TEST_PROPS = settings with a code
+    /// folder, LOONAR_PROMPT = the task. Run: `cargo test code_analysis_alone -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "requires an API key and a source code folder"]
+    fn code_analysis_alone() {
+        let mut cfg = AppConfig::load(Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("settings");
+        cfg.claude_model = "claude-haiku-5-5".into();
+        cfg.hub_url = String::new();
+        let prompt = std::env::var("LOONAR_PROMPT").expect("LOONAR_PROMPT");
+        let messages = vec![Message { role: "user".into(), text: prompt, attachments: vec![], created: chrono::Utc::now().to_rfc3339() }];
+        let approver = tools::Approver::new(ApprovalMode::Auto, Box::new(|_| true));
+        let (_tx, inbox) = mpsc::channel();
+        let cancel = AtomicBool::new(false);
+        let answers = std::sync::Mutex::new(Vec::<String>::new());
+        let asked = std::sync::atomic::AtomicBool::new(false);
+        let emit = |event: WorkerEvent| match event {
+            WorkerEvent::Text(text) => {
+                if text.contains("```questions") {
+                    asked.store(true, Ordering::Relaxed);
+                }
+                println!("ANSWER: {text}");
+                answers.lock().unwrap().push(text);
+            }
+            WorkerEvent::StepStart(step) => println!("STEP: {}", step.chars().take(160).collect::<String>()),
+            _ => {}
+        };
+        run_turn(&cfg, &messages, &approver, &inbox, &cancel, &emit).expect("turn");
+        assert!(!asked.load(Ordering::Relaxed), "asked a question");
+        assert_eq!(answers.lock().unwrap().len(), 1, "one answer in the chat");
     }
 
     /// The new 0.8 tools in real conversations on the cheapest models: the model check, the gap analysis, reading a
