@@ -183,7 +183,7 @@ impl Connection {
             crate::i18n::tr("reading the issue"),
         )?;
         let f = &value["fields"];
-        let mut out = vec![format!("{key}: {}", f["summary"].as_str().unwrap_or(""))];
+        let mut out = vec![format!("{key}: {}", f["summary"].as_str().unwrap_or("")), format!("{}: {}", crate::i18n::tr("Link"), self.browse(key))];
         let names = |list: &Value| list.as_array().into_iter().flatten().filter_map(|v| v["name"].as_str().or(v.as_str())).collect::<Vec<_>>().join(", ");
         out.push(format!(
             "{}: {} | {}: {} | {}: {} | {}: {}",

@@ -199,6 +199,12 @@ fn pieces_with_links(text: &str) -> Vec<Piece<'_>> {
     out
 }
 
+/// The addresses a line shows as clickable links.
+#[cfg(test)]
+pub fn link_targets(text: &str) -> Vec<String> {
+    pieces_with_links(text).into_iter().filter_map(|p| match p { Piece::Link(_, url) => Some(url.to_string()), Piece::Text(_) => None }).collect()
+}
+
 /// One line with inline formatting; links in it are clickable and open in the browser.
 fn rich(ui: &mut egui::Ui, text: &str, size: f32, all_bold: bool) {
     let pieces = pieces_with_links(text);

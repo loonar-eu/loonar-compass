@@ -1260,8 +1260,18 @@ fn jira_files(ctx: &ToolContext, input: &Value) -> Result<Vec<(String, Vec<u8>)>
     Ok(files)
 }
 
-/// Images the model sees from one jira_download_attachments call (each costs about 1 500 tokens).
-const DOWNLOADED_IMAGES_SHOWN: usize = 8;
+thread_local! {
+    /// Downloaded images the model already saw in this answer (an answer runs on one thread): not shown twice.
+    static SHOWN_IN_ANSWER: std::cell::RefCell<std::collections::HashSet<String>> = std::cell::RefCell::new(std::collections::HashSet::new());
+}
+
+/// A new answer: images shown in earlier answers are not in the model's view any more (the history keeps texts).
+pub fn begin_answer() {
+    SHOWN_IN_ANSWER.with(|s| s.borrow_mut().clear());
+}
+
+/// Images the model sees from one jira_download_attachments call (each costs about 1 500 tokens in every later round).
+const DOWNLOADED_IMAGES_SHOWN: usize = 4;
 
 /// Downloads attachments of an issue into the conversation's files (LC-309).
 fn jira_download_attachments(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
@@ -1277,6 +1287,25 @@ fn jira_download_attachments(input: &Value, ctx: &ToolContext) -> Result<ToolOut
     std::fs::create_dir_all(&ctx.cfg.attachments_dir).context(crate::i18n::tr("attachments folder"))?;
     let (mut lines, mut images) = (Vec::new(), Vec::new());
     for (name, url, _) in chosen {
+        // Downloaded earlier in this conversation: the same file again, not shown again (the model saw it already;
+        // found in the 0.9.2 tests: four downloads of one issue doubled the prompt).
+        let suffix = format!("_{}_{}", key, crate::history::sanitize_name(name));
+        let earlier = std::fs::read_dir(&ctx.cfg.attachments_dir).ok().into_iter().flatten().flatten()
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .find(|f| f.len() == 32 + suffix.len() && f.ends_with(&suffix));
+        if let Some(stored) = earlier {
+            let lower = name.to_lowercase();
+            let image = [".png", ".jpg", ".jpeg", ".gif"].iter().any(|e| lower.ends_with(e));
+            let seen = SHOWN_IN_ANSWER.with(|s| s.borrow().contains(&stored));
+            if image && !seen && images.len() < DOWNLOADED_IMAGES_SHOWN {
+                SHOWN_IN_ANSWER.with(|s| s.borrow_mut().insert(stored.clone()));
+                images.push(stored.clone());
+                lines.push(format!("- {name}: image:{stored}"));
+            } else {
+                lines.push(format!("- {name}: {}:{stored}{}", if image { "image" } else { "file" }, if seen { " (you saw it earlier in this answer)" } else { "" }));
+            }
+            continue;
+        }
         match connection.download(url) {
             Ok(bytes) => {
                 let stored = format!("{}_{}_{}", uuid::Uuid::new_v4().simple(), key, crate::history::sanitize_name(name));
@@ -1284,6 +1313,7 @@ fn jira_download_attachments(input: &Value, ctx: &ToolContext) -> Result<ToolOut
                 let lower = name.to_lowercase();
                 let image = [".png", ".jpg", ".jpeg", ".gif"].iter().any(|e| lower.ends_with(e));
                 if image && images.len() < DOWNLOADED_IMAGES_SHOWN {
+                    SHOWN_IN_ANSWER.with(|s| s.borrow_mut().insert(stored.clone()));
                     images.push(stored.clone());
                 }
                 lines.push(format!("- {name}: {}:{stored}", if image { "image" } else { "file" }));
@@ -1291,7 +1321,11 @@ fn jira_download_attachments(input: &Value, ctx: &ToolContext) -> Result<ToolOut
             Err(e) => lines.push(format!("- {name}: not downloaded ({e:#})")),
         }
     }
-    let note = if images.len() == DOWNLOADED_IMAGES_SHOWN { format!(" You see the first {DOWNLOADED_IMAGES_SHOWN} images.") } else { String::new() };
+    let note = if images.len() == DOWNLOADED_IMAGES_SHOWN {
+        format!(" You see the first {DOWNLOADED_IMAGES_SHOWN} images; the others are in the conversation by their names: use them without downloading again.")
+    } else {
+        " Use these names; do not download them again.".to_string()
+    };
     Ok(ToolOutput { text: format!("Attachments of {key} in this conversation:\n{}{note}", lines.join("\n")), images, files: Vec::new() })
 }
 

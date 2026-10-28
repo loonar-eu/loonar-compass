@@ -117,7 +117,8 @@ pub struct ClaudeClient {
 impl ClaudeClient {
     pub fn new(api_key: String, model: String, max_tokens: u32, workspace_id: String) -> Result<Self> {
         let http = reqwest::blocking::Client::builder().redirect(crate::net::same_origin_redirects())
-            .timeout(Duration::from_secs(300))
+            // A long document in one answer takes minutes (32 000 tokens at about 80 a second).
+            .timeout(Duration::from_secs(900))
             .connect_timeout(Duration::from_secs(20))
             .build()?;
         Ok(Self { http, api_key, model, max_tokens, workspace_id: workspace_id.trim().to_string(), effort: String::new(), show_thinking: false, base_url: String::new(), oauth: None, openai: false, openai_url: String::new(), via_hub: false, purpose: "chat", tool_clearing: None })

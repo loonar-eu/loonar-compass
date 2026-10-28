@@ -229,6 +229,9 @@ Leave out greetings and repeated tool output. Write in the language of the conve
     Ok(kept)
 }
 
+/// The answer's token limit when a document is asked for (it is written in one tool call).
+const DOCUMENT_MAX_TOKENS: u32 = 32_000;
+
 /// The offer of a stronger model for a document (LC-307): {0} the stronger model, {1} the current one, {2} how many times
 /// the price.
 const DOCUMENT_MODEL_PRICE_QUESTION: &str = "📄 A document: {0} writes documents clearly better than {1} (it keeps to the template and to every requirement), at about {2}× the price. Approve: this answer with {0}, then back to {1}. Reject: {1} stays.";
@@ -6173,6 +6176,7 @@ fn run_turn(
     emit: &dyn Fn(WorkerEvent),
 ) -> anyhow::Result<()> {
     usage::begin_answer();
+    tools::begin_answer();
     let result = run_turn_with(cfg, messages, approver, inbox, cancel, emit, None);
     // The cost of the whole answer, as its last step (LC-300).
     let totals = usage::answer_totals();
@@ -6225,6 +6229,18 @@ fn run_turn_with(
             } else {
                 cfg
             }
+        }
+        _ => cfg,
+    };
+    // A whole document is written in one tool call (create_confluence_page, create_document): the answer gets room
+    // for it, whatever the limit in the settings (found in the 0.9.2 tests: a page cut off at 10 000 tokens).
+    let roomy_cfg;
+    let cfg = match messages.last() {
+        Some(last) if allowed.is_none() && last.role == "user" && cfg.claude_max_tokens < DOCUMENT_MAX_TOKENS && (asks_for_document(&last.text) || offered_model(cfg, &last.text).is_some()) => {
+            let mut roomy = cfg.clone();
+            roomy.claude_max_tokens = DOCUMENT_MAX_TOKENS;
+            roomy_cfg = roomy;
+            &roomy_cfg
         }
         _ => cfg,
     };
@@ -8815,6 +8831,108 @@ mod tests {
         let estimated = claude::estimated_tokens(&system, &msgs, Some(&tools));
         println!("COUNTED {counted} ESTIMATED {estimated} ({} messages)", msgs.len());
         assert!(estimated * 10 >= counted * 9, "the estimate is too low");
+    }
+
+    /// 0.9.2 end to end (LC-307..311) in real conversations: a document from a user's template with images from a real
+    /// Jira issue (read only), the stronger model offered and taken, the document discipline, links in the answer.
+    /// LOONAR_TEST_PROPS = a test model; LOONAR_TEST_TEMPLATES = a folder of templates; LOONAR_TEST_JIRA_URL / _USER /
+    /// _TOKEN / _ISSUE = a Jira with an issue that has PNG attachments; LOONAR_TEST_OUT = where the results go.
+    /// Run with: `cargo test documents_092_live -- --ignored --nocapture --test-threads=1`.
+    #[test]
+    #[ignore = "requires an API key, a Jira account and a test model"]
+    fn documents_092_live() {
+        i18n::set(i18n::Lang::Pl);
+        let env = |k: &str| std::env::var(k).unwrap_or_else(|_| panic!("{k}"));
+        let mut cfg = AppConfig::load(Path::new(&env("LOONAR_TEST_PROPS"))).expect("settings");
+        let out = std::path::PathBuf::from(env("LOONAR_TEST_OUT"));
+        std::fs::create_dir_all(&out).unwrap();
+        cfg.ai_provider = "anthropic".into();
+        cfg.claude_model = "claude-haiku-5-5".into();
+        cfg.claude_url = String::new();
+        cfg.hub_url = String::new();
+        cfg.templates_dir = out.join("templates");
+        cfg.attachments_dir = out.join("attachments");
+        let _ = std::fs::remove_dir_all(&cfg.templates_dir);
+        std::fs::create_dir_all(&cfg.templates_dir).unwrap();
+        for entry in std::fs::read_dir(env("LOONAR_TEST_TEMPLATES")).unwrap().flatten() {
+            if entry.path().extension().is_some_and(|e| e == "md") {
+                std::fs::copy(entry.path(), cfg.templates_dir.join(entry.file_name())).unwrap();
+            }
+        }
+        cfg.jira_url = env("LOONAR_TEST_JIRA_URL");
+        cfg.jira_user = env("LOONAR_TEST_JIRA_USER");
+        let issue = env("LOONAR_TEST_JIRA_ISSUE");
+
+        let mut report = String::new();
+        let mut turn = |prompt: &str, label: &str| -> (Vec<String>, String, Vec<String>, String) {
+            usage::begin_answer();
+            let messages = vec![Message { role: "user".into(), text: prompt.into(), attachments: vec![], created: chrono::Utc::now().to_rfc3339() }];
+            let asked = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+            let log = asked.clone();
+            let approver = tools::Approver::new(ApprovalMode::Auto, Box::new(move |summary| { log.lock().unwrap().push(summary); true }));
+            let (_tx, inbox) = mpsc::channel();
+            let cancel = AtomicBool::new(false);
+            let steps = std::sync::Mutex::new(Vec::<String>::new());
+            let answer = std::sync::Mutex::new(String::new());
+            let emit = |event: WorkerEvent| match event {
+                WorkerEvent::Text(text) => answer.lock().unwrap().push_str(&text),
+                WorkerEvent::StepStart(step) => steps.lock().unwrap().push(step),
+                WorkerEvent::StepEnd { ok, detail } => steps.lock().unwrap().push(format!("{} {}", if ok { "  ok:" } else { "  FAILED:" }, detail.chars().take(600).collect::<String>())),
+                _ => {}
+            };
+            let started = std::time::Instant::now();
+            let result = run_turn(&cfg, &messages, &approver, &inbox, &cancel, &emit);
+            let (steps, answer) = (steps.into_inner().unwrap(), answer.into_inner().unwrap());
+            let asked = asked.lock().unwrap().clone();
+            let cost = usage::answer_totals().line();
+            let error = result.err().map(|e| format!("{e:#}")).unwrap_or_default();
+            report.push_str(&format!(
+                "\n\n## {label}\n\nPrompt: {prompt}\nTime: {} s\nCost: {cost}\nError: {error}\n\nApprovals asked ({}):\n{}\n\nSteps:\n{}\n\nAnswer:\n{answer}\n",
+                started.elapsed().as_secs(), asked.len(), asked.iter().map(|a| format!("- {}", a.replace('\n', " / "))).collect::<Vec<_>>().join("\n"), steps.join("\n")
+            ));
+            (steps, answer, asked, error)
+        };
+
+        // 1. A document from a named template, with images from Jira (LC-307, LC-308, LC-309, LC-311); LOONAR_TEST_SKIP_DOC
+        // leaves it out (the most expensive part, about 0.30 USD).
+        let skip_doc = std::env::var("LOONAR_TEST_SKIP_DOC").is_ok();
+        let (doc_steps, doc_answer, doc_asked, doc_error) = if skip_doc { Default::default() } else { turn(
+            &format!("Przygotuj stronę Confluence według szablonu „Poziom biznesowy” dla zmiany opisanej w zgłoszeniu Jira {issue}. Wstaw na stronę obrazy załączone do tego zgłoszenia. Nie publikuj."),
+            "1. Document from the template \"Poziom biznesowy\" with Jira images",
+        ) };
+        // 2. A plain question: no model offer, a clickable link in the answer (LC-307, LC-310).
+        let (_, link_answer, link_asked, _) = turn(&format!("Podaj adres (link) zgłoszenia {issue} w Jirze. Jedno zdanie."), "2. Link in the answer");
+        // 3. A document request without a template name: the stronger model is offered too (LC-307).
+        let (_, _, plain_asked, _) = turn("Napisz krótki dokument Word: jedno zdanie o tym, czym jest model Sklep. Nazwa pliku test_092.", "3. Word document without a template");
+
+        let page = std::fs::read_dir(&cfg.attachments_dir).ok().into_iter().flatten().flatten().map(|e| e.path())
+            .filter(|p| p.to_string_lossy().ends_with(".confluence.md")).max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok());
+        let page_text = page.as_ref().map(|p| std::fs::read_to_string(p).unwrap_or_default()).unwrap_or_default();
+        let template = templates::read(&cfg.templates_dir, "Poziom biznesowy").unwrap();
+        let headings: Vec<String> = template.lines().filter(|l| l.starts_with('#') && !l.contains('<')).map(|l| l.trim_start_matches('#').trim().to_string()).collect();
+        let missing: Vec<&String> = headings.iter().filter(|h| !page_text.contains(h.as_str())).collect();
+        let links: Vec<String> = link_answer.lines().flat_map(|l| markdown::link_targets(l)).collect();
+        report.push_str(&format!(
+            "\n\n## Checks\n\n- page file: {}\n- template headings missing on the page: {:?}\n- images on the page: {}\n- links found in answer 2: {:?}\n\n## The page (markdown)\n\n{page_text}\n",
+            page.as_ref().map(|p| p.display().to_string()).unwrap_or("none".into()), missing, page_text.matches("](image:").count(), links
+        ));
+        std::fs::write(out.join("report_092.md"), &report).unwrap();
+        println!("{report}");
+
+        if !skip_doc {
+        assert!(doc_error.is_empty(), "turn 1 failed: {doc_error}");
+        assert!(doc_asked.iter().any(|a| a.contains("claude-sonnet-5-5")), "the stronger model was offered for the document");
+        assert!(doc_steps.iter().any(|s| s.contains("claude-sonnet-5-5")), "the document was written with the stronger model");
+        assert!(doc_steps.iter().any(|s| s.contains(&issue)) , "the Jira issue was read");
+        assert!(doc_steps.iter().any(|s| s.contains("Załączniki zgłoszenia Jira")), "the attachments were downloaded");
+        assert!(page.is_some(), "a page was prepared");
+        assert!(missing.is_empty(), "every heading of the template is on the page: {missing:?}");
+        assert!(page_text.contains("](image:"), "images from Jira are on the page");
+        assert!(!doc_answer.is_empty());
+        }
+        assert!(link_asked.is_empty(), "no model offer for a plain question");
+        assert!(!links.is_empty(), "the answer has a clickable link");
+        assert!(plain_asked.iter().any(|a| a.contains("claude-sonnet-5-5")), "a document without a template also gets the offer");
     }
 
     /// The new 0.8 tools in real conversations on the cheapest models: the model check, the gap analysis, reading a
