@@ -13,6 +13,7 @@ from pathlib import Path
 
 import executors
 import executors_window  # noqa: F401  (registers the window tests)
+import executors_092  # noqa: F401  (0.9.1 regression and 0.9.2 cases)
 import judge
 from services import CONFIG, Jira, Zephyr, secret
 

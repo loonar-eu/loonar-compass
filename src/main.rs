@@ -1488,6 +1488,8 @@ struct TemplateForm {
     name: String,
     meta: templates::Meta,
     body: String,
+    /// Whether the form was already scrolled into view.
+    shown: bool,
 }
 
 /// The name of a template's tool ("" = any).
@@ -4919,7 +4921,7 @@ impl App {
                             Ok(text) => {
                                 let (meta, body) = templates::split_header(&text);
                                 if files.len() == 1 {
-                                    state.form = Some(TemplateForm { original: None, name: stem, meta, body });
+                                    state.form = Some(TemplateForm { original: None, name: stem, meta, body, shown: false });
                                 } else {
                                     let name = if templates::exists(&dir, &stem) { format!("{stem} (2)") } else { stem.clone() };
                                     match templates::save_with_meta(&dir, None, &name, &meta, &body) {
@@ -4955,7 +4957,7 @@ impl App {
                         if meta.target.is_empty() {
                             meta.target = "confluence".into();
                         }
-                        state.form = Some(TemplateForm { original: None, name: title, meta, body });
+                        state.form = Some(TemplateForm { original: None, name: title, meta, body, shown: false });
                         state.confluence_page.clear();
                         state.status.clear();
                     }
@@ -4977,7 +4979,7 @@ impl App {
         };
         let mut close_form = false;
         if let Some(form) = state.form.as_mut() {
-            egui::Frame::none()
+            let shown_form = egui::Frame::none()
                 .fill(theme::SURFACE)
                 .stroke(egui::Stroke::new(1.0_f32, theme::NAV_ACTIVE))
                 .rounding(14.0)
@@ -5030,8 +5032,8 @@ impl App {
                     });
                     ui.add_space(6.0);
                     ui.label(egui::RichText::new(crate::i18n::tr("Content (Markdown: # headings, lists, | tables |; lines starting with \"> \" are hints and examples for the assistant, not copied to the document)")).small().color(theme::MUTED));
-                    egui::ScrollArea::vertical().id_salt("template_body").max_height(320.0).show(ui, |ui| {
-                        ui.add(egui::TextEdit::multiline(&mut form.body).code_editor().desired_rows(14).desired_width(f32::INFINITY));
+                    egui::ScrollArea::vertical().id_salt("template_body").max_height(240.0).show(ui, |ui| {
+                        ui.add(egui::TextEdit::multiline(&mut form.body).code_editor().desired_rows(10).desired_width(f32::INFINITY));
                     });
                     ui.add_space(8.0);
                     ui.horizontal(|ui| {
@@ -5050,6 +5052,11 @@ impl App {
                         }
                     });
                 });
+            // Opened from a card further down the list: the form (at the top) is brought into view once.
+            if !form.shown {
+                shown_form.response.scroll_to_me(Some(egui::Align::TOP));
+                form.shown = true;
+            }
             ui.add_space(12.0);
         }
         if close_form {
@@ -5100,6 +5107,7 @@ impl App {
                                             state.delete = None;
                                         } else {
                                             state.delete = Some(name.clone());
+                                            ui.ctx().request_repaint();
                                         }
                                     }
                                     if ui.button(crate::i18n::tr("Edit")).on_hover_text(crate::i18n::tr("Opens the template file in Notepad")).clicked() {
@@ -5124,7 +5132,7 @@ impl App {
         }
         if let Some((name, meta)) = edit_template {
             let body = templates::body(&dir, &name).unwrap_or_default();
-            self.templates_state.form = Some(TemplateForm { original: Some(name.clone()), name, meta, body });
+            self.templates_state.form = Some(TemplateForm { original: Some(name.clone()), name, meta, body, shown: false });
         }
         if let Some((name, target)) = use_template {
             let request = match target.as_str() {
