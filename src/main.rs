@@ -274,6 +274,13 @@ fn shorten_long_messages(msgs: &[Value]) -> Option<Vec<Value>> {
 /// One thing found in the model: kind (element, package, diagram), id, name, type, package.
 type Found = (&'static str, i64, String, String, String);
 
+/// The window "Conversations of other models" (LC-292).
+#[derive(Default)]
+struct OtherModels {
+    query: String,
+    pin_notes: bool,
+}
+
 #[derive(Default)]
 struct Picker {
     query: String,
@@ -700,6 +707,8 @@ mod icons {
     pub const SAVE: &str = "\u{E74E}";
     pub const OPEN: &str = "\u{E8A7}";
     pub const STEPS: &str = "\u{E9D5}";
+    pub const MORE: &str = "\u{E712}";
+    pub const IMPORT: &str = "\u{E8B5}";
 
     pub fn set_loaded(loaded: bool) {
         LOADED.store(loaded, Ordering::Relaxed);
@@ -1480,6 +1489,8 @@ struct App {
     ea_project: Option<ModelChoice>,
     /// In a window of EA: the new name being typed for the current conversation.
     ea_rename: Option<String>,
+    /// The window with the conversations of other models (to continue one with this model, LC-292).
+    other_models: Option<OtherModels>,
     /// The diagram editor window that is open: the diagram and the changes come back when it closes.
     editor_rx: Option<mpsc::Receiver<Result<Option<(Value, Value)>, String>>>,
     /// "Tidy with AI" in the diagram editor: the request goes to the conversation once the editor's changes are saved.
@@ -1642,6 +1653,7 @@ impl App {
             confirmed_session: String::new(),
             ea_project: None,
             ea_rename: None,
+            other_models: None,
             editor_rx: None,
             tidy_request: None,
             miro: None,
@@ -2172,7 +2184,7 @@ impl App {
     /// Sets the model of the current conversation; a conversation with messages is saved at once.
     fn set_session_model(&mut self, choice: ModelChoice) {
         let label = choice.label();
-        self.session.model = Some(choice);
+        self.session.record_move(choice);
         if let (Some(cfg), false) = (self.cfg.clone(), self.session.messages.is_empty()) {
             if let Err(e) = self.session.save(&cfg.history_dir) {
                 self.status = crate::i18n::fmt("Could not save the conversation: {0}", &[e.to_string()]);
@@ -2391,6 +2403,134 @@ impl App {
     }
 
     /// Changes the conversation title and saves it in the history.
+    /// The model a continued or imported conversation gets: the project of this EA window, otherwise the model of the
+    /// conversation open now (or the settings' model).
+    fn target_model(&self) -> Option<ModelChoice> {
+        if ea::in_ea_tab() {
+            return self.ea_project.clone();
+        }
+        let base = self.cfg.as_ref()?;
+        Some(self.session.model.clone().unwrap_or_else(|| ModelChoice::of(base)))
+    }
+
+    /// Saves a conversation made from another one (continued or imported) and opens it.
+    fn open_new_copy(&mut self, mut copy: Session, status: String) {
+        let Some(cfg) = self.cfg.clone() else { return };
+        if let Err(e) = copy.save(&cfg.history_dir) {
+            self.status = crate::i18n::fmt("Could not save the conversation: {0}", &[e.to_string()]);
+            return;
+        }
+        self.sessions = Session::list(&cfg.history_dir).into_iter().map(|(_, s)| s).collect();
+        self.confirmed_session = copy.id.clone();
+        self.switch_to(copy);
+        self.renaming = None;
+        self.scroll_to_end = true;
+        self.status = status;
+    }
+
+    /// Continues a conversation of another model with the model of this window: a copy, the original stays (LC-292).
+    /// `pin_notes` also pins the memory notes of the earlier model to this one.
+    fn continue_here(&mut self, source: Session, pin_notes: bool) {
+        let (Some(target), Some(cfg)) = (self.target_model(), self.cfg.clone()) else {
+            self.status = crate::i18n::tr("Open a model in Enterprise Architect first.").into();
+            return;
+        };
+        if pin_notes {
+            if let Some(old) = source.model.as_ref().map(|m| m.label()) {
+                for note in memory::list(&cfg.memory_dir).into_iter().filter(|n| n.model == old) {
+                    let _ = memory::save(&cfg.memory_dir, &note.name, &note.description, &note.content, &target.label());
+                }
+            }
+        }
+        let label = target.label();
+        self.open_new_copy(source.continue_in(target), crate::i18n::fmt("The conversation continues with the model {0}; the original stays with its own model.", &[label]));
+    }
+
+    /// Writes a conversation with its attachments to a file chosen by the user.
+    fn export_session(&mut self, session: &Session) {
+        let Some(cfg) = self.cfg.clone() else { return };
+        let name: String = shown_title(&session.title).chars().map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' { c } else { '_' }).take(60).collect();
+        let Some(target) = rfd::FileDialog::new()
+            .set_title(crate::i18n::tr("Export the conversation"))
+            .set_file_name(format!("{}.{}", name.trim(), history::EXPORT_EXTENSION))
+            .add_filter(crate::i18n::tr("Loonar Compass conversation"), &[history::EXPORT_EXTENSION])
+            .save_file()
+        else {
+            return;
+        };
+        self.status = match history::export(session, &cfg.attachments_dir, &target) {
+            Ok(()) => crate::i18n::fmt("Conversation exported: {0}", &[target.display().to_string()]),
+            Err(e) => crate::i18n::fmt("Could not export the conversation: {0}", &[format!("{e:#}")]),
+        };
+    }
+
+    /// Reads an exported conversation as a new conversation with the model of this window.
+    fn import_session(&mut self) {
+        let (Some(target), Some(cfg)) = (self.target_model(), self.cfg.clone()) else {
+            self.status = crate::i18n::tr("Open a model in Enterprise Architect first.").into();
+            return;
+        };
+        let Some(source) = rfd::FileDialog::new()
+            .set_title(crate::i18n::tr("Import a conversation"))
+            .add_filter(crate::i18n::tr("Loonar Compass conversation"), &[history::EXPORT_EXTENSION])
+            .pick_file()
+        else {
+            return;
+        };
+        let label = target.label();
+        match history::import(&source, &cfg.attachments_dir, target) {
+            Ok(session) => self.open_new_copy(session, crate::i18n::fmt("Conversation imported; it continues with the model {0}.", &[label])),
+            Err(e) => self.status = crate::i18n::fmt("Could not import the conversation: {0}", &[format!("{e:#}")]),
+        }
+    }
+
+    /// The conversations of other models (other files and databases), to continue one here.
+    fn other_models_window(&mut self, ctx: &egui::Context) {
+        let Some(win) = self.other_models.as_mut() else { return };
+        let here = if ea::in_ea_tab() { self.ea_project.clone() } else { self.session.model.clone() };
+        let query = win.query.trim().to_lowercase();
+        let mut open = true;
+        let mut chosen: Option<Session> = None;
+        egui::Window::new(crate::i18n::tr("Conversations of other models")).open(&mut open).default_width(520.0).collapsible(false).show(ctx, |ui| {
+            ui.label(egui::RichText::new(crate::i18n::tr("Continue a conversation with the model open here, e.g. after moving the project from a database to a file. A copy is made; the original stays with its own model.")).small().color(theme::MUTED));
+            ui.add_space(4.0);
+            ui.add(egui::TextEdit::singleline(&mut win.query).hint_text(egui::RichText::new(crate::i18n::tr("Search conversations…")).color(theme::HINT)).desired_width(f32::INFINITY));
+            ui.checkbox(&mut win.pin_notes, crate::i18n::tr("Also pin the memory notes of the earlier model to this model"));
+            ui.add_space(4.0);
+            egui::ScrollArea::vertical().max_height(380.0).show(ui, |ui| {
+                let mut any = false;
+                for s in &self.sessions {
+                    let Some(model) = &s.model else { continue };
+                    if s.messages.is_empty() || here.as_ref().is_some_and(|h| h.same_project(model)) {
+                        continue;
+                    }
+                    if !query.is_empty() && !session_matches(s, &query) && !model.describe().to_lowercase().contains(&query) {
+                        continue;
+                    }
+                    any = true;
+                    ui.horizontal(|ui| {
+                        if ui.button(crate::i18n::tr("Continue here")).clicked() {
+                            chosen = Some(s.clone());
+                        }
+                        ui.add(egui::Label::new(shown_title(&s.title)).truncate()).on_hover_text(model.describe());
+                    });
+                    ui.label(egui::RichText::new(crate::i18n::fmt("Model: {0}", &[model.describe()])).small().color(theme::MUTED));
+                    ui.add_space(4.0);
+                }
+                if !any {
+                    ui.label(egui::RichText::new(crate::i18n::tr("No conversations of other models.")).color(theme::MUTED));
+                }
+            });
+        });
+        let pin_notes = win.pin_notes;
+        if let Some(source) = chosen {
+            self.other_models = None;
+            self.continue_here(source, pin_notes);
+        } else if !open {
+            self.other_models = None;
+        }
+    }
+
     fn rename_session(&mut self, id: &str, title: String) {
         let Some(cfg) = self.cfg.clone() else { return };
         let result = if self.session.id == id {
@@ -3438,7 +3578,7 @@ impl App {
         let (events_tx, events_rx) = mpsc::channel::<WorkerEvent>();
         let (outbox_tx, inbox) = mpsc::channel::<Message>();
         let cancel = Arc::new(AtomicBool::new(false));
-        let messages = self.session.messages.clone();
+        let messages = self.session.messages_for_model();
         let wake = ctx.clone();
         let worker_cancel = cancel.clone();
         std::thread::spawn(move || {
@@ -6636,6 +6776,7 @@ impl eframe::App for App {
                         let mut new_one = false;
                         let mut delete_current = false;
                         let mut rename_done: Option<String> = None;
+                        let mut more_action: Option<&str> = None;
                         ui.horizontal(|ui| {
                             // Renaming the current conversation: the drop-down becomes a text field (Enter saves, Esc cancels).
                             if let Some(name) = self.ea_rename.as_mut() {
@@ -6677,6 +6818,24 @@ impl eframe::App for App {
                             {
                                 self.ea_rename = Some(shown_title(&self.session.title).to_string());
                             }
+                            // Conversations of other models, export and import (LC-292).
+                            let has_messages = !self.session.messages.is_empty();
+                            ui.menu_button(icons::text(icons::MORE, "⋯", 13.0), |ui| {
+                                if ui.button(crate::i18n::tr("Conversations of other models…")).clicked() {
+                                    more_action = Some("other");
+                                    ui.close_menu();
+                                }
+                                if ui.add_enabled(has_messages, egui::Button::new(crate::i18n::tr("Export the conversation…"))).clicked() {
+                                    more_action = Some("export");
+                                    ui.close_menu();
+                                }
+                                if ui.button(crate::i18n::tr("Import a conversation…")).clicked() {
+                                    more_action = Some("import");
+                                    ui.close_menu();
+                                }
+                            })
+                            .response
+                            .on_hover_text(crate::i18n::tr("More"));
                             // No list here (narrow tab of EA): the current conversation is deleted with its own button.
                             delete_current = ui
                                 .add_enabled(can_rename && !busy, egui::Button::new(icons::text(icons::DELETE, "🗑", 13.0)).min_size(egui::vec2(28.0, 28.0)))
@@ -6700,6 +6859,15 @@ impl eframe::App for App {
                         if let Some(s) = pick {
                             self.switch_to(s);
                         }
+                        match more_action {
+                            Some("other") => self.other_models = Some(OtherModels { pin_notes: true, ..Default::default() }),
+                            Some("export") => {
+                                let current = self.session.clone();
+                                self.export_session(&current);
+                            }
+                            Some("import") => self.import_session(),
+                            _ => {}
+                        }
                         if delete_current {
                             self.move_to_bin(self.session.clone());
                         }
@@ -6710,6 +6878,7 @@ impl eframe::App for App {
                         }
                         return;
                     }
+                    let mut import_now = false;
                     if !narrow {
                     ui.horizontal(|ui| {
                         ui.add_space(4.0);
@@ -6723,6 +6892,9 @@ impl eframe::App for App {
                                 self.switch_to(Session::new());
                                 self.pending.clear();
                                 self.renaming = None;
+                            }
+                            if icon_button(ui, icons::IMPORT, "⇩", crate::i18n::tr("Import a conversation…")).clicked() {
+                                import_now = true;
                             }
                         });
                     });
@@ -6743,6 +6915,8 @@ impl eframe::App for App {
                     let mut rename_commit: Option<(String, String)> = None;
                     let mut rename_cancel = false;
                     let mut to_bin: Option<Session> = None;
+                    let mut to_export: Option<Session> = None;
+                    let mut other_models = false;
                     egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
                         ui.spacing_mut().item_spacing.y = 2.0;
                         let mut shown = 0;
@@ -6810,6 +6984,10 @@ impl eframe::App for App {
                                 // Right click: delete (to the bin folder of the history, nothing is lost for good).
                                 let working_here = (selected && busy) || self.background.iter().any(|run| run.session.id == s.id);
                                 row.context_menu(|ui| {
+                                    if ui.add_enabled(!s.messages.is_empty(), egui::Button::new(crate::i18n::tr("Export the conversation…"))).clicked() {
+                                        to_export = Some(s.clone());
+                                        ui.close_menu();
+                                    }
                                     if ui.add_enabled(!working_here, egui::Button::new(crate::i18n::tr("Delete the conversation"))).on_disabled_hover_text(crate::i18n::tr("The assistant is working in it.")).clicked() {
                                         to_bin = Some(s.clone());
                                         ui.close_menu();
@@ -6828,7 +7006,23 @@ impl eframe::App for App {
                             let text = if query.is_empty() { crate::i18n::tr("No saved conversations") } else { crate::i18n::tr("No conversations match the search") };
                             ui.label(egui::RichText::new(text).color(theme::MUTED));
                         }
+                        // In a tab of EA the list shows this project only: the others are one click away (LC-292).
+                        if ea::in_ea_tab() {
+                            ui.add_space(8.0);
+                            if ui.link(crate::i18n::tr("Conversations of other models…")).clicked() {
+                                other_models = true;
+                            }
+                        }
                     });
+                    if other_models {
+                        self.other_models = Some(OtherModels { pin_notes: true, ..Default::default() });
+                    }
+                    if import_now {
+                        self.import_session();
+                    }
+                    if let Some(session) = to_export {
+                        self.export_session(&session);
+                    }
 
                     if let Some(session) = to_bin {
                         self.move_to_bin(session);
@@ -6944,6 +7138,7 @@ impl eframe::App for App {
                 let mut open_conn = false;
                 self.conn_window(ctx);
                 self.miro_window(ctx);
+                self.other_models_window(ctx);
                 // In a tab of EA the header only shows that Claude is working.
                 if !ea::in_ea_tab() || busy {
                 egui::TopBottomPanel::top("chat_header")
@@ -7379,6 +7574,14 @@ impl eframe::App for App {
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
                             for (index, m) in self.session.messages.iter().enumerate() {
+                                for mv in self.session.moves.iter().filter(|mv| mv.at == index) {
+                                    ui.add_space(6.0);
+                                    ui.vertical_centered(|ui| {
+                                        ui.label(egui::RichText::new(crate::i18n::fmt("From here on: model {0}", &[mv.to.clone()])).small().color(theme::MUTED))
+                                            .on_hover_text(crate::i18n::fmt("Earlier: {0}", &[mv.from.clone()]));
+                                    });
+                                    ui.add_space(6.0);
+                                }
                                 let is_user = m.role == "user";
                                 // The failure note is saved in the language of that moment: check all languages (the UI language may have changed).
                                 let failed = !is_user && i18n::Lang::ALL.iter().any(|lang| m.text.starts_with(i18n::tr_in(*lang, "Could not finish")));
@@ -7535,10 +7738,11 @@ impl eframe::App for App {
                                                     ui.label(egui::RichText::new(if *up { "👍" } else { "👎" }).small().color(theme::HINT)).on_hover_text(crate::i18n::tr("Thank you for the rating"));
                                                 }
                                                 None => {
-                                                    if ui.add(egui::Button::new(egui::RichText::new("👍").small()).frame(false)).on_hover_text(crate::i18n::tr("A good answer")).clicked() {
+                                                    // Both alike (no frame, same colour): the thumb down only opens the reasons first.
+                                                    if ui.add(egui::Button::new(egui::RichText::new("👍").small().color(theme::MUTED)).frame(false)).on_hover_text(crate::i18n::tr("A good answer")).clicked() {
                                                         rate = Some((m.created.clone(), true, ""));
                                                     }
-                                                    ui.menu_button(egui::RichText::new("👎").small(), |ui| {
+                                                    egui::menu::menu_custom_button(ui, egui::Button::new(egui::RichText::new("👎").small().color(theme::MUTED)).frame(false), |ui| {
                                                         for (reason, label) in [("wrong", crate::i18n::tr("Wrong or inaccurate answer")), ("not_asked", crate::i18n::tr("Not what I asked for")), ("slow", crate::i18n::tr("Too slow")), ("model_error", crate::i18n::tr("A mistake in the model"))] {
                                                             if ui.button(label).clicked() {
                                                                 rate = Some((m.created.clone(), false, reason));
