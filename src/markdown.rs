@@ -1,5 +1,6 @@
 //! Rendering Markdown in the chat and in the changelog: headings, lists, tables, code blocks,
-//! and within text bold (`**like this**`) and inline code (`` `like this` ``).
+//! and within text bold (`**like this**`), inline code (`` `like this` ``) and links (`[text](https://…)` and bare
+//! https:// addresses, clickable: they open in the browser, LC-310).
 
 use crate::theme;
 use eframe::egui;
@@ -66,23 +67,23 @@ pub fn show(ui: &mut egui::Ui, text: &str, salt: impl std::hash::Hash) {
                 ui.add_space(6.0);
             } else if let Some(heading) = trimmed.strip_prefix("### ") {
                 ui.add_space(4.0);
-                ui.add(egui::Label::new(inline(heading, 16.0, true)).wrap());
+                rich(ui, heading, 16.0, true);
             } else if let Some(heading) = trimmed.strip_prefix("## ") {
                 ui.add_space(8.0);
-                ui.add(egui::Label::new(inline(heading, 19.0, true)).wrap());
+                rich(ui, heading, 19.0, true);
             } else if let Some(heading) = trimmed.strip_prefix("# ") {
                 ui.add_space(8.0);
-                ui.add(egui::Label::new(inline(heading, 22.0, true)).wrap());
+                rich(ui, heading, 22.0, true);
             } else if let Some((marker, item)) = list_item(trimmed) {
                 // The indentation of nested items follows the indentation of the line in the text.
                 let indent = (line.len() - line.trim_start().len()) as f32 * 6.0;
                 ui.horizontal_top(|ui| {
                     ui.add_space(6.0 + indent);
                     ui.label(egui::RichText::new(marker).color(theme::TEXT));
-                    ui.add(egui::Label::new(inline(item, BODY_SIZE, false)).wrap());
+                    rich(ui, item, BODY_SIZE, false);
                 });
             } else {
-                ui.add(egui::Label::new(inline(trimmed, BODY_SIZE, false)).wrap());
+                rich(ui, trimmed, BODY_SIZE, false);
             }
         }
     });
@@ -120,13 +121,105 @@ fn table(ui: &mut egui::Ui, rows: &[Vec<&str>], salt: impl std::hash::Hash) {
                     for (row_no, row) in rows.iter().enumerate() {
                         for cell in row {
                             // The first row is the table header.
-                            ui.label(inline(cell, BODY_SIZE, row_no == 0));
+                            rich(ui, cell, BODY_SIZE, row_no == 0);
                         }
                         ui.end_row();
                     }
                 });
             });
         });
+}
+
+/// A part of a line: text with inline formatting, or a link (label, address).
+#[derive(Debug, PartialEq)]
+enum Piece<'a> {
+    Text(&'a str),
+    Link(&'a str, &'a str),
+}
+
+/// Splits a line into text and links: `[label](https://…)` and bare http(s) addresses outside `code`. Only http and
+/// https addresses become links (nothing that could start a program or open a file).
+fn pieces_with_links(text: &str) -> Vec<Piece<'_>> {
+    let mut out = Vec::new();
+    let mut start = 0; // start of the pending text
+    let mut i = 0;
+    let mut in_code = false;
+    let bytes = text.as_bytes();
+    let is_web = |s: &str| s.starts_with("https://") || s.starts_with("http://");
+    while i < text.len() {
+        let c = bytes[i];
+        if c == b'`' {
+            in_code = !in_code;
+            i += 1;
+            continue;
+        }
+        if !in_code && c == b'[' && (i == 0 || bytes[i - 1] != b'!') {
+            if let Some(close) = text[i + 1..].find("](").map(|p| i + 1 + p) {
+                if let Some(end) = text[close + 2..].find(')').map(|p| close + 2 + p) {
+                    let (label, url) = (&text[i + 1..close], text[close + 2..end].trim());
+                    if is_web(url) && !label.is_empty() && !label.contains('[') {
+                        if start < i {
+                            out.push(Piece::Text(&text[start..i]));
+                        }
+                        out.push(Piece::Link(label, url));
+                        i = end + 1;
+                        start = i;
+                        continue;
+                    }
+                }
+            }
+        }
+        if !in_code && is_web(&text[i..]) && (i == 0 || !bytes[i - 1].is_ascii_alphanumeric()) {
+            let mut end = text[i..].find(|ch: char| ch.is_whitespace() || matches!(ch, '<' | '>' | '"' | '`')).map_or(text.len(), |p| i + p);
+            // Punctuation after an address belongs to the sentence (also a closing bracket without an opening one in it).
+            while end > i {
+                let last = text[..end].chars().next_back().unwrap_or(' ');
+                let unbalanced = last == ')' && text[i..end].matches('(').count() < text[i..end].matches(')').count();
+                if matches!(last, '.' | ',' | ';' | ':' | '!' | '?' | '\'' | '*') || unbalanced {
+                    end -= last.len_utf8();
+                } else {
+                    break;
+                }
+            }
+            if end > i + "https://".len() {
+                if start < i {
+                    out.push(Piece::Text(&text[start..i]));
+                }
+                out.push(Piece::Link(&text[i..end], &text[i..end]));
+                i = end;
+                start = i;
+                continue;
+            }
+        }
+        i += text[i..].chars().next().map_or(1, char::len_utf8);
+    }
+    if start < text.len() {
+        out.push(Piece::Text(&text[start..]));
+    }
+    out
+}
+
+/// One line with inline formatting; links in it are clickable and open in the browser.
+fn rich(ui: &mut egui::Ui, text: &str, size: f32, all_bold: bool) {
+    let pieces = pieces_with_links(text);
+    if !pieces.iter().any(|p| matches!(p, Piece::Link(..))) {
+        ui.add(egui::Label::new(inline(text, size, all_bold)).wrap());
+        return;
+    }
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        for piece in pieces {
+            match piece {
+                Piece::Text(t) => {
+                    ui.add(egui::Label::new(inline(t, size, all_bold)).wrap());
+                }
+                Piece::Link(label, url) => {
+                    let label = label.replace("**", "").replace('`', "");
+                    ui.hyperlink_to(egui::RichText::new(label).size(size).color(theme::NAV_ACTIVE), url).on_hover_text(url);
+                }
+            }
+        }
+    });
 }
 
 /// Lays out one line of text with inline formatting: `**bold**` and `` `code` ``.
@@ -212,6 +305,17 @@ mod tests {
                 (" plain".to_string(), false, false),
             ]
         );
+    }
+
+    #[test]
+    fn links_in_text() {
+        use Piece::*;
+        assert_eq!(pieces_with_links("See [LC-1](https://x.atlassian.net/browse/LC-1)."), vec![Text("See "), Link("LC-1", "https://x.atlassian.net/browse/LC-1"), Text(".")]);
+        assert_eq!(pieces_with_links("Page: https://wiki.example.com/p?id=5, done"), vec![Text("Page: "), Link("https://wiki.example.com/p?id=5", "https://wiki.example.com/p?id=5"), Text(", done")]);
+        assert_eq!(pieces_with_links("(https://a.example.com/x)"), vec![Text("("), Link("https://a.example.com/x", "https://a.example.com/x"), Text(")")]);
+        assert_eq!(pieces_with_links("`https://in.code/x` and [f](file:///C:/x)"), vec![Text("`https://in.code/x` and [f](file:///C:/x)")]);
+        assert_eq!(pieces_with_links("![d](https://img.example.com/a.png)"), vec![Text("![d]("), Link("https://img.example.com/a.png", "https://img.example.com/a.png"), Text(")")]);
+        assert_eq!(pieces_with_links("plain **text**"), vec![Text("plain **text**")]);
     }
 
     #[test]
