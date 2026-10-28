@@ -5431,7 +5431,8 @@ fn asks_to_continue(text: &str) -> bool {
     let t = text.to_lowercase().replace(['„', '”', '“', '«', '»', '"'], "'");
     const PHRASES: &[&str] = &[
         "'dalej'", "'kontynuuj'", "czy kontynuować", "czy mam kontynuować", "mam kontynuować", "czy mam przejść", "czy przejść dalej",
-        "czy kontynuuję", "jeśli chcesz, kontynuuję", "daj znać, czy mam", "czy robić dalej", "czy robię dalej",
+        "czy kontynuuję", "jeśli chcesz, kontynuuję", "daj znać, czy mam", "czy robić dalej", "czy robię dalej", "w następnej turze",
+        "w kolejnej turze", "w następnej odpowiedzi", "in the next turn", "in my next answer", "in the next answer",
         "'go on'", "'continue'", "shall i continue", "should i continue", "shall i proceed", "should i proceed", "shall i go on",
         "want me to continue", "want me to proceed", "let me know if i should continue",
         "'weiter'", "soll ich weitermachen", "soll ich fortfahren",
@@ -8242,6 +8243,7 @@ mod tests {
         assert!(asks_to_continue("Zacznę od nasa-crmd-sync-service i będę przechodził po kolei. Napisz „dalej”, a ruszam."));
         assert!(asks_to_continue("Done 4 of 13 services. Shall I continue with the rest?"));
         assert!(asks_to_continue("Soll ich weitermachen?"));
+        assert!(asks_to_continue("Zrobię to kolejno, zaczynając od customer-service w następnej turze."));
         assert!(!asks_to_continue("Zrobione: 13 usług, 412 operacji, wszystkie z aliasami."));
         assert!(!asks_to_continue("Który pakiet jest właściwy: A czy B?"));
     }
