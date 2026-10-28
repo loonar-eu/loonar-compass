@@ -2,6 +2,7 @@
 Cloudflare API token and writes a self-contained HTML page. Private: nothing here is published.
 
     python tools/stats/dashboard.py [--out compass_stats.html] [--days 60] [--no-open]
+    pythonw tools/stats/dashboard.py --serve 8105   (local page that stays up, e.g. from autostart)
 
 The token: the environment variable CLOUDFLARE_API_TOKEN, or the Windows Credential Manager entry given with
 --credential (default cloudflare_api_token.loonar-tools). The account and the database come from feedback/wrangler.toml.
@@ -458,6 +459,56 @@ th {{ color:var(--text2); font-weight:600; font-size:12px; }} .num {{ text-align
 </main></body></html>"""
 
 
+def build(a):
+    """The page with fresh data and a one-line description of what was read."""
+    today = dt.datetime.now(dt.timezone.utc).date()
+    since = (today - dt.timedelta(days=max(a.days, 7 * 9) + 1)).isoformat()
+    auth = token(a.credential)
+    starts, days, first = load(auth, since)
+    web = web_section(today, a.days, auth, a.goatcounter_site, a.goatcounter_credential, a.repo)
+    return page(summarize(starts, days, first, today, a.days), a.days, web),         f"{len(first)} installations, {len(days)} daily summaries since {since}"
+
+
+def serve(a):
+    """A local page that stays up (autostart): rebuilt when older than --cache minutes or on ?refresh=1."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    lock, cache = threading.Lock(), {"at": None, "html": None}
+
+    def current(force):
+        with lock:
+            now = dt.datetime.now()
+            if force or cache["html"] is None or now - cache["at"] > dt.timedelta(minutes=a.cache):
+                try:
+                    cache["html"], _ = build(a)
+                except Exception as e:  # keep the last good page; show the error above it
+                    err = f'<div class="muted" style="color:#b42318">Refresh failed: {esc(str(e))}</div>'
+                    cache["html"] = (cache["html"] or "<html><body><main></main></body></html>").replace("<main>", "<main>" + err, 1)
+                cache["at"] = now
+            bar = (f'<div class="muted" style="margin-bottom:8px">Generated {cache["at"]:%Y-%m-%d %H:%M} · '
+                   f'refreshed every {a.cache} min · <a href="/?refresh=1">Refresh now</a></div>')
+            return cache["html"].replace("<main>", "<main>" + bar, 1)
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path.split("?")[0] not in ("/", "/index.html"):
+                self.send_error(404)
+                return
+            body = current("refresh=1" in self.path).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    print(f"http://127.0.0.1:{a.serve}/")
+    ThreadingHTTPServer(("127.0.0.1", a.serve), Handler).serve_forever()
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", default="compass_stats.html")
@@ -467,15 +518,16 @@ def main():
     ap.add_argument("--goatcounter-site", default="loonar.goatcounter.com")
     ap.add_argument("--goatcounter-credential", default="goatcounter_api_token.loonar-tools")
     ap.add_argument("--repo", default="loonar-eu/loonar-compass")
+    ap.add_argument("--serve", type=int, metavar="PORT", help="serve the page on 127.0.0.1:PORT instead of writing a file")
+    ap.add_argument("--cache", type=int, default=10, help="minutes a served page is reused (--serve)")
     a = ap.parse_args()
-    today = dt.datetime.now(dt.timezone.utc).date()
-    since = (today - dt.timedelta(days=max(a.days, 7 * 9) + 1)).isoformat()
-    auth = token(a.credential)
-    starts, days, first = load(auth, since)
-    web = web_section(today, a.days, auth, a.goatcounter_site, a.goatcounter_credential, a.repo)
+    if a.serve:
+        serve(a)
+        return
+    html_page, info = build(a)
     out = Path(a.out).resolve()
-    out.write_text(page(summarize(starts, days, first, today, a.days), a.days, web), encoding="utf-8")
-    print(f"{out}  ({len(first)} installations, {len(days)} daily summaries since {since})")
+    out.write_text(html_page, encoding="utf-8")
+    print(f"{out}  ({info})")
     if not a.no_open:
         webbrowser.open(out.as_uri())
 
