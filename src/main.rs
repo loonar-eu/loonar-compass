@@ -270,6 +270,28 @@ fn asks_for_document(text: &str) -> bool {
     MAKE.iter().any(|w| t.contains(w)) && DOCUMENT.iter().any(|w| t.contains(w))
 }
 
+/// The model offered for an answer (LC-307, LC-311): a template named in the message (by its name or group) decides:
+/// its model ("strong" = `document_model`, or a model name of the same provider), or none when it keeps the model of the
+/// settings. Without a named template, a request for a document gets `document_model`.
+fn offered_model(cfg: &AppConfig, text: &str) -> Option<String> {
+    let lower = text.to_lowercase();
+    let named: Vec<templates::Meta> = templates::list_meta(&cfg.templates_dir)
+        .into_iter()
+        .filter(|(name, meta)| lower.contains(&name.to_lowercase()) || (meta.group.chars().count() >= 4 && lower.contains(&meta.group.to_lowercase())))
+        .map(|(_, meta)| meta)
+        .collect();
+    if named.is_empty() {
+        return if asks_for_document(text) { document_model(cfg) } else { None };
+    }
+    let current = if cfg.uses_openai() { &cfg.openai_model } else { &cfg.claude_model };
+    named.iter().find_map(|meta| match meta.model.as_str() {
+        "" => None,
+        "strong" => document_model(cfg),
+        name if name != current && name.starts_with("claude") != cfg.uses_openai() => Some(name.to_string()),
+        _ => None,
+    })
+}
+
 /// The tokens of a request: counted by Anthropic, or estimated (LC-306).
 fn prompt_tokens(client: &claude::ClaudeClient, system: &str, msgs: &[Value], tools: Option<&Value>) -> u64 {
     client.count_tokens(system, msgs, tools).unwrap_or_else(|| claude::estimated_tokens(system, msgs, tools))
@@ -668,7 +690,11 @@ diagrams as ![caption](diagram:ID), impact analysis, operation usage) and from t
 For Confluence use create_confluence_page, for Word use create_document; publish (publish_confluence) only when explicitly asked — \
 a request for a page IN Confluence (\"create a page in Confluence\", \"put it in Confluence\", \"publish\") is such a request: publish right after creating it \
 (the approval card asks the user). \
-When the user shows a sample document and wants a template made from it, save it with save_template. Discipline for every document and page (LC-308), in this order: 1. List the user's requests about it from the whole conversation (content, sections, each requirement, use case or item they named, the sources they pointed to such as Jira issues, Confluence pages, files or diagrams, images, format, language, length) - this list is the \"checklist\" of the tool call. 2. Read everything they pointed to (jira_issue, confluence_read, files, db_query, diagrams) before writing; images in Jira issues come with jira_download_attachments and go into the document as ![caption](image:NAME). 3. The structure: the template's headings in its order (read_template); the user's own structure when they gave one; never a generic structure of your own instead. 4. Content: each requirement or item the user named gets its own entry with its number or key and its text from the source - not a summary of all of them; facts only from the sources, \"to be completed\" for the rest. 5. Before the call compare the markdown with the checklist item by item; the tool refuses a document with a request or template heading missing. 6. In your answer list the checklist briefly (request → section) and name what is marked \"to be completed\".";
+When the user shows a sample document and wants a template made from it, save it with save_template. Discipline for every document and page (LC-308), in this order: 1. List the user's requests about it from the whole conversation (content, sections, each requirement, use case or item they named, the sources they pointed to such as Jira issues, Confluence pages, files or diagrams, images, format, language, length) - this list is the \"checklist\" of the tool call. 2. Read everything they pointed to (jira_issue, confluence_read, files, db_query, diagrams) before writing; images in Jira issues come with jira_download_attachments and go into the document as ![caption](image:NAME). 3. The structure: the template's headings in its order (read_template); the user's own structure when they gave one; never a generic structure of your own instead. 4. Content: each requirement or item the user named gets its own entry with its number or key and its text from the source - not a summary of all of them; facts only from the sources, \"to be completed\" for the rest. 5. Before the call compare the markdown with the checklist item by item; the tool refuses a document with a request or template heading missing. 6. In your answer list the checklist briefly (request → section) and name what is marked \"to be completed\". \
+Templates (<templates>) have a tool (confluence, jira, word or any tool) and may have a group of the user's own (e.g. a level of documentation). When the \
+user names a template or a group, use that template for that tool; when several templates fit and the user did not say which, ask with ask_user. A \
+template for Jira: the issue's description follows its headings. Lines starting with \"> \" in a template are hints and examples for you: follow them, \
+never copy them into the document.";
 
 /// Rules for memory across conversations (tools memory_save, memory_delete, memory_read).
 const MEMORY_RULES: &str = "You have memory across conversations: notes saved earlier are below in the <memory> section and apply \
@@ -1440,6 +1466,54 @@ impl Form {
     }
 }
 
+/// State of the "Document templates" view (LC-311).
+#[derive(Default)]
+struct TemplatesState {
+    /// The template being added or changed.
+    form: Option<TemplateForm>,
+    /// The address of a Confluence page to add as a template.
+    confluence_page: String,
+    status: String,
+    /// The template whose removal waits for a second click.
+    delete: Option<String>,
+}
+
+/// A template in the form: its name before the change (None = a new one), name, header and content.
+#[derive(Default)]
+struct TemplateForm {
+    original: Option<String>,
+    name: String,
+    meta: templates::Meta,
+    body: String,
+}
+
+/// The name of a template's tool ("" = any).
+fn target_label(target: &str) -> &'static str {
+    match target {
+        "confluence" => "Confluence",
+        "jira" => "Jira",
+        "word" => "Word",
+        _ => crate::i18n::tr("Any tool"),
+    }
+}
+
+/// The model of a template as shown ("" = the model of the settings, "strong" = a stronger one, or its name).
+fn model_label(model: &str) -> String {
+    match model {
+        "" => crate::i18n::tr("Model of the settings").to_string(),
+        "strong" => crate::i18n::tr("Stronger model (asks first)").to_string(),
+        name => name.to_string(),
+    }
+}
+
+/// How many groups the templates of one tool have.
+fn target_groups_len(items: &[&(String, templates::Meta)]) -> usize {
+    let mut groups: Vec<&str> = items.iter().map(|(_, m)| m.group.as_str()).collect();
+    groups.sort();
+    groups.dedup();
+    groups.len()
+}
+
 /// State of the "Report a bug" view and of the newsletter sign-up.
 #[derive(Default)]
 struct Contact {
@@ -1494,6 +1568,7 @@ impl Contact {
 
 struct App {
     contact: Contact,
+    templates_state: TemplatesState,
     /// The check for a newer release (started once, in the background) and the release to tell the user about.
     update_rx: Option<mpsc::Receiver<Option<update::Release>>>,
     /// When to check for a newer release again (every hour while the application is open) and the version already
@@ -1749,6 +1824,7 @@ impl App {
             hub_signin_rx: None,
             hub_signin_status: String::new(),
             contact: Contact { technical: true, include_context: true, ..Default::default() },
+            templates_state: TemplatesState::default(),
             stats: Stats { notice_open: telemetry_notice, ..Default::default() },
             pending_gap: None,
             gap_marks: HashMap::new(),
@@ -4808,53 +4884,253 @@ impl App {
     }
 
 
-    /// "Document templates" view: document templates the assistant fills from the model (Word or Confluence).
+    /// "Document templates" view (LC-311): any number of templates, added from files or Confluence pages, each for a tool
+    /// (Confluence, Jira, Word or any), in a group of the user's own and with the model to write it; listed by tool and group.
     fn templates_ui(&mut self, ui: &mut egui::Ui) {
         ui.label(egui::RichText::new(crate::i18n::tr("Document templates")).font(egui::FontId::new(24.0, egui::FontFamily::Name(markdown::BOLD_FAMILY.into()))));
         ui.add_space(2.0);
         ui.add(egui::Label::new(
-            egui::RichText::new(crate::i18n::tr("The assistant fills a template with content from the model and the conversation and turns it into a Confluence page or a Word document. Templates are Markdown files: you can change them, add your own or ask the assistant to make a template from a sample document."))
+            egui::RichText::new(crate::i18n::tr("A template tells the assistant how a document should look: its sections, hints and examples. Add as many as you need - from Markdown, Word, HTML, PDF or a Confluence page - and say for which tool each one is (Confluence, Jira, Word or any), in which group (e.g. a level of documentation or a project) and which model should write it. In the chat name the template or its group, e.g. \"a Confluence page for … from the template Technical level\"."))
             .color(theme::MUTED),
         ).wrap());
         ui.add_space(10.0);
-        let Some(dir) = self.cfg.as_ref().map(|c| c.templates_dir.clone()) else {
+        let Some(cfg) = self.cfg.clone() else {
             ui.label(crate::i18n::tr("Complete the settings first."));
             return;
         };
-        let items = templates::list(&dir);
-        if ui.button(crate::i18n::tr("Open templates folder")).clicked() {
-            let _ = open_in_explorer(&dir);
+        let dir = cfg.templates_dir.clone();
+        let items = templates::list_meta(&dir);
+        let state = &mut self.templates_state;
+        ui.horizontal_wrapped(|ui| {
+            if ui.button(crate::i18n::tr("➕ Add from files…")).on_hover_text(crate::i18n::tr("Markdown, text, Word, HTML, PDF, PowerPoint or Excel: headings, lists and tables are kept")).clicked() {
+                if let Some(files) = rfd::FileDialog::new()
+                    .set_title(crate::i18n::tr("Choose template files"))
+                    .add_filter(crate::i18n::tr("Documents"), &["md", "txt", "docx", "dotx", "docm", "html", "htm", "pdf", "pptx", "xlsx"])
+                    .pick_files()
+                {
+                    let mut added = Vec::new();
+                    let mut errors = Vec::new();
+                    for file in &files {
+                        let stem = file.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+                        match std::fs::read(file).map_err(anyhow::Error::from).and_then(|bytes| templates::to_markdown(&file.to_string_lossy(), &bytes)) {
+                            Ok(text) => {
+                                let (meta, body) = templates::split_header(&text);
+                                if files.len() == 1 {
+                                    state.form = Some(TemplateForm { original: None, name: stem, meta, body });
+                                } else {
+                                    let name = if templates::exists(&dir, &stem) { format!("{stem} (2)") } else { stem.clone() };
+                                    match templates::save_with_meta(&dir, None, &name, &meta, &body) {
+                                        Ok(_) => added.push(name),
+                                        Err(e) => errors.push(format!("{stem}: {e:#}")),
+                                    }
+                                }
+                            }
+                            Err(e) => errors.push(format!("{stem}: {e:#}")),
+                        }
+                    }
+                    state.status = if errors.is_empty() {
+                        if added.is_empty() { String::new() } else { crate::i18n::fmt("Templates added: {0}. Set their tool and group with \"Properties\".", &[added.join(", ")]) }
+                    } else {
+                        errors.join("\n")
+                    };
+                }
+            }
+            if ui.button(crate::i18n::tr("➕ New template")).clicked() {
+                state.form = Some(TemplateForm::default());
+            }
+            if ui.button(crate::i18n::tr("Open templates folder")).clicked() {
+                let _ = open_in_explorer(&dir);
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.label(crate::i18n::tr("Confluence page:"));
+            ui.add(egui::TextEdit::singleline(&mut state.confluence_page).hint_text("https://…/pages/123456/…").desired_width(360.0));
+            if ui.add_enabled(!state.confluence_page.trim().is_empty(), egui::Button::new(crate::i18n::tr("➕ Add from Confluence"))).clicked() {
+                match templates::from_confluence(&cfg, &state.confluence_page) {
+                    Ok((title, text)) => {
+                        let (mut meta, body) = templates::split_header(&text);
+                        if meta.target.is_empty() {
+                            meta.target = "confluence".into();
+                        }
+                        state.form = Some(TemplateForm { original: None, name: title, meta, body });
+                        state.confluence_page.clear();
+                        state.status.clear();
+                    }
+                    Err(e) => state.status = format!("{e:#}"),
+                }
+            }
+        });
+        if !state.status.is_empty() {
+            ui.add(egui::Label::new(egui::RichText::new(&state.status).small().color(theme::MUTED)).wrap());
         }
-        ui.add_space(12.0);
-        let mut use_template = None;
-        for (name, description) in &items {
+        ui.add_space(10.0);
+
+        // The template being added or changed.
+        let groups: Vec<String> = {
+            let mut g: Vec<String> = items.iter().map(|(_, m)| m.group.clone()).filter(|g| !g.is_empty()).collect();
+            g.sort();
+            g.dedup();
+            g
+        };
+        let mut close_form = false;
+        if let Some(form) = state.form.as_mut() {
             egui::Frame::none()
                 .fill(theme::SURFACE)
-                .stroke(egui::Stroke::new(1.0_f32, theme::BORDER))
+                .stroke(egui::Stroke::new(1.0_f32, theme::NAV_ACTIVE))
                 .rounding(14.0)
                 .inner_margin(egui::Margin::symmetric(16.0, 12.0))
                 .show(ui, |ui| {
                     ui.set_width(ui.available_width());
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new(name).font(egui::FontId::new(16.0, egui::FontFamily::Name(markdown::BOLD_FAMILY.into()))));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.button(crate::i18n::tr("Edit")).on_hover_text(crate::i18n::tr("Opens the template file in Notepad")).clicked() {
-                                let _ = std::process::Command::new(config::system_program("notepad.exe")).arg(dir.join(format!("{name}.md"))).spawn();
-                            }
-                            let use_button = egui::Button::new(egui::RichText::new(crate::i18n::tr("Use")).color(egui::Color32::WHITE)).fill(theme::NAV).stroke(egui::Stroke::NONE);
-                            if ui.add(use_button).on_hover_text(crate::i18n::tr("Inserts a request into the chat to prepare a document from this template")).clicked() {
-                                use_template = Some(name.clone());
+                    let title = if form.original.is_some() { crate::i18n::tr("Template properties") } else { crate::i18n::tr("New template") };
+                    ui.label(egui::RichText::new(title).font(egui::FontId::new(16.0, egui::FontFamily::Name(markdown::BOLD_FAMILY.into()))));
+                    ui.add_space(6.0);
+                    egui::Grid::new("template_form").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
+                        ui.label(crate::i18n::tr("Name"));
+                        ui.add(egui::TextEdit::singleline(&mut form.name).desired_width(420.0));
+                        ui.end_row();
+                        ui.label(crate::i18n::tr("Description"));
+                        ui.add(egui::TextEdit::singleline(&mut form.meta.description).hint_text(crate::i18n::tr("what the document is and when to use it")).desired_width(420.0));
+                        ui.end_row();
+                        ui.label(crate::i18n::tr("Tool"));
+                        egui::ComboBox::from_id_salt("template_target").selected_text(target_label(&form.meta.target)).show_ui(ui, |ui| {
+                            for t in templates::TARGETS {
+                                ui.selectable_value(&mut form.meta.target, t.to_string(), target_label(t));
                             }
                         });
+                        ui.end_row();
+                        ui.label(crate::i18n::tr("Group"));
+                        ui.horizontal(|ui| {
+                            ui.add(egui::TextEdit::singleline(&mut form.meta.group).hint_text(crate::i18n::tr("e.g. Business level, Technical level, Project X")).desired_width(300.0));
+                            if !groups.is_empty() {
+                                ui.menu_button("▾", |ui| {
+                                    for g in &groups {
+                                        if ui.button(g).clicked() {
+                                            form.meta.group = g.clone();
+                                            ui.close_menu();
+                                        }
+                                    }
+                                });
+                            }
+                        });
+                        ui.end_row();
+                        ui.label(crate::i18n::tr("Model"));
+                        let custom = !form.meta.model.is_empty() && form.meta.model != "strong";
+                        egui::ComboBox::from_id_salt("template_model").selected_text(model_label(&form.meta.model)).show_ui(ui, |ui| {
+                            ui.selectable_value(&mut form.meta.model, String::new(), model_label(""));
+                            ui.selectable_value(&mut form.meta.model, "strong".into(), model_label("strong"));
+                            if custom {
+                                let current = form.meta.model.clone();
+                                ui.selectable_value(&mut form.meta.model, current.clone(), current);
+                            }
+                        });
+                        ui.end_row();
                     });
-                    if !description.is_empty() {
-                        ui.add(egui::Label::new(egui::RichText::new(description).color(theme::MUTED)).wrap());
-                    }
+                    ui.add_space(6.0);
+                    ui.label(egui::RichText::new(crate::i18n::tr("Content (Markdown: # headings, lists, | tables |; lines starting with \"> \" are hints and examples for the assistant, not copied to the document)")).small().color(theme::MUTED));
+                    egui::ScrollArea::vertical().id_salt("template_body").max_height(320.0).show(ui, |ui| {
+                        ui.add(egui::TextEdit::multiline(&mut form.body).code_editor().desired_rows(14).desired_width(f32::INFINITY));
+                    });
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        let save = egui::Button::new(egui::RichText::new(crate::i18n::tr("Save")).color(egui::Color32::WHITE)).fill(theme::NAV).stroke(egui::Stroke::NONE);
+                        if ui.add_enabled(!form.name.trim().is_empty() && !form.body.trim().is_empty(), save).clicked() {
+                            match templates::save_with_meta(&dir, form.original.as_deref(), form.name.trim(), &form.meta, &form.body) {
+                                Ok(_) => {
+                                    state.status = crate::i18n::fmt("Template \"{0}\" saved.", &[form.name.trim().to_string()]);
+                                    close_form = true;
+                                }
+                                Err(e) => state.status = format!("{e:#}"),
+                            }
+                        }
+                        if ui.button(crate::i18n::tr("Cancel")).clicked() {
+                            close_form = true;
+                        }
+                    });
                 });
-            ui.add_space(10.0);
+            ui.add_space(12.0);
         }
-        if let Some(name) = use_template {
-            self.input = crate::i18n::fmt("Prepare a Confluence page using the template \"{0}\" for: ", &[(name).to_string()]);
+        if close_form {
+            state.form = None;
+        }
+
+        // The templates by tool, then by group.
+        let mut use_template = None;
+        let mut edit_template = None;
+        for target in templates::TARGETS {
+            let in_target: Vec<&(String, templates::Meta)> = items.iter().filter(|(_, m)| m.target == target).collect();
+            if in_target.is_empty() {
+                continue;
+            }
+            ui.add_space(4.0);
+            ui.label(egui::RichText::new(target_label(target)).font(egui::FontId::new(18.0, egui::FontFamily::Name(markdown::BOLD_FAMILY.into()))));
+            let mut target_groups: Vec<String> = in_target.iter().map(|(_, m)| m.group.clone()).collect();
+            target_groups.sort_by_key(|g| (g.is_empty(), g.to_lowercase()));
+            target_groups.dedup();
+            for group in target_groups {
+                if !group.is_empty() || target_groups_len(&in_target) > 1 {
+                    ui.add_space(4.0);
+                    let label = if group.is_empty() { crate::i18n::tr("No group").to_string() } else { group.clone() };
+                    ui.label(egui::RichText::new(label).color(theme::MUTED));
+                }
+                for (name, meta) in in_target.iter().filter(|(_, m)| m.group == group) {
+                    egui::Frame::none()
+                        .fill(theme::SURFACE)
+                        .stroke(egui::Stroke::new(1.0_f32, theme::BORDER))
+                        .rounding(14.0)
+                        .inner_margin(egui::Margin::symmetric(16.0, 10.0))
+                        .show(ui, |ui| {
+                            ui.set_width(ui.available_width());
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new(name).font(egui::FontId::new(16.0, egui::FontFamily::Name(markdown::BOLD_FAMILY.into()))));
+                                if !meta.model.is_empty() {
+                                    ui.label(egui::RichText::new(format!("· {}", model_label(&meta.model))).small().color(theme::MUTED));
+                                }
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    let asked = state.delete.as_deref() == Some(name.as_str());
+                                    let remove = if asked { crate::i18n::tr("Click again to remove") } else { crate::i18n::tr("Remove") };
+                                    if ui.button(remove).on_hover_text(crate::i18n::tr("Moves the template to the bin folder of the templates")).clicked() {
+                                        if asked {
+                                            state.status = match templates::delete(&dir, name) {
+                                                Ok(()) => crate::i18n::fmt("Template \"{0}\" moved to the bin folder.", &[name.clone()]),
+                                                Err(e) => format!("{e:#}"),
+                                            };
+                                            state.delete = None;
+                                        } else {
+                                            state.delete = Some(name.clone());
+                                        }
+                                    }
+                                    if ui.button(crate::i18n::tr("Edit")).on_hover_text(crate::i18n::tr("Opens the template file in Notepad")).clicked() {
+                                        let _ = std::process::Command::new(config::system_program("notepad.exe")).arg(dir.join(format!("{name}.md"))).spawn();
+                                    }
+                                    if ui.button(crate::i18n::tr("Properties")).on_hover_text(crate::i18n::tr("Name, description, tool, group, model and content")).clicked() {
+                                        edit_template = Some((name.clone(), meta.clone()));
+                                    }
+                                    let use_button = egui::Button::new(egui::RichText::new(crate::i18n::tr("Use")).color(egui::Color32::WHITE)).fill(theme::NAV).stroke(egui::Stroke::NONE);
+                                    if ui.add(use_button).on_hover_text(crate::i18n::tr("Inserts a request into the chat to prepare a document from this template")).clicked() {
+                                        use_template = Some((name.clone(), meta.target.clone()));
+                                    }
+                                });
+                            });
+                            if !meta.description.is_empty() {
+                                ui.add(egui::Label::new(egui::RichText::new(&meta.description).color(theme::MUTED)).wrap());
+                            }
+                        });
+                    ui.add_space(8.0);
+                }
+            }
+        }
+        if let Some((name, meta)) = edit_template {
+            let body = templates::body(&dir, &name).unwrap_or_default();
+            self.templates_state.form = Some(TemplateForm { original: Some(name.clone()), name, meta, body });
+        }
+        if let Some((name, target)) = use_template {
+            let request = match target.as_str() {
+                "jira" => "Create a Jira issue using the template \"{0}\" for: ",
+                "word" => "Prepare a Word document using the template \"{0}\" for: ",
+                "confluence" => "Prepare a Confluence page using the template \"{0}\" for: ",
+                _ => "Prepare a document using the template \"{0}\" for: ",
+            };
+            self.input = crate::i18n::fmt(request, &[name]);
             self.view = View::Chat;
         }
     }
@@ -5929,8 +6205,9 @@ fn run_turn_with(
     // A document with a small model (LC-307): the user is offered a stronger one for this answer only; the next answer
     // uses the model of the settings again.
     let document_cfg;
-    let cfg = match (allowed, document_model(cfg), messages.last()) {
-        (None, Some(model), Some(last)) if last.role == "user" && asks_for_document(&last.text) => {
+    let cfg = match (allowed, messages.last()) {
+        (None, Some(last)) if last.role == "user" && offered_model(cfg, &last.text).is_some() => {
+            let model = offered_model(cfg, &last.text).unwrap_or_default();
             let current = if cfg.uses_openai() { cfg.openai_model.clone() } else { cfg.claude_model.clone() };
             let ratio = usage::prices(&model, 0).zip(usage::prices(&current, 0)).map(|(a, b)| (a.input / b.input).round()).filter(|r| *r > 1.0);
             let question = match ratio {
@@ -6023,15 +6300,9 @@ fn run_turn_with(
     // here, at the start of the turn, where the history holds only texts: no earlier reasoning is replayed after it.
     let mut msgs = history_to_api(messages, &cfg.attachments_dir)?;
     let tokens = prompt_tokens(&client, &system, &msgs, Some(&tools));
-    let summarised;
-    let messages = match summarise_if_long(&client, messages, tokens, emit) {
-        Some(shorter) => {
-            summarised = shorter;
-            msgs = history_to_api(&summarised, &cfg.attachments_dir)?;
-            &summarised[..]
-        }
-        None => messages,
-    };
+    if let Some(shorter) = summarise_if_long(&client, messages, tokens, emit) {
+        msgs = history_to_api(&shorter, &cfg.attachments_dir)?;
+    }
     if conversation_chars(&msgs) > SUMMARY_THRESHOLD {
         emit(WorkerEvent::StepStart(crate::i18n::tr("The conversation is long: summarising its earlier part").into()));
         match summarize_earlier(&client, &msgs) {

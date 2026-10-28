@@ -1450,7 +1450,7 @@ fn create_confluence_page(input: &Value, ctx: &ToolContext) -> Result<ToolOutput
     })
 }
 
-fn confluence_connection(cfg: &AppConfig) -> Result<crate::confluence::Connection> {
+pub(crate) fn confluence_connection(cfg: &AppConfig) -> Result<crate::confluence::Connection> {
     if let Some((hub, token)) = crate::hub::via_hub(cfg, "confluence") {
         return Ok(crate::confluence::Connection { base_url: format!("{hub}/proxy/confluence"), user: String::new(), token, identity: None });
     }

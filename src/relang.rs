@@ -62,8 +62,7 @@ fn translate(cfg: &AppConfig, key: &str, text: &str, to: Lang) -> Result<String>
 
 /// Performs the move. Returns a description of the result; error = no connection to Claude or another problem (the task stays pending).
 pub fn run(cfg: &AppConfig, props: &Path, from: Lang, to: Lang) -> Result<String> {
-    // Default templates without AI (always, even without a connection).
-    let custom_templates = templates::switch_defaults(&cfg.templates_dir, from, to);
+    let custom_templates = templates::to_translate(&cfg.templates_dir);
     let entries = memory::list(&cfg.memory_dir);
     if custom_templates.is_empty() && entries.is_empty() {
         clear_pending(props)?;

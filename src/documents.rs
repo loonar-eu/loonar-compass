@@ -12,7 +12,7 @@ const PART_LIMIT: u64 = 20 * 1024 * 1024;
 /// Most characters of text returned to the model.
 pub const TEXT_LIMIT: usize = 200_000;
 
-fn part(archive: &mut zip::ZipArchive<std::io::Cursor<&[u8]>>, name: &str) -> Option<String> {
+pub(crate) fn part(archive: &mut zip::ZipArchive<std::io::Cursor<&[u8]>>, name: &str) -> Option<String> {
     let entry = archive.by_name(name).ok()?;
     let mut text = String::new();
     entry.take(PART_LIMIT).read_to_string(&mut text).ok()?;
@@ -31,7 +31,7 @@ fn unescape(text: &str) -> String {
 }
 
 /// The text inside every `<tag …>…</tag>` of the XML (e.g. a:t), in order.
-fn texts(xml: &str, tag: &str) -> Vec<String> {
+pub(crate) fn texts(xml: &str, tag: &str) -> Vec<String> {
     let open = format!("<{tag}");
     let close = format!("</{tag}>");
     let mut out = Vec::new();
@@ -57,7 +57,7 @@ fn texts(xml: &str, tag: &str) -> Vec<String> {
 }
 
 /// An attribute of the first tag in a piece of XML.
-fn attr(tag: &str, name: &str) -> Option<String> {
+pub(crate) fn attr(tag: &str, name: &str) -> Option<String> {
     let key = format!(" {name}=\"");
     let start = tag.find(&key)? + key.len();
     let end = tag[start..].find('"')?;
