@@ -254,7 +254,10 @@ fn document_model(cfg: &AppConfig) -> Option<String> {
         let model = cfg.openai_model.to_lowercase();
         (cfg.openai_url.trim().is_empty() && (model.contains("mini") || model.contains("nano"))).then(|| config::OPENAI_MODELS[0].to_string())
     } else {
-        (cfg.claude_url.trim().is_empty() && cfg.claude_model.contains("haiku") && hub::via_hub(cfg, "ai").is_none()).then(|| "claude-sonnet-5-5".to_string())
+        // Through the team hub too (it passes the model on to Anthropic; a hub that does not allow it answers 403 and the
+        // answer goes on with the model of the settings, see run_turn_with). Found in the 0.9.2 lab tests: with the AI
+        // through the hub, as in most companies, there was no offer at all.
+        (cfg.claude_url.trim().is_empty() && cfg.claude_model.contains("haiku")).then(|| "claude-sonnet-5-5".to_string())
     }
 }
 
@@ -6234,6 +6237,7 @@ fn run_turn_with(
     }
     // A document with a small model (LC-307): the user is offered a stronger one for this answer only; the next answer
     // uses the model of the settings again.
+    let settings_model = cfg.ai_model().to_string();
     let document_cfg;
     let cfg = match (allowed, messages.last()) {
         (None, Some(last)) if last.role == "user" && offered_model(cfg, &last.text).is_some() => {
@@ -6276,7 +6280,7 @@ fn run_turn_with(
     } else {
         telemetry::turn();
     }
-    let client = claude::ClaudeClient::from_config(cfg, cfg.claude_max_tokens)?.with_tool_clearing(TOOL_CLEARING_AT);
+    let mut client = claude::ClaudeClient::from_config(cfg, cfg.claude_max_tokens)?.with_tool_clearing(TOOL_CLEARING_AT);
     let mut tools = tools::definitions();
     match allowed {
         Some(names) => {
@@ -6378,6 +6382,22 @@ fn run_turn_with(
         emit(WorkerEvent::StepStart(crate::i18n::fmt("The assistant is analyzing and planning (step {0})", &[(round).to_string()])));
         let resp = match client.send_value(&system, &msgs, Some(&tools)) {
             Ok(resp) => resp,
+            // The stronger model for a document is not allowed by the team hub: the answer goes on with the model of the
+            // settings.
+            Err(e) if round == 1 && cfg.ai_model() != settings_model && format!("{e:#}").contains("not allowed") => {
+                let mut back = cfg.clone();
+                if back.uses_openai() { back.openai_model = settings_model.clone() } else { back.claude_model = settings_model.clone() }
+                client = claude::ClaudeClient::from_config(&back, back.claude_max_tokens)?.with_tool_clearing(TOOL_CLEARING_AT);
+                emit(WorkerEvent::StepEnd { ok: false, detail: crate::i18n::fmt("{0} is not allowed by the team hub: the answer goes on with {1}", &[cfg.ai_model().to_string(), settings_model.clone()]) });
+                match client.send_value(&system, &msgs, Some(&tools)) {
+                    Ok(resp) => resp,
+                    Err(e) => {
+                        telemetry::ai_error();
+                        emit(WorkerEvent::StepEnd { ok: false, detail: shorten(&format!("{e:#}"), 200) });
+                        return Err(e);
+                    }
+                }
+            }
             Err(e) => {
                 telemetry::ai_error();
                 emit(WorkerEvent::StepEnd { ok: false, detail: shorten(&format!("{e:#}"), 200) });

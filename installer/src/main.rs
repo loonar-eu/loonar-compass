@@ -649,24 +649,71 @@ fn read_install(product: &Product, scope: Scope) -> Option<Installed> {
 }
 
 /// Closes the application started from `dir` (its windows first, as a person would; whatever is still running after
-/// a few seconds is stopped), so that a failed installation can be retried (LC-284). The path is compared without
-/// case and in its full form; a copy whose path cannot be read (it runs with other rights) is asked to close its
-/// window, not stopped (found in the 0.9.2 lab tests: the button did not close Compass).
+/// a few seconds is stopped), so that a failed installation can be retried (LC-284). Done with Windows calls, without
+/// PowerShell (found in the 0.9.2 lab tests: the PowerShell way closed nothing there, silently). A copy whose path
+/// cannot be read (it runs with other rights) is asked to close its window, not stopped.
 fn close_app_in(dir: &Path) {
-    let exe = dir.join(APP_EXE).display().to_string().replace('\'', "''");
-    let script = format!(
-        "$exe = [IO.Path]::GetFullPath('{exe}'); \
-         $all = @(Get-Process -Name LoonarCompass -ErrorAction SilentlyContinue); \
-         $p = @($all | Where-Object {{ $_.Path -and ([IO.Path]::GetFullPath($_.Path) -ieq $exe) }}); \
-         $unknown = @($all | Where-Object {{ -not $_.Path }}); \
-         ($p + $unknown) | ForEach-Object {{ [void]$_.CloseMainWindow() }}; \
-         for ($i = 0; $i -lt 20 -and (($p + $unknown) | Where-Object {{ -not $_.HasExited }})); $i++) {{ Start-Sleep -Milliseconds 250; ($p + $unknown) | ForEach-Object {{ $_.Refresh() }} }}; \
-         $p | Where-Object {{ -not $_.HasExited }} | Stop-Process -Force -ErrorAction SilentlyContinue"
-    );
-    let _ = Command::new(windows_dir().join("System32").join("WindowsPowerShell").join("v1.0").join("powershell.exe"))
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .status();
+    use windows::Win32::Foundation::{CloseHandle, BOOL, HWND, LPARAM, WPARAM};
+    use windows::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS};
+    use windows::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, TerminateProcess, WaitForSingleObject, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE};
+    use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowThreadProcessId, IsWindowVisible, PostMessageW, WM_CLOSE};
+    use windows::core::PWSTR;
+
+    let exe = dir.join(APP_EXE);
+    // (process id, whether its path is the one in `dir`; false = the path could not be read)
+    let mut found: Vec<(u32, bool)> = Vec::new();
+    unsafe {
+        let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return };
+        let mut entry = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
+        let mut more = Process32FirstW(snapshot, &mut entry).is_ok();
+        while more {
+            let len = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
+            let name = String::from_utf16_lossy(&entry.szExeFile[..len]);
+            if name.eq_ignore_ascii_case(APP_EXE) {
+                let pid = entry.th32ProcessID;
+                let path = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok().and_then(|h| {
+                    let mut buf = [0u16; 1024];
+                    let mut size = buf.len() as u32;
+                    let ok = QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut size).is_ok();
+                    let _ = CloseHandle(h);
+                    ok.then(|| PathBuf::from(String::from_utf16_lossy(&buf[..size as usize])))
+                });
+                match path {
+                    Some(p) if same_path(&p, &exe) => found.push((pid, true)),
+                    None => found.push((pid, false)),
+                    _ => {}
+                }
+            }
+            more = Process32NextW(snapshot, &mut entry).is_ok();
+        }
+        let _ = CloseHandle(snapshot);
+        if found.is_empty() {
+            return;
+        }
+        // Its windows are asked to close (the application saves and ends as when the user closes it).
+        unsafe extern "system" fn ask_to_close(hwnd: HWND, data: LPARAM) -> BOOL {
+            let pids = &*(data.0 as *const Vec<u32>);
+            let mut pid = 0u32;
+            GetWindowThreadProcessId(hwnd, Some(&mut pid));
+            if pids.contains(&pid) && IsWindowVisible(hwnd).as_bool() {
+                let _ = PostMessageW(hwnd, WM_CLOSE, WPARAM(0), LPARAM(0));
+            }
+            BOOL(1)
+        }
+        let pids: Vec<u32> = found.iter().map(|(p, _)| *p).collect();
+        let _ = EnumWindows(Some(ask_to_close), LPARAM(&pids as *const Vec<u32> as isize));
+        for (pid, ours) in found {
+            let access = if ours { PROCESS_SYNCHRONIZE | PROCESS_TERMINATE } else { PROCESS_SYNCHRONIZE };
+            if let Ok(h) = OpenProcess(access, false, pid) {
+                // Up to 5 s to close by itself; then the one in `dir` is stopped.
+                if WaitForSingleObject(h, 5000).0 != 0 && ours {
+                    let _ = TerminateProcess(h, 1);
+                    let _ = WaitForSingleObject(h, 3000);
+                }
+                let _ = CloseHandle(h);
+            }
+        }
+    }
 }
 
 /// Whether this program is the uninstaller in `dir` (it cannot delete itself while it runs).
@@ -2714,6 +2761,17 @@ fn mode_label(mode: &str) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    /// LC-284: a running copy of the application in LOONAR_TEST_APP_DIR is closed (run it first, then
+    /// `cargo test close_app_live -- --ignored --nocapture`).
+    #[test]
+    #[ignore = "requires a running copy of the application"]
+    fn close_app_live() {
+        let dir = PathBuf::from(std::env::var("LOONAR_TEST_APP_DIR").unwrap());
+        let started = std::time::Instant::now();
+        close_app_in(&dir);
+        println!("closed in {} ms", started.elapsed().as_millis());
+    }
+
     /// Registers the add-in of the installed copy (manual: `cargo test register_installed_addin -- --ignored`).
     #[test]
     #[ignore]
