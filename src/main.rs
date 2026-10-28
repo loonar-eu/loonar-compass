@@ -4785,6 +4785,8 @@ impl App {
         if ui.small_button(crate::i18n::tr("New identifier")).on_hover_text(crate::i18n::tr("Later days can no longer be joined with the earlier ones.")).clicked() {
             telemetry::new_install_id();
             self.stats.loaded = false;
+            // Said where the user looks, not only in the tooltip (found in the 0.9.2 tests).
+            self.stats.status = crate::i18n::tr("New installation id: later days can no longer be joined with the earlier ones.").to_string();
         }
         ui.add_space(14.0);
         ui.horizontal(|ui| {
@@ -6240,8 +6242,8 @@ fn run_turn_with(
     let settings_model = cfg.ai_model().to_string();
     let document_cfg;
     let cfg = match (allowed, messages.last()) {
-        (None, Some(last)) if last.role == "user" && offered_model(cfg, &last.text).is_some() => {
-            let model = offered_model(cfg, &last.text).unwrap_or_default();
+        (None, Some(last)) if last.role == "user" && offered_model(cfg, history::own_text(&last.text)).is_some() => {
+            let model = offered_model(cfg, history::own_text(&last.text)).unwrap_or_default();
             let current = if cfg.uses_openai() { cfg.openai_model.clone() } else { cfg.claude_model.clone() };
             let ratio = usage::prices(&model, 0).zip(usage::prices(&current, 0)).map(|(a, b)| (a.input / b.input).round()).filter(|r| *r > 1.0);
             let question = match ratio {
@@ -6266,7 +6268,7 @@ fn run_turn_with(
     // for it, whatever the limit in the settings (found in the 0.9.2 tests: a page cut off at 10 000 tokens).
     let roomy_cfg;
     let cfg = match messages.last() {
-        Some(last) if allowed.is_none() && last.role == "user" && cfg.claude_max_tokens < DOCUMENT_MAX_TOKENS && (asks_for_document(&last.text) || offered_model(cfg, &last.text).is_some()) => {
+        Some(last) if allowed.is_none() && last.role == "user" && cfg.claude_max_tokens < DOCUMENT_MAX_TOKENS && (asks_for_document(history::own_text(&last.text)) || offered_model(cfg, history::own_text(&last.text)).is_some()) => {
             let mut roomy = cfg.clone();
             roomy.claude_max_tokens = DOCUMENT_MAX_TOKENS;
             roomy_cfg = roomy;
@@ -8418,6 +8420,12 @@ impl eframe::App for App {
                                                                 rate = Some((m.created.clone(), false, reason));
                                                                 ui.close_menu();
                                                             }
+                                                        }
+                                                        ui.separator();
+                                                        if ui.button(crate::i18n::tr("Report a problem with this answer")).clicked() {
+                                                            rate = Some((m.created.clone(), false, "wrong"));
+                                                            report_answer = Some(index);
+                                                            ui.close_menu();
                                                         }
                                                     });
                                                 }
