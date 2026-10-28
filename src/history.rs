@@ -181,6 +181,10 @@ pub struct Session {
     /// Places where the conversation went on with another model (continued from another file or database, imported).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub moves: Vec<ModelMove>,
+    /// What the application did while making an answer (tools, reads, saves), by the `created` of that answer. The
+    /// assistant gets it with the history: without it, it cannot know in the next turn what it already read or changed.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub steps: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 /// The conversation went on with another model from message `at` on (LC-292).
@@ -214,6 +218,7 @@ impl Session {
             revision: 0,
             model: None,
             moves: Vec::new(),
+            steps: Default::default(),
         }
     }
 
@@ -249,6 +254,15 @@ impl Session {
                      (the messages before were about {earlier}). Packages, elements and diagrams named earlier may be missing here or have \
                      other ids: check them in this model before you rely on them or change them.]\n\n{}",
                     mv.to, m.text
+                );
+            }
+        }
+        for m in out.iter_mut().filter(|m| m.role == "assistant") {
+            if let Some(steps) = self.steps.get(&m.created).filter(|s| !s.is_empty()) {
+                m.text = format!(
+                    "{}\n\n[Record of the application, not visible to the user: steps done while making this answer:\n{}]",
+                    m.text.trim_end(),
+                    steps.iter().map(|s| format!("- {s}")).collect::<Vec<_>>().join("\n")
                 );
             }
         }
@@ -372,6 +386,8 @@ struct Exported {
     messages: Vec<Message>,
     #[serde(default)]
     moves: Vec<ModelMove>,
+    #[serde(default)]
+    steps: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 fn not_exported() -> anyhow::Error {
@@ -390,6 +406,7 @@ pub fn export(session: &Session, attachments_dir: &Path, target: &Path) -> Resul
         model: session.model.as_ref().map(|m| m.describe()).unwrap_or_default(),
         messages: session.messages.clone(),
         moves: session.moves.clone(),
+        steps: session.steps.clone(),
     };
     let tmp = target.with_extension("lcchat.tmp");
     {
@@ -449,6 +466,7 @@ pub fn import(source: &Path, attachments_dir: &Path, model: ModelChoice) -> Resu
     }
     let count = session.messages.len();
     session.moves = exported.moves.into_iter().filter(|m| m.at <= count).collect();
+    session.steps = exported.steps;
     let to = model.describe();
     if count > 0 && exported.model != to {
         session.moves.retain(|m| m.at != count);
@@ -537,6 +555,12 @@ mod tests {
         let sent = copy.messages_for_model();
         assert!(sent[2].text.starts_with("[Note from the application") && sent[2].text.contains("sklep@srv:5432") && sent[2].text.ends_with("Dodaj element"));
         assert_eq!(copy.messages[2].text, "Dodaj element");
+        // The steps of an answer go to the model with it, not to the stored text.
+        let mut with_steps = talk();
+        with_steps.steps.insert(with_steps.messages[1].created.clone(), vec!["Reading the Confluence page \"W2\" ✓".into()]);
+        let sent = with_steps.messages_for_model();
+        assert!(sent[1].text.contains("steps done while making this answer") && sent[1].text.contains("Confluence page"));
+        assert_eq!(with_steps.messages[1].text, "Pakiet ma 3 elementy.");
         // The same model again is no move.
         let mut same = talk();
         same.record_move(db());

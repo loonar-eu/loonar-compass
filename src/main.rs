@@ -2531,6 +2531,33 @@ impl App {
         }
     }
 
+    /// Keeps the steps of the turn that has just ended with its last answer, so the next turns know what was really done
+    /// (read, searched, saved). Returns whether something was recorded.
+    fn record_turn_steps(&mut self) -> bool {
+        let record: Vec<String> = self
+            .steps
+            .iter()
+            .filter(|s| !s.text.starts_with(TASKS_MARK))
+            .take(60)
+            .map(|s| {
+                let result = match &s.result {
+                    Some((true, detail, _)) => format!(" ✓ {}", shorten(detail, 160)),
+                    Some((false, detail, _)) => format!(" ✗ {}", shorten(detail, 160)),
+                    None => " (not finished)".to_string(),
+                };
+                format!("{}{result}", shorten(&s.text, 200))
+            })
+            .collect();
+        if record.is_empty() {
+            return false;
+        }
+        let failed = |m: &Message| i18n::Lang::ALL.iter().any(|lang| m.text.starts_with(i18n::tr_in(*lang, "Could not finish")));
+        let since = self.session.messages.iter().rposition(|m| m.role == "user").map_or(0, |i| i + 1);
+        let Some(answer) = self.session.messages[since..].iter().rev().find(|m| m.role == "assistant" && !failed(m)) else { return false };
+        self.session.steps.insert(answer.created.clone(), record);
+        true
+    }
+
     fn rename_session(&mut self, id: &str, title: String) {
         let Some(cfg) = self.cfg.clone() else { return };
         let result = if self.session.id == id {
@@ -2778,6 +2805,9 @@ impl App {
                 crate::i18n::fmt("Could not finish: {0}", &[(error).to_string()])
             };
             self.push_assistant(text, vec![]);
+            changed = true;
+        }
+        if finished && self.record_turn_steps() {
             changed = true;
         }
         if changed {
