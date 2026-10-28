@@ -4067,10 +4067,15 @@ impl App {
                 ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Your organisation requires the hub: the assistant works only when you are signed in to it.")).small().color(theme::MUTED)).wrap());
             }
             egui::Grid::new("settings_hub").num_columns(2).min_col_width(SETTINGS_LABEL_WIDTH).spacing([12.0, 8.0]).show(ui, |ui| {
-                ui.add_enabled_ui(fixed_hub.is_none(), |ui| row_hint(ui, crate::i18n::tr("Hub address"), &mut self.form.hub_url, crate::i18n::tr("e.g. https://compass-hub.example.com")));
-                if fixed_hub.is_some() {
-                    ui.end_row();
-                }
+                // The label and the field straight in the grid (a nested ui would swallow the end of the row).
+                label_cell(ui, crate::i18n::tr("Hub address"));
+                ui.add_enabled(
+                    fixed_hub.is_none(),
+                    egui::TextEdit::singleline(&mut self.form.hub_url)
+                        .hint_text(egui::RichText::new(crate::i18n::tr("e.g. https://compass-hub.example.com")).color(theme::HINT))
+                        .desired_width(settings_field_width(ui)),
+                );
+                ui.end_row();
                 row_secret(ui, crate::i18n::tr("Token"), &mut self.form.hub_token, secrets::exists(secrets::HUB_TOKEN));
                 row_hint(ui, crate::i18n::tr("This model in the hub"), &mut self.form.hub_source, crate::i18n::tr("source id, e.g. shop-db (optional)"));
             });
