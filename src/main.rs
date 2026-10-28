@@ -8392,8 +8392,8 @@ mod tests {
         // The cost of the answer (LC-300), for the before/after comparison of the cost changes.
         let t = usage::answer_totals();
         println!(
-            "COST calls={} input={} cache_write={} cache_read={} output={} largest_prompt={} over_100k={} retries={} seconds={:.1} usd={:.5}",
-            t.calls, t.input, t.cache_write, t.cache_read, t.output, t.largest_prompt, t.long_prompts, t.retries, t.millis as f64 / 1000.0, t.usd
+            "COST calls={} input={} cache_write={} (1h {}) cache_read={} output={} largest_prompt={} over_100k={} retries={} seconds={:.1} usd={:.5}",
+            t.calls, t.input, t.cache_write, t.cache_write_1h, t.cache_read, t.output, t.largest_prompt, t.long_prompts, t.retries, t.millis as f64 / 1000.0, t.usd
         );
         assert!(!asked.load(Ordering::Relaxed), "asked a question");
         assert_eq!(answers.lock().unwrap().len(), 1, "one answer in the chat");

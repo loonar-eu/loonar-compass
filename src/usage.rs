@@ -122,6 +122,8 @@ pub struct Totals {
     pub calls: u32,
     pub input: u64,
     pub cache_write: u64,
+    /// The part of `cache_write` kept for an hour.
+    pub cache_write_1h: u64,
     pub cache_read: u64,
     pub output: u64,
     pub long_prompts: u32,
@@ -138,6 +140,7 @@ impl Totals {
         self.calls += 1;
         self.input += c.input;
         self.cache_write += c.cache_write_5m + c.cache_write_1h;
+        self.cache_write_1h += c.cache_write_1h;
         self.cache_read += c.cache_read;
         self.output += c.output;
         self.long_prompts += u32::from(c.long_prompt());

@@ -13,6 +13,9 @@ const CONTEXT_MANAGEMENT_BETA: &str = "context-management-2025-06-27";
 const TOOL_USES_KEPT: u64 = 6;
 const CLEAR_AT_LEAST: u64 = 20_000;
 
+/// The cache of the tools and the system prompt: one hour (a longer duration must come before shorter ones).
+static PREFIX_CACHE: std::sync::LazyLock<Value> = std::sync::LazyLock::new(|| json!({ "type": "ephemeral", "ttl": "1h" }));
+
 /// Attempts for temporary errors (rate limit, overload, server or network errors).
 const ATTEMPTS: u32 = 4;
 /// Longest wait between attempts, also when the API asks for a longer one (retry-after).
@@ -202,8 +205,10 @@ impl ClaudeClient {
         let mut body = json!({
             "model": self.model,
             "max_tokens": self.max_tokens,
-            // The system prompt and the tools are the same in every request: cached by Anthropic, they cost a tenth.
-            "system": [{ "type": "text", "text": system, "cache_control": { "type": "ephemeral" } }],
+            // The system prompt and the tools are the same in every request: cached by Anthropic, they cost a tenth. Kept
+            // for an hour (LC-302): between turns the user often reads, works in EA or waits longer than 5 minutes, and a
+            // rewrite of this part costs twelve reads. The conversation marks stay at 5 minutes (written every round).
+            "system": [{ "type": "text", "text": system, "cache_control": PREFIX_CACHE.clone() }],
             "messages": messages,
         });
         if let Some(list) = body["messages"].as_array_mut() {
@@ -212,7 +217,7 @@ impl ClaudeClient {
         if let Some(t) = tools {
             let mut tools = t.clone();
             if let Some(last) = tools.as_array_mut().and_then(|list| list.last_mut()) {
-                last["cache_control"] = json!({ "type": "ephemeral" });
+                last["cache_control"] = PREFIX_CACHE.clone();
             }
             body["tools"] = tools;
         }
@@ -361,6 +366,10 @@ mod cache_tests {
         let tools = json!([{"name": "a", "input_schema": {}}, {"name": "b", "input_schema": {}}]);
         let body = client().request_body("system", &messages, Some(&tools));
         assert_eq!(marks(&body), 4, "tools, system and two in the conversation: the API allows four");
+        // The tools and the system prompt for an hour, the conversation for 5 minutes (longer ones first, as the API needs).
+        assert_eq!(body["tools"][1]["cache_control"]["ttl"], "1h");
+        assert_eq!(body["system"][0]["cache_control"]["ttl"], "1h");
+        assert!(body["messages"][4]["content"][0]["cache_control"]["ttl"].is_null());
         let sent = body["messages"].as_array().unwrap();
         // The newest message: its last block that can carry a mark (the empty text cannot).
         assert!(sent[4]["content"][0]["cache_control"].is_object() && sent[4]["content"][1]["cache_control"].is_null());
@@ -381,6 +390,19 @@ mod cache_tests {
             Value::Array(a) => a.iter_mut().for_each(strip),
             _ => {}
         }
+    }
+
+    /// Real API: a new prefix (system + tools) is written for an hour, the conversation for 5 minutes.
+    #[test]
+    #[ignore = "requires an API key (LOONAR_TEST_PROPS)"]
+    fn prefix_is_written_for_an_hour() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("settings");
+        let client = ClaudeClient::from_config(&cfg, 64).unwrap();
+        let system = format!("Test {}. {}", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0), "You answer with one word. ".repeat(400));
+        let tools = json!([{"name": "noop", "description": "Does nothing.", "input_schema": {"type": "object", "properties": {}}}]);
+        let r = client.send_value(&system, &[json!({"role": "user", "content": "Say ok."})], Some(&tools)).unwrap();
+        println!("USAGE {}", r["usage"]);
+        assert!(r["usage"]["cache_creation"]["ephemeral_1h_input_tokens"].as_u64().unwrap_or(0) > 0, "the prefix is written for an hour");
     }
 
     #[test]
