@@ -229,6 +229,11 @@ Leave out greetings and repeated tool output. Write in the language of the conve
     Ok(kept)
 }
 
+/// The offer of a stronger model for a document (LC-307): {0} the stronger model, {1} the current one, {2} how many times
+/// the price.
+const DOCUMENT_MODEL_PRICE_QUESTION: &str = "📄 A document: {0} writes documents clearly better than {1} (it keeps to the template and to every requirement), at about {2}× the price. Approve: this answer with {0}, then back to {1}. Reject: {1} stays.";
+const DOCUMENT_MODEL_QUESTION: &str = "📄 A document: {0} writes documents clearly better than {1} (it keeps to the template and to every requirement). Approve: this answer with {0}, then back to {1}. Reject: {1} stays.";
+
 /// The prompt a turn starts with, at most (tokens, with the system prompt and the tools): above it the earlier part of
 /// the conversation is summarised, leaving room for the tool results of the turn below Claude Haiku 5.5's 100k-token
 /// price tier (LC-301). Counted by the API (LC-306), estimated only where it cannot count.
@@ -237,6 +242,33 @@ const TURN_START_BUDGET: u64 = 70_000;
 const KEEP_MESSAGES: usize = 8;
 /// Within a turn: above this many prompt tokens the API clears the oldest tool results itself.
 const TOOL_CLEARING_AT: u64 = 85_000;
+
+/// A stronger model of the same provider for writing a document (LC-307): Claude Sonnet 5.5 instead of Haiku, the first
+/// OpenAI model instead of a mini or nano one. None when the model is already a strong one, or the provider is reached
+/// through the hub or another address (which models it offers is not known).
+fn document_model(cfg: &AppConfig) -> Option<String> {
+    if cfg.uses_openai() {
+        let model = cfg.openai_model.to_lowercase();
+        (cfg.openai_url.trim().is_empty() && (model.contains("mini") || model.contains("nano"))).then(|| config::OPENAI_MODELS[0].to_string())
+    } else {
+        (cfg.claude_url.trim().is_empty() && cfg.claude_model.contains("haiku") && hub::via_hub(cfg, "ai").is_none()).then(|| "claude-sonnet-5-5".to_string())
+    }
+}
+
+/// Whether a message asks for a document or page to be written or changed (a verb of making and a kind of document).
+fn asks_for_document(text: &str) -> bool {
+    const MAKE: [&str; 27] = [
+        "napisz", "przygotuj", "stwórz", "utwórz", "wygeneruj", "zrób", "opracuj", "sporządź", "zredaguj", "popraw", "uzupełnij",
+        "write", "prepare", "create", "generate", "draft", "produce", "update", "rewrite",
+        "erstelle", "schreib", "generiere", "überarbeite", "rédige", "crée", "prépare", "génère",
+    ];
+    const DOCUMENT: [&str; 18] = [
+        "dokument", "stron", "confluence", "word", "docx", "raport", "specyfikac", "brd",
+        "document", "page", "report", "specification", "seite", "bericht", "spezifikation", "rapport", "spécification", "wiki",
+    ];
+    let t = text.to_lowercase();
+    MAKE.iter().any(|w| t.contains(w)) && DOCUMENT.iter().any(|w| t.contains(w))
+}
 
 /// The tokens of a request: counted by Anthropic, or estimated (LC-306).
 fn prompt_tokens(client: &claude::ClaudeClient, system: &str, msgs: &[Value], tools: Option<&Value>) -> u64 {
@@ -5894,6 +5926,31 @@ fn run_turn_with(
     if let Err(message) = hub::required(cfg) {
         bail!("{message}");
     }
+    // A document with a small model (LC-307): the user is offered a stronger one for this answer only; the next answer
+    // uses the model of the settings again.
+    let document_cfg;
+    let cfg = match (allowed, document_model(cfg), messages.last()) {
+        (None, Some(model), Some(last)) if last.role == "user" && asks_for_document(&last.text) => {
+            let current = if cfg.uses_openai() { cfg.openai_model.clone() } else { cfg.claude_model.clone() };
+            let ratio = usage::prices(&model, 0).zip(usage::prices(&current, 0)).map(|(a, b)| (a.input / b.input).round()).filter(|r| *r > 1.0);
+            let question = match ratio {
+                Some(r) => crate::i18n::fmt(DOCUMENT_MODEL_PRICE_QUESTION, &[model.clone(), current.clone(), r.to_string()]),
+                None => crate::i18n::fmt(DOCUMENT_MODEL_QUESTION, &[model.clone(), current.clone()]),
+            };
+            if (approver.ask)(question) {
+                let mut stronger = cfg.clone();
+                if stronger.uses_openai() { stronger.openai_model = model.clone() } else { stronger.claude_model = model.clone() }
+                telemetry::event("event_document_model");
+                emit(WorkerEvent::StepStart(crate::i18n::fmt("📄 This answer: {0}", &[model.clone()])));
+                emit(WorkerEvent::StepEnd { ok: true, detail: crate::i18n::fmt("the next one with {0} again", &[current]) });
+                document_cfg = stronger;
+                &document_cfg
+            } else {
+                cfg
+            }
+        }
+        _ => cfg,
+    };
     let tool_ctx = tools::ToolContext { cfg, approver };
     if allowed.is_some() {
         telemetry::event("event_agent_run");
@@ -8441,6 +8498,36 @@ mod tests {
 {}", messages.len(), text.chars().take(1_500).collect::<String>());
         assert!(after <= TURN_START_BUDGET && shorter[0].created == from && shorter[0].role == "user");
         println!("COST {}", usage::answer_totals().line());
+    }
+
+    /// LC-307: a request for a document is recognised, and only a small model of a known address is offered a stronger one.
+    #[test]
+    fn stronger_model_for_documents() {
+        for yes in ["Przygotuj dokument ogólny w Confluence na podstawie P_1805", "write a specification page", "Popraw stronę w Confluence", "Erstelle einen Bericht"] {
+            assert!(asks_for_document(yes), "{yes}");
+        }
+        for no in ["Przeanalizuj kod klasy Order", "co jest na diagramie?", "Utwórz element klasy Klient"] {
+            assert!(!asks_for_document(no), "{no}");
+        }
+        let dir = std::env::temp_dir().join(format!("loonar-doc-model-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("app.properties"), "").unwrap();
+        let mut cfg = config::AppConfig::load(&dir.join("app.properties")).unwrap();
+        cfg.ai_provider = "anthropic".into();
+        cfg.claude_model = "claude-haiku-5-5".into();
+        cfg.claude_url = String::new();
+        assert_eq!(document_model(&cfg).as_deref(), Some("claude-sonnet-5-5"));
+        cfg.claude_model = "claude-sonnet-5-5".into();
+        assert_eq!(document_model(&cfg), None);
+        cfg.claude_model = "claude-haiku-5-5".into();
+        cfg.claude_url = "https://gateway.example.com".into();
+        assert_eq!(document_model(&cfg), None);
+        cfg.ai_provider = "openai".into();
+        cfg.openai_model = "gpt-5-mini".into();
+        cfg.openai_url = String::new();
+        assert_eq!(document_model(&cfg).as_deref(), Some(config::OPENAI_MODELS[0]));
+        cfg.openai_model = "gpt-5.1".into();
+        assert_eq!(document_model(&cfg), None);
     }
 
     /// LC-306: the real prompt of a turn counted by the API, and the estimate used where it cannot be counted (not below
