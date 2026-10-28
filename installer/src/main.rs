@@ -2369,7 +2369,7 @@ impl Setup {
             ui.set_width(ui.available_width());
             ui.label(egui::RichText::new(crate::i18n::tr("Important: please leave them on")).size(15.0).strong().color(theme::ERROR));
             ui.add_space(4.0);
-            ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Loonar Compass is free and developed by one person. The statistics are the only way to see which functions people really use, where the assistant fails and what to fix first. Without them, decisions about the next versions are guesses.")).color(theme::ERROR)).wrap());
+            ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Loonar Compass is free. The statistics are the only way to see which functions users really use, where the assistant fails and what to fix first. Without them, decisions about the next versions are guesses.")).color(theme::ERROR)).wrap());
         });
         ui.add_space(10.0);
         ui.label(bold(crate::i18n::tr("What is sent"), 14.5));
