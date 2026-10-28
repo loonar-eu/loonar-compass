@@ -7,6 +7,8 @@
 mod check;
 mod client_cert;
 mod code_read;
+mod usage;
+mod changelog;
 mod user_oauth;
 mod gdrive;
 mod telemetry;
@@ -97,15 +99,14 @@ fn system_prompt(cfg: &AppConfig) -> String {
         "{SYSTEM_PROMPT}\n\n{SAFETY_RULES}\n\n{MODEL_STORE}\n\n{LANGUAGE_RULE}\n\n{MEMORY_RULES}\n\n{memories}\n\n{model_instructions}\n\n{WORK_RULES}\n\n{DOC_RULES}\n\n{templates}\n\n\
          You are running inside the {app} application, version {version} (a desktop AI assistant for Enterprise Architect). \
          Application owner: {OWNER}, {OWNER_ADDRESS}, {OWNER_CONTACT}. Language model: {model}. User guide of this version: {docs}. \
-         Answer questions about yourself, this application, its features and limitations based on the changelog below \
-         (newest version first; \"Prerequisites\" lists requirements on the EA model without which the application does not work, \
-         \"Known limitations\" lists things the application cannot do). \
-         Do not attribute to the application any features that are not in the changelog.\n\n\
-         <changelog>\n{CHANGELOG_EN}\n</changelog>",
+         The prerequisites are requirements on the EA model without which the application does not work; the known limitations are \
+         things it cannot do.\n{about}",
         app = config::APP_NAME,
         version = app_version(),
         model = config::CLAUDE_MODEL,
         docs = docs_url(),
+        // The changelog itself is a tool (app_changelog): only its contents and the prerequisites stay here (LC-300).
+        about = changelog::prompt_section(),
         memories = memory::prompt_section(&cfg.memory_dir, &cfg.model_label()),
         model_instructions = instructions::prompt_section(cfg),
         MODEL_STORE = format!(
@@ -1607,6 +1608,7 @@ impl App {
         let telemetry_on = saved.get("telemetry.enabled").is_none_or(|v| v != "false");
         if let Some(dir) = props_path.parent() {
             telemetry::init(dir, telemetry_on);
+            usage::init(dir);
         }
         let telemetry_notice = telemetry_on && telemetry::policy_block().is_none() && !saved.contains_key("telemetry.notice");
 
@@ -3265,7 +3267,7 @@ impl App {
         let text = expression.clone();
         std::thread::spawn(move || {
             let result = (|| -> anyhow::Result<Vec<String>> {
-                let client = claude::ClaudeClient::from_config(&cfg, 1500)?.with_effort("low");
+                let client = claude::ClaudeClient::from_config(&cfg, 1500)?.with_effort("low").with_purpose("dictionary");
                 let prompt = format!(
                     "Expression: \"{text}\". If it is Polish, list all its inflected forms: singular and plural, in all seven cases \
                      (mianownik, dopełniacz, celownik, biernik, narzędnik, miejscownik, wołacz); inflect a multi-word expression as a \
@@ -5311,7 +5313,7 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
     match group {
         GROUP_CLAUDE => {
             // A small answer budget would end in the model's reasoning: the test asks for one word with room to spare.
-            let client = claude::ClaudeClient::from_config(cfg, 400)?.with_effort("low");
+            let client = claude::ClaudeClient::from_config(cfg, 400)?.with_effort("low").with_purpose("check");
             let response = client.send_value("Answer in one word.", &[json!({ "role": "user", "content": "ping" })], None)?;
             Ok(crate::i18n::fmt("Saved. The key works: model {0} replied.", &[(response["model"].as_str().unwrap_or(cfg.ai_model())).to_string()]))
         }
@@ -5507,6 +5509,7 @@ fn shorten(text: &str, max: usize) -> String {
 fn tool_step(name: &str, input: &Value) -> String {
     match name {
         "db_query" => crate::i18n::fmt("Reading the model database: {0}", &[(shorten(input["sql"].as_str().unwrap_or(""), 160)).to_string()]),
+        "app_changelog" => crate::i18n::tr("Reading the application's changelog").to_string(),
         "ea_write" => {
             let ops = input["ops"].as_array().cloned().unwrap_or_default();
             crate::i18n::fmt("Saving to EA, {0} operations: {1}", &[(ops.len()).to_string(), (ea::describe(&ops).replace('\n', ", ")).to_string()])
@@ -5788,7 +5791,14 @@ fn run_turn(
     cancel: &AtomicBool,
     emit: &dyn Fn(WorkerEvent),
 ) -> anyhow::Result<()> {
+    usage::begin_answer();
     let result = run_turn_with(cfg, messages, approver, inbox, cancel, emit, None);
+    // The cost of the whole answer, as its last step (LC-300).
+    let totals = usage::answer_totals();
+    if totals.calls > 0 {
+        emit(WorkerEvent::StepStart(crate::i18n::tr("💲 Cost of this answer").into()));
+        emit(WorkerEvent::StepEnd { ok: true, detail: totals.line() });
+    }
     // One record of the task: what the request turned into and how it ended (LC-288).
     telemetry::end_task(result.is_ok(), cancel.load(std::sync::atomic::Ordering::Relaxed));
     result
@@ -5923,14 +5933,19 @@ fn run_turn_with(
             emit(WorkerEvent::StepStart(crate::i18n::tr("💭 The assistant's reasoning").into()));
             emit(WorkerEvent::StepEnd { ok: true, detail: shorten(thinking.trim(), 1200) });
         }
-        telemetry::tokens(resp["usage"]["input_tokens"].as_u64().unwrap_or(0), resp["usage"]["output_tokens"].as_u64().unwrap_or(0));
+        // What this call cost (recorded by the client): the prompt, its share from the cache and the price.
+        let call = usage::Call::from_usage(&cfg.claude_model, "chat", &resp["usage"], 0, 0);
         let planned: Vec<&str> = resp["content"]
             .as_array()
             .map(|blocks| blocks.iter().filter(|b| b["type"] == "tool_use").filter_map(|b| b["name"].as_str()).collect())
             .unwrap_or_default();
         emit(WorkerEvent::StepEnd {
             ok: true,
-            detail: crate::i18n::fmt("{0}, {1} response tokens", &[(if planned.is_empty() { crate::i18n::tr("final answer").to_string() } else { crate::i18n::fmt("next: {0}", &[(planned.join(", ")).to_string()]) }).to_string(), (resp["usage"]["output_tokens"]).to_string()]),
+            detail: format!(
+                "{} · {}",
+                crate::i18n::fmt("{0}, {1} response tokens", &[(if planned.is_empty() { crate::i18n::tr("final answer").to_string() } else { crate::i18n::fmt("next: {0}", &[(planned.join(", ")).to_string()]) }).to_string(), (resp["usage"]["output_tokens"]).to_string()]),
+                crate::i18n::fmt("prompt {0} tokens, {1}% from the cache", &[call.prompt().to_string(), format!("{:.0}", call.cache_share() * 100.0)])
+            ),
         });
         claude::check_refusal(&resp)?;
         let content = resp["content"].clone();
@@ -8278,6 +8293,12 @@ mod tests {
             _ => {}
         };
         run_turn(&cfg, &messages, &approver, &inbox, &cancel, &emit).expect("turn");
+        // The cost of the answer (LC-300), for the before/after comparison of the cost changes.
+        let t = usage::answer_totals();
+        println!(
+            "COST calls={} input={} cache_write={} cache_read={} output={} largest_prompt={} over_100k={} retries={} seconds={:.1} usd={:.5}",
+            t.calls, t.input, t.cache_write, t.cache_read, t.output, t.largest_prompt, t.long_prompts, t.retries, t.millis as f64 / 1000.0, t.usd
+        );
         assert!(!asked.load(Ordering::Relaxed), "asked a question");
         assert_eq!(answers.lock().unwrap().len(), 1, "one answer in the chat");
     }

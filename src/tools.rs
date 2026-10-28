@@ -230,6 +230,7 @@ pub fn definitions() -> Value {
     let mut list = definitions_core();
     if let Some(items) = list.as_array_mut() {
         items.extend(crate::model_db::read_only_definitions());
+        items.push(crate::changelog::definition());
         items.push(crate::scripts::definition());
         items.push(crate::traceability::definition());
         items.push(crate::code_drift::definition());
@@ -767,6 +768,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             crate::code_drift::compare(ctx.cfg, &path, input["package"].as_i64()).map(Into::into)
         }
         "spell_check" => crate::model_spell::check(ctx.cfg, input["package"].as_i64(), crate::i18n::current().code()).map(Into::into),
+        "app_changelog" => Ok(crate::changelog::lookup(input).into()),
         "jira_search" => jira(ctx.cfg)?.search(input["jql"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["jql".to_string()]))?, input["max"].as_u64().unwrap_or(30) as usize).map(Into::into),
         "jira_issue" => jira(ctx.cfg)?.issue(input["key"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["key".to_string()]))?.trim()).map(Into::into),
         "jira_create_issue" => jira_create_issue(input, ctx).map(Into::into),

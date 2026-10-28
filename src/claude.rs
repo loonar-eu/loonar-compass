@@ -12,6 +12,41 @@ const ATTEMPTS: u32 = 4;
 /// Longest wait between attempts, also when the API asks for a longer one (retry-after).
 const MAX_WAIT: Duration = Duration::from_secs(30);
 
+/// Cache breakpoints on the conversation (LC-300): the end of the newest message and of the message before the
+/// previous answer. The tools and the system prompt have their own two, so a request has at most the four the API
+/// allows. Each round of the assistant's loop sends the whole conversation again (history, tool calls and results such
+/// as source files read); with these marks everything sent before is read from the cache at a tenth of the price and
+/// only the new part is written. The second mark keeps the previous round's cache entry reachable when one round adds
+/// many blocks (the API looks back only a limited number of blocks from a mark). The content itself is not changed.
+pub fn mark_conversation_cache(messages: &mut [Value]) {
+    // A message as a plain string and as one text block are the same to the model; every message is sent as blocks, so
+    // a message reads the same in every round whether it carries a mark or not (the cache matches the request byte for
+    // byte up to a mark).
+    for m in messages.iter_mut() {
+        if let Some(text) = m["content"].as_str().map(str::to_string) {
+            if !text.is_empty() {
+                m["content"] = json!([{ "type": "text", "text": text }]);
+            }
+        }
+    }
+    let n = messages.len();
+    for index in [n.checked_sub(1), n.checked_sub(3)].into_iter().flatten() {
+        mark_message(&mut messages[index]);
+    }
+}
+
+fn mark_message(message: &mut Value) {
+    let Some(blocks) = message["content"].as_array_mut() else { return };
+    // The last block that can carry a mark: not reasoning, not an empty text.
+    let target = blocks.iter_mut().rev().find(|b| {
+        let kind = b["type"].as_str().unwrap_or("");
+        !matches!(kind, "thinking" | "redacted_thinking") && !(kind == "text" && b["text"].as_str().is_none_or(|t| t.trim().is_empty()))
+    });
+    if let Some(block) = target {
+        block["cache_control"] = json!({ "type": "ephemeral" });
+    }
+}
+
 pub struct ClaudeClient {
     http: reqwest::blocking::Client,
     api_key: String,
@@ -33,6 +68,8 @@ pub struct ClaudeClient {
     openai_url: String,
     /// Claude through the team hub (the hub keeps the key): its errors are about the hub, not about Anthropic.
     via_hub: bool,
+    /// What the calls are for, in the cost log (chat, summary, agent, translation…).
+    purpose: &'static str,
 }
 
 impl ClaudeClient {
@@ -41,7 +78,7 @@ impl ClaudeClient {
             .timeout(Duration::from_secs(300))
             .connect_timeout(Duration::from_secs(20))
             .build()?;
-        Ok(Self { http, api_key, model, max_tokens, workspace_id: workspace_id.trim().to_string(), effort: String::new(), show_thinking: false, base_url: String::new(), oauth: None, openai: false, openai_url: String::new(), via_hub: false })
+        Ok(Self { http, api_key, model, max_tokens, workspace_id: workspace_id.trim().to_string(), effort: String::new(), show_thinking: false, base_url: String::new(), oauth: None, openai: false, openai_url: String::new(), via_hub: false, purpose: "chat" })
     }
 
     /// The client of the provider chosen in the settings (Claude or OpenAI), with its key, model and effort.
@@ -101,6 +138,12 @@ impl ClaudeClient {
         self
     }
 
+    /// What the calls are for, in the cost log.
+    pub fn with_purpose(mut self, purpose: &'static str) -> Self {
+        self.purpose = purpose;
+        self
+    }
+
     pub fn with_effort(mut self, effort: &str) -> Self {
         self.effort = effort.trim().to_string();
         self
@@ -109,10 +152,35 @@ impl ClaudeClient {
     /// One Messages API call. Returns the whole response (with `content` and `stop_reason`),
     /// because the tool loop must see the `tool_use` blocks. Temporary errors are retried.
     pub fn send_value(&self, system: &str, messages: &[Value], tools: Option<&Value>) -> Result<Value> {
+        let started = std::time::Instant::now();
         if self.openai {
             let body = crate::openai::to_openai(&self.model, self.max_tokens, &self.effort, system, messages, tools);
-            return crate::openai::send(&self.http, &self.openai_url, &self.api_key, &body);
+            let value = crate::openai::send(&self.http, &self.openai_url, &self.api_key, &body)?;
+            crate::usage::record(&crate::usage::Call::from_usage(&self.model, self.purpose, &value["usage"], 0, started.elapsed().as_millis() as u64));
+            return Ok(value);
         }
+        let body = self.request_body(system, messages, tools);
+        let mut attempt = 1;
+        loop {
+            match self.send_once(&body) {
+                Ok(value) => {
+                    // What the call cost: the usage of the answer, the retries before it and the time (LC-300).
+                    crate::usage::record(&crate::usage::Call::from_usage(&self.model, self.purpose, &value["usage"], attempt - 1, started.elapsed().as_millis() as u64));
+                    return Ok(value);
+                }
+                Err(Failure::Retry { error, wait }) if attempt < ATTEMPTS => {
+                    let backoff = Duration::from_secs(2u64.pow(attempt));
+                    std::thread::sleep(wait.unwrap_or(backoff).min(MAX_WAIT));
+                    attempt += 1;
+                    let _ = error;
+                }
+                Err(Failure::Retry { error, .. }) | Err(Failure::Final(error)) => return Err(error),
+            }
+        }
+    }
+
+    /// The Messages API request: the system prompt and the tools cached, the conversation with its cache marks.
+    fn request_body(&self, system: &str, messages: &[Value], tools: Option<&Value>) -> Value {
         let mut body = json!({
             "model": self.model,
             "max_tokens": self.max_tokens,
@@ -120,6 +188,9 @@ impl ClaudeClient {
             "system": [{ "type": "text", "text": system, "cache_control": { "type": "ephemeral" } }],
             "messages": messages,
         });
+        if let Some(list) = body["messages"].as_array_mut() {
+            mark_conversation_cache(list);
+        }
         if let Some(t) = tools {
             let mut tools = t.clone();
             if let Some(last) = tools.as_array_mut().and_then(|list| list.last_mut()) {
@@ -133,22 +204,11 @@ impl ClaudeClient {
         if self.show_thinking {
             body["thinking"] = json!({ "type": "adaptive", "display": "summarized" });
         }
-        let mut attempt = 1;
-        loop {
-            match self.send_once(&body) {
-                Ok(value) => return Ok(value),
-                Err(Failure::Retry { error, wait }) if attempt < ATTEMPTS => {
-                    let backoff = Duration::from_secs(2u64.pow(attempt));
-                    std::thread::sleep(wait.unwrap_or(backoff).min(MAX_WAIT));
-                    attempt += 1;
-                    let _ = error;
-                }
-                Err(Failure::Retry { error, .. }) | Err(Failure::Final(error)) => return Err(error),
-            }
-        }
+        body
     }
 
     fn send_once(&self, body: &Value) -> std::result::Result<Value, Failure> {
+
         let url = if self.base_url.is_empty() { API_URL.to_string() } else { format!("{}/v1/messages", self.base_url) };
         let mut request = self.http.post(&url).header("anthropic-version", API_VERSION);
         if let Some((token_url, client_id, scope, secret)) = &self.oauth {
@@ -241,6 +301,65 @@ pub fn check_refusal(response: &Value) -> Result<()> {
         bail!("{}", crate::i18n::tr("The model declined to answer this request. Rephrase it or ask about something else."));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+
+    fn marks(v: &Value) -> usize {
+        match v {
+            Value::Object(o) => usize::from(o.contains_key("cache_control")) + o.values().map(marks).sum::<usize>(),
+            Value::Array(a) => a.iter().map(marks).sum(),
+            _ => 0,
+        }
+    }
+
+    fn client() -> ClaudeClient {
+        ClaudeClient::new("k".into(), "claude-haiku-5-5".into(), 1000, String::new()).unwrap()
+    }
+
+    #[test]
+    fn a_tool_loop_round_has_four_marks_and_the_content_unchanged() {
+        let messages = vec![
+            json!({"role": "user", "content": "List the controllers"}),
+            json!({"role": "assistant", "content": [{"type": "thinking", "thinking": "", "signature": "s"}, {"type": "text", "text": "Reading."}, {"type": "tool_use", "id": "t1", "name": "code_read", "input": {"path": "C:/a.java"}}]}),
+            json!({"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "class A {}"}]}),
+            json!({"role": "assistant", "content": [{"type": "tool_use", "id": "t2", "name": "code_read", "input": {"path": "C:/b.java"}}]}),
+            json!({"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t2", "content": "class B {}"}, {"type": "text", "text": ""}]}),
+        ];
+        let tools = json!([{"name": "a", "input_schema": {}}, {"name": "b", "input_schema": {}}]);
+        let body = client().request_body("system", &messages, Some(&tools));
+        assert_eq!(marks(&body), 4, "tools, system and two in the conversation: the API allows four");
+        let sent = body["messages"].as_array().unwrap();
+        // The newest message: its last block that can carry a mark (the empty text cannot).
+        assert!(sent[4]["content"][0]["cache_control"].is_object() && sent[4]["content"][1]["cache_control"].is_null());
+        // The message before the previous answer.
+        assert!(sent[2]["content"][0]["cache_control"].is_object());
+        // A string becomes one text block everywhere, so it reads the same with and without a mark.
+        assert_eq!(sent[0]["content"], json!([{"type": "text", "text": "List the controllers"}]));
+        // Reasoning blocks are never marked; the caller's messages are not changed.
+        assert!(sent[1]["content"][0]["cache_control"].is_null());
+        assert_eq!(marks(&json!(messages)), 0);
+        let without_marks = |v: &Value| { let mut v = v.clone(); strip(&mut v); v };
+        assert_eq!(without_marks(&sent[2]), messages[2]);
+    }
+
+    fn strip(v: &mut Value) {
+        match v {
+            Value::Object(o) => { o.remove("cache_control"); o.values_mut().for_each(strip); }
+            Value::Array(a) => a.iter_mut().for_each(strip),
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn short_requests_stay_within_the_limit() {
+        let one = client().request_body("s", &[json!({"role": "user", "content": "Summarise it."})], None);
+        assert_eq!(marks(&one), 2);
+        let empty = client().request_body("s", &[json!({"role": "user", "content": ""})], None);
+        assert_eq!(marks(&empty), 1, "an empty message gets no mark");
+    }
 }
 
 #[cfg(test)]

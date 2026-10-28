@@ -46,7 +46,7 @@ fn run_tool(cfg: &AppConfig, name: &str, input: &Value) -> Result<String> {
 /// Runs the assistant on one question; stops after `timeout`.
 pub fn run(cfg: &AppConfig, prompt: &str, timeout: Duration) -> Result<String> {
     let started = Instant::now();
-    let client = crate::claude::ClaudeClient::from_config(cfg, cfg.claude_max_tokens)?;
+    let client = crate::claude::ClaudeClient::from_config(cfg, cfg.claude_max_tokens)?.with_purpose("agent");
     let system = system_prompt(cfg);
     let tools = definitions();
     let mut messages = vec![json!({ "role": "user", "content": [{ "type": "text", "text": prompt }] })];

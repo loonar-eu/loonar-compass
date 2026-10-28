@@ -301,14 +301,39 @@ pub fn ai_error() {
 }
 
 /// Tokens of one model response.
-pub fn tokens(input: u64, output: u64) {
+/// One call to the model (LC-300): the tokens of the task (all of the prompt, cache included, and the output) and the
+/// day's counters: input without cache, cache writes and reads, output, calls, calls over Haiku's 100k-token price
+/// tier, and the cost in thousandths of a dollar.
+pub fn usage(call: &crate::usage::Call) {
     if let Some(task) = TASK.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
-        task.tokens += input + output;
+        task.tokens += call.prompt() + call.output;
     }
     with_state(|s| {
-        bump(&mut s.counters, "tokens", "in", input);
-        bump(&mut s.counters, "tokens", "out", output);
+        bump(&mut s.counters, "tokens", "in", call.input);
+        bump(&mut s.counters, "tokens", "out", call.output);
+        bump(&mut s.counters, "tokens", "cache_write", call.cache_write_5m + call.cache_write_1h);
+        bump(&mut s.counters, "tokens", "cache_read", call.cache_read);
+        bump(&mut s.counters, "tokens", "calls", 1);
+        if call.long_prompt() {
+            bump(&mut s.counters, "tokens", "calls_over_100k", 1);
+        }
+        if let Some(usd) = call.usd() {
+            bump(&mut s.counters, "tokens", "usd_milli", (usd * 1000.0).round() as u64);
+        }
     });
+}
+
+/// The highest count the feedback service accepts: a larger one would make it refuse the whole day.
+const MAX_COUNT: u64 = 10_000_000;
+
+fn clamp_counts(map: &mut Map<String, Value>) {
+    for v in map.values_mut() {
+        match v {
+            Value::Number(n) if n.as_u64().is_some_and(|n| n > MAX_COUNT) => *v = json!(MAX_COUNT),
+            Value::Object(m) => clamp_counts(m),
+            _ => {}
+        }
+    }
 }
 
 /// An approval was asked; `accepted` = the user agreed.
@@ -481,6 +506,8 @@ pub fn day_summary(day: &str) -> Option<Value> {
     if counters.is_empty() && setup.is_null() {
         return None;
     }
+    // A busy day passes 10 million input tokens: the service would refuse the whole summary.
+    clamp_counts(&mut counters);
     let mut out = Map::new();
     out.insert("v".into(), json!(1));
     out.insert("install".into(), json!(install_id()));

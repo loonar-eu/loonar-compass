@@ -1811,3 +1811,12 @@ remove labels: {0} ‖ usuń etykiety: {0} ‖ Labels entfernen: {0} ‖ retirer
 Changed the Jira issue {0}: {1} ‖ Zmieniono zgłoszenie Jira {0}: {1} ‖ Jira-Vorgang {0} geändert: {1} ‖ Ticket Jira {0} modifié : {1}
 changing the issue ‖ zmiana zgłoszenia ‖ Ändern des Vorgangs ‖ modification du ticket
 nothing to change: give a new summary, description or labels ‖ nie ma czego zmienić: podaj nowy tytuł, opis albo etykiety ‖ nichts zu ändern: geben Sie eine neue Zusammenfassung, Beschreibung oder Labels an ‖ rien à modifier : donnez un nouveau résumé, une description ou des étiquettes
+{0} calls to the model ‖ wywołania modelu: {0} ‖ {0} Aufrufe des Modells ‖ {0} appels au modèle
+{0} input ({1}% from the cache, {2} written to it) ‖ wejście {0} ({1}% z cache, {2} zapisane do cache) ‖ Eingabe {0} ({1} % aus dem Cache, {2} in den Cache geschrieben) ‖ entrée {0} ({1} % depuis le cache, {2} écrits dans le cache)
+{0} output ‖ wyjście {0} ‖ Ausgabe {0} ‖ sortie {0}
+{0} over 100k tokens ‖ powyżej 100 tys. tokenów: {0} ‖ über 100.000 Tokens: {0} ‖ au-delà de 100 000 jetons : {0}
+{0} retries ‖ ponowienia: {0} ‖ Wiederholungen: {0} ‖ nouvelles tentatives : {0}
+cost unknown ‖ koszt nieznany ‖ Kosten unbekannt ‖ coût inconnu
+💲 Cost of this answer ‖ 💲 Koszt tej odpowiedzi ‖ 💲 Kosten dieser Antwort ‖ 💲 Coût de cette réponse
+prompt {0} tokens, {1}% from the cache ‖ prompt {0} tokenów, {1}% z cache ‖ Prompt {0} Tokens, {1} % aus dem Cache ‖ prompt {0} jetons, {1} % depuis le cache
+Reading the application's changelog ‖ Czytanie listy zmian aplikacji ‖ Lesen des Änderungsprotokolls der Anwendung ‖ Lecture du journal des modifications de l’application

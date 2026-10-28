@@ -18,6 +18,7 @@ All notable changes to Loonar Compass (named Loonar EA Assistant until version 0
 - **One approval for a series:** the approval card of a Jira issue, Confluence publishing, a memory note, an MCP tool call, an upload and an EA script has the button “Approve all … until Compass is closed”. Ten Jira issues are one click instead of ten.
 - **Stories and use cases under an epic on Jira Server / Data Center:** an issue with an epic as its parent is joined through the “Epic Link” field (`parent` is only for sub-tasks there). Before, Jira rejected it with “Issue type … is not a sub-task but a parent is specified”. Jira Cloud works as before.
 - **Changing Jira issues:** the assistant corrects existing issues – summary, description and labels (added and removed), e.g. removes a needless mark from the acceptance criteria of all issues at once. Approved as when creating, also once for all.
+- **Lower AI model costs:** the whole conversation of the assistant's loop – history and tool results such as source files read – is now in Anthropic's cache, so every further step pays a tenth of the price for it. The changelog is no longer pasted into every request (about 18,000 tokens less); the assistant reads it with a tool when you ask about Compass's features. In the code-analysis test the cost of a task fell by about 79%. Under every answer the step “💲 Cost of this answer” shows the calls, tokens, cache share and the cost in USD; every call also goes to the local `usage` log (numbers only, no content).
 
 ## Version 0.9 (2026-10-27)
 

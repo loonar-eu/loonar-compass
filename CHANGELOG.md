@@ -18,6 +18,7 @@ Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Lo
 - **Jedna zgoda na serię:** w karcie zgody na zgłoszenie Jira, publikację w Confluence, notatkę pamięci, wywołanie narzędzia MCP, wysyłkę pliku i skrypt EA jest przycisk „Zatwierdź wszystkie … do zamknięcia Compassa”. Dziesięć zgłoszeń Jira to jedno kliknięcie zamiast dziesięciu.
 - **Story i UC pod epikiem w Jira Server / Data Center:** zgłoszenie z rodzicem-epikiem jest dowiązywane przez pole „Epic Link” (pole `parent` jest tam tylko dla pod-zadań). Wcześniej Jira odrzucała je błędem „Issue type … is not a sub-task but a parent is specified”. Jira Cloud działa jak dotąd.
 - **Zmiana zgłoszeń Jira:** asystent poprawia istniejące zgłoszenia – tytuł, opis i etykiety (dodaje i usuwa), np. usuwa z kryteriów akceptacji niepotrzebne oznaczenie we wszystkich zgłoszeniach naraz. Zgoda jak przy zakładaniu, także jedną na wszystkie.
+- **Niższe koszty modelu AI:** cała rozmowa w pętli asystenta – historia i wyniki narzędzi, np. przeczytane pliki kodu – jest teraz w cache Anthropic, więc każdy kolejny krok płaci za nią dziesiątą część ceny. Lista zmian nie jest już wklejana do każdego zapytania (ok. 18 tys. tokenów mniej); asystent czyta ją narzędziem, gdy pytasz o funkcje Compassa. W teście analizy kodu koszt zadania spadł o ok. 79%. Pod każdą odpowiedzią krok „💲 Koszt tej odpowiedzi” pokazuje liczbę wywołań, tokeny, udział cache i koszt w USD; każde wywołanie trafia też do lokalnego dziennika `usage` (same liczby, bez treści).
 
 ## Wersja 0.9 (2026-10-27)
 
