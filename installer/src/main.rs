@@ -2367,7 +2367,7 @@ impl Setup {
         ui.add_space(10.0);
         egui::Frame::none().stroke(egui::Stroke::new(1.5_f32, theme::ERROR)).rounding(6.0).inner_margin(egui::Margin::same(12.0)).show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.label(egui::RichText::new(crate::i18n::tr("Important: please leave them on")).size(15.0).strong().color(theme::ERROR));
+            ui.label(egui::RichText::new(crate::i18n::tr("A request from the author: please leave them on")).size(15.0).strong().color(theme::ERROR));
             ui.add_space(4.0);
             ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr("Loonar Compass is free. The statistics are the only way to see which functions users really use, where the assistant fails and what to fix first. Without them, decisions about the next versions are guesses.")).color(theme::ERROR)).wrap());
         });
