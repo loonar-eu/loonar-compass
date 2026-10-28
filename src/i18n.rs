@@ -235,7 +235,22 @@ mod tests {
                     while end < bytes.len() && !(bytes[end] == b'"' && (end == 0 || bytes[end - 1] != b'\\')) {
                         end += 1;
                     }
-                    let key = body[..end].replace("\\\"", "\"").replace("\\n", "\n");
+                    // The text as the program has it: Rust escapes resolved (\\\\ is one backslash; found in 0.9.2: a key with a
+                    // registry path matched here but not at run time, so the text stayed in English).
+                    let mut key = String::new();
+                    let mut chars = body[..end].chars();
+                    while let Some(c) = chars.next() {
+                        if c != '\\' {
+                            key.push(c);
+                            continue;
+                        }
+                        match chars.next() {
+                            Some('n') => key.push('\n'),
+                            Some('t') => key.push('\t'),
+                            Some(other) => key.push(other),
+                            None => key.push('\\'),
+                        }
+                    }
                     checked += 1;
                     match table().get(&key) {
                         Some(row) if row.iter().all(|t| !t.is_empty()) => {}

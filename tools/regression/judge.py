@@ -71,7 +71,7 @@ def judge(case, evidence_dir, api_key):
     client = anthropic.Anthropic(api_key=api_key)
     content = [{"type": "text", "text": _case_text(case)}] + _evidence_blocks(evidence_dir)
     response = client.messages.create(
-        model=MODEL, max_tokens=2000, system=SYSTEM,
+        model=MODEL, max_tokens=6000, system=SYSTEM,
         output_config={"effort": "medium", "format": {"type": "json_schema", "schema": SCHEMA}},
         messages=[{"role": "user", "content": content}],
     )

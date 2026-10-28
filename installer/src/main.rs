@@ -649,13 +649,18 @@ fn read_install(product: &Product, scope: Scope) -> Option<Installed> {
 }
 
 /// Closes the application started from `dir` (its windows first, as a person would; whatever is still running after
-/// a few seconds is stopped), so that a failed installation can be retried (LC-284).
+/// a few seconds is stopped), so that a failed installation can be retried (LC-284). The path is compared without
+/// case and in its full form; a copy whose path cannot be read (it runs with other rights) is asked to close its
+/// window, not stopped (found in the 0.9.2 lab tests: the button did not close Compass).
 fn close_app_in(dir: &Path) {
     let exe = dir.join(APP_EXE).display().to_string().replace('\'', "''");
     let script = format!(
-        "$p = Get-Process -Name LoonarCompass -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -eq '{exe}' }}; \
-         $p | ForEach-Object {{ [void]$_.CloseMainWindow() }}; \
-         for ($i = 0; $i -lt 20 -and ($p | Where-Object {{ -not $_.HasExited }})); $i++) {{ Start-Sleep -Milliseconds 250; $p | ForEach-Object {{ $_.Refresh() }} }}; \
+        "$exe = [IO.Path]::GetFullPath('{exe}'); \
+         $all = @(Get-Process -Name LoonarCompass -ErrorAction SilentlyContinue); \
+         $p = @($all | Where-Object {{ $_.Path -and ([IO.Path]::GetFullPath($_.Path) -ieq $exe) }}); \
+         $unknown = @($all | Where-Object {{ -not $_.Path }}); \
+         ($p + $unknown) | ForEach-Object {{ [void]$_.CloseMainWindow() }}; \
+         for ($i = 0; $i -lt 20 -and (($p + $unknown) | Where-Object {{ -not $_.HasExited }})); $i++) {{ Start-Sleep -Milliseconds 250; ($p + $unknown) | ForEach-Object {{ $_.Refresh() }} }}; \
          $p | Where-Object {{ -not $_.HasExited }} | Stop-Process -Force -ErrorAction SilentlyContinue"
     );
     let _ = Command::new(windows_dir().join("System32").join("WindowsPowerShell").join("v1.0").join("powershell.exe"))
@@ -1288,7 +1293,10 @@ fn save_user_settings(c: &ConfigForm, lang: Lang) -> Result<Vec<String>> {
         ("telemetry.notice", "shown".to_string()),
     ])?;
     if !c.configure_now {
-        return Ok(vec![crate::i18n::tr("Settings: to be completed in the application, in the \"Settings\" view").to_string()]);
+        // An update keeps the settings (found in the 0.9.2 lab tests: the finish page said they were to be completed).
+        let configured = !new_file && std::fs::read_to_string(&props).is_ok_and(|t| config::parse_properties(&t).contains_key("model.source"));
+        let note = if configured { crate::i18n::tr("Settings: kept from the earlier installation") } else { crate::i18n::tr("Settings: to be completed in the application, in the \"Settings\" view") };
+        return Ok(vec![note.to_string()]);
     }
     let mode = config::ApprovalMode::parse(&c.approval_mode)?;
     let mut updates: Vec<(&str, String)> = vec![
@@ -2283,7 +2291,7 @@ impl Setup {
         ui.add_space(10.0);
         ui.label(bold(crate::i18n::tr("Prerequisites:"), 14.5));
         for line in [
-            crate::i18n::tr("• the EA model is a file (.qea, .qeax) or is in a PostgreSQL database,"),
+            crate::i18n::tr("• the EA model is a file (.qea, .qeax) or is in a database (PostgreSQL, SQL Server, MySQL/MariaDB or Oracle),"),
             crate::i18n::tr("• a model in a database has user security enabled (Enable Security) and a user account for the assistant (any name)."),
         ] {
             ui.label(line);

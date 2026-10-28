@@ -533,7 +533,9 @@ mod tests {
         let bytes = c.download(url).unwrap();
         println!("DOWNLOADED {name} {} of {size} bytes", bytes.len());
         assert!(bytes.starts_with(&[0x89, b'P', b'N', b'G']) && bytes.len() as u64 == *size);
-        assert!(c.download("https://example.com/x.png").is_err());
+        let other = c.download("https://example.com/x.png");
+        println!("REJECTED an address outside this Jira: {}", other.as_ref().err().map(|e| e.to_string()).unwrap_or_else(|| "NOT rejected".into()));
+        assert!(other.is_err());
     }
 
     use super::*;

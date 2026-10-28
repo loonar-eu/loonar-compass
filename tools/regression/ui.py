@@ -115,11 +115,16 @@ class Compass:
         time.sleep(2)
         calm = 0
         while time.time() < end:
-            buttons = [(c.element_info.name or "").strip() for c in self.win.descendants(control_type="Button")]
+            try:
+                buttons = [(c.element_info.name or "").strip() for c in self.win.descendants(control_type="Button")]
+                texts = self.win.descendants(control_type="Text")
+            except Exception:  # the window is busy redrawing: UI Automation may miss it for a moment
+                time.sleep(1)
+                continue
             if any(b in self.APPROVAL for b in buttons):
                 return "approval"
             working = any((c.element_info.name or "").strip().endswith("…") and "Napisz" not in (c.element_info.name or "")
-                          for c in self.win.descendants(control_type="Text"))
+                          for c in texts)
             calm = calm + 1 if SEND in buttons and not working else 0
             if calm >= 3:
                 return "done"

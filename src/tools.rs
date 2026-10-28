@@ -1475,9 +1475,11 @@ fn create_confluence_page(input: &Value, ctx: &ToolContext) -> Result<ToolOutput
     Ok(ToolOutput {
         text: format!(
             "Page \"{title}\" is ready: file {stored} ({} KB of code, images: {}). In the chat the user sees a card with the buttons \
-             \"Copy page code\" (to paste into the Confluence source editor) and \"Open images folder\" (to attach the images). {publish_hint} {checked}",
+             \"{}\" (to paste into the Confluence source editor) and \"{}\" (to attach the images). {publish_hint} {checked}",
             storage.len() / 1024,
-            attachments.len()
+            attachments.len(),
+            crate::i18n::tr("Copy page code"),
+            crate::i18n::tr("Open images folder")
         ),
         images: Vec::new(),
         files: vec![stored],

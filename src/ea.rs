@@ -657,12 +657,21 @@ model.file=C:/nie-ma/takiego/pliku.qea
         let after = rows("after repair_diagram_links");
         let bound_after = q(&format!("select diagramid from t_connector where connector_id = {c}"));
         println!("created with a diagram: diagramid {unbound:?}; bound one after repair: {bound_after:?}");
+        // Only hidden (no duplicate): the repair with show_hidden shows it.
+        run_batch(&cfg, &[json!({"op":"hide_connectors","diagram":dia,"connectors":[c]})], &BatchOptions::default()).expect("hidden only");
+        let hidden_only = rows("hidden only");
+        let shown_by_repair = run_batch(&cfg, &[json!({"op":"repair_diagram_links","diagram":dia,"show_hidden":true})], &BatchOptions::default()).expect("repair hidden");
+        println!("repair of a hidden link: {}", shown_by_repair["created"]);
+        let after_show = rows("after repair with show_hidden");
         run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &BatchOptions::default()).expect("deleting the test package");
         shutdown();
         assert!(visible(&shown), "{shown:?}");
         assert!(visible(&after), "{after:?}");
         assert_eq!(unbound[0][0], "0", "a dependency is not bound to a diagram");
         assert_eq!(bound_after[0][0], "0", "repair unbinds it");
+        assert!(!visible(&hidden_only), "{hidden_only:?}");
+        assert_eq!(shown_by_repair["created"][0]["hidden_shown"], 1, "the hidden link is shown");
+        assert!(visible(&after_show), "{after_show:?}");
     }
 
     /// Connector route (route_connector): from the left side of B to the left, then up to the bottom side of A.

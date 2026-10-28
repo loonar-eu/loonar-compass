@@ -2,6 +2,7 @@
 it, live tests of the program (cargo) where the check is in the program's own test, web pages where the check is on
 loonar.eu. Each one only gathers evidence; the judge decides."""
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -115,6 +116,16 @@ def cargo_live(out: Path, test: str, name: str, env=None, timeout=1800):
     lines = [l for l in (p.stdout + p.stderr).splitlines() if not l.startswith(("   Compiling", "warning", "  ", "    ", "  |", "   |", "    |")) or "panicked" in l]
     (out / f"{name}.txt").write_text(f"> cargo test {test} -- --ignored\nexit code: {p.returncode}\n\n" + "\n".join(lines[-400:]), encoding="utf-8")
     return p.returncode
+
+
+def cargo_unit(out: Path, filters, name):
+    """Unit tests of the program (no network), only the lines about the tests as evidence."""
+    lines = []
+    for f in filters:
+        p = subprocess.run(["cargo", "test", "--bin", "loonar-compass", f], cwd=REPO, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=1800)
+        lines.append(f"> cargo test {f}   (exit code {p.returncode})")
+        lines += [l for l in (p.stdout + p.stderr).splitlines() if l.startswith(("test ", "running ", "failures", "---- ")) or "panicked" in l]
+    (out / f"{name}.txt").write_text(chr(10).join(lines), encoding="utf-8")
 
 
 def jira_env():
@@ -281,15 +292,22 @@ def new_install_id(out: Path, work: Path):
 def stats_service(out: Path, work: Path):
     fetch("https://compass-feedback.loonar-eu.workers.dev/health", out, "1_health")
     fetch("https://compass-feedback.loonar-eu.workers.dev/v1/summary", out, "2_summary")
-    fetch("http://127.0.0.1:8105/", out, "3_author_dashboard")
+    page = fetch("http://127.0.0.1:8105/", out, "3_author_dashboard_raw")
+    text = html_text(page)
+    sections = ", ".join(f"{h}: {'present' if h in text else 'MISSING'}" for h in ("Website and downloads", "The application"))
+    (out / "3_author_dashboard.txt").write_text(f"Author's dashboard (python tools/stats/dashboard.py --serve 8105), as text. Sections: {sections}\n" + text[:5000], encoding="utf-8")
+    (out / "3_author_dashboard_raw.txt").unlink()
     (out / "note.txt").write_text("Step 4 (D1 retention) needs the Cloudflare console: for a person.", encoding="utf-8")
 
 
 @executor("Polityka prywatności na loonar.eu (po wydaniu)")
 def privacy(out: Path, work: Path):
-    for lang, url in (("pl", "https://loonar.eu/pl/privacy.html"), ("en", "https://loonar.eu/privacy.html"), ("de", "https://loonar.eu/de/privacy.html"), ("fr", "https://loonar.eu/fr/privacy.html")):
+    for lang, url in (("pl", "https://loonar.eu/pl/privacy/"), ("en", "https://loonar.eu/privacy/"), ("de", "https://loonar.eu/de/privacy/"), ("fr", "https://loonar.eu/fr/privacy/")):
         body = fetch(url, out, f"privacy_{lang}_raw")
-        (out / f"privacy_{lang}.txt").write_text(html_text(body), encoding="utf-8")
+        text = html_text(body)
+        dates = sorted(set(re.findall(r"\d{1,2}[.\s]\d{1,2}[.\s]20\d\d|20\d\d-\d\d-\d\d|\d{1,2}\.? \w+ 20\d\d", text)))
+        start = max(0, min([i for i in (text.find(w) for w in ("Statystyki użycia", "Usage statistics", "Nutzungsstatistik", "Statistiques d")) if i >= 0] or [0]))
+        (out / f"privacy_{lang}.txt").write_text(f"{url}\nDates on the page: {dates}\n\nThe usage statistics section:\n{text[start:start + 4500]}", encoding="utf-8")
         (out / f"privacy_{lang}_raw.txt").unlink()
 
 
@@ -297,19 +315,25 @@ def privacy(out: Path, work: Path):
 def website(out: Path, work: Path):
     for lang, url in (("pl", "https://loonar.eu/pl/"), ("en", "https://loonar.eu/"), ("de", "https://loonar.eu/de/"), ("fr", "https://loonar.eu/fr/")):
         body = fetch(url, out, f"site_{lang}_raw")
-        long_dashes = body.count("—")
-        (out / f"site_{lang}.txt").write_text(f"long dashes (—) in the page source: {long_dashes}\n\n" + html_text(body), encoding="utf-8")
+        text = html_text(body)
+        keys = [l.strip() for l in text.splitlines() if any(w in l for w in ("0.9.1", "SHA", "SharePoint", "OneDrive", "Google"))]
+        summary = (f"Long dashes (em dash, U+2014) in the page source: {body.count(chr(0x2014))}. "
+                   f"(Short dashes U+2013, the typographic dash of German and French, are not long dashes: {body.count(chr(0x2013))}.)\n"
+                   + "Lines with 0.9.1 / SHA / SharePoint / OneDrive / Google:\n" + "\n".join(keys[:40]))
+        (out / f"site_{lang}.txt").write_text(summary + "\n\n" + text, encoding="utf-8")
         (out / f"site_{lang}_raw.txt").unlink()
     docs = REPO / "docs" / "Instrukcja_uzytkownika.html"
     text = html_text(docs.read_text(encoding="utf-8"))
     keep = [l for l in text.splitlines() if any(w in l for w in ("innych modeli", "Eksport", "Import", "streszcz", "Koszt", "Zatwierdź wszystkie", "Spróbuj ponownie", "0.9.1", "0.9"))]
     (out / "manual_pl_excerpts.txt").write_text("\n".join(keep[:200]), encoding="utf-8")
-    fetch("https://loonar.eu/docs/0.9/", out, "docs_archive_0.9")
+    archive = fetch("https://loonar.eu/docs/0.9/pl/", out, "docs_archive_0.9_pl_raw")
+    (out / "docs_archive_0.9_pl.txt").write_text("https://loonar.eu/docs/0.9/pl/ (archive of the 0.9 manual):\n" + html_text(archive)[:3000], encoding="utf-8")
+    (out / "docs_archive_0.9_pl_raw.txt").unlink()
 
 
 @executor("Adres Jira/Confluence z przeglądarki (/spaces, /browse)")
 def service_urls(out: Path, work: Path):
-    run(["cargo", "test", "--bin", "loonar-compass", "base"], out, "unit_tests_base_url", cwd=REPO)
+    cargo_unit(out, ["keys_and_addresses", "base"], "unit_tests_base_url")
     def body(c):
         nav(c, "Ustawienia")
         c.evidence("settings")
@@ -382,7 +406,7 @@ def scripts_approve_all(out: Path, work: Path):
         c.evidence("second_script_no_question" if state == "done" else "second_script_asked_again")
         (out / "note.txt").write_text("Step 3 (5 Jira issues) is not run: it would create issues in the real Jira; covered by the program's unit tests with a Jira imitation.", encoding="utf-8")
     in_window(body, settings="approval.mode=auto\n")(out, work)
-    run(["cargo", "test", "--bin", "loonar-compass", "trust"], out, "unit_tests_approve_all", cwd=REPO)
+    cargo_unit(out, ["approval_questions_are_recognised_by_kind", "scripts_differing_only_in_data_have_one_build", "other_code_is_another_build"], "unit_tests_approve_all")
 
 
 @executor("Koszt odpowiedzi, cache i długie rozmowy")
@@ -488,7 +512,14 @@ def document_from_template(out: Path, work: Path):
             c.click("Zatwierdź", timeout=5)
             state = c.wait_idle(900)
         c.steps()
+        wiggle(c)
         c.evidence("document_answer")
+        try:
+            from executors_window import scroll_to
+            scroll_to(c, "Ta odpowiedź")
+            c.evidence("document_steps_model")
+        except Exception:
+            pass
         pages = sorted((c.work / "attachments").glob("*.confluence.md")) if (c.work / "attachments").exists() else []
         (out / "page_source.md").write_text(pages[-1].read_text(encoding="utf-8") if pages else "no page", encoding="utf-8")
         shutil.copy2(TEMPLATES / "Poziom ogólny.md", out / "template_Poziom_ogolny.md")
@@ -502,25 +533,50 @@ def document_from_template(out: Path, work: Path):
 def clickable_links(out: Path, work: Path):
     def body(c):
         c.start_conversation()
-        c.say("Napisz jedno zdanie z linkiem markdown [strona Loonar](https://loonar.eu) i drugie z gołym adresem https://loonar.eu/pl/")
-        links = [(h.element_info.name, h.element_info.control_type) for h in c.win.descendants() if h.element_info.control_type == "Hyperlink"]
-        (out / "hyperlinks_in_window.txt").write_text("\n".join(f"{t}: {n}" for n, t in links) or "no Hyperlink controls", encoding="utf-8")
+        c.say("Odpowiedz dokładnie trzema wierszami: 1) zdanie z linkiem markdown [strona Loonar](https://loonar.eu), 2) zdanie z gołym adresem https://loonar.eu/pl/, 3) adres w kodzie: `https://example.com/kod`.")
         c.evidence("answer_with_links")
+        # A link shows the address on hover (a plain text does not): the pointer rests on each of them.
+        for label, name in (("strona Loonar", "hover_markdown_link"), ("https://loonar.eu/pl/", "hover_bare_address"), ("https://example.com/kod", "hover_address_in_code")):
+            found = [t for t in c.win.descendants() if label in (t.element_info.name or "") and t.element_info.rectangle.left > c.win.rectangle().left + 400]
+            if found:
+                r = found[-1].element_info.rectangle
+                mouse.move(coords=(r.left + min(30, (r.right - r.left) // 2), (r.top + r.bottom) // 2))
+                time.sleep(1.5)
+                c.evidence(name)
+        (out / "note.txt").write_text("egui shows links to UI Automation as text, not as Hyperlink controls: the hover screenshots show the address tooltip and the hand pointer that only links have.", encoding="utf-8")
     in_window(body)(out, work)
-    run(["cargo", "test", "--bin", "loonar-compass", "links_in_text"], out, "unit_test_links", cwd=REPO)
+    cargo_unit(out, ["links_in_text"], "unit_test_links")
 
 
 @executor("Załączniki Jira: pobieranie obrazów do dokumentu")
 def jira_images(out: Path, work: Path):
     cargo_live(out, "attachments_download_live", "download_live_test", dict(jira_env(), LOONAR_TEST_JIRA_ISSUE="LC-245"))
+    links = SCRATCH / "e2e_links_report.md"
+    if links.exists():
+        text = links.read_text(encoding="utf-8")
+        part = text.split("## 2.")[1].split("## 3.")[0] if "## 2." in text else ""
+        (out / "jira_issue_gives_its_link.md").write_text("Reading the issue gives its link (answer of the program in a real conversation):\n## 2." + part, encoding="utf-8")
     report = SCRATCH / "e2e_document_report.md"
     if report.exists():
-        shutil.copy2(report, out / "end_to_end_document_with_jira_images.md")
+        text = report.read_text(encoding="utf-8")
+        turn1 = text.split("## 2.")[0]
+        checks = text.split("## Checks")[1].split("## The page")[0] if "## Checks" in text else ""
+        page = text.split("## The page (markdown)")[1] if "## The page (markdown)" in text else ""
+        images = [l.strip() for l in page.splitlines() if "](image:" in l]
+        (out / "end_to_end_document_with_jira_images.md").write_text(
+            "End-to-end run of the program (documents_092_live, 2026-10-28): a Confluence page from the template \"Poziom biznesowy\" for the Jira issue LC-245, with its images.\n\n"
+            + turn1 + "\n## Checks" + checks + f"\n## Image lines on the page ({len(images)})\n" + "\n".join(images), encoding="utf-8")
 
 
 @executor("Załączniki w Jirze i ostre obrazy diagramów")
 def jira_attach_sharp(out: Path, work: Path):
-    run(["cargo", "test", "--bin", "loonar-compass", "jira"], out, "unit_tests_jira", cwd=REPO)
+    cargo_unit(out, ["cloud_and_server_against_mock", "keys_and_addresses"], "unit_tests_jira_create_epic_update_attachment")
+    source = (REPO / "src" / "jira.rs").read_text(encoding="utf-8")
+    start = source.index("fn cloud_and_server_against_mock")
+    (out / "what_the_jira_test_checks.txt").write_text(
+        "The source of the unit test cloud_and_server_against_mock (Jira Cloud and Server imitation): it creates issues, a story under an epic "
+        "(Cloud: parent, Server: the Epic Link field), changes an issue (description, labels) and adds an attachment, and checks the requests.\n\n"
+        + source[start:start + 5000], encoding="utf-8")
     cargo_live(out, "ea_export_size", "ea_export_size_live", {"LOONAR_TEST_PROPS": str(test_props(out))})
 
 

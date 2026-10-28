@@ -265,12 +265,17 @@ fn asks_for_document(text: &str) -> bool {
         "write", "prepare", "create", "generate", "draft", "produce", "update", "rewrite",
         "erstelle", "schreib", "generiere", "überarbeite", "rédige", "crée", "prépare", "génère",
     ];
-    const DOCUMENT: [&str; 18] = [
-        "dokument", "stron", "confluence", "word", "docx", "raport", "specyfikac", "brd",
-        "document", "page", "report", "specification", "seite", "bericht", "spezifikation", "rapport", "spécification", "wiki",
+    // Kinds of documents only: a "page" or "strona" alone is too common (\"a sentence with a link to the Loonar page\" is no
+    // document; found in the 0.9.2 tests); a Confluence page is named by \"confluence\".
+    const DOCUMENT: [&str; 15] = [
+        "dokument", "confluence", "word", "docx", "raport", "specyfikac", "brd",
+        "document", "report", "specification", "bericht", "spezifikation", "rapport", "spécification", "wiki",
     ];
-    let t = text.to_lowercase();
-    MAKE.iter().any(|w| t.contains(w)) && DOCUMENT.iter().any(|w| t.contains(w))
+    // Whole words from their beginning (\"word\" is not in \"password\", \"brd\" not in a longer word's middle).
+    let lower = text.to_lowercase();
+    let words: Vec<&str> = lower.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).collect();
+    let starts = |list: &[&str]| words.iter().any(|w| list.iter().any(|p| w.starts_with(p)));
+    starts(&MAKE) && starts(&DOCUMENT)
 }
 
 /// The model offered for an answer (LC-307, LC-311): a template named in the message (by its name or group) decides:
@@ -1017,7 +1022,7 @@ fn info_ui(ui: &mut egui::Ui) {
     ui.add_space(16.0);
 
     ui.label(egui::RichText::new(crate::i18n::tr("About the application")).font(egui::FontId::new(16.0, egui::FontFamily::Name(markdown::BOLD_FAMILY.into()))));
-    ui.add(egui::Label::new(crate::i18n::tr("A standalone assistant for Enterprise Architect. It reads the model from a PostgreSQL database or an EA file (.qea, .qeax), saves changes through COM and shows diagrams as images. It uses only the Claude Haiku 5.5 model through the Anthropic API.")).wrap());
+    ui.add(egui::Label::new(crate::i18n::tr("An assistant for Enterprise Architect, as a separate application and inside EA. It reads the model from an EA file (.qea, .qeax) or a database (PostgreSQL, SQL Server, MySQL/MariaDB, Oracle), saves changes through EA and shows diagrams as images. It works with Claude (Anthropic), OpenAI, Azure OpenAI or a local model, with your own key.")).wrap());
     ui.add_space(8.0);
     ui.horizontal_wrapped(|ui| {
         ui.hyperlink_to(crate::i18n::tr("User guide"), docs_url());
@@ -1315,6 +1320,10 @@ struct Stats {
     notice_open: bool,
     /// The view was loaded: what was sent, what today looks like.
     loaded: bool,
+    /// When it was loaded: while the view is open it is read again every few seconds (a summary sent meanwhile shows up).
+    loaded_at: Option<std::time::Instant>,
+    /// The team hub's policy switches statistics off (found in the 0.9.2 lab tests: the view did not say so).
+    team_off: bool,
     sent: Vec<(String, String, String)>,
     today: String,
     status: String,
@@ -4642,7 +4651,11 @@ impl App {
     /// Usage statistics: the setup and the session at the start, a send of ended days a minute after the start and
     /// then every hour, the views opened and the notice at the first start.
     fn telemetry_tick(&mut self, ctx: &egui::Context) {
-        if !self.stats.started {
+        // Nothing is sent while the first-start notice waits for the user's answer (found in the 0.9.2 lab tests: a
+        // copy started without the settings written by the installer sent the start ping and a day summary before
+        // the user could switch statistics off).
+        let waiting = self.stats.notice_open;
+        if !self.stats.started && !waiting {
             self.stats.started = true;
             telemetry::event(if ea::in_ea_tab() { "session_ea_tab" } else { "session_standalone" });
             let cfg_for_ping = self.cfg.clone();
@@ -4661,6 +4674,7 @@ impl App {
         }
         let now = std::time::Instant::now();
         match self.stats.next_send {
+            _ if waiting => {}
             None => self.stats.next_send = Some(now + std::time::Duration::from_secs(60)),
             Some(when) if now >= when => {
                 self.stats.next_send = Some(now + std::time::Duration::from_secs(3600));
@@ -4724,8 +4738,11 @@ impl App {
 
     /// The "Usage statistics" view: the switch, the installation id, today so far and what was sent in 30 days.
     fn stats_ui(&mut self, ui: &mut egui::Ui) {
-        if !self.stats.loaded {
+        if !self.stats.loaded || self.stats.loaded_at.is_none_or(|t| t.elapsed().as_secs() >= 5) {
             self.stats.loaded = true;
+            self.stats.loaded_at = Some(std::time::Instant::now());
+            self.stats.team_off = self.cfg.as_ref().is_some_and(hub::team_telemetry_off);
+            ui.ctx().request_repaint_after(std::time::Duration::from_secs(5));
             self.stats.sent = telemetry::sent_records();
             self.stats.today = telemetry::today_preview().map(|v| serde_json::to_string_pretty(&v).unwrap_or_default()).unwrap_or_default();
         }
@@ -4740,7 +4757,8 @@ impl App {
             ui.hyperlink_to(crate::i18n::tr("Privacy policy"), privacy_url());
         });
         ui.add_space(12.0);
-        match telemetry::policy_block() {
+        let block = telemetry::policy_block().or_else(|| self.stats.team_off.then(|| crate::i18n::tr("the policy of the team hub").to_string()));
+        match block {
             Some(why) => {
                 ui.add(egui::Label::new(egui::RichText::new(crate::i18n::fmt("Switched off by a policy of your organisation ({0}).", &[why])).color(theme::MUTED)).wrap());
             }
@@ -8801,7 +8819,7 @@ mod tests {
         for yes in ["Przygotuj dokument ogólny w Confluence na podstawie P_1805", "write a specification page", "Popraw stronę w Confluence", "Erstelle einen Bericht"] {
             assert!(asks_for_document(yes), "{yes}");
         }
-        for no in ["Przeanalizuj kod klasy Order", "co jest na diagramie?", "Utwórz element klasy Klient"] {
+        for no in ["Przeanalizuj kod klasy Order", "co jest na diagramie?", "Utwórz element klasy Klient", "Napisz jedno zdanie z linkiem [strona Loonar](https://loonar.eu)", "Zmień password w ustawieniach"] {
             assert!(!asks_for_document(no), "{no}");
         }
         let dir = std::env::temp_dir().join(format!("loonar-doc-model-{}", std::process::id()));
