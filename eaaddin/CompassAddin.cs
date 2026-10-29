@@ -26,6 +26,7 @@ namespace LoonarCompass
         const string OpenTab = "Open Compass in EA";
         const string OpenWindow = "Open Compass in its own window";
         const string AddReference = "Add to the Compass conversation";
+        const string SendToMiro = "Send to Miro";
 
         public string EA_Connect(object repository)
         {
@@ -247,8 +248,15 @@ namespace LoonarCompass
         {
             // Right-click on an element, package or diagram: "Loonar Compass" → "Add to the Compass conversation"
             // (EA shows add-in entries of a context menu under the add-in's own submenu).
+            // On a diagram (on the diagram itself, or the diagram picked in the Browser) also "Send to Miro".
             if (location == "TreeView" || location == "Diagram")
-                return menuName == "" ? L10n.Get(AddReference) : "";
+            {
+                if (menuName != "")
+                    return "";
+                if (MiroDiagram(repository, location) > 0)
+                    return new string[] { L10n.Get(AddReference), L10n.Get(SendToMiro) };
+                return L10n.Get(AddReference);
+            }
             // Ribbon: one button that opens Compass in EA (the standalone app is started from the Start menu).
             return menuName == "" ? "Loonar Compass" : "";
         }
@@ -276,6 +284,20 @@ namespace LoonarCompass
                         ((dynamic)repository).ShowAddinWindow("Loonar Compass");
                     if (current != null)
                         current.Send(reference);
+                    return;
+                }
+                if (itemName == L10n.Get(SendToMiro))
+                {
+                    int diagram = MiroDiagram(repository, location);
+                    if (diagram <= 0)
+                        return;
+                    string picked = location == "Diagram" ? Selected(repository) : "";
+                    if (current == null || current.IsDisposed)
+                        EA_MenuClick(repository, "MainMenu", "", "Loonar Compass");
+                    else
+                        ((dynamic)repository).ShowAddinWindow("Loonar Compass");
+                    if (current != null)
+                        current.SendToMiro(diagram, picked);
                     return;
                 }
                 CompassTab tab = Window(repository);
@@ -341,6 +363,48 @@ namespace LoonarCompass
                 case 24: return "«" + L10n.Get("Operation") + ": " + item.Name + " (id " + item.MethodID + ")»";
             }
             return null;
+        }
+
+        /// <summary>The diagram "Send to Miro" is for: on a diagram the open diagram (wherever the click was), in the
+        /// Browser the diagram picked there; 0 for anything else.</summary>
+        static int MiroDiagram(object repository, string location)
+        {
+            try
+            {
+                dynamic repo = repository;
+                if (location == "Diagram")
+                {
+                    dynamic open = repo.GetCurrentDiagram();
+                    return open == null ? 0 : (int)open.DiagramID;
+                }
+                if ((int)repo.GetContextItemType() != 8)
+                    return 0;
+                dynamic item = repo.GetContextObject();
+                return item == null ? 0 : (int)item.DiagramID;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        /// <summary>The elements selected on the open diagram, "id,id,…" (empty: nothing selected, the whole diagram).</summary>
+        static string Selected(object repository)
+        {
+            try
+            {
+                dynamic open = ((dynamic)repository).GetCurrentDiagram();
+                if (open == null)
+                    return "";
+                var ids = new System.Collections.Generic.List<string>();
+                foreach (dynamic o in open.SelectedObjects)
+                    ids.Add(((int)o.ElementID).ToString());
+                return string.Join(",", ids);
+            }
+            catch
+            {
+                return "";
+            }
         }
 
         static string Connection(object repository)
@@ -605,6 +669,17 @@ namespace LoonarCompass
             if (rotName == null)
                 return;
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "loonar-ea-insert-" + rotName + ".txt"), reference + Environment.NewLine);
+            GiveKeyboard();
+        }
+
+        /// <summary>"Send to Miro" on a diagram: Compass opens its "Send to Miro" window for it, with only the selected
+        /// elements ("id,id,…") when some are selected.</summary>
+        public void SendToMiro(int diagram, string picked)
+        {
+            if (rotName == null)
+                return;
+            string line = string.IsNullOrEmpty(picked) ? diagram.ToString() : diagram + ":" + picked;
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "loonar-ea-miro-" + rotName + ".txt"), line + Environment.NewLine);
             GiveKeyboard();
         }
 
@@ -973,6 +1048,7 @@ namespace LoonarCompass
                 case "Open Compass in its own window": return lang == "de" ? "Compass in eigenem Fenster öffnen" : lang == "fr" ? "Ouvrir Compass dans sa propre fenêtre" : "Otwórz Compass w osobnym oknie";
                 case "Starting Loonar Compass…": return lang == "de" ? "Loonar Compass wird gestartet…" : lang == "fr" ? "Démarrage de Loonar Compass…" : "Uruchamianie Loonar Compass…";
                 case "No project is open: open a .qea file or a repository to work with Compass.": return lang == "de" ? "Kein Projekt geöffnet: Öffnen Sie eine .qea-Datei oder ein Repository, um mit Compass zu arbeiten." : lang == "fr" ? "Aucun projet ouvert : ouvrez un fichier .qea ou un référentiel pour travailler avec Compass." : "Brak otwartego projektu: otwórz plik .qea albo repozytorium, aby pracować z Compass.";
+                case "Send to Miro": return lang == "de" ? "An Miro senden" : lang == "fr" ? "Envoyer vers Miro" : "Wyślij do Miro";
                 case "Add to the Compass conversation": return lang == "de" ? "Zur Compass-Unterhaltung hinzufügen" : lang == "fr" ? "Ajouter à la conversation Compass" : "Dodaj do rozmowy w Compass";
                 case "Element": return lang == "de" ? "Element" : lang == "fr" ? "Élément" : "Element";
                 case "Package": return lang == "de" ? "Paket" : lang == "fr" ? "Paquetage" : "Pakiet";

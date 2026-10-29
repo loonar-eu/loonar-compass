@@ -153,6 +153,8 @@ disabled ‖ wyłączone ‖ deaktiviert ‖ désactivée
 Reading the model database: {0} ‖ Odczyt z bazy modelu: {0} ‖ Lesen der Modelldatenbank: {0} ‖ Lecture de la base de données du modèle : {0}
 Saving to EA, {0} operations: {1} ‖ Zapis do EA (operacje: {0}): {1} ‖ Speichern in EA, {0} Operationen: {1} ‖ Enregistrement dans EA, {0} opérations : {1}
 Getting diagram {0} from EA as an image ‖ Pobranie diagramu {0} z EA jako obrazka ‖ Abruf von Diagramm {0} aus EA als Bild ‖ Récupération du diagramme {0} depuis EA sous forme d'image
+Opening "Send to Miro" for diagram {0} ‖ Otwarcie „Wyślij do Miro” dla diagramu {0} ‖ „An Miro senden“ für Diagramm {0} wird geöffnet ‖ Ouverture de « Envoyer vers Miro » pour le diagramme {0}
+window open ‖ okno otwarte ‖ Fenster geöffnet ‖ fenêtre ouverte
 Remembering a note: {0} ‖ Zapamiętanie ustalenia: {0} ‖ Merken einer Festlegung: {0} ‖ Mémorisation d'une note : {0}
 Drawing an image: {0} ‖ Rysowanie obrazka: {0} ‖ Zeichnen eines Bildes: {0} ‖ Dessin d'une image : {0}
 Creating a Word document: {0}.docx ‖ Tworzenie dokumentu Word: {0}.docx ‖ Erstellen eines Word-Dokuments: {0}.docx ‖ Création d'un document Word : {0}.docx

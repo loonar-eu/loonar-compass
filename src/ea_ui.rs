@@ -516,6 +516,21 @@ pub fn take_references() -> Vec<String> {
     text.lines().map(str::trim).filter(|line| !line.is_empty()).map(str::to_string).collect()
 }
 
+/// Diagrams the EA add-in sent with "Send to Miro" (the diagram menu), taken out of their hand-over file: one line
+/// each, "diagram" or "diagram:element,element,…" when elements were selected on it.
+pub fn take_miro() -> Vec<(i64, Vec<i64>)> {
+    let Some(name) = ROT_NAME.get() else { return Vec::new() };
+    let file = std::env::temp_dir().join(format!("loonar-ea-miro-{name}.txt"));
+    let Ok(text) = std::fs::read_to_string(&file) else { return Vec::new() };
+    let _ = std::fs::remove_file(&file);
+    text.lines().filter_map(parse_miro).collect()
+}
+
+fn parse_miro(line: &str) -> Option<(i64, Vec<i64>)> {
+    let (diagram, picked) = line.trim().split_once(':').unwrap_or((line.trim(), ""));
+    Some((diagram.trim().parse().ok()?, picked.split(',').filter_map(|id| id.trim().parse().ok()).collect()))
+}
+
 /// Model events the EA add-in passed on (a new relationship, a changed element): ("connector" | "element", id).
 /// One event of EA: kind, id and, for a deletion, the object's description from EA (description, type, stereotype),
 /// because the object is gone when Compass reads the event.
@@ -544,6 +559,13 @@ fn parse_event(line: &str) -> Option<Event> {
 
 #[cfg(test)]
 mod event_tests {
+    #[test]
+    fn miro_requests_with_and_without_selection() {
+        assert_eq!(super::parse_miro("42"), Some((42, vec![])));
+        assert_eq!(super::parse_miro("42:7, 9,8 "), Some((42, vec![7, 9, 8])));
+        assert_eq!(super::parse_miro("x:1"), None);
+    }
+
     #[test]
     fn events_with_and_without_description() {
         assert_eq!(super::parse_event("element:42"), Some(("element".into(), 42, None)));

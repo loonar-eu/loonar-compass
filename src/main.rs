@@ -2111,8 +2111,9 @@ impl App {
         }
     }
 
-    /// Opens the "Send to Miro" window for a diagram of the current conversation's model.
-    fn open_miro(&mut self, ctx: &egui::Context, diagram_id: i64) {
+    /// Opens the "Send to Miro" window for a diagram of the current conversation's model; `picked`: only these elements
+    /// (a selection in EA), empty for the whole diagram.
+    fn open_miro(&mut self, ctx: &egui::Context, diagram_id: i64, picked: Vec<i64>) {
         if !secrets::exists(secrets::MIRO_TOKEN) {
             self.status = crate::i18n::tr("Set up the connection to Miro first (Settings → 7. Miro).").into();
             self.view = View::Settings;
@@ -2146,7 +2147,14 @@ impl App {
         };
         let wake = ctx.clone();
         std::thread::spawn(move || {
-            let plan = diagram_editor::model(&cfg, diagram_id).map(|m| miro::plan(&m)).map_err(|e| format!("{e:#}"));
+            let plan = diagram_editor::model(&cfg, diagram_id)
+                .map(|mut m| {
+                    if !picked.is_empty() {
+                        miro::only(&mut m, &picked);
+                    }
+                    miro::plan(&m)
+                })
+                .map_err(|e| format!("{e:#}"));
             let _ = tx.send(MiroEvent::Plan(plan));
             wake.request_repaint();
         });
@@ -6041,6 +6049,7 @@ fn tool_step(name: &str, input: &Value) -> String {
             crate::i18n::fmt("Saving to EA, {0} operations: {1}", &[(ops.len()).to_string(), (ea::describe(&ops).replace('\n', ", ")).to_string()])
         }
         "ea_show_diagram" => crate::i18n::fmt("Getting diagram {0} from EA as an image", &[(input["diagram_id"]).to_string()]),
+        "miro_send" => crate::i18n::fmt("Opening \"Send to Miro\" for diagram {0}", &[(input["diagram_id"]).to_string()]),
         "memory_save" => crate::i18n::fmt("Remembering a note: {0}", &[(input["name"].as_str().unwrap_or("")).to_string()]),
         "render_image" => crate::i18n::fmt("Drawing an image: {0}", &[(input["name"].as_str().unwrap_or("")).to_string()]),
         "create_document" => crate::i18n::fmt("Creating a Word document: {0}.docx", &[(input["file_name"].as_str().unwrap_or(crate::i18n::tr("Document"))).to_string()]),
@@ -6165,6 +6174,7 @@ fn tool_result_summary(name: &str, text: &str) -> String {
         }
         "ea_write" => crate::i18n::tr("saved in the EA model").into(),
         "ea_show_diagram" | "render_image" => crate::i18n::tr("image ready").into(),
+        "miro_send" => crate::i18n::tr("window open").into(),
         "create_document" | "create_spreadsheet" | "create_confluence_page" => crate::i18n::tr("file ready").into(),
         "publish_confluence" => crate::i18n::tr("published in Confluence").into(),
         "jira_create_issue" | "jira_comment" | "jira_update_issue" | "jira_attach" => crate::i18n::tr("saved in Jira").into(),
@@ -7348,6 +7358,17 @@ impl eframe::App for App {
             }
             if own != 0 && ctx.input(|i| i.pointer.any_pressed()) && !ea_ui::keyboard_is_ours() {
                 ea_ui::take_keyboard(own);
+            }
+        }
+        // "Send to Miro" asked by the assistant or by the EA add-in's diagram menu: one window at a time.
+        let mut miro_ids = miro::take_requests();
+        if ea::in_ea_tab() {
+            miro_ids.extend(ea_ui::take_miro());
+        }
+        if let Some((id, picked)) = miro_ids.into_iter().last() {
+            if self.miro.is_none() {
+                self.view = View::Chat;
+                self.open_miro(ctx, id, picked);
             }
         }
         // In a tab of EA: objects the user points at in EA ("Add to the Compass conversation") go into the message.
@@ -8707,7 +8728,7 @@ impl eframe::App for App {
                     self.report_answer(index);
                 }
                 if let Some(id) = miro_request {
-                    self.open_miro(ctx, id);
+                    self.open_miro(ctx, id, Vec::new());
                 }
                 self.poll_diagram_editor(ctx);
 
