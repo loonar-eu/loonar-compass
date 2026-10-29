@@ -30,6 +30,16 @@ impl Lang {
         }
     }
 
+    /// The published usage statistics on loonar.eu in this language.
+    pub fn stats_url(self) -> &'static str {
+        match self {
+            Lang::Pl => "https://loonar.eu/pl/stats/",
+            Lang::En => "https://loonar.eu/stats/",
+            Lang::De => "https://loonar.eu/de/stats/",
+            Lang::Fr => "https://loonar.eu/fr/stats/",
+        }
+    }
+
     /// The language's name in that language (for the language picker).
     pub fn native_name(self) -> &'static str {
         match self {

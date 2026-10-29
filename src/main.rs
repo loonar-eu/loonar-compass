@@ -4860,7 +4860,7 @@ impl App {
         ui.add_space(6.0);
         ui.add(egui::Label::new(crate::i18n::tr("At the start Compass sends a random installation id (created on this computer, not derived from it or from you) with the application version, Windows version and language; every hour it sends a summary of the day so far: the kinds of tasks (for example a diagram, a document, a change of the model, a question about the model) and how they ended, how often each function of the assistant was used and how often it failed, ratings of answers, what the assistant could not do, approvals, views opened, tokens and the kind of setup (model source, AI provider and model family, approval mode, whether Jira, Confluence, the hub, MCP servers and event agents are set up). It never sends the content of conversations, names or ids from the model, file paths, server addresses, error messages or user names, and the service does not store addresses (IP). Only the author sees the data; summaries for all users together are published.")).wrap());
         ui.horizontal_wrapped(|ui| {
-            ui.hyperlink_to(crate::i18n::tr("Published statistics"), telemetry::STATS_URL);
+            ui.hyperlink_to(crate::i18n::tr("Published statistics"), crate::i18n::current().stats_url());
             ui.label("·");
             ui.hyperlink_to(crate::i18n::tr("Privacy policy"), privacy_url());
         });

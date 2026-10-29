@@ -26,8 +26,6 @@ use std::time::{Duration, Instant};
 /// The feedback service (statistics and bug reports). `LOONAR_FEEDBACK_URL` replaces it (https, or http on this
 /// computer for tests).
 pub const SERVICE_URL: &str = "https://compass-feedback.loonar-eu.workers.dev";
-/// The public repository with the statistics.
-pub const STATS_URL: &str = "https://compass-feedback.loonar-eu.workers.dev/v1/summary";
 /// Days kept: sent ones (shown in the view) and unsent ones (waiting for a connection).
 const KEEP_DAYS: i64 = 30;
 /// Counters are written to disk at most this often (and at the end of every answer).

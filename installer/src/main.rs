@@ -2435,7 +2435,7 @@ impl Setup {
         ui.add_space(6.0);
         ui.horizontal_wrapped(|ui| {
             ui.label(crate::i18n::tr("Only the author sees the data; summaries over all installations together are published:"));
-            ui.hyperlink_to(crate::i18n::tr("Published statistics"), "https://compass-feedback.loonar-eu.workers.dev/v1/summary");
+            ui.hyperlink_to(crate::i18n::tr("Published statistics"), crate::i18n::current().stats_url());
         });
         ui.add_space(12.0);
         ui.checkbox(&mut self.config.statistics, egui::RichText::new(crate::i18n::tr("Send anonymous usage statistics (recommended)")).strong());

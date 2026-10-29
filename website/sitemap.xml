@@ -101,6 +101,38 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/privacy/"/>
   </url>
   <url>
+    <loc>https://loonar.eu/stats/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/stats/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/pl/stats/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/de/stats/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/fr/stats/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/stats/"/>
+  </url>
+  <url>
+    <loc>https://loonar.eu/pl/stats/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/stats/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/pl/stats/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/de/stats/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/fr/stats/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/stats/"/>
+  </url>
+  <url>
+    <loc>https://loonar.eu/de/stats/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/stats/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/pl/stats/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/de/stats/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/fr/stats/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/stats/"/>
+  </url>
+  <url>
+    <loc>https://loonar.eu/fr/stats/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/stats/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/pl/stats/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/de/stats/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/fr/stats/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/stats/"/>
+  </url>
+  <url>
     <loc>https://loonar.eu/legal/</loc>
     <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/legal/"/>
     <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/pl/legal/"/>
