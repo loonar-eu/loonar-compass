@@ -272,14 +272,21 @@ impl Connection {
                 fields["parent"] = json!({ "key": parent });
             } else {
                 // Jira Server / Data Center: "parent" is only for sub-tasks; a story or task joins its epic through the
-                // "Epic Link" field ("Issue type … is not a sub-task but a parent is specified" otherwise).
-                let field = self.epic_link_field()?;
-                fields[field.as_str()] = json!(parent);
+                // "Epic Link" field ("Issue type … is not a sub-task but a parent is specified" otherwise). A Jira without
+                // that field joins epics through "parent" too: Jira Cloud behind the team hub (its address is the hub's,
+                // so it does not look like Cloud; found in the 0.9.2 lab tests, LC-T92) and Data Center 10.
+                match self.epic_link_field() {
+                    Ok(field) => fields[field.as_str()] = json!(parent),
+                    Err(_) => fields["parent"] = json!({ "key": parent }),
+                }
             }
         }
         let created = self.send(self.client()?.post(self.url("/issue")).json(&json!({ "fields": fields })), crate::i18n::tr("creating the issue"))?;
         let key = created["key"].as_str().context(crate::i18n::tr("Jira did not return the issue key"))?.to_string();
-        Ok((key.clone(), self.browse(&key)))
+        // The link from the new issue's own address ("self"), as when an issue is read: through the team hub the
+        // connection's address is the hub's proxy, which a person's browser cannot open (401; LC-T92 in the lab).
+        let link = created["self"].as_str().and_then(|u| u.find("/rest/").map(|i| format!("{}/browse/{key}", &u[..i]))).unwrap_or_else(|| self.browse(&key));
+        Ok((key, link))
     }
 
     /// Whether the issue type is a sub-task type (Jira Server / Data Center).
