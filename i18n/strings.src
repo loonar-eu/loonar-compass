@@ -1891,3 +1891,13 @@ New installation id: later days can no longer be joined with the earlier ones. �
 checking the address ‖ sprawdzanie adresu ‖ Prüfung der Adresse ‖ vérification de l’adresse
 Where is the operation "{0}" (operation id {1} of element id {2}) used on diagrams? List the diagrams and the messages or actions that use it. ‖ Gdzie na diagramach jest użyta operacja „{0}” (operacja id {1} elementu id {2})? Wypisz diagramy oraz komunikaty lub akcje, które jej używają. ‖ Wo wird die Operation „{0}“ (Operation-ID {1} von Element-ID {2}) in Diagrammen verwendet? Liste die Diagramme und die Nachrichten oder Aktionen, die sie verwenden. ‖ Où l'opération « {0} » (opération id {1} de l'élément id {2}) est-elle utilisée dans les diagrammes ? Liste les diagrammes et les messages ou actions qui l'utilisent.
 Clone element "{0}" (id {1}) as a new version with a trace relationship to the original (clone_element_version). ‖ Sklonuj element „{0}” (id {1}) jako nową wersję z relacją trace do oryginału (clone_element_version). ‖ Klone das Element „{0}“ (ID {1}) als neue Version mit einer Trace-Beziehung zum Original (clone_element_version). ‖ Clone l'élément « {0} » (id {1}) comme nouvelle version avec une relation trace vers l'original (clone_element_version).
+The assistant is inflecting the term… ‖ Asystent odmienia termin… ‖ Der Assistent dekliniert den Begriff… ‖ L'assistant décline le terme…
+Saving in the project glossary… ‖ Zapisywanie w słowniku projektu… ‖ Wird im Projektglossar gespeichert… ‖ Enregistrement dans le glossaire du projet…
+Saved. ‖ Zapisano. ‖ Gespeichert. ‖ Enregistré.
+Add a term to the project glossary ‖ Dodaj termin do słownika projektu ‖ Begriff zum Projektglossar hinzufügen ‖ Ajouter un terme au glossaire du projet
+Term ‖ Termin ‖ Begriff ‖ Terme
+Meaning ‖ Znaczenie ‖ Bedeutung ‖ Signification
+Forms (one per line): EA highlights only these exact forms ‖ Formy (po jednej w wierszu): EA podświetla tylko dokładnie te formy ‖ Formen (eine pro Zeile): EA hebt nur genau diese Formen hervor ‖ Formes (une par ligne) : EA ne surligne que ces formes exactes
+Inflect by cases ‖ Odmień przez przypadki ‖ Nach Fällen deklinieren ‖ Décliner selon les cas
+Save in the EA glossary ‖ Zapisz w słowniku EA ‖ Im EA-Glossar speichern ‖ Enregistrer dans le glossaire EA
+The assistant returned no forms ‖ Asystent nie zwrócił żadnych form ‖ Der Assistent hat keine Formen geliefert ‖ L'assistant n'a renvoyé aucune forme

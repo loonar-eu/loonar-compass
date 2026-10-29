@@ -37,6 +37,7 @@ mod markdown;
 mod docx;
 mod memory;
 mod miro;
+mod glossary_ui;
 mod relang;
 mod render;
 mod xlsx;
@@ -1786,6 +1787,8 @@ struct App {
     tidy_request: Option<String>,
     /// The "Send to Miro" window, when open.
     miro: Option<MiroDialog>,
+    /// The `/glossary-add` window.
+    glossary: Option<glossary_ui::Dialog>,
 }
 
 /// State of one conversation in which the assistant works in the background (meanwhile the window shows another conversation).
@@ -1950,6 +1953,7 @@ impl App {
             editor_rx: None,
             tidy_request: None,
             miro: None,
+            glossary: None,
             pending: Vec::new(),
             input: String::new(),
             status,
@@ -3798,6 +3802,20 @@ impl App {
             } else {
                 crate::i18n::tr("Confirm the model of the conversation first.").into()
             };
+            return;
+        }
+        // /glossary-add [term]: the glossary window instead of a message.
+        if let Some(term) = glossary_ui::command(&self.input) {
+            if let Some(base) = self.cfg.clone() {
+                let choice = self.session.model.clone().or_else(|| self.ea_project.clone()).unwrap_or_else(|| ModelChoice::of(&base));
+                match choice.apply(&base) {
+                    Ok(cfg) => {
+                        self.input.clear();
+                        self.glossary = Some(glossary_ui::Dialog::new(cfg, term));
+                    }
+                    Err(e) => self.status = format!("{e:#}"),
+                }
+            }
             return;
         }
         let text = std::mem::take(&mut self.input);
@@ -7943,6 +7961,11 @@ impl eframe::App for App {
                 let mut open_conn = false;
                 self.conn_window(ctx);
                 self.miro_window(ctx);
+                if let Some(dialog) = self.glossary.as_mut() {
+                    if !dialog.show(ctx) {
+                        self.glossary = None;
+                    }
+                }
                 self.other_models_window(ctx);
                 // In a tab of EA the header only shows that Claude is working.
                 if !ea::in_ea_tab() || busy {
