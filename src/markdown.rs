@@ -233,6 +233,23 @@ fn rich(ui: &mut egui::Ui, text: &str, size: f32, all_bold: bool) {
     });
 }
 
+/// Markdown backslash escapes shown as the character itself: "0..\*" reads "0..*" (found in the 0.9.2 lab tests:
+/// multiplicities in answers about diagrams).
+fn unescape(text: &str) -> std::borrow::Cow<'_, str> {
+    if !text.contains('\\') {
+        return text.into();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\\' && chars.peek().is_some_and(|n| n.is_ascii_punctuation()) {
+            continue;
+        }
+        out.push(c);
+    }
+    out.into()
+}
+
 /// Lays out one line of text with inline formatting: `**bold**` and `` `code` ``.
 fn inline(text: &str, size: f32, all_bold: bool) -> LayoutJob {
     let normal = egui::TextFormat {
@@ -258,12 +275,12 @@ fn inline(text: &str, size: f32, all_bold: bool) -> LayoutJob {
         let next_code = rest.find('`');
         match (next_bold, next_code) {
             (Some(b), c) if c.map_or(true, |c| b < c) => {
-                job.append(&rest[..b], 0.0, if is_bold { bold.clone() } else { normal.clone() });
+                job.append(&unescape(&rest[..b]), 0.0, if is_bold { bold.clone() } else { normal.clone() });
                 is_bold = !is_bold || all_bold;
                 rest = &rest[b + 2..];
             }
             (_, Some(c)) => {
-                job.append(&rest[..c], 0.0, if is_bold { bold.clone() } else { normal.clone() });
+                job.append(&unescape(&rest[..c]), 0.0, if is_bold { bold.clone() } else { normal.clone() });
                 let after = &rest[c + 1..];
                 match after.find('`') {
                     Some(end) => {
@@ -272,13 +289,13 @@ fn inline(text: &str, size: f32, all_bold: bool) -> LayoutJob {
                     }
                     // A single ` without a pair: show it literally.
                     None => {
-                        job.append(&rest[c..], 0.0, if is_bold { bold.clone() } else { normal.clone() });
+                        job.append(&unescape(&rest[c..]), 0.0, if is_bold { bold.clone() } else { normal.clone() });
                         rest = "";
                     }
                 }
             }
             _ => {
-                job.append(rest, 0.0, if is_bold { bold.clone() } else { normal.clone() });
+                job.append(&unescape(rest), 0.0, if is_bold { bold.clone() } else { normal.clone() });
                 rest = "";
             }
         }
@@ -289,6 +306,12 @@ fn inline(text: &str, size: f32, all_bold: bool) -> LayoutJob {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn backslash_escapes_are_shown_as_characters() {
+        assert_eq!(unescape(r"0..\* and 1..\* \_x\_"), "0..* and 1..* _x_");
+        assert_eq!(unescape(r"C:\Users\x"), r"C:\Users\x");
+    }
 
     fn pieces(text: &str) -> Vec<(String, bool, bool)> {
         let job = inline(text, BODY_SIZE, false);

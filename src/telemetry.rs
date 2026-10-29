@@ -448,11 +448,15 @@ pub fn install_id() -> String {
     id
 }
 
-/// A new identifier: later days can no longer be joined with the earlier ones.
+/// A new identifier: later days can no longer be joined with the earlier ones. What was counted and not sent yet
+/// (also today so far) is deleted, so nothing from before goes under the new identifier (found in the 0.9.2 lab tests).
 pub fn new_install_id() -> String {
-    if let Some(dir) = STATE.lock().unwrap().as_ref().map(|s| s.dir.clone()) {
-        let _ = std::fs::remove_file(dir.join("install_id"));
+    if let Some(state) = STATE.lock().unwrap().as_mut() {
+        let _ = std::fs::remove_file(state.dir.join("install_id"));
+        state.counters = Map::new();
+        state.dirty = false;
     }
+    discard_unsent();
     install_id()
 }
 
