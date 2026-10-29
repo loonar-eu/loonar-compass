@@ -39,6 +39,8 @@ mod memory;
 mod miro;
 mod matrix;
 mod ea_template;
+mod commands;
+mod model_usage;
 mod glossary_ui;
 mod relang;
 mod render;
@@ -3806,6 +3808,10 @@ impl App {
             };
             return;
         }
+        // /command [arguments]: sent as the command's precise request (LC-337).
+        if let Some(request) = commands::request(&self.input) {
+            self.input = request;
+        }
         // /glossary-add [term]: the glossary window instead of a message.
         if let Some(term) = glossary_ui::command(&self.input) {
             if let Some(base) = self.cfg.clone() {
@@ -6071,6 +6077,8 @@ fn tool_step(name: &str, input: &Value) -> String {
         "ea_show_diagram" => crate::i18n::fmt("Getting diagram {0} from EA as an image", &[(input["diagram_id"]).to_string()]),
         "miro_send" => crate::i18n::fmt("Opening \"Send to Miro\" for diagram {0}", &[(input["diagram_id"]).to_string()]),
         "package_matrix" => crate::i18n::fmt("Relationship matrix of packages {0} × {1}", &[input["source"].to_string(), input["target"].to_string()]),
+        "where_used" => crate::i18n::fmt("Where element {0} is used", &[input["element"].to_string()]),
+        "find_orphans" => crate::i18n::tr("Looking for elements nothing uses").to_string(),
         "memory_save" => crate::i18n::fmt("Remembering a note: {0}", &[(input["name"].as_str().unwrap_or("")).to_string()]),
         "render_image" => crate::i18n::fmt("Drawing an image: {0}", &[(input["name"].as_str().unwrap_or("")).to_string()]),
         "create_document" => crate::i18n::fmt("Creating a Word document: {0}.docx", &[(input["file_name"].as_str().unwrap_or(crate::i18n::tr("Document"))).to_string()]),
@@ -8114,6 +8122,29 @@ impl eframe::App for App {
                                 state.store(ctx, input_id);
                             }
                         }
+                    }
+                    // Typing "/": the commands with a line about each; a click puts the command into the field.
+                    let suggestions = commands::matching(&self.input);
+                    if !suggestions.is_empty() {
+                        egui::Frame::none().fill(theme::SURFACE).stroke(egui::Stroke::new(1.0_f32, theme::BORDER)).rounding(8.0).inner_margin(egui::Margin::same(6.0)).show(ui, |ui| {
+                            for c in suggestions {
+                                let text = egui::RichText::new(format!("{} {}", c.name, c.args)).strong();
+                                let row = ui.horizontal(|ui| {
+                                    let pick = ui.add(egui::Button::new(text).frame(false));
+                                    ui.label(egui::RichText::new(crate::i18n::tr(c.about)).small().color(theme::MUTED));
+                                    pick
+                                });
+                                if row.inner.clicked() {
+                                    self.input = format!("{} ", c.name);
+                                    if let Some(mut state) = egui::TextEdit::load_state(ctx, input_id) {
+                                        let end = egui::text::CCursor::new(self.input.chars().count());
+                                        state.cursor.set_char_range(Some(egui::text::CCursorRange::one(end)));
+                                        state.store(ctx, input_id);
+                                    }
+                                    ctx.memory_mut(|m| m.request_focus(input_id));
+                                }
+                            }
+                        });
                     }
                     let mut paste = false;
                     let mut clicked = false;

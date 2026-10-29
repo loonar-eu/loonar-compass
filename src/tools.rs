@@ -314,6 +314,7 @@ pub fn definitions() -> Value {
         items.push(crate::changelog::definition());
         items.push(crate::miro::definition());
         items.push(crate::matrix::definition());
+        items.extend(crate::model_usage::definitions());
         items.push(crate::scripts::definition());
         items.push(crate::traceability::definition());
         items.push(crate::code_drift::definition());
@@ -812,6 +813,8 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "ea_show_diagram" => ea_show_diagram(input, ctx),
         "miro_send" => crate::miro::tool(input, ctx.cfg).map(Into::into),
         "package_matrix" => crate::matrix::tool(input, ctx.cfg),
+        "where_used" => crate::model_usage::where_used(input, ctx.cfg).map(Into::into),
+        "find_orphans" => crate::model_usage::find_orphans(input, ctx.cfg).map(Into::into),
         "memory_save" => {
             let name = input["name"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["name".to_string()]))?;
             let content = input["content"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["content".to_string()]))?;
