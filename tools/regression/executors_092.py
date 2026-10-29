@@ -268,7 +268,19 @@ def gap_request(out: Path, work: Path):
         c.click("💡 Zgłoś zapotrzebowanie", contains=True, timeout=10)
         time.sleep(1.5)
         c.evidence("request_form_not_sent")
-        (out / "note.txt").write_text("The form was opened but NOT sent: sending creates a public GitHub issue (step 3 is for a person).", encoding="utf-8")
+        if os.environ.get("LOONAR_SEND_GAP") == "1":
+            # Step 3 with the owner's consent: one public issue marked as a test, closed right after the run.
+            edits = sorted(c.win.descendants(control_type="Edit"), key=lambda e: e.element_info.rectangle.height())
+            edits[-1].set_focus(); time.sleep(0.4)
+            keyboard.send_keys("^{END}{ENTER}TEST – zgłoszenie testowe z regresji 0.9.2 (LC-T77), do zamknięcia. Import modelu z pliku StarUML .mdj.", with_spaces=True)
+            c.evidence("request_form_filled")
+            c.find("Wyślij zgłoszenie").invoke()
+            end = time.time() + 60
+            while time.time() < end and not any("github.com" in t for t in c.texts()):
+                time.sleep(1)
+            c.evidence("request_sent")
+        else:
+            (out / "note.txt").write_text("The form was opened but NOT sent: sending creates a public GitHub issue (step 3 is for a person).", encoding="utf-8")
         nav(c, "Statystyki użycia")
         c.evidence("stats_today_gaps")
     in_window(body, telemetry=True)(out, work)
@@ -392,12 +404,12 @@ def service_urls(out: Path, work: Path):
         save_address("copied_page_address", "https://quantumlearn.atlassian.net/wiki/spaces/PM/pages/1/Test")
         nav(c, "Czat")
         c.start_conversation()
-        c.say("Wypisz tytuły 3 dowolnych stron z przestrzeni Confluence PM.")
+        c.say("Przeczytaj stronę Confluence o identyfikatorze 65818 (strona główna przestrzeni PM) i podaj jej tytuł oraz pierwsze zdanie.")
         c.steps()
         c.evidence("pages_read")
         nav(c, "Ustawienia")
         save_address("web_page_address", "https://loonar.eu")
-    in_window(body)(out, work)
+    in_window(body, settings=f"confluence.user={CONFIG['account']}\nconfluence.space=PM\n")(out, work)
 
 
 @executor("Kod źródłowy: karta Ustawień i odczyt")
