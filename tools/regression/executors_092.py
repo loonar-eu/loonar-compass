@@ -355,7 +355,7 @@ def privacy(out: Path, work: Path):
         text = html_text(body)
         dates = sorted(set(re.findall(r"\d{1,2}[.\s]\d{1,2}[.\s]20\d\d|20\d\d-\d\d-\d\d|\d{1,2}\.? \w+ 20\d\d", text)))
         start = max(0, min([i for i in (text.find(w) for w in ("Statystyki użycia", "Usage statistics", "Nutzungsstatistik", "Statistiques d")) if i >= 0] or [0]))
-        (out / f"privacy_{lang}.txt").write_text(f"{url}\nDates on the page: {dates}\n\nThe usage statistics section:\n{text[start:start + 4500]}", encoding="utf-8")
+        (out / f"privacy_{lang}.txt").write_text(f"{url}\nDates on the page: {dates}\n\nThe usage statistics section:\n{text[start:start + 9000]}", encoding="utf-8")
         (out / f"privacy_{lang}_raw.txt").unlink()
 
 
@@ -419,6 +419,10 @@ def source_code(out: Path, work: Path):
         nav(c, "Ustawienia")
         click_text(c, "Kod źródłowy")
         c.evidence("source_code_card")
+        # Step 1 expects the message of "Save and check folders" ("Znalezione foldery: 1").
+        c.click("Zapisz i sprawdź foldery", timeout=10)
+        time.sleep(2)
+        c.evidence("source_code_folders_checked")
         nav(c, "Czat")
         c.start_conversation()
         c.say("wiesz gdzie mam kod?")
