@@ -37,6 +37,7 @@ mod markdown;
 mod docx;
 mod memory;
 mod miro;
+mod matrix;
 mod glossary_ui;
 mod relang;
 mod render;
@@ -6068,6 +6069,7 @@ fn tool_step(name: &str, input: &Value) -> String {
         }
         "ea_show_diagram" => crate::i18n::fmt("Getting diagram {0} from EA as an image", &[(input["diagram_id"]).to_string()]),
         "miro_send" => crate::i18n::fmt("Opening \"Send to Miro\" for diagram {0}", &[(input["diagram_id"]).to_string()]),
+        "package_matrix" => crate::i18n::fmt("Relationship matrix of packages {0} × {1}", &[input["source"].to_string(), input["target"].to_string()]),
         "memory_save" => crate::i18n::fmt("Remembering a note: {0}", &[(input["name"].as_str().unwrap_or("")).to_string()]),
         "render_image" => crate::i18n::fmt("Drawing an image: {0}", &[(input["name"].as_str().unwrap_or("")).to_string()]),
         "create_document" => crate::i18n::fmt("Creating a Word document: {0}.docx", &[(input["file_name"].as_str().unwrap_or(crate::i18n::tr("Document"))).to_string()]),
@@ -6193,6 +6195,7 @@ fn tool_result_summary(name: &str, text: &str) -> String {
         "ea_write" => crate::i18n::tr("saved in the EA model").into(),
         "ea_show_diagram" | "render_image" => crate::i18n::tr("image ready").into(),
         "miro_send" => crate::i18n::tr("window open").into(),
+        "package_matrix" => crate::i18n::tr("matrix ready").into(),
         "create_document" | "create_spreadsheet" | "create_confluence_page" => crate::i18n::tr("file ready").into(),
         "publish_confluence" => crate::i18n::tr("published in Confluence").into(),
         "jira_create_issue" | "jira_comment" | "jira_update_issue" | "jira_attach" => crate::i18n::tr("saved in Jira").into(),

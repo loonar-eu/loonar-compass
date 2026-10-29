@@ -1344,6 +1344,43 @@ impl Job<'_> {
                 let (id, guid, real) = (copy.int("PackageID")?, copy.text("PackageGUID")?, copy.text("Name")?);
                 self.register(&op["key"], Kind::Package, &copy, id, guid, real);
             }
+            "create_matrix_specification" => {
+                // EA's Relationship Matrix kept in the model: an Artifact «EAMatrixSpecification» whose tagged value
+                // MatrixOptions holds the profile (packages by GUID, element types, link type, direction). Double-click
+                // in the Browser opens the live matrix.
+                let owner = self.package(&op["package"])?;
+                let source = self.package(&op["source_package"])?;
+                let target = self.package(&op["target_package"])?;
+                let title = text_field(op, "name");
+                let attr = |v: String| v.replace('&', "&amp;").replace('"', "&quot;").replace('<', "&lt;");
+                let link = { let l = text_field(op, "link_type"); if l.is_empty() { "Realisation".to_string() } else { l } };
+                let direction = match text_field(op, "direction").to_lowercase().as_str() {
+                    "target_to_source" => 1,
+                    "both" => 2,
+                    _ => 0,
+                };
+                let children = if op["children"].as_bool().unwrap_or(true) { 1 } else { 0 };
+                let options = format!(
+                    "<MatrixData><Profile linktype=\"{}\" source=\"{}\" target=\"{}\" direction=\"{direction}\" targetpackage=\"{}\" sourcepackage=\"{}\" showsourcechildren=\"{children}\" showtargetchildren=\"{children}\"/></MatrixData>",
+                    attr(link), attr(text_field(op, "source_type")), attr(text_field(op, "target_type")), target.text("PackageGUID")?, source.text("PackageGUID")?
+                );
+                let artifact = self.new_typed(&owner.obj("Elements")?, &title, "Artifact", "EAUML::EAMatrixSpecification")?;
+                artifact.update(&crate::i18n::fmt("element '{0}'", &[title.clone()]))?;
+                // The stereotype brings its own (empty) MatrixOptions tag: fill that one, add it only when missing.
+                let tags = artifact.obj("TaggedValues")?;
+                let existing = tags.items()?.into_iter().find(|t| t.text("Name").map(|n| n == "MatrixOptions").unwrap_or(false));
+                let tag = match existing {
+                    Some(tag) => tag,
+                    None => tags.call_obj("AddNew", &[s("MatrixOptions"), s("<memo>")])?,
+                };
+                tag.set("Value", s("<memo>"))?;
+                tag.set("Notes", s(&options))?;
+                tag.update(crate::i18n::tr("tagged value"))?;
+                artifact.obj("TaggedValues")?.call("Refresh", &[])?;
+                owner.obj("Elements")?.call("Refresh", &[])?;
+                let (id, guid, real) = (artifact.int("ElementID")?, artifact.text("ElementGUID")?, artifact.text("Name")?);
+                self.register(&op["key"], Kind::Element, &artifact, id, guid, real);
+            }
             "clone_element_version" => {
                 // EA's "Clone as New Version" (removed after EA 16.0): a copy of the element next to it with the next
                 // version number and a «trace» from the new version to the original.

@@ -1901,3 +1901,8 @@ Forms (one per line): EA highlights only these exact forms ‖ Formy (po jednej 
 Inflect by cases ‖ Odmień przez przypadki ‖ Nach Fällen deklinieren ‖ Décliner selon les cas
 Save in the EA glossary ‖ Zapisz w słowniku EA ‖ Im EA-Glossar speichern ‖ Enregistrer dans le glossaire EA
 The assistant returned no forms ‖ Asystent nie zwrócił żadnych form ‖ Der Assistent hat keine Formen geliefert ‖ L'assistant n'a renvoyé aucune forme
+Relationship matrix of packages {0} × {1} ‖ Macierz relacji pakietów {0} × {1} ‖ Beziehungsmatrix der Pakete {0} × {1} ‖ Matrice des relations des paquetages {0} × {1}
+matrix ready ‖ macierz gotowa ‖ Matrix fertig ‖ matrice prête
+Matrix ‖ Macierz ‖ Matrix ‖ Matrice
+Without relationships ‖ Bez relacji ‖ Ohne Beziehungen ‖ Sans relations
+relationship matrices in EA (Matrix Specification) ‖ macierze relacji w EA (Matrix Specification) ‖ Beziehungsmatrizen in EA (Matrix Specification) ‖ matrices de relations dans EA (Matrix Specification)
