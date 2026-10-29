@@ -47,10 +47,27 @@ pub fn site_base(url: &str, pages: &[&str]) -> String {
 
 /// A successful answer that is not data: a web page (sign-in, an address that is not the REST API).
 /// Whether an address answers a REST request with a web page instead of data (checked without signing in, so a wrong
-/// address is reported also before a token is entered). False when it cannot be reached at all.
-pub fn answers_with_page(url: &str) -> bool {
-    let Ok(client) = reqwest::blocking::Client::builder().redirect(same_origin_redirects()).timeout(std::time::Duration::from_secs(15)).build() else { return false };
-    client.get(url).header("Accept", "application/json").send().ok().and_then(|r| r.text().ok()).is_some_and(|t| not_json(&t))
+/// address is reported also before a token is entered). False when it cannot be reached at all. With the client
+/// certificate of the settings (LC-279): a server that asks for one answers without it with an error page (IIS 403.7,
+/// nginx 400), which is no sign of a wrong address (found in the 0.9.2 lab tests).
+pub fn answers_with_page(url: &str, identity: Option<reqwest::Identity>) -> bool {
+    let mut builder = reqwest::blocking::Client::builder().redirect(same_origin_redirects()).timeout(std::time::Duration::from_secs(15));
+    if let Some(identity) = identity {
+        builder = builder.identity(identity);
+    }
+    let Ok(client) = builder.build() else { return false };
+    let Ok(response) = client.get(url).header("Accept", "application/json").send() else { return false };
+    let status = response.status().as_u16();
+    response.text().is_ok_and(|t| not_json(&t) && !asks_for_client_certificate(status, &t))
+}
+
+/// Whether an error answer says the server wants a client certificate (mTLS) that was not sent: IIS 403.7 "The page
+/// requires a client certificate", nginx 400 "No required SSL certificate was sent" (LC-279).
+pub fn asks_for_client_certificate(status: u16, text: &str) -> bool {
+    (status == 400 || status == 403) && not_json(text) && {
+        let lower = text.to_lowercase();
+        lower.contains("client certificate") || lower.contains("ssl certificate") || lower.contains("certyfikat")
+    }
 }
 
 /// The key a copied address names: …/projects/KEY…, …/browse/KEY-12, …/spaces/KEY…, …/display/KEY/…
@@ -90,7 +107,7 @@ mod site_base_tests {
     fn copied_addresses() {
         let c = ["/spaces", "/display", "/pages", "/rest", "/dashboard.action"];
         assert_eq!(super::site_base("https://jira.example.com/confluence/spaces", &c), "https://jira.example.com/confluence");
-        assert_eq!(super::site_base("https://jira.example.com/confluence/spaces/P1805/pages/447655091/Wymagania", &c), "https://jira.example.com/confluence");
+        assert_eq!(super::site_base("https://jira.example.com/confluence/spaces/ARCH/pages/447655091/Wymagania", &c), "https://jira.example.com/confluence");
         assert_eq!(super::site_base("https://x.atlassian.net/wiki/spaces/LC/overview", &c), "https://x.atlassian.net/wiki");
         assert_eq!(super::site_base("https://confluence.example.com/display/ARCH/Home", &c), "https://confluence.example.com");
         assert_eq!(super::site_base("https://confluence.example.com/", &c), "https://confluence.example.com");
@@ -99,5 +116,9 @@ mod site_base_tests {
         assert_eq!(super::site_base("https://jira.example.com/jira", &j), "https://jira.example.com/jira");
         assert!(super::not_json("<!DOCTYPE html><html>"));
         assert!(!super::not_json("") && !super::not_json("{\"a\":1}"));
+        // LC-279: the error page of a server that wants a client certificate is no wrong address.
+        assert!(super::asks_for_client_certificate(403, "<html><h3>The page requires a client certificate</h3></html>"));
+        assert!(super::asks_for_client_certificate(400, "<html><center>No required SSL certificate was sent</center></html>"));
+        assert!(!super::asks_for_client_certificate(403, "{\"errorMessages\":[\"no permission\"]}") && !super::asks_for_client_certificate(200, "<html>client certificate</html>"));
     }
 }

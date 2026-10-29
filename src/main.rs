@@ -5903,7 +5903,7 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
                 return Ok(crate::i18n::tr("Saved. Without a Jira address the assistant does not use Jira.").into());
             }
             // A wrong address (a web page) is said also before a token is entered (found in the 0.9.2 lab tests).
-            if crate::net::answers_with_page(&format!("{}/rest/api/2/serverInfo", cfg.jira_url.trim_end_matches('/'))) {
+            if crate::net::answers_with_page(&format!("{}/rest/api/2/serverInfo", cfg.jira_url.trim_end_matches('/')), client_cert::jira(cfg)?) {
                 bail!("{}", crate::i18n::fmt("{0}: Jira answered with a web page instead of data: check the Jira address in Settings (e.g. https://jira.company.com or https://company.com/jira, without /browse or /projects)", &[crate::i18n::tr("checking the address").to_string()]));
             }
             let token = secrets::get(secrets::JIRA_TOKEN).context(crate::i18n::tr("no Jira token in the settings"))?;
@@ -5918,7 +5918,7 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
             if cfg.confluence_url.trim().is_empty() {
                 return Ok(crate::i18n::tr("Saved. Without a Confluence address, pages are prepared for you to paste into the source editor.").into());
             }
-            if crate::net::answers_with_page(&format!("{}/rest/api/space?limit=1", cfg.confluence_url.trim_end_matches('/'))) {
+            if crate::net::answers_with_page(&format!("{}/rest/api/space?limit=1", cfg.confluence_url.trim_end_matches('/')), client_cert::confluence(cfg)?) {
                 bail!("{}", crate::i18n::fmt("{0}: Confluence answered with a web page instead of data: check the Confluence address in Settings (e.g. https://confluence.company.com or https://company.com/confluence, without /spaces or /display)", &[crate::i18n::tr("checking the address").to_string()]));
             }
             let token = secrets::get(secrets::CONFLUENCE_TOKEN).context(crate::i18n::tr("no Confluence token"))?;

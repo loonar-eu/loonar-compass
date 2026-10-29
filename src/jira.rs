@@ -123,6 +123,9 @@ impl Connection {
         let status = response.status();
         let text = response.text().unwrap_or_default();
         if !status.is_success() {
+            if crate::net::asks_for_client_certificate(status.as_u16(), &text) {
+                bail!("{}", crate::i18n::fmt("{0}: the server asks for a client certificate (mTLS): choose its file (.p12, .pfx or .pem) and password in Settings", &[what.to_string()]));
+            }
             let parsed = serde_json::from_str::<Value>(&text).ok();
             let message = parsed
                 .as_ref()
@@ -594,7 +597,7 @@ mod tests {
             jira.create_issue("ARCH", "Story", "Under the epic", "x", &[], Some("ARCH-1")).unwrap();
             jira.create_issue("ARCH", "Sub-task", "A step", "x", &[], Some("ARCH-7")).unwrap();
             jira.add_comment("ARCH-7", "Checked against the model.").unwrap();
-            jira.update_issue("ARCH-7", None, Some("Clean text"), &["p1805".into()], &["old label".into()]).unwrap();
+            jira.update_issue("ARCH-7", None, Some("Clean text"), &["release-1".into()], &["old label".into()]).unwrap();
             assert_eq!(jira.add_attachment("ARCH-7", "Order process.png", vec![137, 80, 78, 71]).unwrap(), "Order process.png");
             assert!(jira.update_issue("ARCH-7", None, None, &[], &[]).is_err());
             jira.add_web_link("ARCH-7", "ea://{1234}", "EA: PaymentGateway").unwrap();
@@ -610,7 +613,7 @@ mod tests {
             let step = requests.iter().find(|r| r.0 == "POST" && r.1.ends_with("/issue") && r.2["fields"]["summary"] == "A step").unwrap();
             assert_eq!(step.2["fields"]["parent"]["key"], "ARCH-7");
             let changed = requests.iter().find(|r| r.0 == "PUT").unwrap();
-            assert_eq!(changed.2["update"]["labels"], json!([{"add":"p1805"},{"remove":"old_label"}]));
+            assert_eq!(changed.2["update"]["labels"], json!([{"add":"release-1"},{"remove":"old_label"}]));
             assert!(changed.2["fields"]["summary"].is_null() && !changed.2["fields"]["description"].is_null());
             let created = requests.iter().find(|r| r.0 == "POST" && r.1.ends_with("/issue")).unwrap();
             assert_eq!(created.2["fields"]["labels"], json!(["from_model"]));
