@@ -666,7 +666,7 @@ pub mod secrets {
                 anyhow::bail!("{}", crate::i18n::fmt("secret '{0}' is not set: give it as LOONAR_SECRET_{1} (or a file named in LOONAR_SECRET_{1}_FILE)", &[name.to_string(), key]));
             }
         }
-        if let Ok(value) = keyring::Entry::new(SERVICE, name).and_then(|e| e.get_password()) {
+        if let Ok(value) = keyring::Entry::new(SERVICE, name).and_then(|e| read(&e)) {
             return Ok(value);
         }
         // Copied, not moved: a pre-release version still installed next to this one keeps working.
@@ -679,8 +679,45 @@ pub mod secrets {
     }
 
     pub fn set(name: &str, value: &str) -> Result<()> {
-        keyring::Entry::new(SERVICE, name)?.set_password(value)?;
+        let entry = keyring::Entry::new(SERVICE, name)?;
+        match long_value(value) {
+            Some(bytes) => entry.set_secret(&bytes)?,
+            None => entry.set_password(value)?,
+        }
         Ok(())
+    }
+
+    /// Marks a secret kept as UTF-8 instead of UTF-16 (LC-318).
+    const UTF8_MARK: &[u8] = b"LCU8:";
+    /// Credential Manager takes at most 2560 bytes; as UTF-16 (keyring's encoding, also what cmdkey writes) a secret
+    /// gets twice its length, so a refresh token of Microsoft (often 1 300–2 000 characters) did not fit (found in the
+    /// 0.9.2 lab tests: OneDrive sign-in ended with "longer than platform limit of 2560 chars").
+    const BLOB_LIMIT: usize = 2560;
+
+    /// The bytes for a secret too long for UTF-16: the mark and the UTF-8 text; None when UTF-16 fits.
+    fn long_value(value: &str) -> Option<Vec<u8>> {
+        (value.encode_utf16().count() * 2 > BLOB_LIMIT).then(|| [UTF8_MARK, value.as_bytes()].concat())
+    }
+
+    #[cfg(test)]
+    mod long_secret_tests {
+        #[test]
+        fn long_secrets_go_as_utf8() {
+            assert_eq!(super::long_value(&"x".repeat(1_280)), None, "1 280 characters fit as UTF-16");
+            let token = format!("0.AQ{}", "a".repeat(1_900));
+            let bytes = super::long_value(&token).expect("too long for UTF-16");
+            assert!(bytes.len() <= super::BLOB_LIMIT && bytes.starts_with(super::UTF8_MARK));
+            assert_eq!(std::str::from_utf8(bytes.strip_prefix(super::UTF8_MARK).unwrap()).unwrap(), token);
+        }
+    }
+
+    /// A secret as saved by `set`: UTF-8 after the mark, otherwise UTF-16.
+    fn read(entry: &keyring::Entry) -> keyring::Result<String> {
+        let bytes = entry.get_secret()?;
+        match bytes.strip_prefix(UTF8_MARK) {
+            Some(text) => String::from_utf8(text.to_vec()).map_err(|e| keyring::Error::BadEncoding(e.into_bytes())),
+            None => entry.get_password(),
+        }
     }
 
     pub fn exists(name: &str) -> bool {
