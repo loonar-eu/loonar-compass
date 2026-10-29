@@ -6,7 +6,9 @@ import re
 import os
 import shutil
 import subprocess
+import sys
 import time
+from datetime import datetime, timedelta
 import urllib.request
 from pathlib import Path
 
@@ -316,7 +318,19 @@ def stats_service(out: Path, work: Path):
     sections = ", ".join(f"{h}: {'present' if h in text else 'MISSING'}" for h in ("Website and downloads", "The application"))
     (out / "3_author_dashboard.txt").write_text(f"Author's dashboard (python tools/stats/dashboard.py --serve 8105), as text. Sections: {sections}\n" + text[:5000], encoding="utf-8")
     (out / "3_author_dashboard_raw.txt").unlink()
-    (out / "note.txt").write_text("Step 4 (D1 retention) needs the Cloudflare console: for a person.", encoding="utf-8")
+    # Step 4: the oldest rows of every table, read from D1 with the dashboard's own query (no console needed).
+    sys.path.insert(0, str(REPO / "tools" / "stats"))
+    import dashboard
+    auth, (account, database) = dashboard.token("cloudflare_api_token.loonar-tools"), dashboard.wrangler_ids()
+    limit = (datetime.now() - timedelta(days=396)).date().isoformat()
+    lines = [f"13 months before today: {limit}"]
+    for table, col in (("starts", "day"), ("days", "day"), ("weekly", "week"), ("downloads", "day")):
+        row = dashboard.query(auth, account, database, f"SELECT MIN({col}) AS oldest, COUNT(*) AS n, SUM({col} < ?1) AS older FROM {table}", (limit,))[0]
+        lines.append(f"{table}: {row['n']} rows, oldest {row['oldest']}, rows older than 13 months: {row['older'] or 0}")
+    worker = (REPO / "feedback" / "worker.js").read_text(encoding="utf-8")
+    i = worker.find("const oldest")
+    lines.append("\nKEEP_MONTHS = 13 in feedback/worker.js; the service's weekly cleanup:\n" + worker[worker.rfind("\n", 0, i - 200):worker.find("]);", i) + 3])
+    (out / "4_d1_retention.txt").write_text("\n".join(lines), encoding="utf-8")
 
 
 @executor("Polityka prywatności na loonar.eu (po wydaniu)")
