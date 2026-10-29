@@ -968,9 +968,18 @@ impl Job<'_> {
                     bail!("{}", crate::i18n::tr("the report file must end with .docx, .pdf or .rtf"));
                 }
                 let template = op["template"].as_str().unwrap_or("Model Report").to_string();
-                let project = self.repo.call("GetProjectInterface", &[])?.object().ok_or_else(|| anyhow!("Project interface"))?;
                 let _ = std::fs::remove_file(&file);
-                project.call("RunReport", &[s(&package.text("PackageGUID")?), s(&template), s(&file)])?;
+                // The document generator works without windows; Project.RunReport opens the "Generate Documentation"
+                // dialog in EA 17 and writes nothing (found in the 0.9.2 live tests).
+                let generator = self.repo.call_obj("CreateDocumentGenerator", &[])?;
+                generator.call("NewDocument", &[s("")])?;
+                generator.call("DocumentPackage", &[i(package.int("PackageID")?), i(0), s(&template)])?;
+                // DocumentType: dtRTF = 0, dtHTML = 1, dtPDF = 2, dtDOCX = 3.
+                let kind = if lower.ends_with(".pdf") { 2 } else if lower.ends_with(".rtf") { 0 } else { 3 };
+                if !generator.call("SaveDocument", &[s(&file), i(kind)])?.bool() {
+                    let error = generator.call("GetLastError", &[]).map(|v| v.text()).unwrap_or_default();
+                    bail!("{} {error}", crate::i18n::fmt("EA did not create the report (template \"{0}\" may not exist)", &[template.clone()]));
+                }
                 let size = std::fs::metadata(&file).map(|m| m.len()).unwrap_or(0);
                 if size == 0 {
                     bail!("{}", crate::i18n::fmt("EA did not create the report (template \"{0}\" may not exist)", &[template]));

@@ -4826,10 +4826,13 @@ impl App {
             self.stats.loaded = true;
             self.stats.loaded_at = Some(std::time::Instant::now());
             self.stats.team_off = self.cfg.as_ref().is_some_and(hub::team_telemetry_off);
-            ui.ctx().request_repaint_after(std::time::Duration::from_secs(5));
             self.stats.sent = telemetry::sent_records();
             self.stats.today = telemetry::today_preview().map(|v| serde_json::to_string_pretty(&v).unwrap_or_default()).unwrap_or_default();
         }
+        // Every frame asks for the next reload: a frame drawn just before the 5 s passed would otherwise leave the view
+        // waiting for input (found in the 0.9.2 lab tests: a sent record appeared after about 20 s).
+        let since = self.stats.loaded_at.map_or(std::time::Duration::ZERO, |t| t.elapsed());
+        ui.ctx().request_repaint_after(std::time::Duration::from_secs(5).saturating_sub(since) + std::time::Duration::from_millis(50));
         let bold = |size: f32| egui::FontId::new(size, egui::FontFamily::Name(markdown::BOLD_FAMILY.into()));
         ui.add_space(10.0);
         ui.label(egui::RichText::new(crate::i18n::tr("Usage statistics")).font(bold(24.0)));

@@ -2103,7 +2103,8 @@ mod tests {
 
     /// The developer's app.properties; without it (CI) the default settings, enough for the tests that refuse before touching a model.
     fn test_config() -> AppConfig {
-        let props = Path::new(env!("CARGO_MANIFEST_DIR")).join("app.properties");
+        // LOONAR_TEST_PROPS points the live tests at another model (a file copy), like the EA tests.
+        let props = std::env::var("LOONAR_TEST_PROPS").map(std::path::PathBuf::from).unwrap_or_else(|_| Path::new(env!("CARGO_MANIFEST_DIR")).join("app.properties"));
         if props.exists() {
             return AppConfig::load(&props).expect("app.properties");
         }

@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 import urllib.request
 from pathlib import Path
 
-from pywinauto import Application, mouse
+from pywinauto import Application, keyboard, mouse
 
 from executors import executor, run
 from services import CONFIG, secret
@@ -73,8 +73,9 @@ def in_window(fn, **kw):
     return runner
 
 
-def click_text(c: Compass, text, exact=True, timeout=15):
-    """Clicks a visible text of any kind (button, link, card title), scrolling the middle of the window to it."""
+def click_text(c: Compass, text, exact=True, timeout=15, click=True):
+    """Clicks a visible text of any kind (button, link, card title), scrolling the middle of the window to it
+    (click=False: only scrolls it into view)."""
     r = c.win.rectangle()
     end = time.time() + timeout
     while time.time() < end:
@@ -82,6 +83,8 @@ def click_text(c: Compass, text, exact=True, timeout=15):
         visible = [d for d in found if r.top + 40 < d.element_info.rectangle.top < r.bottom - 40]
         if visible:
             box = visible[0].element_info.rectangle
+            if not click:
+                return
             mouse.move(coords=((box.left + box.right) // 2, (box.top + box.bottom) // 2))
             time.sleep(0.4)
             mouse.click(coords=((box.left + box.right) // 2, (box.top + box.bottom) // 2))
@@ -370,8 +373,30 @@ def service_urls(out: Path, work: Path):
     def body(c):
         nav(c, "Ustawienia")
         c.evidence("settings")
-        click_text(c, "Confluence")
         c.evidence("confluence_card")
+        # Step 1: an address copied from the browser (a page under /spaces/KEY/pages/…), saved and checked with the
+        # token from Credential Manager; then an address answering with a web page (step 2).
+        def save_address(label, url):
+            # Through UI Automation (focus, typing, Invoke): the card may be below the visible part of the view.
+            label_top = next(d for d in c.win.descendants() if (d.element_info.name or "") == "Adres Confluence").element_info.rectangle.top
+            field = min(c.win.descendants(control_type="Edit"), key=lambda e: abs(e.element_info.rectangle.top - label_top))
+            field.set_focus(); time.sleep(0.5)
+            keyboard.send_keys("^a{DEL}"); keyboard.send_keys(url, with_spaces=True)
+            before = set(c.texts())
+            c.find("Zapisz i sprawdź połączenie z Confluence").invoke()
+            end = time.time() + 90
+            while time.time() < end and not any(("✓" in t or "✗" in t) and t not in before for t in c.texts()):
+                time.sleep(1)
+            wiggle(c)
+            c.evidence(label)
+        save_address("copied_page_address", "https://quantumlearn.atlassian.net/wiki/spaces/PM/pages/1/Test")
+        nav(c, "Czat")
+        c.start_conversation()
+        c.say("Wypisz tytuły 3 dowolnych stron z przestrzeni Confluence PM.")
+        c.steps()
+        c.evidence("pages_read")
+        nav(c, "Ustawienia")
+        save_address("web_page_address", "https://loonar.eu")
     in_window(body)(out, work)
 
 
