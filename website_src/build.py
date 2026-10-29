@@ -152,11 +152,12 @@ def page_dir(kind, lang):
     return PATH[lang] + ("" if kind == "home" else kind + "/")
 
 
-def csp():
+def csp(connect_extra=""):
     """Content-Security-Policy for the <meta> tag (GitHub Pages sends no custom headers; frame-ancestors
-    cannot be set in a meta tag). Only the site itself, data: images (CSS ticks) and the GoatCounter endpoint."""
+    cannot be set in a meta tag). Only the site itself, data: images (CSS ticks), the GoatCounter endpoint and
+    `connect_extra` (the statistics page reads the feedback service)."""
     img = "'self' data:" + (" " + GC_ENDPOINT if GC_ENDPOINT else "")
-    connect = GC_ENDPOINT or "'none'"
+    connect = " ".join(x for x in (GC_ENDPOINT, connect_extra) if x) or "'none'"
     return (f"default-src 'self'; img-src {img}; connect-src {connect}; style-src 'self'; script-src 'self'; "
             "font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'")
 
@@ -270,7 +271,8 @@ def portrait(P):
 
 # ---------------------------------------------------------------------------- shared page parts
 
-def head(lang, title, desc, canonical, alternates, P, og_title, og_desc, extra="", robots=None, gc_path=None, root=False):
+def head(lang, title, desc, canonical, alternates, P, og_title, og_desc, extra="", robots=None, gc_path=None, root=False,
+         connect=""):
     alts = ''.join(f'<link rel="alternate" hreflang="{l}" href="{u}">\n' for l, u in alternates)
     oglocs = ''.join(f'<meta property="og:locale:alternate" content="{T[l]["locale"]}">\n' for l in LANGS if l != lang)
     attrs = ' data-root="1"' if root else ''
@@ -286,7 +288,7 @@ def head(lang, title, desc, canonical, alternates, P, og_title, og_desc, extra="
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="{csp()}">
+<meta http-equiv="Content-Security-Policy" content="{csp(connect)}">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <title>{title}</title>
 <meta name="description" content="{esc_attr(desc)}">
@@ -595,6 +597,56 @@ def doc_page(kind, lang):
 '''
     write(d + "index.html", html)
 
+# ---------------------------------------------------------------------------- published usage statistics
+
+# The weekly summary over all installations (feedback/worker.js, GET /v1/summary; it allows any origin). The
+# workers.dev address is only read by assets/stats.js: Chrome shows a lookalike-domain warning when it is opened.
+STATS_API = "https://compass-feedback.loonar-eu.workers.dev/v1/summary"
+STATS_V = 1
+STATS_T = {
+    "en": dict(title="Usage statistics", desc="Anonymous usage statistics of Loonar Compass: a weekly summary over all installations together.",
+               intro="If you leave usage statistics on, Loonar Compass sends anonymous statistics (see the <a href=\"{privacy}\">privacy policy</a>, section 8). Only the author sees the data of single installations; here is the summary of each week over all installations together. A value shared by fewer than 3 installations is counted as “other”. The summary of a week is computed the day after it ends.",
+               nojs="This page needs JavaScript."),
+    "pl": dict(title="Statystyki użycia", desc="Anonimowe statystyki użycia Loonar Compass: podsumowanie tygodnia dla wszystkich instalacji łącznie.",
+               intro="Jeśli zostawisz statystyki użycia włączone, Loonar Compass wysyła anonimowe statystyki (zob. <a href=\"{privacy}\">politykę prywatności</a>, punkt 8). Dane pojedynczych instalacji widzi tylko autor; tutaj jest podsumowanie każdego tygodnia dla wszystkich instalacji łącznie. Wartość, którą ma mniej niż 3 instalacje, jest liczona jako „inne”. Podsumowanie tygodnia powstaje dzień po jego końcu.",
+               nojs="Ta strona wymaga JavaScriptu."),
+    "de": dict(title="Nutzungsstatistik", desc="Anonyme Nutzungsstatistik von Loonar Compass: eine Wochenzusammenfassung über alle Installationen zusammen.",
+               intro="Wenn Sie die Nutzungsstatistik eingeschaltet lassen, sendet Loonar Compass anonyme Statistiken (siehe <a href=\"{privacy}\">Datenschutzerklärung</a>, Abschnitt 8). Die Daten einzelner Installationen sieht nur der Autor; hier steht die Zusammenfassung jeder Woche über alle Installationen zusammen. Ein Wert, den weniger als 3 Installationen haben, wird als „andere“ gezählt. Die Zusammenfassung einer Woche entsteht am Tag nach ihrem Ende.",
+               nojs="Diese Seite braucht JavaScript."),
+    "fr": dict(title="Statistiques d’utilisation", desc="Statistiques d’utilisation anonymes de Loonar Compass : un résumé hebdomadaire de toutes les installations ensemble.",
+               intro="Si vous laissez les statistiques d’utilisation activées, Loonar Compass envoie des statistiques anonymes (voir la <a href=\"{privacy}\">politique de confidentialité</a>, section 8). Seul l’auteur voit les données de chaque installation ; voici le résumé de chaque semaine pour toutes les installations ensemble. Une valeur partagée par moins de 3 installations est comptée comme « autres ». Le résumé d’une semaine est calculé le lendemain de sa fin.",
+               nojs="Cette page nécessite JavaScript."),
+}
+
+
+def stats_page(lang):
+    d, P, t, sw = common("stats", lang)
+    s = STATS_T[lang]
+    home = rel(d, PATH[lang])
+    privacy = rel(d, page_dir("privacy", lang))
+    alternates = [(l, SITE + page_dir("stats", l)) for l in LANGS] + [("x-default", SITE + page_dir("stats", "en"))]
+    extra = (f'<link rel="stylesheet" href="{P}assets/stats.css?v={STATS_V}">\n'
+             f'<script src="{P}assets/stats.js?v={STATS_V}" defer></script>\n')
+    html = head(lang, f"{s['title']} – {NAME}", s["desc"], SITE + d, alternates, P, f"{s['title']} – {NAME}", s["desc"],
+                extra=extra, connect=STATS_API) + f'''
+<body id="top">
+{header(t, lang, home, sw)}
+
+<main id="main" class="doc-main">
+  <article class="wrap doc">
+    <h1>{s["title"]}</h1>
+    <p>{s["intro"].format(privacy=privacy)}</p>
+    <div id="stats" class="stats" aria-live="polite"><noscript><p>{s["nojs"]}</p></noscript></div>
+    <p class="doc-back"><a href="{home}">← {t["doc_home"]}</a></p>
+  </article>
+</main>
+
+{footer(t, lang, P, privacy, rel(d, page_dir("legal", lang)), sw["html"])}
+</body>
+</html>
+'''
+    write(d + "index.html", html)
+
 # ---------------------------------------------------------------------------- changelog (from CHANGELOG*.md)
 
 CHANGELOGS = {"pl": "CHANGELOG.md", "en": "CHANGELOG.en.md", "de": "CHANGELOG.de.md", "fr": "CHANGELOG.fr.md"}
@@ -710,7 +762,7 @@ def not_found():
 
 def sitemap(extra=()):
     urls = [f'  <url>\n    <loc>{u}</loc>\n  </url>' for u in extra]
-    for kind in ("home", "privacy", "legal", "changelog"):
+    for kind in ("home", "privacy", "legal", "stats", "changelog"):
         for l in LANGS:
             alts = ''.join(f'\n    <xhtml:link rel="alternate" hreflang="{a}" href="{SITE + page_dir(kind, a)}"/>' for a in LANGS)
             alts += f'\n    <xhtml:link rel="alternate" hreflang="x-default" href="{SITE + page_dir(kind, "en")}"/>'
@@ -821,6 +873,7 @@ if __name__ == "__main__":
         home_page(l)
         doc_page("privacy", l)
         doc_page("legal", l)
+        stats_page(l)
         changelog_page(l)
     doc_urls = docs.generate(sys.modules[__name__])
     not_found()
