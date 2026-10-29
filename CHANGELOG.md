@@ -2,7 +2,7 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
-## Wersja 0.9.2 (w przygotowaniu)
+## Wersja 0.9.2 (2026-10-30)
 
 - **Widoczne strzałki na diagramach:** połączenia, które nie są komunikatami diagramu sekwencji, nie są już przypinane do jednego diagramu (wcześniej np. zależność narysowana na diagramie „Systemy zależne” nie pokazywała się na żadnym innym). Pokazanie ukrytego połączenia usuwa jego zdublowane wpisy na diagramie, a nowa naprawa „połączenia niewidoczne na diagramie” odpina przypięte połączenia, usuwa duplikaty i – na życzenie – pokazuje ukryte. Asystent przy brakujących strzałkach sprawdza najpierw te przyczyny.
 - **Załączniki w Jirze:** asystent dołącza do zgłoszeń obrazy diagramów prosto z modelu oraz obrazy i pliki z rozmowy – nowym narzędziem albo od razu przy zakładaniu i zmianie zgłoszenia. W Jira Server / Data Center obrazy pokazują się też w opisie zgłoszenia.

@@ -2,7 +2,7 @@
 
 Toutes les modifications importantes de l'application Loonar Compass (nommée Loonar EA Assistant jusqu'à la version 0.3).
 
-## Version 0.9.2 (en préparation)
+## Version 0.9.2 (2026-10-30)
 
 - **Flèches visibles dans les diagrammes :** les connecteurs qui ne sont pas des messages d’un diagramme de séquence ne sont plus liés à un seul diagramme (auparavant, par exemple, une dépendance dessinée dans le diagramme « Systèmes dépendants » n’apparaissait dans aucun autre). Afficher un connecteur masqué supprime ses entrées en double sur le diagramme, et la nouvelle réparation « connecteurs invisibles sur un diagramme » délie les connecteurs liés, supprime les doublons et, sur demande, affiche les connecteurs masqués. Quand des flèches manquent, l’assistant vérifie d’abord ces causes.
 - **Pièces jointes dans Jira :** l’assistant joint aux tickets des images de diagrammes directement depuis le modèle, ainsi que des images et fichiers de la conversation – avec un nouvel outil ou dès la création ou la modification d’un ticket. Sur Jira Server / Data Center, les images s’affichent aussi dans la description.
