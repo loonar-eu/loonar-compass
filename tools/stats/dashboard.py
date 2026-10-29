@@ -287,7 +287,9 @@ def web_section(today, span, auth, gc_site, gc_credential, repo):
     if gc:
         parts.append(daily_bars([(d, gc["daily"].get(d, 0)) for (d,) in rows], 1, f"Website visitors per day, last {span} days", "visitors"))
     if per_day:
-        parts.append(daily_bars([(d, per_day.get(d, 0)) for (d,) in rows], 1, f"Installer downloads per day, last {span} days", "downloads"))
+        # Snapshots without a change are data too: "none" rather than "no data" (found in the 0.9.1 regression, LC-T81).
+        parts.append(daily_bars([(d, per_day.get(d, 0)) for (d,) in rows], 1, f"Installer downloads per day, last {span} days", "downloads",
+                                empty=f"No installer downloads in the counted days (since {min(per_day)})."))
     cards = [hbars("Installer downloads by version (all time)", by_version, limit=15)]
     if hub:
         cards.append(hbars("Hub downloads by version (all time)", hub, limit=10))
@@ -306,11 +308,11 @@ def esc(v):
     return html.escape(str(v))
 
 
-def daily_bars(rows, index, title, label):
+def daily_bars(rows, index, title, label, empty="No data yet."):
     """A column chart of one measure per day; the hover tooltip is the SVG title of each column."""
     w, h, pad = 960, 180, 28
     if not any(r[index] for r in rows):
-        return f'<figure><figcaption>{esc(title)}</figcaption><p class="muted">No data yet.</p></figure>'
+        return f'<figure><figcaption>{esc(title)}</figcaption><p class="muted">{esc(empty)}</p></figure>'
     peak = max([r[index] for r in rows] + [1])
     step = (w - pad) / len(rows)
     bar = max(step - 2, 1)
