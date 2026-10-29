@@ -95,7 +95,7 @@ mod site_base_tests {
         assert_eq!(super::site_base("https://confluence.example.com/display/ARCH/Home", &c), "https://confluence.example.com");
         assert_eq!(super::site_base("https://confluence.example.com/", &c), "https://confluence.example.com");
         let j = ["/browse", "/projects", "/secure", "/rest", "/issues"];
-        assert_eq!(super::site_base("https://jira.example.com/jira/browse/ITSPX-1", &j), "https://jira.example.com/jira");
+        assert_eq!(super::site_base("https://jira.example.com/jira/browse/PROJX-1", &j), "https://jira.example.com/jira");
         assert_eq!(super::site_base("https://jira.example.com/jira", &j), "https://jira.example.com/jira");
         assert!(super::not_json("<!DOCTYPE html><html>"));
         assert!(!super::not_json("") && !super::not_json("{\"a\":1}"));

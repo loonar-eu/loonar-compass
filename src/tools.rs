@@ -2408,7 +2408,7 @@ for (var id in map) { var m = Repository.GetMethodByID(id); m.Style = map[id]; m
 mod trust_tests {
     #[test]
     fn approval_questions_are_recognised_by_kind() {
-        let jira = crate::i18n::fmt(super::JIRA_CREATE_QUESTION, &["ITSPX".into(), "Story".into(), "US-05".into(), "text".into()]);
+        let jira = crate::i18n::fmt(super::JIRA_CREATE_QUESTION, &["PROJX".into(), "Story".into(), "US-05".into(), "text".into()]);
         assert_eq!(super::trustable_kind(&jira).map(|k| k.0), Some("jira"));
         let page = crate::i18n::fmt(super::CONFLUENCE_NEW_QUESTION, &["T".into(), "PM".into()]);
         assert_eq!(super::trustable_kind(&page).map(|k| k.0), Some("confluence"));
