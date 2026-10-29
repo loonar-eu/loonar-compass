@@ -604,7 +604,8 @@ model.file=C:/nie-ma/takiego/pliku.qea
         let sharp = std::env::temp_dir().join("loonar_export_size_x2.png");
         run_batch(&cfg, &[json!({"op":"export_diagram","diagram":dia,"path":sharp.to_string_lossy(),"scale":2.0})], &BatchOptions::default()).expect("export x2");
         let size2 = image::image_dimensions(&sharp).expect("png x2");
-        println!("EXPORT {}x{} | scale 2 from the metafile: {}x{} ({})", size.0, size.1, size2.0, size2.1, sharp.display());
+        // Sizes of the saved PNG files themselves (read back from disk), so a reader of the log sees the exported result.
+        println!("EXPORT saved file {} is {}x{} px | saved file {} (scale 2, drawn from the metafile) is {}x{} px", path.display(), size.0, size.1, sharp.display(), size2.0, size2.1);
         assert!(size2.0 >= size.0 * 3 / 2 && size2.1 >= size.1 * 3 / 2, "twice as large");
         run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &BatchOptions::default()).expect("deleting the test package");
         shutdown();
