@@ -1344,6 +1344,65 @@ impl Job<'_> {
                 let (id, guid, real) = (copy.int("PackageID")?, copy.text("PackageGUID")?, copy.text("Name")?);
                 self.register(&op["key"], Kind::Package, &copy, id, guid, real);
             }
+            "clone_element_version" => {
+                // EA's "Clone as New Version" (removed after EA 16.0): a copy of the element next to it with the next
+                // version number and a «trace» from the new version to the original.
+                let original = self.element(&op["element"])?;
+                let package = self.package(&json!(original.int("PackageID")?))?;
+                let title = if op["name"].is_null() { original.text("Name")? } else { text_field(op, "name") };
+                let copy = self.new_typed(&package.obj("Elements")?, &title, &original.text("Type")?, &original.text("StereotypeEx").unwrap_or_default())?;
+                for property in ["Notes", "Alias", "Status", "Phase", "Author", "Complexity", "Difficulty", "Priority"] {
+                    if let Ok(value) = original.text(property) {
+                        let _ = copy.set(property, s(&value));
+                    }
+                }
+                let version = if op["version"].is_null() { next_version(&original.text("Version").unwrap_or_default()) } else { text_field(op, "version") };
+                copy.set("Version", s(&version))?;
+                copy.update(&crate::i18n::fmt("element '{0}'", &[title.clone()]))?;
+                for attribute in original.obj("Attributes")?.items()? {
+                    let a = copy.obj("Attributes")?.call_obj("AddNew", &[s(&attribute.text("Name")?), s(&attribute.text("Type")?)])?;
+                    for property in ["Visibility", "Notes", "Default", "StereotypeEx", "Style", "LowerBound", "UpperBound", "IsStatic", "IsConst"] {
+                        if let Ok(value) = attribute.text(property) {
+                            let _ = a.set(property, s(&value));
+                        }
+                    }
+                    a.update(crate::i18n::tr("attribute"))?;
+                }
+                for method in original.obj("Methods")?.items()? {
+                    let m = copy.obj("Methods")?.call_obj("AddNew", &[s(&method.text("Name")?), s(&method.text("ReturnType")?)])?;
+                    for property in ["Visibility", "Notes", "StereotypeEx", "Style", "Behavior", "IsStatic", "Abstract", "IsQuery"] {
+                        if let Ok(value) = method.text(property) {
+                            let _ = m.set(property, s(&value));
+                        }
+                    }
+                    m.update(crate::i18n::tr("operation"))?;
+                    for parameter in method.obj("Parameters")?.items()? {
+                        let p = m.obj("Parameters")?.call_obj("AddNew", &[s(&parameter.text("Name")?), s(&parameter.text("Type")?)])?;
+                        for property in ["Kind", "Default", "Notes"] {
+                            if let Ok(value) = parameter.text(property) {
+                                let _ = p.set(property, s(&value));
+                            }
+                        }
+                        p.update(crate::i18n::tr("operation parameter"))?;
+                    }
+                }
+                for tag in original.obj("TaggedValues")?.items()? {
+                    let t = copy.obj("TaggedValues")?.call_obj("AddNew", &[s(&tag.text("Name")?), s(&tag.text("Value")?)])?;
+                    if let Ok(notes) = tag.text("Notes") {
+                        let _ = t.set("Notes", s(&notes));
+                    }
+                    t.update(crate::i18n::tr("tagged value"))?;
+                }
+                for collection in ["Attributes", "Methods", "TaggedValues"] {
+                    copy.obj(collection)?.call("Refresh", &[])?;
+                }
+                let trace = self.new_typed(&copy.obj("Connectors")?, "", "Abstraction", "trace")?;
+                trace.set("SupplierID", i(original.int("ElementID")?))?;
+                trace.update(crate::i18n::tr("EA did not create the trace to the original."))?;
+                package.obj("Elements")?.call("Refresh", &[])?;
+                let (id, guid, real) = (copy.int("ElementID")?, copy.text("ElementGUID")?, copy.text("Name")?);
+                self.register(&op["key"], Kind::Element, &copy, id, guid, real);
+            }
             "update_scenario" | "delete_scenario" => {
                 // An existing structured scenario of an element, found by its name (or GUID).
                 let element = self.element(&op["element"])?;
@@ -1868,6 +1927,18 @@ mod tests {
 }
 
 
+/// The version after `v`: the last number goes up ("1.0" → "1.1", "2" → "3", "v1.9" → "v1.10"); without a number,
+/// ".2" is added ("" → "2").
+fn next_version(v: &str) -> String {
+    let v = v.trim();
+    let digits = v.chars().rev().take_while(|c| c.is_ascii_digit()).count();
+    if digits == 0 {
+        return if v.is_empty() { "2".into() } else { format!("{v}.2") };
+    }
+    let (head, number) = v.split_at(v.len() - digits);
+    format!("{head}{}", number.parse::<u64>().map(|n| n + 1).unwrap_or(2))
+}
+
 /// Plain text as a minimal RTF document (EA keeps linked documents as RTF): paragraphs per line, Unicode escaped.
 fn rtf(text: &str) -> String {
     let mut out = String::from("{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Calibri;}}\\fs22 ");
@@ -1893,4 +1964,16 @@ fn rtf(text: &str) -> String {
     }
     out.push('}');
     out
+}
+
+#[cfg(test)]
+mod version_tests {
+    #[test]
+    fn next_versions() {
+        assert_eq!(super::next_version("1.0"), "1.1");
+        assert_eq!(super::next_version("2"), "3");
+        assert_eq!(super::next_version("v1.9"), "v1.10");
+        assert_eq!(super::next_version(""), "2");
+        assert_eq!(super::next_version("draft"), "draft.2");
+    }
 }

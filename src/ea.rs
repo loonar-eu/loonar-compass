@@ -539,6 +539,44 @@ model.file=C:/nie-ma/takiego/pliku.qea
         assert_eq!(copied[0][0], "1");
     }
 
+    /// A new version of an element (EA's former "Clone as New Version"): members, tags, next version, «trace» to the
+    /// original. Run with: `cargo test ea_clone_element_version -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "requires EA, a license and the model database from app.properties"]
+    fn ea_clone_element_version() {
+        let cfg = test_config();
+        let _ea = CloseEa;
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).expect(sql);
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id limit 1")[0][0].parse().unwrap();
+        let name = format!("ZZ_test_wersji_{}", chrono::Local::now().format("%H%M%S"));
+        let ops = vec![
+            json!({"op":"create_package","key":"pkg","parent":root,"name":name}),
+            json!({"op":"create_element","key":"a","package":"#pkg","name":"Zamówienie","type":"Class","stereotype":"entity","notes":"Opis","tags":{"owner":"Team A"}}),
+            json!({"op":"create_attribute","element":"#a","name":"total","type":"Decimal","visibility":"Private"}),
+            json!({"op":"create_operation","element":"#a","name":"pay","return_type":"Boolean","parameters":[{"name":"amount","type":"Decimal"}]}),
+        ];
+        let created = run_batch(&cfg, &ops, &BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("creation");
+        let id_of = |v: &Value, key: &str| v["created"].as_array().unwrap().iter().find(|c| c["key"] == key).expect(key)["id"].as_i64().unwrap();
+        let (pkg, a) = (id_of(&created, "pkg"), id_of(&created, "a"));
+        let cloned = run_batch(&cfg, &[json!({"op":"clone_element_version","key":"v2","element":a})], &BatchOptions::default()).expect("new version");
+        let v2 = id_of(&cloned, "v2");
+        let row = q(&format!(
+            "select o.name, o.version, coalesce(o.stereotype,''), coalesce(o.note,''), (select count(*) from t_attribute where object_id = o.object_id), \
+             (select count(*) from t_operation where object_id = o.object_id), (select count(*) from t_operationparams p join t_operation m on m.operationid = p.operationid where m.object_id = o.object_id), \
+             (select count(*) from t_objectproperties where object_id = o.object_id and property = 'owner'), \
+             (select count(*) from t_connector c where c.start_object_id = o.object_id and c.end_object_id = {a} and c.connector_type = 'Abstraction' and c.stereotype = 'trace'), \
+             (select version from t_object where object_id = {a}) from t_object o where o.object_id = {v2}"
+        ));
+        println!("new version: {:?}", row[0]);
+        run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &BatchOptions::default()).expect("deleting the test package");
+        shutdown();
+        let r = &row[0];
+        assert_eq!(r[0], "Zamówienie");
+        assert!(!r[1].is_empty() && r[1] != r[9], "version {} after {}", r[1], r[9]);
+        assert_eq!((r[2].as_str(), r[3].as_str()), ("entity", "Opis"));
+        assert_eq!((r[4].as_str(), r[5].as_str(), r[6].as_str(), r[7].as_str(), r[8].as_str()), ("1", "1", "1", "1", "1"));
+    }
+
     /// Renaming a diagram (update_diagram) and hiding a connector on the diagram (hide_connectors).
     /// Run with: `cargo test ea_rename_and_hide -- --ignored --nocapture`.
     #[test]

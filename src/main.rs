@@ -7371,6 +7371,24 @@ impl eframe::App for App {
                 self.open_miro(ctx, id, picked);
             }
         }
+        // Context menu commands of the EA add-in: sent as a message of the conversation (one at a time, when idle).
+        if ea::in_ea_tab() && !self.busy() {
+            if let Some((kind, args)) = ea_ui::take_commands().into_iter().next() {
+                let arg = |n: usize| args.get(n).cloned().unwrap_or_default();
+                let message = match kind.as_str() {
+                    "usage" => Some(crate::i18n::fmt("Where is the operation \"{0}\" (operation id {1} of element id {2}) used on diagrams? List the diagrams and the messages or actions that use it.", &[arg(2), arg(0), arg(1)])),
+                    "version" => Some(crate::i18n::fmt("Clone element \"{0}\" (id {1}) as a new version with a trace relationship to the original (clone_element_version).", &[arg(1), arg(0)])),
+                    _ => None,
+                };
+                if let Some(message) = message {
+                    self.view = View::Chat;
+                    // A message the user was writing waits until this one is sent.
+                    let draft = std::mem::replace(&mut self.input, message);
+                    self.send(ctx);
+                    self.input = draft;
+                }
+            }
+        }
         // In a tab of EA: objects the user points at in EA ("Add to the Compass conversation") go into the message.
         if ea::in_ea_tab() {
             for reference in ea_ui::take_references() {

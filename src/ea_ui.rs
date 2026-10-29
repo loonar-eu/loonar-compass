@@ -516,6 +516,21 @@ pub fn take_references() -> Vec<String> {
     text.lines().map(str::trim).filter(|line| !line.is_empty()).map(str::to_string).collect()
 }
 
+/// Commands from the add-in's context menu: ("usage", [operation id, element id, name]) or ("version", [element id, name]).
+pub fn take_commands() -> Vec<(String, Vec<String>)> {
+    let Some(name) = ROT_NAME.get() else { return Vec::new() };
+    let file = std::env::temp_dir().join(format!("loonar-ea-command-{name}.txt"));
+    let Ok(text) = std::fs::read_to_string(&file) else { return Vec::new() };
+    let _ = std::fs::remove_file(&file);
+    text.lines()
+        .filter_map(|line| {
+            let mut parts = line.trim_end_matches(['\r', '\n']).split('\t');
+            let kind = parts.next()?.trim().to_string();
+            Some((kind, parts.map(str::to_string).collect()))
+        })
+        .collect()
+}
+
 /// Diagrams the EA add-in sent with "Send to Miro" (the diagram menu), taken out of their hand-over file: one line
 /// each, "diagram" or "diagram:element,element,…" when elements were selected on it.
 pub fn take_miro() -> Vec<(i64, Vec<i64>)> {
