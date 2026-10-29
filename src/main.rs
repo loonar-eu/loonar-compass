@@ -1503,6 +1503,49 @@ impl Form {
     }
 }
 
+/// The application's window, the owner of file and folder dialogs: owned, a dialog is modal and stays above the window
+/// (found in the 0.9.2 lab tests: without an owner the folder dialog went under the window and a second click opened
+/// another one).
+#[derive(Clone, Copy)]
+struct OwnerWindow(raw_window_handle::RawWindowHandle);
+
+// SAFETY: only the handle value is kept; it is used on the window's own (UI) thread, where the dialogs are opened.
+unsafe impl Send for OwnerWindow {}
+
+impl raw_window_handle::HasWindowHandle for OwnerWindow {
+    fn window_handle(&self) -> Result<raw_window_handle::WindowHandle<'_>, raw_window_handle::HandleError> {
+        // SAFETY: the handle of the application's main window, valid while the application runs.
+        Ok(unsafe { raw_window_handle::WindowHandle::borrow_raw(self.0) })
+    }
+}
+
+impl raw_window_handle::HasDisplayHandle for OwnerWindow {
+    fn display_handle(&self) -> Result<raw_window_handle::DisplayHandle<'_>, raw_window_handle::HandleError> {
+        Ok(raw_window_handle::DisplayHandle::windows())
+    }
+}
+
+static OWNER_WINDOW: std::sync::Mutex<Option<OwnerWindow>> = std::sync::Mutex::new(None);
+
+/// Remembers the main window once (from the first frame).
+fn remember_owner_window(frame: &eframe::Frame) {
+    use raw_window_handle::HasWindowHandle;
+    let mut owner = OWNER_WINDOW.lock().unwrap_or_else(|p| p.into_inner());
+    if owner.is_none() {
+        if let Ok(handle) = frame.window_handle() {
+            *owner = Some(OwnerWindow(handle.as_raw()));
+        }
+    }
+}
+
+/// A file or folder dialog owned by the application's window.
+fn file_dialog() -> rfd::FileDialog {
+    match *OWNER_WINDOW.lock().unwrap_or_else(|p| p.into_inner()) {
+        Some(owner) => rfd::FileDialog::new().set_parent(&owner),
+        None => rfd::FileDialog::new(),
+    }
+}
+
 /// State of the "Document templates" view (LC-311).
 #[derive(Default)]
 struct TemplatesState {
@@ -2497,7 +2540,7 @@ impl App {
                             ui.horizontal(|ui| {
                                 ui.add(egui::TextEdit::singleline(&mut editor.file).desired_width(settings_field_width(ui) - 44.0));
                                 if ui.button("…").on_hover_text(crate::i18n::tr("Choose the model file")).clicked() {
-                                    if let Some(file) = rfd::FileDialog::new()
+                                    if let Some(file) = file_dialog()
                                         .set_title(crate::i18n::tr("Choose the model file"))
                                         .add_filter(crate::i18n::tr("Enterprise Architect project"), &config::MODEL_FILE_EXTENSIONS)
                                         .pick_file()
@@ -2679,7 +2722,7 @@ impl App {
     fn export_session(&mut self, session: &Session) {
         let Some(cfg) = self.cfg.clone() else { return };
         let name: String = shown_title(&session.title).chars().map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' { c } else { '_' }).take(60).collect();
-        let Some(target) = rfd::FileDialog::new()
+        let Some(target) = file_dialog()
             .set_title(crate::i18n::tr("Export the conversation"))
             .set_file_name(format!("{}.{}", name.trim(), history::EXPORT_EXTENSION))
             .add_filter(crate::i18n::tr("Loonar Compass conversation"), &[history::EXPORT_EXTENSION])
@@ -2699,7 +2742,7 @@ impl App {
             self.status = crate::i18n::tr("Open a model in Enterprise Architect first.").into();
             return;
         };
-        let Some(source) = rfd::FileDialog::new()
+        let Some(source) = file_dialog()
             .set_title(crate::i18n::tr("Import a conversation"))
             .add_filter(crate::i18n::tr("Loonar Compass conversation"), &[history::EXPORT_EXTENSION])
             .pick_file()
@@ -3357,6 +3400,15 @@ impl App {
                 if !url.is_empty() {
                     jira::check_base_url(&url)?;
                 }
+                // The form shows what is saved; a project named in a copied address fills an empty key (found in the
+                // 0.9.2 lab tests).
+                if f.jira_project.trim().is_empty() {
+                    if let Some(key) = crate::net::key_in_address(&f.jira_url, &["projects", "browse"]) {
+                        self.form.jira_project = key.to_uppercase();
+                    }
+                }
+                self.form.jira_url = url.clone();
+                let f = self.form.clone();
                 updates.push(("jira.url", url));
                 updates.push(("jira.user", f.jira_user.trim().to_string()));
                 updates.push(("jira.project", f.jira_project.trim().to_uppercase()));
@@ -3375,6 +3427,13 @@ impl App {
                 if !url.is_empty() {
                     confluence::check_base_url(&url)?;
                 }
+                if f.confluence_space.trim().is_empty() {
+                    if let Some(key) = crate::net::key_in_address(&f.confluence_url, &["spaces", "display"]) {
+                        self.form.confluence_space = key;
+                    }
+                }
+                self.form.confluence_url = url.clone();
+                let f = self.form.clone();
                 updates.push(("confluence.url", url));
                 updates.push(("confluence.user", f.confluence_user.trim().to_string()));
                 updates.push(("confluence.space", f.confluence_space.trim().to_string()));
@@ -4040,7 +4099,7 @@ impl App {
                                         .desired_width(settings_field_width(ui) - 44.0),
                                 );
                                 if ui.button("…").on_hover_text(crate::i18n::tr("Choose the model file")).clicked() {
-                                    if let Some(file) = rfd::FileDialog::new()
+                                    if let Some(file) = file_dialog()
                                         .set_title(crate::i18n::tr("Choose the model file"))
                                         .add_filter(crate::i18n::tr("Enterprise Architect project"), &config::MODEL_FILE_EXTENSIONS)
                                         .pick_file()
@@ -4107,7 +4166,7 @@ impl App {
                         ui.horizontal(|ui| {
                             ui.add(egui::TextEdit::singleline(&mut self.form.ea_path).desired_width(settings_field_width(ui) - 44.0));
                             if ui.button("…").on_hover_text(crate::i18n::tr("Choose EA.exe")).clicked() {
-                                if let Some(file) = rfd::FileDialog::new().set_title(crate::i18n::tr("Choose EA.exe")).add_filter("EA.exe", &["exe"]).pick_file() {
+                                if let Some(file) = file_dialog().set_title(crate::i18n::tr("Choose EA.exe")).add_filter("EA.exe", &["exe"]).pick_file() {
                                     self.form.ea_path = file.display().to_string();
                                 }
                             }
@@ -4133,7 +4192,7 @@ impl App {
                     ui.add(egui::TextEdit::singleline(&mut self.form.code_folders).hint_text(egui::RichText::new(crate::i18n::tr("read without asking, e.g. C:/repos/shop; C:/repos/billing")).color(theme::HINT)).desired_width(settings_field_width(ui) - 44.0));
                     // Adds a folder to the list (several are separated with "; ").
                     if ui.button("…").on_hover_text(crate::i18n::tr("Add a source code folder")).clicked() {
-                        if let Some(dir) = rfd::FileDialog::new().set_title(crate::i18n::tr("Add a source code folder")).pick_folder() {
+                        if let Some(dir) = file_dialog().set_title(crate::i18n::tr("Add a source code folder")).pick_folder() {
                             let dir = dir.display().to_string();
                             let list = self.form.code_folders.trim().trim_end_matches(';').trim().to_string();
                             if !list.split(';').any(|f| f.trim().eq_ignore_ascii_case(&dir)) {
@@ -4522,7 +4581,7 @@ impl App {
             c.thumbnails.remove(i);
         }
         if pick {
-            if let Some(paths) = rfd::FileDialog::new().set_title(crate::i18n::tr("Choose images")).add_filter(crate::i18n::tr("Images@@file-filter"), &["png", "jpg", "jpeg", "gif", "bmp", "webp"]).pick_files() {
+            if let Some(paths) = file_dialog().set_title(crate::i18n::tr("Choose images")).add_filter(crate::i18n::tr("Images@@file-filter"), &["png", "jpg", "jpeg", "gif", "bmp", "webp"]).pick_files() {
                 for path in paths {
                     c.add_file_from_path(&path);
                 }
@@ -4953,7 +5012,7 @@ impl App {
         let state = &mut self.templates_state;
         ui.horizontal_wrapped(|ui| {
             if ui.button(crate::i18n::tr("➕ Add from files…")).on_hover_text(crate::i18n::tr("Markdown, text, Word, HTML, PDF, PowerPoint or Excel: headings, lists and tables are kept")).clicked() {
-                if let Some(files) = rfd::FileDialog::new()
+                if let Some(files) = file_dialog()
                     .set_title(crate::i18n::tr("Choose template files"))
                     .add_filter(crate::i18n::tr("Documents"), &["md", "txt", "docx", "dotx", "docm", "html", "htm", "pdf", "pptx", "xlsx"])
                     .pick_files()
@@ -5252,7 +5311,7 @@ impl App {
                 ]
                 .map(String::from)
                 .to_vec();
-                let target = rfd::FileDialog::new().set_file_name(crate::i18n::tr("EA audit log.xlsx")).add_filter(crate::i18n::tr("Excel workbook"), &["xlsx"]).save_file();
+                let target = file_dialog().set_file_name(crate::i18n::tr("EA audit log.xlsx")).add_filter(crate::i18n::tr("Excel workbook"), &["xlsx"]).save_file();
                 if let Some(target) = target {
                     self.status = match crate::xlsx::build(&[crate::xlsx::Sheet { name: crate::i18n::tr("Audit log").into(), columns, rows }])
                         .and_then(|bytes| std::fs::write(&target, bytes).map_err(Into::into))
@@ -5819,6 +5878,10 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
             if cfg.jira_url.trim().is_empty() {
                 return Ok(crate::i18n::tr("Saved. Without a Jira address the assistant does not use Jira.").into());
             }
+            // A wrong address (a web page) is said also before a token is entered (found in the 0.9.2 lab tests).
+            if crate::net::answers_with_page(&format!("{}/rest/api/2/serverInfo", cfg.jira_url.trim_end_matches('/'))) {
+                bail!("{}", crate::i18n::fmt("{0}: Jira answered with a web page instead of data: check the Jira address in Settings (e.g. https://jira.company.com or https://company.com/jira, without /browse or /projects)", &[crate::i18n::tr("checking the address").to_string()]));
+            }
             let token = secrets::get(secrets::JIRA_TOKEN).context(crate::i18n::tr("no Jira token in the settings"))?;
             let connection = jira::Connection { base_url: cfg.jira_url.clone(), user: cfg.jira_user.clone(), token, identity: client_cert::jira(cfg)? };
             if cfg.jira_project.trim().is_empty() {
@@ -5830,6 +5893,9 @@ fn test_settings_group(group: usize, cfg: &AppConfig) -> anyhow::Result<String> 
         GROUP_CONFLUENCE => {
             if cfg.confluence_url.trim().is_empty() {
                 return Ok(crate::i18n::tr("Saved. Without a Confluence address, pages are prepared for you to paste into the source editor.").into());
+            }
+            if crate::net::answers_with_page(&format!("{}/rest/api/space?limit=1", cfg.confluence_url.trim_end_matches('/'))) {
+                bail!("{}", crate::i18n::fmt("{0}: Confluence answered with a web page instead of data: check the Confluence address in Settings (e.g. https://confluence.company.com or https://company.com/confluence, without /spaces or /display)", &[crate::i18n::tr("checking the address").to_string()]));
             }
             let token = secrets::get(secrets::CONFLUENCE_TOKEN).context(crate::i18n::tr("no Confluence token"))?;
             let connection = confluence::Connection { base_url: cfg.confluence_url.clone(), user: cfg.confluence_user.clone(), token, identity: client_cert::confluence(cfg)? };
@@ -7139,7 +7205,7 @@ fn row_cert(ui: &mut egui::Ui, value: &mut String) {
                 .desired_width(settings_field_width(ui) - 44.0),
         );
         if ui.button("…").on_hover_text(crate::i18n::tr("Choose the client certificate")).clicked() {
-            if let Some(file) = rfd::FileDialog::new()
+            if let Some(file) = file_dialog()
                 .set_title(crate::i18n::tr("Choose the client certificate"))
                 .add_filter(crate::i18n::tr("Certificates (.p12, .pfx, .pem)"), &["p12", "pfx", "pem"])
                 .pick_file()
@@ -7233,14 +7299,15 @@ impl eframe::App for App {
         ea::shutdown();
     }
 
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        remember_owner_window(frame);
         self.poll_dictionary();
         self.picker_ui(ctx);
         self.telemetry_tick(ctx);
         // In a window of EA: a click in Compass takes the keyboard (EA keeps it after the user switched docked panels).
         if ea::in_ea_tab() {
             use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-            let own = match _frame.window_handle().map(|h| h.as_raw()) {
+            let own = match frame.window_handle().map(|h| h.as_raw()) {
                 Ok(RawWindowHandle::Win32(window)) => window.hwnd.get(),
                 _ => 0,
             };
@@ -8623,7 +8690,7 @@ impl eframe::App for App {
                 // Saving and previewing an image: after the panel is drawn, because the file dialog blocks drawing.
                 if let Some(dir) = attachments_dir.as_deref() {
                     if let Some(stored) = save_request {
-                        let chosen = rfd::FileDialog::new()
+                        let chosen = file_dialog()
                             .set_file_name(history::display_name(&stored))
                             .add_filter(save_filter_name(&stored), &[stored.rsplit('.').next().unwrap_or("png")])
                             .save_file();

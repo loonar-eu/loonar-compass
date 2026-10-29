@@ -90,7 +90,10 @@ pub fn to_adf(text: &str) -> Value {
 const MAX_DOWNLOAD: usize = 25 << 20;
 
 pub fn base(url: &str) -> String {
-    crate::net::site_base(url, &["/browse", "/projects", "/secure", "/rest", "/issues", "/plugins"])
+    // Also the pages of Jira Cloud under /jira/… (found in the 0.9.2 lab tests: …/jira/software/projects/X/boards/1 kept
+    // "/jira/software").
+    crate::net::site_base(url, &["/browse", "/projects", "/secure", "/rest", "/issues", "/plugins", "/jira/software", "/jira/core", "/jira/servicemanagement",
+        "/jira/servicedesk", "/jira/your-work", "/jira/for-you", "/jira/projects", "/jira/dashboards", "/jira/plans", "/jira/boards", "/jira/filters"])
 }
 
 impl Connection {

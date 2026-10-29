@@ -121,6 +121,9 @@ fn table(ui: &mut egui::Ui, rows: &[Vec<&str>], salt: impl std::hash::Hash) {
                     for (row_no, row) in rows.iter().enumerate() {
                         for cell in row {
                             // The first row is the table header.
+                            // Cells keep their text on one line (the table scrolls sideways): wrapped, a grid gives
+                            // every column its narrowest width (found in the 0.9.2 lab tests: very narrow tables).
+                            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
                             rich(ui, cell, BODY_SIZE, row_no == 0);
                         }
                         ui.end_row();
@@ -208,8 +211,10 @@ pub fn link_targets(text: &str) -> Vec<String> {
 /// One line with inline formatting; links in it are clickable and open in the browser.
 fn rich(ui: &mut egui::Ui, text: &str, size: f32, all_bold: bool) {
     let pieces = pieces_with_links(text);
+    let extend = ui.style().wrap_mode == Some(egui::TextWrapMode::Extend);
+    let label = |job| if extend { egui::Label::new(job).extend() } else { egui::Label::new(job).wrap() };
     if !pieces.iter().any(|p| matches!(p, Piece::Link(..))) {
-        ui.add(egui::Label::new(inline(text, size, all_bold)).wrap());
+        ui.add(label(inline(text, size, all_bold)));
         return;
     }
     ui.horizontal_wrapped(|ui| {
@@ -217,7 +222,7 @@ fn rich(ui: &mut egui::Ui, text: &str, size: f32, all_bold: bool) {
         for piece in pieces {
             match piece {
                 Piece::Text(t) => {
-                    ui.add(egui::Label::new(inline(t, size, all_bold)).wrap());
+                    ui.add(label(inline(t, size, all_bold)));
                 }
                 Piece::Link(label, url) => {
                     let label = label.replace("**", "").replace('`', "");

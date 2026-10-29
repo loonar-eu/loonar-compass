@@ -19,6 +19,10 @@ evidence shows something else; it is blocked when the evidence does not show it 
 Be strict about facts in the expected result (numbers, names, messages), lenient about wording and formatting;
 "…" in an expected result stands for any value (an id, a count, a name). Something extra on the screen that the
 expected result does not mention (another window still open, more items) does not fail a step.
+A regression run executes the cases of an earlier version on a newer build: a newer version than the precondition
+names is not a reason to fail or block. When the evidence shows several builds, the newest build decides (an earlier
+build that failed and a newer one that passes = the step passes, say so). A step the evidence names as done by a
+person or another tester, with what they observed, counts as evidence.
 The overall verdict is FAIL if any step fails, otherwise BLOCKED if any step is blocked, otherwise PASS.
 Write the reasons in the language of the test case, one or two short sentences, naming what the evidence shows."""
 

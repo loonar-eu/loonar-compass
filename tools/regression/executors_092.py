@@ -604,3 +604,26 @@ def hidden_connectors(out: Path, work: Path):
 def counted_tokens(out: Path, work: Path):
     session = max(Path(os.environ["APPDATA"], "Loonar Compass", "history").glob("*.json"), key=lambda p: p.stat().st_size)
     cargo_live(out, "prompt_tokens_counted_live", "counted_tokens_live", {"LOONAR_TEST_PROPS": str(test_props(out)), "LOONAR_TEST_SESSION": str(session)})
+
+
+@executor("Długa rozmowa: po streszczeniu prompt poniżej progu")
+def summary_under_budget(out: Path, work: Path):
+    session = max(Path(os.environ["APPDATA"], "Loonar Compass", "history").glob("*.json"), key=lambda p: p.stat().st_size)
+    cargo_live(out, "long_conversations_live", "long_conversation_live_test", {"LOONAR_TEST_PROPS": str(Path(os.environ["APPDATA"], "Loonar Compass", "app.properties")), "LOONAR_TEST_SESSION": str(session)})
+
+
+@executor("Testy programu na żywo: EA, AI, dokumenty (regresja)")
+def live_suite(out: Path, work: Path):
+    """The results of the live test run of the build (LOONAR_LIVE_LOG: the cargo log of the run, LOONAR_E2E_REPORT: the
+    end-to-end document report)."""
+    log = Path(os.environ.get("LOONAR_LIVE_LOG", ""))
+    if log.is_file():
+        lines = [l for l in log.read_text(encoding="utf-8", errors="replace").splitlines() if l.startswith(("test ", "test result", "failures:", "---- ")) or "panicked" in l]
+        (out / "live_tests_results.txt").write_text("\n".join(lines), encoding="utf-8")
+    report = Path(os.environ.get("LOONAR_E2E_REPORT", ""))
+    if report.is_file():
+        text = report.read_text(encoding="utf-8")
+        parts = [p.split("Answer:")[0] for p in text.split("\n## ")[1:4]]
+        checks = text.split("## Checks")[1].split("## The page")[0] if "## Checks" in text else ""
+        (out / "end_to_end_document.md").write_text("\n## ".join(parts) + "\n## Checks" + checks, encoding="utf-8")
+

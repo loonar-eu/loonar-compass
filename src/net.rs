@@ -46,6 +46,29 @@ pub fn site_base(url: &str, pages: &[&str]) -> String {
 }
 
 /// A successful answer that is not data: a web page (sign-in, an address that is not the REST API).
+/// Whether an address answers a REST request with a web page instead of data (checked without signing in, so a wrong
+/// address is reported also before a token is entered). False when it cannot be reached at all.
+pub fn answers_with_page(url: &str) -> bool {
+    let Ok(client) = reqwest::blocking::Client::builder().redirect(same_origin_redirects()).timeout(std::time::Duration::from_secs(15)).build() else { return false };
+    client.get(url).header("Accept", "application/json").send().ok().and_then(|r| r.text().ok()).is_some_and(|t| not_json(&t))
+}
+
+/// The key a copied address names: …/projects/KEY…, …/browse/KEY-12, …/spaces/KEY…, …/display/KEY/…
+pub fn key_in_address(url: &str, kinds: &[&str]) -> Option<String> {
+    for kind in kinds {
+        if let Some(i) = url.find(&format!("/{kind}/")) {
+            let rest = &url[i + kind.len() + 2..];
+            let key: String = rest.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '~').collect();
+            let key = if *kind == "browse" { key.split('-').next().unwrap_or("").to_string() } else { key };
+            let key = key.trim_end_matches(|c: char| c.is_ascii_digit() && *kind == "browse").to_string();
+            if !key.is_empty() && key.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '~') {
+                return Some(key);
+            }
+        }
+    }
+    None
+}
+
 pub fn not_json(text: &str) -> bool {
     let t = text.trim_start();
     !t.is_empty() && serde_json::from_str::<serde_json::Value>(t).is_err()
@@ -53,6 +76,16 @@ pub fn not_json(text: &str) -> bool {
 
 #[cfg(test)]
 mod site_base_tests {
+    #[test]
+    fn keys_in_copied_addresses() {
+        assert_eq!(super::key_in_address("https://x.atlassian.net/jira/software/projects/LC/boards/1", &["projects", "browse"]).as_deref(), Some("LC"));
+        assert_eq!(super::key_in_address("https://jira.firma.pl/browse/ARCH-12", &["projects", "browse"]).as_deref(), Some("ARCH"));
+        assert_eq!(super::key_in_address("https://x.atlassian.net/wiki/spaces/PM/pages/1/Title", &["spaces", "display"]).as_deref(), Some("PM"));
+        assert_eq!(super::key_in_address("https://jira.firma.pl", &["projects", "browse"]), None);
+        assert_eq!(crate::jira::base("https://x.atlassian.net/jira/software/projects/LC/boards/1"), "https://x.atlassian.net");
+        assert_eq!(crate::jira::base("https://firma.pl/jira/browse/LC-1"), "https://firma.pl/jira");
+    }
+
     #[test]
     fn copied_addresses() {
         let c = ["/spaces", "/display", "/pages", "/rest", "/dashboard.action"];
