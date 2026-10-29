@@ -85,7 +85,8 @@ def source(ver, current):
         return {"html": os.path.join(ROOT, "docs"), "img": os.path.join(ROOT, "docs", "img", "en"),
                 "logo": os.path.join(ROOT, "docs", "img", "logo.png"), "pdf": os.path.join(ROOT, "docs")}
     d = os.path.join(ARCHIVE, ver)
-    return {"html": d, "img": os.path.join(d, "img"), "logo": os.path.join(d, "img", "logo.png"), "pdf": os.path.join(d, "pdf")}
+    img = os.path.join(d, "img", "en") if os.path.isdir(os.path.join(d, "img", "en")) else os.path.join(d, "img")
+    return {"html": d, "img": img, "logo": os.path.join(d, "img", "logo.png"), "pdf": os.path.join(d, "pdf")}
 
 
 def sections(path):
@@ -127,8 +128,8 @@ def generate(b):
     for ver in vers:
         src = source(ver, current)
         for label in ([ver, "latest"] if ver == current else [ver]):
-            base = f"docs/{label}/"
-            img_out = os.path.join(b.OUT, "docs", label, "img")
+            base = f"{b.DOCS}{label}/"
+            img_out = os.path.join(b.OUT, *b.DOCS.strip("/").split("/"), label, "img")
             os.makedirs(img_out, exist_ok=True)
             for f in os.listdir(src["img"]):
                 if f.endswith(".png"):
@@ -143,8 +144,8 @@ def generate(b):
                 has_pdf = os.path.isfile(pdf)
                 # "latest" links to the PDF of its version instead of keeping a second copy.
                 if has_pdf and label != "latest":
-                    os.makedirs(os.path.join(b.OUT, "docs", label, lang), exist_ok=True)
-                    shutil.copyfile(pdf, os.path.join(b.OUT, "docs", label, lang, SOURCE[lang] + ".pdf"))
+                    os.makedirs(os.path.join(b.OUT, *b.DOCS.strip("/").split("/"), label, lang), exist_ok=True)
+                    shutil.copyfile(pdf, os.path.join(b.OUT, *b.DOCS.strip("/").split("/"), label, lang, SOURCE[lang] + ".pdf"))
                 marked = {c[0] for c in chapters if re.match(r'<h2 [^>]*data-page="install"', c[2])}
                 install = marked or INSTALL_BEFORE_0_6
                 for page in PAGES:
@@ -153,7 +154,7 @@ def generate(b):
                     if label == "latest":
                         urls.append(b.SITE + base + lang + "/" + ("" if page == "index.html" else page))
     # The installation guide of the hub for IT: a page of the current version (and its PDF in docs/<ver>/hub/).
-    hub_out = os.path.join(b.OUT, "docs", current, "hub")
+    hub_out = os.path.join(b.OUT, *b.DOCS.strip("/").split("/"), current, "hub")
     os.makedirs(hub_out, exist_ok=True)
     for lang in b.LANGS:
         guide, pdf_name = hub_source(lang)
@@ -163,13 +164,13 @@ def generate(b):
         chapters = sections(guide)
         for label in (current, "latest"):
             write_page(b, current, label, lang, "hub.html", chapters, os.path.isfile(pdf), [current], current, chapters)
-        urls.append(b.SITE + f"docs/latest/{lang}/hub.html")
+        urls.append(b.SITE + f"{b.DOCS}latest/{lang}/hub.html")
     index_page(b, vers, current)
     return urls
 
 
 def write_page(b, ver, label, lang, page, chapters, has_pdf, vers, current, all_chapters):
-    d = f"docs/{label}/{lang}/"
+    d = f"{b.DOCS}{label}/{lang}/"
     P = b.rel(d, "")
     t, dt = b.texts(lang), T[lang]
     install = page == "install.html"
@@ -180,11 +181,11 @@ def write_page(b, ver, label, lang, page, chapters, has_pdf, vers, current, all_
     body = "\n".join(clean(c[2], here, other) for c in chapters)
     title = ht["title"] if hub else dt["title_install"] if install else dt["title_guide"]
     desc = (ht["desc"] if hub else dt["desc_install"] if install else dt["desc_guide"]).format(v=ver)
-    canonical = b.SITE + f"docs/latest/{lang}/" + ("" if page == "index.html" else page) if ver == current else b.SITE + d + ("" if page == "index.html" else page)
-    alternates = [(l, b.SITE + f"docs/{label}/{l}/" + ("" if page == "index.html" else page)) for l in b.LANGS]
+    canonical = b.SITE + f"{b.DOCS}latest/{lang}/" + ("" if page == "index.html" else page) if ver == current else b.SITE + d + ("" if page == "index.html" else page)
+    alternates = [(l, b.SITE + f"{b.DOCS}{label}/{l}/" + ("" if page == "index.html" else page)) for l in b.LANGS]
     links = {l: f"../{l}/" + ("" if page == "index.html" else page) for l in b.LANGS}
     switch = {"P": P, "html": b.lang_switch(t, links, lang)}
-    home = b.rel(d, b.PATH[lang])
+    home = b.rel(d, b.page_dir("home", lang))
     # The table of contents lists every chapter, so the numbers run without gaps; chapters on the other page
     # (installation or user guide) link there.
     toc = "".join(
@@ -198,16 +199,16 @@ def write_page(b, ver, label, lang, page, chapters, has_pdf, vers, current, all_
     if hub:  # one version and no chapters on other pages
         vers = [current]
     ver_links = "".join(
-        f'<li><a href="{b.rel(d, f"docs/{v}/{lang}/")}{"" if page == "index.html" else page}"'
+        f'<li><a href="{b.rel(d, f"{b.DOCS}{v}/{lang}/")}{"" if page == "index.html" else page}"'
         f'{" aria-current=\"page\"" if v == ver else ""}>{v}{" (" + dt["latest"] + ")" if v == current else ""}</a></li>'
         for v in vers)
-    pdf_href = f"{SOURCE[lang]}.pdf" if label != "latest" else b.rel(d, f"docs/{ver}/{lang}/") + f"{SOURCE[lang]}.pdf"
+    pdf_href = f"{SOURCE[lang]}.pdf" if label != "latest" else b.rel(d, f"{b.DOCS}{ver}/{lang}/") + f"{SOURCE[lang]}.pdf"
     if hub:
-        pdf_href = b.rel(d, f"docs/{ver}/hub/") + hub_source(lang)[1]
+        pdf_href = b.rel(d, f"{b.DOCS}{ver}/hub/") + hub_source(lang)[1]
     pdf = f'<p class="docs-pdf"><a href="{pdf_href}" download>{ht["pdf"] if hub else dt["pdf"]}</a></p>' if has_pdf else ""
     old = ""
     if ver != current:
-        newest = b.rel(d, f"docs/latest/{lang}/") + ("" if page == "index.html" else page)
+        newest = b.rel(d, f"{b.DOCS}latest/{lang}/") + ("" if page == "index.html" else page)
         old = f'<p class="docs-old">{dt["old"].format(v=ver, l=current)} <a href="{newest}">{dt["old_link"]}</a></p>'
     html = b.head(lang, f"{title} {ver} – {b.NAME}", desc, canonical, alternates, P, f"{title} – {b.NAME}", desc,
                   robots=None if ver == current else "noindex") + f'''
@@ -241,7 +242,7 @@ def write_page(b, ver, label, lang, page, chapters, has_pdf, vers, current, all_
 
 def index_page(b, vers, current):
     """/docs/: the language choice for the newest documentation and the list of older versions."""
-    d = "docs/"
+    d = b.DOCS
     P = b.rel(d, "")
     t = b.texts("en")
     langs = "".join(f'<li><a class="btn{"" if l == "en" else " btn-ghost"}" href="latest/{l}/" hreflang="{l}" lang="{l}">{T[l]["guide"]}</a></li>' for l in b.LANGS)
@@ -251,7 +252,7 @@ def index_page(b, vers, current):
     html = b.head("en", f"{T['en']['docs']} – {b.NAME}", T["en"]["desc_guide"].format(v=current), b.SITE + d,
                   [], P, f"{T['en']['docs']} – {b.NAME}", T["en"]["desc_guide"].format(v=current)) + f'''
 <body id="top">
-{b.header(t, "en", P, switch, nav=False)}
+{b.header(t, "en", b.rel(d, b.page_dir("home", "en")), switch, nav=False)}
 
 <main id="main" class="doc-main">
   <article class="wrap doc">
@@ -263,7 +264,7 @@ def index_page(b, vers, current):
   </article>
 </main>
 
-{b.footer(t, "en", P, "../privacy/", "../legal/", switch["html"])}
+{b.footer(t, "en", P, b.rel(d, b.page_dir("privacy", "en")), b.rel(d, b.page_dir("legal", "en")), switch["html"])}
 </body>
 </html>
 '''

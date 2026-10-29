@@ -5,6 +5,12 @@ GitHub) pod domeną **loonar.eu**, publikowana z publicznego repozytorium **gith
 przez GitHub Actions. Bez PHP, bez cookies, bez zewnętrznych skryptów i czcionek. Statystyki: GoatCounter
 (bez cookies, bez danych osobowych). Instalator jest pobierany z **GitHub Releases**.
 
+**Układ adresów (od 0.9.2):** wszystko o Loonar Compass jest pod **`/compass/`** (strona główna w 4 językach,
+`stats/`, `changelog/`, `docs/`). W korzeniu zostają polityka prywatności (`/privacy/`, `/pl/privacy/`…) i nota
+prawna (`/legal/`…), bo dotyczą całej strony. Korzeń `/` (i `/pl/`, `/de/`, `/fr/`) oraz stare adresy Compassa
+(`/docs/…`, `/changelog/…`) to strony przekierowujące na `/compass/…` (`legacy_redirects()` w `build.py`) –
+korzeń jest zarezerwowany na kolejne produkty Loonar.
+
 **Wszystkie pliki HTML, `sitemap.xml`, `robots.txt`, `CNAME`, `.nojekyll` i kopie licencji są generowane**
 skryptem `website_src\build.py`. Nie poprawiaj ich ręcznie – zmiana zniknie przy następnym generowaniu.
 Ręcznie zmieniasz tylko `assets/style.css` i `assets/site.js` (potem podnieś `ASSET_V` w `build.py`).

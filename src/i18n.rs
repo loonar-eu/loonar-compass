@@ -33,10 +33,10 @@ impl Lang {
     /// The published usage statistics on loonar.eu in this language.
     pub fn stats_url(self) -> &'static str {
         match self {
-            Lang::Pl => "https://loonar.eu/pl/stats/",
-            Lang::En => "https://loonar.eu/stats/",
-            Lang::De => "https://loonar.eu/de/stats/",
-            Lang::Fr => "https://loonar.eu/fr/stats/",
+            Lang::Pl => "https://loonar.eu/compass/pl/stats/",
+            Lang::En => "https://loonar.eu/compass/stats/",
+            Lang::De => "https://loonar.eu/compass/de/stats/",
+            Lang::Fr => "https://loonar.eu/compass/fr/stats/",
         }
     }
 

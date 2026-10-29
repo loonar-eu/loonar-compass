@@ -1079,7 +1079,7 @@ fn info_ui(ui: &mut egui::Ui) {
         ui.label("·");
         ui.hyperlink_to(crate::i18n::tr("Issues and ideas"), ISSUES_URL);
         ui.label("·");
-        ui.hyperlink_to("loonar.eu", "https://loonar.eu");
+        ui.hyperlink_to("loonar.eu", "https://loonar.eu/compass/");
     });
     ui.add_space(8.0);
     install_id_row(ui);
@@ -1144,7 +1144,7 @@ fn support_ui(ui: &mut egui::Ui) {
     ui.horizontal_wrapped(|ui| {
         ui.hyperlink_to(crate::i18n::tr("Source code on GitHub"), SOURCE_URL);
         ui.label("·");
-        ui.hyperlink_to("loonar.eu", "https://loonar.eu");
+        ui.hyperlink_to("loonar.eu", "https://loonar.eu/compass/");
     });
 }
 
@@ -1174,7 +1174,7 @@ fn open_in_explorer(path: &Path) -> std::io::Result<std::process::Child> {
 /// Privacy policy on loonar.eu in the current UI language.
 /// The user guide of this version on the website, in the interface language.
 fn docs_url() -> String {
-    format!("https://loonar.eu/docs/{}/{}/", app_version(), i18n::current().code())
+    format!("https://loonar.eu/compass/docs/{}/{}/", app_version(), i18n::current().code())
 }
 
 fn privacy_url() -> &'static str {

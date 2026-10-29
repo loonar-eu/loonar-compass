@@ -45,8 +45,8 @@ const LICENSE_FILE: &str = "LICENSE.txt";
 const LICENSE_PL_FILE: &str = "LICENSE.pl.txt";
 const CHANGELOG_FILE: &str = "CHANGELOG.md";
 const NOTICES_FILE: &str = "THIRD-PARTY-NOTICES.txt";
-const URL_INFO: &str = "https://loonar.eu";
-const URL_HELP: &str = "https://loonar.eu/#faq";
+const URL_INFO: &str = "https://loonar.eu/compass/";
+const URL_HELP: &str = "https://loonar.eu/compass/#faq";
 const DEFAULT_EA_PATH: &str = r"C:\Program Files\Sparx Systems\EA\EA.exe";
 const CRASH_LOG: &str = "loonar-compass-setup-crash.log";
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -121,7 +121,7 @@ fn payload_changelog(lang: Lang) -> &'static [u8] {
 
 /// The user guide of this version on the website, in the installation language.
 fn docs_url(lang: Lang) -> String {
-    format!("https://loonar.eu/docs/{}/{}/", display_version(app_version()), lang.code())
+    format!("https://loonar.eu/compass/docs/{}/{}/", display_version(app_version()), lang.code())
 }
 
 /// File name of the user guide PDF that versions before 0.5 put into the program folder (removed on update).

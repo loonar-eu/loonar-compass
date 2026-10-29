@@ -3,9 +3,10 @@
 
     python -I -B website_src\\build.py   (from the repository root)
 
-Writes into website/: the home page in four languages, the privacy policy and the legal notice per language,
-the documentation (docs.py: /docs/<version>/<lang>/), 404.html, robots.txt, sitemap.xml, CNAME, .nojekyll and copies
-of the licence; then checks the generated HTML.
+Writes into website/: under compass/ the home page, the usage statistics and the changelog in four languages and the
+documentation (docs.py: /compass/docs/<version>/<lang>/); at the root the privacy policy and the legal notice per
+language, forwarding pages at the old Compass addresses (the root forwards to /compass/), 404.html, robots.txt,
+sitemap.xml, CNAME, .nojekyll and copies of the licence; then checks the generated HTML.
 """
 import os, re, json, sys, hashlib, shutil, posixpath
 from html.parser import HTMLParser
@@ -27,6 +28,10 @@ DOMAIN = "loonar.eu"
 SITE = f"https://{DOMAIN}/"
 LANGS = ["en", "pl", "de", "fr"]
 PATH = {"en": "", "pl": "pl/", "de": "de/", "fr": "fr/"}
+# Everything about Loonar Compass is under COMPASS (the root is kept for other Loonar products; for now it forwards
+# to COMPASS). The privacy policy and the legal notice stay at the root: they cover the whole site.
+COMPASS = "compass/"
+DOCS = COMPASS + "docs/"
 NAME = "Loonar Compass"
 OWNER = "Loonar Mariusz Głowacki"
 EMAIL = "mariusz@loonar.eu"
@@ -149,7 +154,10 @@ def rel(frm, to):
 
 
 def page_dir(kind, lang):
-    return PATH[lang] + ("" if kind == "home" else kind + "/")
+    """Folder of a page: 'privacy' and 'legal' at the root, the rest under COMPASS."""
+    if kind in ("privacy", "legal"):
+        return PATH[lang] + kind + "/"
+    return COMPASS + PATH[lang] + ("" if kind == "home" else kind + "/")
 
 
 def csp(connect_extra=""):
@@ -328,14 +336,14 @@ def header(t, lang, home, switch, nav=True):
     if nav:
         items = ''.join(f'<li><a href="{home}#{i}">{n}</a></li>' for i, n in zip(NAV_IDS, t["nav"]))
         # The documentation is the last item of the menu; the separate link shows only when the menu is hidden.
-        items += f'<li><a href="{switch["P"]}docs/latest/{lang}/">{docs.T[lang]["docs"]}</a></li>'
+        items += f'<li><a href="{switch["P"]}{DOCS}latest/{lang}/">{docs.T[lang]["docs"]}</a></li>'
         navhtml = f'\n    <nav class="main-nav" aria-label="{MAINNAV[lang]}"><ul>{items}</ul></nav>'
     return f'''<a class="skip" href="#main">{t["skip"]}</a>
 <header class="site-header">
   <div class="wrap hdr{'' if nav else ' nonav'}">
     <a class="brand" href="{brand}"><img src="{switch["P"]}assets/img/logo.svg" alt="" width="34" height="34"><span>Loonar <b>Compass</b></span></a>{navhtml}
     {switch["html"]}
-    <a class="hdr-docs" href="{switch["P"]}docs/latest/{lang}/" aria-label="{esc_attr(docs.T[lang]["docs"])}">{mark("book")}<span>{docs.T[lang]["docs"]}</span></a>
+    <a class="hdr-docs" href="{switch["P"]}{DOCS}latest/{lang}/" aria-label="{esc_attr(docs.T[lang]["docs"])}">{mark("book")}<span>{docs.T[lang]["docs"]}</span></a>
     <a class="hdr-gh" href="{REPO}" aria-label="{esc_attr(t["gh_label"])}" title="{esc_attr(t["gh_label"])}">{mark("github")}</a>
     <a class="btn btn-sm" href="{home}#download">{t["nav_dl"]}</a>
   </div>
@@ -352,7 +360,7 @@ def footer(t, lang, P, privacy, legal_href, switch_html, top=True):
   </div>
   <div class="wrap ftr-bottom">
     <nav aria-label="{FOOTNAV[lang]}"><ul class="ftr-links">
-      <li><a href="{P}docs/latest/{lang}/">{docs.T[lang]["docs"]}</a></li>
+      <li><a href="{P}{DOCS}latest/{lang}/">{docs.T[lang]["docs"]}</a></li>
       <li><a href="{privacy}" data-gc="privacy">{t["f_privacy_link"]}</a></li>
       <li><a href="{legal_href}" data-gc="legal">{t["f_legal_link"]}</a></li>
       <li><a class="ftr-gh" href="{REPO}">{mark("github")}{t["gh_label"]}</a></li>
@@ -576,7 +584,7 @@ def doc_page(kind, lang):
                                             gc_privacy=GC_PRIVACY, optout=optout(t))
     if lang == "fr":
         body, updated = nbsp_fr(body), nbsp_fr(updated)
-    home = rel(d, PATH[lang])
+    home = rel(d, page_dir("home", lang))
     alternates = [(l, SITE + page_dir(kind, l)) for l in LANGS] + [("x-default", SITE + page_dir(kind, "en"))]
     html = head(lang, f"{title} – {NAME}", desc, SITE + d, alternates, P, f"{title} – {NAME}", desc) + f'''
 <body id="top">
@@ -622,7 +630,7 @@ STATS_T = {
 def stats_page(lang):
     d, P, t, sw = common("stats", lang)
     s = STATS_T[lang]
-    home = rel(d, PATH[lang])
+    home = rel(d, page_dir("home", lang))
     privacy = rel(d, page_dir("privacy", lang))
     alternates = [(l, SITE + page_dir("stats", l)) for l in LANGS] + [("x-default", SITE + page_dir("stats", "en"))]
     extra = (f'<link rel="stylesheet" href="{P}assets/stats.css?v={STATS_V}">\n'
@@ -710,7 +718,7 @@ def changelog_page(lang):
         raise SystemExit(f"ERROR: {CHANGELOGS[lang]} has no section for version {VER}")
     if lang == "fr":
         body = nbsp_fr(body)
-    home = rel(d, PATH[lang])
+    home = rel(d, page_dir("home", lang))
     alternates = [(l, SITE + page_dir("changelog", l)) for l in LANGS] + [("x-default", SITE + page_dir("changelog", "en"))]
     html = head(lang, f"{c['title']} – {NAME}", c["desc"], SITE + d, alternates, P, f"{c['title']} – {NAME}", c["desc"]) + f'''
 <body id="top">
@@ -730,6 +738,35 @@ def changelog_page(lang):
 '''
     write(d + "index.html", html)
 
+# ---------------------------------------------------------------------------- old addresses
+
+def legacy_redirects():
+    """Until 0.9.2 the Compass pages were at the root (/, /pl/, /docs/..., /changelog/). Every Compass page gets a
+    forwarding page at its old address, the root too (loonar.eu -> loonar.eu/compass/); old folders are removed
+    first, so no stale copy stays. PDFs of the user guide are copied too (the Start menu and old links point there)."""
+    compass_out = os.path.join(OUT, *COMPASS.strip("/").split("/"))
+    for old in ["docs"] + [PATH[l] + k for l in LANGS for k in ("changelog", "stats")]:
+        path = os.path.join(OUT, *old.strip("/").split("/"))
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+    for dirpath, _, files in os.walk(compass_out):
+        for f in files:
+            rp = os.path.relpath(os.path.join(dirpath, f), compass_out).replace(os.sep, "/")
+            if f.endswith(".pdf"):
+                dst = os.path.join(OUT, *rp.split("/"))
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copyfile(os.path.join(dirpath, f), dst)
+                continue
+            if not f.endswith(".html"):
+                continue
+            target = rel(posixpath.dirname(rp) + "/" if "/" in rp else "", COMPASS + (posixpath.dirname(rp) + "/" if "/" in rp else ""))
+            target += "" if f == "index.html" else f
+            write(rp, '<!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex">'
+                      f'<link rel="canonical" href="{SITE + COMPASS + rp.replace("index.html", "")}">'
+                      f'<meta http-equiv="refresh" content="0; url={target}"><title>Loonar Compass</title>'
+                      f'<script>location.replace("{target}" + location.hash)</script></head>'
+                      f'<body><a href="{target}">Loonar Compass</a></body></html>\n')
+
 # ---------------------------------------------------------------------------- 404 page
 
 def not_found():
@@ -737,13 +774,13 @@ def not_found():
     t = texts("en")
     blocks = ''.join(
         f'<section class="nf-l" lang="{l}"><h2>{texts(l)["nf_title"]}</h2><p>{texts(l)["nf_text"]}</p>'
-        f'<p><a class="btn{" btn-ghost" if l != "en" else ""}" href="/{PATH[l]}">{texts(l)["nf_link"]}</a></p></section>'
+        f'<p><a class="btn{" btn-ghost" if l != "en" else ""}" href="/{page_dir('home', l)}">{texts(l)["nf_link"]}</a></p></section>'
         for l in LANGS)
-    switch = lang_switch(t, {l: "/" + PATH[l] for l in LANGS}, None)
+    switch = lang_switch(t, {l: "/" + page_dir("home", l) for l in LANGS}, None)
     html = head("en", f"{t['nf_title']} – {NAME}", T["en"]["desc"], None, [], "/", f"{t['nf_title']} – {NAME}",
                 T["en"]["og_desc"], robots="noindex", gc_path="/404") + f'''
 <body id="top">
-{header(t, "en", "/", {"P": "/", "html": switch}, nav=False)}
+{header(t, "en", "/" + COMPASS, {"P": "/", "html": switch}, nav=False)}
 
 <main id="main" class="nf">
   <div class="wrap">
@@ -877,6 +914,7 @@ if __name__ == "__main__":
         changelog_page(l)
     doc_urls = docs.generate(sys.modules[__name__])
     not_found()
+    legacy_redirects()
     sitemap(doc_urls)
     static_files()
     stale = os.path.join(OUT, ".htaccess")
