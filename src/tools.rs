@@ -501,8 +501,15 @@ Use it when the user asks for slides or a presentation; keep slides short (at mo
         {
             "name": "create_document",
             "description": "Creates a Word document (DOCX) and shows it to the user in the chat with the \"Open\" and \"Save as…\" buttons. \
-Content in Markdown: # / ## / ### headings, paragraphs with **bold**, lists (- item, 1. item), tables (| a | b | with a |---|---| row), \
-images on separate lines: ![caption](diagram:ID) inserts a diagram from EA (id from t_diagram.diagram_id), ![caption](image:NAME) inserts an image \
+Content in Markdown, laid out in a polished style (coloured headings, tables with a navy header and striped rows): # to #### headings, paragraphs, \
+lists (- item, 1. item, - [ ] / - [x] checkboxes), tables (| a | b | with a |---|---| row), > quotes or notes (a highlighted box), --- separator, \
+code blocks in ``` fences with a language (```json, ```http, ```xml, ```sql…): every line and its indentation is kept exactly, monospaced in a grey box, \
+JSON in colour - write requests and responses the way Postman shows them (method and URL, headers, pretty-printed JSON body). \
+Inline: **bold**, *italic*, `code`, ~~strike~~, ==highlight==, [text](https://…) links, and colours with HTML tags: \
+<span style=\"color:red\">…</span> (any colour name or #RRGGBB), <span style=\"background:yellow\">…</span>, <u>…</u>, and for marking changes \
+<del>removed text</del> (red, struck through) and <ins>added text</ins> (green, underlined). When the user asks for colours, changes in red or other \
+formatting, use these: never tell the user Word cannot do it. \
+Images on separate lines: ![caption](diagram:ID) inserts a diagram from EA (id from t_diagram.diagram_id), ![caption](image:NAME) inserts an image \
 drawn earlier with render_image (NAME from its result). Use it when the user asks for a document, description, specification or report for Word.",
             "input_schema": {
                 "type": "object",
