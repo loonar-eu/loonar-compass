@@ -973,7 +973,29 @@ impl Job<'_> {
                 // dialog in EA 17 and writes nothing (found in the 0.9.2 live tests).
                 let generator = self.repo.call_obj("CreateDocumentGenerator", &[])?;
                 generator.call("NewDocument", &[s("")])?;
-                generator.call("DocumentPackage", &[i(package.int("PackageID")?), i(0), s(&template)])?;
+                // DocumentPackage through the API documents the package and its diagrams but leaves out its elements
+                // (EA 17, also with EA's own "Model Report"; found with LC-335): every element is added with
+                // DocumentElement and the same template, child packages the same way.
+                let mut pending = vec![package];
+                while let Some(current) = pending.pop() {
+                    generator.call("DocumentPackage", &[i(current.int("PackageID")?), i(0), s(&template)])?;
+                    let mut elements: Vec<(i32, String, i32)> = current
+                        .obj("Elements")?
+                        .items()?
+                        .iter()
+                        .filter(|e| e.int("ParentID").unwrap_or(0) == 0)
+                        // Notes, texts and boundaries are part of their diagram, not elements to describe.
+                        .filter(|e| !matches!(e.text("Type").unwrap_or_default().as_str(), "Note" | "Text" | "Boundary"))
+                        .filter_map(|e| Some((e.int("TreePos").unwrap_or(0), e.text("Name").ok()?, e.int("ElementID").ok()?)))
+                        .collect();
+                    elements.sort();
+                    for (_, _, id) in elements {
+                        generator.call("DocumentElement", &[i(id), i(0), s(&template)])?;
+                    }
+                    let mut children = current.obj("Packages")?.items()?;
+                    children.reverse();
+                    pending.extend(children);
+                }
                 // DocumentType: dtRTF = 0, dtHTML = 1, dtPDF = 2, dtDOCX = 3.
                 let kind = if lower.ends_with(".pdf") { 2 } else if lower.ends_with(".rtf") { 0 } else { 3 };
                 if !generator.call("SaveDocument", &[s(&file), i(kind)])?.bool() {
@@ -1343,6 +1365,26 @@ impl Job<'_> {
                 parent.obj("Packages")?.call("Refresh", &[])?;
                 let (id, guid, real) = (copy.int("PackageID")?, copy.text("PackageGUID")?, copy.text("Name")?);
                 self.register(&op["key"], Kind::Package, &copy, id, guid, real);
+            }
+            "save_document_template" => {
+                // An EA document template (Publish → Report Builder) made from the user's document: package, element
+                // and diagram parts in Markdown with EA fields, stored the way EA keeps templates (t_document, SSDOCSTYLE).
+                let title = text_field(op, "name");
+                if title.trim().is_empty() {
+                    bail!("{}", crate::i18n::tr("The template needs a name."));
+                }
+                let rtf = crate::ea_template::rtf(&text_field(op, "package_part"), &text_field(op, "element_part"), &text_field(op, "diagram_part"));
+                let bytes = crate::ea_template::document(&title, &rtf)?;
+                let kind = self.repo.call("RepositoryType", &[]).map(|v| v.text()).unwrap_or_default();
+                let literal = crate::ea_template::binary_literal(&kind, &bytes)?;
+                let quoted = title.replace('\'', "''");
+                self.repo.call("Execute", &[s(&format!("DELETE FROM t_document WHERE DocType = 'SSDOCSTYLE' AND DocName = '{quoted}'"))])?;
+                let id = format!("{{{}}}", uuid::Uuid::new_v4().to_string().to_uppercase());
+                self.repo.call("Execute", &[s(&format!(
+                    "INSERT INTO t_document (DocID, DocName, Style, ElementID, ElementType, BinContent, DocType, IsActive, Sequence) \
+                     VALUES ('{id}', '{quoted}', 'Zip=1;', 'SSDOCSTYLE', 'SSDOCSTYLE', {literal}, 'SSDOCSTYLE', 1, 0)"
+                ))])?;
+                self.warnings.push(crate::i18n::fmt("EA template \"{0}\" saved: Publish → Report Builder → Generate Documentation, or ask Compass for a report with it.", &[title.clone()]));
             }
             "create_matrix_specification" => {
                 // EA's Relationship Matrix kept in the model: an Artifact «EAMatrixSpecification» whose tagged value

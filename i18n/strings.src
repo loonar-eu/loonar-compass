@@ -1906,3 +1906,6 @@ matrix ready ‖ macierz gotowa ‖ Matrix fertig ‖ matrice prête
 Matrix ‖ Macierz ‖ Matrix ‖ Matrice
 Without relationships ‖ Bez relacji ‖ Ohne Beziehungen ‖ Sans relations
 relationship matrices in EA (Matrix Specification) ‖ macierze relacji w EA (Matrix Specification) ‖ Beziehungsmatrizen in EA (Matrix Specification) ‖ matrices de relations dans EA (Matrix Specification)
+EA document templates (Report Builder) ‖ szablony dokumentów EA (Report Builder) ‖ EA-Dokumentvorlagen (Report Builder) ‖ modèles de documents EA (Report Builder)
+The template needs a name. ‖ Szablon musi mieć nazwę. ‖ Die Vorlage braucht einen Namen. ‖ Le modèle doit avoir un nom.
+EA template "{0}" saved: Publish → Report Builder → Generate Documentation, or ask Compass for a report with it. ‖ Szablon EA „{0}” zapisany: Publish → Report Builder → Generate Documentation albo poproś Compass o raport z tym szablonem. ‖ EA-Vorlage „{0}“ gespeichert: Publish → Report Builder → Generate Documentation, oder bitten Sie Compass um einen Bericht damit. ‖ Modèle EA « {0} » enregistré : Publish → Report Builder → Generate Documentation, ou demandez à Compass un rapport avec ce modèle.

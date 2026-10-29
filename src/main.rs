@@ -38,6 +38,7 @@ mod docx;
 mod memory;
 mod miro;
 mod matrix;
+mod ea_template;
 mod glossary_ui;
 mod relang;
 mod render;
