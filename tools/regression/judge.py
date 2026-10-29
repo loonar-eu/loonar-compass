@@ -70,9 +70,19 @@ def _evidence_blocks(evidence_dir):
     return blocks or [{"type": "text", "text": "No evidence was collected."}]
 
 
-def judge(case, evidence_dir, api_key):
-    """Returns ({"verdict", "reason", "steps": [...]}, usage) for one test case."""
-    client = anthropic.Anthropic(api_key=api_key)
+def judge(case, evidence_dir, api_key, base_url=None):
+    """Returns ({"verdict", "reason", "steps": [...]}, usage) for one test case. With base_url (for example a team hub's
+    https://hub/ai) the key is the hub token and the hub's own Claude key is used; its certificate is checked against
+    the Windows certificate store, so a hub with an in-house CA works."""
+    if base_url:
+        import ssl
+        try:
+            import httpx
+        except ImportError:
+            import httpx2 as httpx
+        client = anthropic.Anthropic(api_key=api_key, base_url=base_url, http_client=httpx.Client(verify=ssl.create_default_context(), timeout=600))
+    else:
+        client = anthropic.Anthropic(api_key=api_key)
     content = [{"type": "text", "text": _case_text(case)}] + _evidence_blocks(evidence_dir)
     response = client.messages.create(
         model=MODEL, max_tokens=6000, system=SYSTEM,

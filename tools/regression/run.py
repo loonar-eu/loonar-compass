@@ -54,7 +54,7 @@ def main(argv):
             (out / "executor_error.txt").write_text(f"{type(e).__name__}: {e}", encoding="utf-8")
         finally:
             shutil.rmtree(work, ignore_errors=True)
-        result, usage = judge.judge(case, out, api_key)
+        result, usage = judge.judge(case, out, api_key, CONFIG.get("claude_base_url"))
         tokens_in, tokens_out = tokens_in + usage.input_tokens, tokens_out + usage.output_tokens
         print(f"  {result['verdict']}: {result['reason']}", flush=True)
         links = []
