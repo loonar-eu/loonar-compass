@@ -8866,7 +8866,7 @@ mod tests {
 
     #[test]
     fn stopping_to_ask_for_go_on_is_recognised() {
-        assert!(asks_to_continue("Zacznę od nasa-crmd-sync-service i będę przechodził po kolei. Napisz „dalej”, a ruszam."));
+        assert!(asks_to_continue("Zacznę od orders-sync-service i będę przechodził po kolei. Napisz „dalej”, a ruszam."));
         assert!(asks_to_continue("Done 4 of 13 services. Shall I continue with the rest?"));
         assert!(asks_to_continue("Soll ich weitermachen?"));
         assert!(asks_to_continue("Zrobię to kolejno, zaczynając od customer-service w następnej turze."));
