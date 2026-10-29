@@ -341,12 +341,13 @@ pub fn definition() -> Value {
         "description": "The user's Google Drive (their own Google account, signed in in the browser on first use; set up in Settings): \
 list a folder (action list, folder = folder id or name path like \"Projects/2026\", empty = My Drive) or find files by name (action list, query), \
 read a file's text (action read, id or path: Google Docs, Sheets (as CSV), Slides, PDF, Word, PowerPoint, Visio, Excel, text) \
-or upload a file you created in this conversation (action upload, file = its name in the attachments folder, folder, optional name; the user approves every upload).",
+or upload a file you created in this conversation (action upload, file = its name in the attachments folder, folder, optional name; the user approves every upload; \
+a folder of the path that does not exist yet is created by the upload, so upload straight to the folder the user named).",
         "input_schema": {
             "type": "object",
             "properties": {
                 "action": { "type": "string", "enum": ["list", "read", "upload"] },
-                "folder": { "type": "string", "description": "folder id or name path from My Drive (\"Projects/2026\"); empty or \"root\" = My Drive" },
+                "folder": { "type": "string", "description": "folder id or name path from My Drive (\"Projects/2026\"); empty or \"root\" = My Drive; upload creates missing folders" },
                 "query": { "type": "string", "description": "list: text to find in file names (instead of folder)" },
                 "id": { "type": "string", "description": "read: file id (from list)" },
                 "path": { "type": "string", "description": "read: name path of the file (\"Projects/2026/Spec\")" },
