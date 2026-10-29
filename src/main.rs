@@ -284,6 +284,27 @@ fn asks_for_document(text: &str) -> bool {
     starts(&MAKE) && starts(&DOCUMENT)
 }
 
+/// Whether a message asks for a report of EA's own document generator (ea_write generate_report: a report of a package,
+/// or a named EA template) rather than a document the model writes (LC-316): EA fills the template, so a stronger model
+/// does not make it better. Found in the 0.9.2 lab tests: "Wygeneruj raport Word z pakietu …" offered Sonnet for nothing.
+fn asks_for_ea_report(text: &str) -> bool {
+    const REPORT: [&str; 4] = ["raport", "report", "bericht", "rapport"];
+    const PACKAGE: [&str; 4] = ["pakiet", "package", "paket", "paquet"];
+    // A document the model writes: a description, a specification, a page (then it is no EA report even of a package).
+    const WRITTEN: [&str; 13] = [
+        "dokument", "document", "confluence", "wiki", "specyfikac", "specification", "spezifikation", "spécification", "brd",
+        "opis", "description", "beschreibung", "streszcz",
+    ];
+    let lower = text.to_lowercase();
+    let words: Vec<&str> = lower.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).collect();
+    let starts = |list: &[&str]| words.iter().any(|w| list.iter().any(|p| w.starts_with(p)));
+    let ea_template = ["szablon ea", "szablonu ea", "szablonem ea", "ea template", "template ea", "model report", "ea-vorlage", "modèle ea"]
+        .iter()
+        .any(|p| lower.contains(p))
+        || words.contains(&"rtf");
+    ((starts(&REPORT) && starts(&PACKAGE)) || ea_template) && !starts(&WRITTEN)
+}
+
 /// The model offered for an answer (LC-307, LC-311): a template named in the message (by its name or group) decides:
 /// its model ("strong" = `document_model`, or a model name of the same provider), or none when it keeps the model of the
 /// settings. Without a named template, a request for a document gets `document_model`.
@@ -295,7 +316,7 @@ fn offered_model(cfg: &AppConfig, text: &str) -> Option<String> {
         .map(|(_, meta)| meta)
         .collect();
     if named.is_empty() {
-        return if asks_for_document(text) { document_model(cfg) } else { None };
+        return if asks_for_document(text) && !asks_for_ea_report(text) { document_model(cfg) } else { None };
     }
     let current = if cfg.uses_openai() { &cfg.openai_model } else { &cfg.claude_model };
     named.iter().find_map(|meta| match meta.model.as_str() {
@@ -8854,7 +8875,7 @@ mod tests {
     }
 
     /// Code analysis on the cheapest model works to the end alone: one answer, no question, no status messages (the
-    /// P_1805 conversation: a question or "shall I go on?" after every few steps). LOONAR_TEST_PROPS = settings with a code
+    /// projektu Alfa conversation: a question or "shall I go on?" after every few steps). LOONAR_TEST_PROPS = settings with a code
     /// folder, LOONAR_PROMPT = the task. Run: `cargo test code_analysis_alone -- --ignored --nocapture`.
     #[test]
     #[ignore = "requires an API key and a source code folder"]
@@ -8941,11 +8962,18 @@ mod tests {
     /// LC-307: a request for a document is recognised, and only a small model of a known address is offered a stronger one.
     #[test]
     fn stronger_model_for_documents() {
-        for yes in ["Przygotuj dokument ogólny w Confluence na podstawie P_1805", "write a specification page", "Popraw stronę w Confluence", "Erstelle einen Bericht"] {
+        for yes in ["Przygotuj dokument ogólny w Confluence na podstawie projektu Alfa", "write a specification page", "Popraw stronę w Confluence", "Erstelle einen Bericht"] {
             assert!(asks_for_document(yes), "{yes}");
         }
         for no in ["Przeanalizuj kod klasy Order", "co jest na diagramie?", "Utwórz element klasy Klient", "Napisz jedno zdanie z linkiem [strona Loonar](https://loonar.eu)", "Zmień password w ustawieniach"] {
             assert!(!asks_for_document(no), "{no}");
+        }
+        // LC-316: a report of EA's document generator is no document the model writes.
+        for ea in ["Wygeneruj raport Word z pakietu Domena zamówień do pliku C:\\x\\raport.docx", "Generate a Word report of package Orders", "Wygeneruj raport RTF", "Utwórz raport z szablonu EA Model Report"] {
+            assert!(asks_for_ea_report(ea), "{ea}");
+        }
+        for written in ["Przygotuj dokument Word z opisem pakietu Domena zamówień", "Erstelle einen Bericht", "Napisz raport ryzyk projektu", "Wygeneruj raport z opisem pakietu w Confluence"] {
+            assert!(!asks_for_ea_report(written), "{written}");
         }
         let dir = std::env::temp_dir().join(format!("loonar-doc-model-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
