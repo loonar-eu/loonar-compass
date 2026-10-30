@@ -353,6 +353,54 @@ struct Head {
     host: String,
 }
 
+/// The REST calls Compass makes to the team's Jira and Confluence through the hub (LC-351); everything else, DELETE
+/// included, is refused. With a project (Jira) or a space (Confluence) in hub.json, calls naming another one are refused
+/// too. Pages by id are checked by the service account's own permissions.
+fn proxy_allowed(kind: &str, method: &str, rest: &str, project: &str, space: &str, body: &[u8]) -> Result<(), String> {
+    let refused = || Err(format!("{kind}: {method} {rest} does not go through the hub"));
+    let same = |a: &str, b: &str| b.is_empty() || a.eq_ignore_ascii_case(b);
+    let issue_ok = |key: &str| project.is_empty() || key.to_ascii_uppercase().starts_with(&format!("{}-", project.to_ascii_uppercase()));
+    let body_value: Value = serde_json::from_slice(body).unwrap_or(Value::Null);
+    if kind == "jira" {
+        let Some(path) = rest.strip_prefix("/rest/api/2/").or_else(|| rest.strip_prefix("/rest/api/3/")) else { return refused() };
+        let parts: Vec<&str> = path.trim_end_matches('/').split('/').collect();
+        let ok = match (method, parts.as_slice()) {
+            ("GET", ["myself"] | ["serverInfo"] | ["issuetype"] | ["field"] | ["search"] | ["search", "jql"]) => true,
+            ("GET", ["project", p]) => same(p, project),
+            ("GET", ["issue", key]) | ("GET", ["issue", key, "remotelink"]) => issue_ok(key),
+            ("GET", ["attachment", "content", _]) | ("GET", ["attachment", _]) => true,
+            ("POST", ["issue"]) => same(body_value["fields"]["project"]["key"].as_str().unwrap_or(""), project),
+            ("POST", ["issue", key, "comment" | "remotelink" | "attachments"]) => issue_ok(key),
+            ("PUT", ["issue", key]) => issue_ok(key),
+            _ => false,
+        };
+        return if ok { Ok(()) } else { refused() };
+    }
+    let Some(path) = rest.strip_prefix("/rest/api/") else { return refused() };
+    let parts: Vec<&str> = path.trim_end_matches('/').split('/').collect();
+    let ok = match (method, parts.as_slice()) {
+        ("GET", ["content"]) | ("GET", ["content", _]) | ("GET", ["content", _, "child", "attachment"]) => true,
+        ("GET", ["space", s]) => same(s, space),
+        ("POST", ["content"]) => same(body_value["space"]["key"].as_str().unwrap_or(""), space),
+        ("POST", ["content", _, "child", "attachment"]) | ("POST", ["content", _, "child", "attachment", _, "data"]) => true,
+        ("PUT", ["content", _]) => true,
+        _ => false,
+    };
+    if ok { Ok(()) } else { refused() }
+}
+
+/// A Jira search limited to the team's project: `project = "P" AND (jql)`, ORDER BY kept at the end.
+fn jql_in_project(jql: &str, project: &str) -> String {
+    let lower = jql.to_ascii_lowercase();
+    let (filter, order) = match lower.rfind("order by") {
+        Some(at) => (jql[..at].trim(), jql[at..].trim()),
+        None => (jql.trim(), ""),
+    };
+    let project = project.replace('"', "");
+    let limited = if filter.is_empty() { format!("project = \"{project}\"") } else { format!("project = \"{project}\" AND ({filter})") };
+    if order.is_empty() { limited } else { format!("{limited} {order}") }
+}
+
 /// Whether the listen address is this computer only (127.0.0.1, ::1, localhost).
 fn listens_on_loopback(listen: &str) -> bool {
     let host = listen.rsplit_once(':').map_or(listen, |(h, _)| h).trim_matches(['[', ']']);
@@ -1731,6 +1779,16 @@ impl Hub {
         if method != "GET" && role == Role::Viewer {
             return Err(deny(403, crate::i18n::tr("a viewer only reads")));
         }
+        // Only what Compass uses, in the configured project or space (LC-351: any path and method went through with
+        // the team's service account).
+        let (project, space) = (s["project"].as_str().unwrap_or("").trim(), s["space"].as_str().unwrap_or("").trim());
+        proxy_allowed(kind, method, rest, project, space, body).map_err(|reason| deny(403, reason))?;
+        let mut query = query.clone();
+        if kind == "jira" && !project.is_empty() && (rest.ends_with("/search") || rest.ends_with("/search/jql")) {
+            let jql = query.get("jql").cloned().unwrap_or_default();
+            query.insert("jql".into(), jql_in_project(&jql, project));
+        }
+        let query = &query;
         let secret = if kind == "jira" { crate::config::secrets::JIRA_TOKEN } else { crate::config::secrets::CONFLUENCE_TOKEN };
         let token = crate::config::secrets::get(secret).map_err(|e| HttpError(500, format!("{e:#}")))?;
         let mut url = reqwest::Url::parse(&format!("{base}{rest}")).map_err(|_| deny(400, "invalid address"))?;
@@ -2179,6 +2237,25 @@ mod tests {
     /// Behind a proxy on this computer the client is the last X-Forwarded-For address (wrong sign-ins of one client do
     /// not lock out the others), and a wrong sign-in is in the audit trail with ✗ and that address. The header from
     /// another computer is not trusted (the test can only connect from loopback, so it checks the trusted case).
+    /// LC-351: the proxy lets through only Compass's calls, in the team's project and space.
+    #[test]
+    fn proxy_only_compass_calls() {
+        let jira = |m: &str, p: &str, body: &str| proxy_allowed("jira", m, p, "LC", "", body.as_bytes()).is_ok();
+        assert!(jira("GET", "/rest/api/3/myself", "") && jira("GET", "/rest/api/3/search/jql", "") && jira("GET", "/rest/api/2/issue/LC-12", ""));
+        assert!(jira("POST", "/rest/api/3/issue", r#"{"fields":{"project":{"key":"LC"}}}"#) && jira("POST", "/rest/api/3/issue/LC-12/comment", ""));
+        assert!(jira("PUT", "/rest/api/3/issue/lc-12", ""));
+        assert!(!jira("DELETE", "/rest/api/3/issue/LC-12", ""), "no DELETE");
+        assert!(!jira("PUT", "/rest/api/3/issue/HR-1", ""), "another project");
+        assert!(!jira("POST", "/rest/api/3/issue", r#"{"fields":{"project":{"key":"HR"}}}"#));
+        assert!(!jira("GET", "/rest/api/3/user/search", "") && !jira("POST", "/rest/api/3/project", "") && !jira("GET", "/rest/auth/1/session", ""));
+        let wiki = |m: &str, p: &str, body: &str| proxy_allowed("confluence", m, p, "", "ARCH", body.as_bytes()).is_ok();
+        assert!(wiki("GET", "/rest/api/content", "") && wiki("PUT", "/rest/api/content/1001", "") && wiki("POST", "/rest/api/content/1001/child/attachment/att7/data", ""));
+        assert!(wiki("POST", "/rest/api/content", r#"{"space":{"key":"ARCH"}}"#) && !wiki("POST", "/rest/api/content", r#"{"space":{"key":"HR"}}"#));
+        assert!(!wiki("DELETE", "/rest/api/content/1001", "") && !wiki("GET", "/rest/api/space/HR", "") && !wiki("GET", "/rest/api/user/memberof", ""));
+        assert_eq!(jql_in_project("assignee = currentUser() ORDER BY updated DESC", "LC"), "project = \"LC\" AND (assignee = currentUser()) ORDER BY updated DESC");
+        assert_eq!(jql_in_project("", "LC"), "project = \"LC\"");
+    }
+
     /// LC-350: a hub on loopback refuses a foreign Host; the address helpers.
     #[test]
     fn local_hub_and_host_header() {
