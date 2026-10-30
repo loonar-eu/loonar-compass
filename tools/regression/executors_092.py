@@ -21,6 +21,17 @@ from ui import Compass
 REPO = Path(CONFIG["compass_exe"]).parents[2]
 TEMPLATES = Path(CONFIG.get("test_templates", str(Path(__file__).with_name("templates_092"))))  # the user's sample templates
 SCRATCH = Path(os.environ.get("LOONAR_REGRESSION_SCRATCH", str(Path(__file__).with_name("out") / "scratch")))
+# When this run started: evidence files written earlier say so, and the judge does not count them for this build (LC-363).
+RUN_STARTED = datetime.now()
+
+
+def provenance(path: Path) -> str:
+    """The first line of evidence copied from a file: when the file was written, and whether that was before this run."""
+    written = datetime.fromtimestamp(path.stat().st_mtime)
+    when = written.strftime("%Y-%m-%d %H:%M")
+    if written < RUN_STARTED:
+        return f"[Evidence from {path.name}, written {when} - BEFORE this run started ({RUN_STARTED:%Y-%m-%d %H:%M}): not produced by this run]\n"
+    return f"[Evidence from {path.name}, written {when} during this run]\n"
 
 
 # Helpers ---------------------------------------------------------------------------------------------------------
@@ -625,7 +636,7 @@ def jira_images(out: Path, work: Path):
     if links.exists():
         text = links.read_text(encoding="utf-8")
         part = text.split("## 2.")[1].split("## 3.")[0] if "## 2." in text else ""
-        (out / "jira_issue_gives_its_link.md").write_text("Reading the issue gives its link (answer of the program in a real conversation):\n## 2." + part, encoding="utf-8")
+        (out / "jira_issue_gives_its_link.md").write_text(provenance(links) + "Reading the issue gives its link (answer of the program in a real conversation):\n## 2." + part, encoding="utf-8")
     report = SCRATCH / "e2e_document_report.md"
     if report.exists():
         text = report.read_text(encoding="utf-8")
@@ -634,7 +645,7 @@ def jira_images(out: Path, work: Path):
         page = text.split("## The page (markdown)")[1] if "## The page (markdown)" in text else ""
         images = [l.strip() for l in page.splitlines() if "](image:" in l]
         (out / "end_to_end_document_with_jira_images.md").write_text(
-            "End-to-end run of the program (documents_092_live, 2026-10-28): a Confluence page from the template \"Poziom biznesowy\" for the Jira issue LC-245, with its images.\n\n"
+            provenance(report) + "End-to-end run of the program (documents_092_live): a Confluence page from the template \"Poziom biznesowy\" for the Jira issue LC-245, with its images.\n\n"
             + turn1 + "\n## Checks" + checks + f"\n## Image lines on the page ({len(images)})\n" + "\n".join(images), encoding="utf-8")
 
 
@@ -674,11 +685,11 @@ def live_suite(out: Path, work: Path):
     log = Path(os.environ.get("LOONAR_LIVE_LOG", ""))
     if log.is_file():
         lines = [l for l in log.read_text(encoding="utf-8", errors="replace").splitlines() if l.startswith(("test ", "test result", "failures:", "---- ")) or "panicked" in l]
-        (out / "live_tests_results.txt").write_text("\n".join(lines), encoding="utf-8")
+        (out / "live_tests_results.txt").write_text(provenance(log) + "\n".join(lines), encoding="utf-8")
     report = Path(os.environ.get("LOONAR_E2E_REPORT", ""))
     if report.is_file():
         text = report.read_text(encoding="utf-8")
         parts = [p.split("Answer:")[0] for p in text.split("\n## ")[1:4]]
         checks = text.split("## Checks")[1].split("## The page")[0] if "## Checks" in text else ""
-        (out / "end_to_end_document.md").write_text("\n## ".join(parts) + "\n## Checks" + checks, encoding="utf-8")
+        (out / "end_to_end_document.md").write_text(provenance(report) + "\n## ".join(parts) + "\n## Checks" + checks, encoding="utf-8")
 
