@@ -1021,7 +1021,7 @@
 <p>Historia rozmów to zwykłe pliki w Twoim profilu Windows, chronione Twoim kontem Windows; aplikacja ich nie szyfruje. Chroń dostęp do swojego konta i nie udostępniaj folderu danych.</p>
 <h3>Co trafia do dostawcy modelu AI</h3>
 <p>Żeby asystent mógł odpowiadać, w każdym zapytaniu do wybranego dostawcy modelu AI (Anthropic albo OpenAI, karta Model AI) aplikacja wysyła: treść rozmowy, załączone pliki, pełną treść pamięci asystenta, instrukcje modelowania repozytorium, listę szablonów z opisami oraz to, co asystent odczytał z modelu w danej rozmowie, czyli wyniki jego zapytań do bazy (na przykład nazwy i opisy pakietów, elementów i diagramów) i obrazki diagramów. Nie jest wysyłana cała baza, tylko to, o co asystent zapytał. Treść szablonu trafia do modelu, gdy asystent go użyje, a po zmianie języka trafiają też pamięć i szablony do przetłumaczenia.</p>
-<p>Dane trafiają bezpośrednio do wybranego dostawcy (api.anthropic.com albo api.openai.com) z użyciem Twojego klucza API; drugi dostawca nie dostaje niczego. Loonar ich nie otrzymuje, a aplikacja nie zbiera żadnych danych o korzystaniu (brak telemetrii). Z <code>claude.url</code> (rozdział 5) zapytania idą zamiast tego pod ten adres, na przykład do Twojego zasobu Azure AI Foundry albo firmowej bramki.</p>
+<p>Dane trafiają bezpośrednio do wybranego dostawcy (api.anthropic.com albo api.openai.com) z użyciem Twojego klucza API; drugi dostawca nie dostaje niczego. Loonar ich nie otrzymuje. Aplikacja wysyła tylko anonimowe statystyki użycia opisane niżej (bez treści rozmów i modelu), które możesz wyłączyć. Z <code>claude.url</code> (rozdział 5) zapytania idą zamiast tego pod ten adres, na przykład do Twojego zasobu Azure AI Foundry albo firmowej bramki.</p>
 <p><b>Inne miejsca, do których mogą trafić Twoje dane</b>, tylko gdy je skonfigurujesz albo włączysz:</p>
 <table>
   <tr><th style="width: 30%;">Gdzie</th><th>Co</th></tr>
@@ -1353,7 +1353,7 @@ compass-hub --service-uninstall</pre>
   <li>aplikację wolno kopiować i przekazywać innym wyłącznie bezpłatnie, w całości i bez zmian, razem z plikami LICENSE i THIRD-PARTY-NOTICES,</li>
   <li>bez pisemnej zgody właściciela nie wolno jej zmieniać, dekompilować, sprzedawać ani wynajmować (z wyjątkiem uprawnień, których nie można wyłączyć umową),</li>
   <li>odpowiedzi, zmiany w modelu i dokumenty przygotowuje model AI: sprawdzaj je przed zatwierdzeniem, tryb <b>auto</b> włączasz na własne ryzyko, a przed pracą rób kopie zapasowe modelu,</li>
-  <li>aplikacja nie zbiera danych (brak telemetrii); treść potrzebna do odpowiedzi trafia bezpośrednio do wybranego dostawcy modelu AI (Anthropic albo OpenAI) na podstawie Twojej umowy z tym dostawcą,</li>
+  <li>aplikacja zbiera wyłącznie anonimowe statystyki użycia (rozdział 18: bez treści rozmów, nazw z modelu i ścieżek plików), które można wyłączyć; treść potrzebna do odpowiedzi trafia bezpośrednio do wybranego dostawcy modelu AI (Anthropic albo OpenAI) na podstawie Twojej umowy z tym dostawcą,</li>
   <li>Enterprise Architect, Claude API, OpenAI API, Confluence, Miro i inne usługi wymagają odrębnych licencji i kont ich dostawców; opłaty za nie ponosisz Ty.</li>
 </ul>
 <p>Wiążąca jest polska wersja licencji; wersje angielska, niemiecka i francuska są tłumaczeniami. Pełna treść jest w widoku <b>Informacje</b> oraz w pliku <code>LICENSE.txt</code> w folderze programu. Lista zmian i znanych ograniczeń tej wersji jest w widoku <b>Changelog</b>.</p>
