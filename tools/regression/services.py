@@ -80,6 +80,12 @@ class Zephyr:
         status = {"PASS": "Pass", "FAIL": "Fail", "BLOCKED": "Blocked"}[verdict]
         self.put(f"/testexecutions/{execution_id}", {"statusName": status, "comment": comment, "executionTime": int(seconds * 1000)})
         if step_results:
+            # Zephyr takes the step results only when there are as many as the execution has steps (it answers 422
+            # otherwise, found on LAB-DC1 with LC-T103): the verdict and the comment above are kept anyway.
+            have = len(self.get(f"/testexecutions/{execution_id}/teststeps?maxResults=100").get("values", []))
+            if have != len(step_results):
+                print(f"  note: {len(step_results)} judged steps, the execution has {have}: step results not recorded")
+                return
             self.put(f"/testexecutions/{execution_id}/teststeps", {"steps": [
                 {"statusName": {"PASS": "Pass", "FAIL": "Fail", "BLOCKED": "Blocked"}[s["verdict"]], "actualResult": s["note"]} for s in step_results]})
 

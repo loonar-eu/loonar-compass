@@ -3,9 +3,10 @@
 
     python -I -B website_src\\build.py   (from the repository root)
 
-Writes into website/: the home page in four languages, the privacy policy and the legal notice per language,
-the documentation (docs.py: /docs/<version>/<lang>/), 404.html, robots.txt, sitemap.xml, CNAME, .nojekyll and copies
-of the licence; then checks the generated HTML.
+Writes into website/: under compass/ the home page, the usage statistics and the changelog in four languages and the
+documentation (docs.py: /compass/docs/<version>/<lang>/); at the root the privacy policy and the legal notice per
+language, forwarding pages at the old Compass addresses (the root forwards to /compass/), 404.html, robots.txt,
+sitemap.xml, CNAME, .nojekyll and copies of the licence; then checks the generated HTML.
 """
 import os, re, json, sys, hashlib, shutil, posixpath
 from html.parser import HTMLParser
@@ -27,20 +28,24 @@ DOMAIN = "loonar.eu"
 SITE = f"https://{DOMAIN}/"
 LANGS = ["en", "pl", "de", "fr"]
 PATH = {"en": "", "pl": "pl/", "de": "de/", "fr": "fr/"}
+# Everything about Loonar Compass is under COMPASS (the root is kept for other Loonar products; for now it forwards
+# to COMPASS). The privacy policy and the legal notice stay at the root: they cover the whole site.
+COMPASS = "compass/"
+DOCS = COMPASS + "docs/"
 NAME = "Loonar Compass"
 OWNER = "Loonar Mariusz Głowacki"
 EMAIL = "mariusz@loonar.eu"
 
 # ---- current release: change these lines for a new version (see website/README.md) ----
-VER = "0.9.1"
+VER = "0.9.2"
 # The only link to the installer: a GitHub release asset. The file name and the repository are taken from it.
-SETUP_URL = "https://github.com/loonar-eu/loonar-compass/releases/download/v0.9.1/LoonarCompass-Setup-0.9.1.exe"
-RELEASE = "2026-10-28"
-DATE = {"en": "28 October 2026", "pl": "28 października 2026", "de": "28. Oktober 2026", "fr": "28 octobre 2026"}
+SETUP_URL = "https://github.com/loonar-eu/loonar-compass/releases/download/v0.9.2/LoonarCompass-Setup-0.9.2.exe"
+RELEASE = "2026-10-30"
+DATE = {"en": "30 October 2026", "pl": "30 października 2026", "de": "30. Oktober 2026", "fr": "30 octobre 2026"}
 # SHA-256 of the installer, shown next to the download button (PowerShell: Get-FileHash <installer>).
 # When the installer is in DIST, the build checks this value against the file and takes the size from it;
 # without the file it uses SHA256 and SIZE_MB as written here and prints a warning.
-SHA256 = "8feefe8cb1934523f81f00f37ec0e9ae7e4f649b6b49184b46d5a52542652074"
+SHA256 = "9cdff6de837e929abf033cdb7004590726ff8fcccac7181fc5615d1ac243f7e7"
 SIZE_MB = 34
 DIST = os.path.join(ROOT, "dist")
 # ---- services used by the website --------------------------------------------------------
@@ -149,14 +154,18 @@ def rel(frm, to):
 
 
 def page_dir(kind, lang):
-    return PATH[lang] + ("" if kind == "home" else kind + "/")
+    """Folder of a page: 'privacy' and 'legal' at the root, the rest under COMPASS."""
+    if kind in ("privacy", "legal"):
+        return PATH[lang] + kind + "/"
+    return COMPASS + PATH[lang] + ("" if kind == "home" else kind + "/")
 
 
-def csp():
+def csp(connect_extra=""):
     """Content-Security-Policy for the <meta> tag (GitHub Pages sends no custom headers; frame-ancestors
-    cannot be set in a meta tag). Only the site itself, data: images (CSS ticks) and the GoatCounter endpoint."""
+    cannot be set in a meta tag). Only the site itself, data: images (CSS ticks), the GoatCounter endpoint and
+    `connect_extra` (the statistics page reads the feedback service)."""
     img = "'self' data:" + (" " + GC_ENDPOINT if GC_ENDPOINT else "")
-    connect = GC_ENDPOINT or "'none'"
+    connect = " ".join(x for x in (GC_ENDPOINT, connect_extra) if x) or "'none'"
     return (f"default-src 'self'; img-src {img}; connect-src {connect}; style-src 'self'; script-src 'self'; "
             "font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'")
 
@@ -270,7 +279,8 @@ def portrait(P):
 
 # ---------------------------------------------------------------------------- shared page parts
 
-def head(lang, title, desc, canonical, alternates, P, og_title, og_desc, extra="", robots=None, gc_path=None, root=False):
+def head(lang, title, desc, canonical, alternates, P, og_title, og_desc, extra="", robots=None, gc_path=None, root=False,
+         connect=""):
     alts = ''.join(f'<link rel="alternate" hreflang="{l}" href="{u}">\n' for l, u in alternates)
     oglocs = ''.join(f'<meta property="og:locale:alternate" content="{T[l]["locale"]}">\n' for l in LANGS if l != lang)
     attrs = ' data-root="1"' if root else ''
@@ -286,7 +296,7 @@ def head(lang, title, desc, canonical, alternates, P, og_title, og_desc, extra="
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="{csp()}">
+<meta http-equiv="Content-Security-Policy" content="{csp(connect)}">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <title>{title}</title>
 <meta name="description" content="{esc_attr(desc)}">
@@ -326,14 +336,14 @@ def header(t, lang, home, switch, nav=True):
     if nav:
         items = ''.join(f'<li><a href="{home}#{i}">{n}</a></li>' for i, n in zip(NAV_IDS, t["nav"]))
         # The documentation is the last item of the menu; the separate link shows only when the menu is hidden.
-        items += f'<li><a href="{switch["P"]}docs/latest/{lang}/">{docs.T[lang]["docs"]}</a></li>'
+        items += f'<li><a href="{switch["P"]}{DOCS}latest/{lang}/">{docs.T[lang]["docs"]}</a></li>'
         navhtml = f'\n    <nav class="main-nav" aria-label="{MAINNAV[lang]}"><ul>{items}</ul></nav>'
     return f'''<a class="skip" href="#main">{t["skip"]}</a>
 <header class="site-header">
   <div class="wrap hdr{'' if nav else ' nonav'}">
     <a class="brand" href="{brand}"><img src="{switch["P"]}assets/img/logo.svg" alt="" width="34" height="34"><span>Loonar <b>Compass</b></span></a>{navhtml}
     {switch["html"]}
-    <a class="hdr-docs" href="{switch["P"]}docs/latest/{lang}/" aria-label="{esc_attr(docs.T[lang]["docs"])}">{mark("book")}<span>{docs.T[lang]["docs"]}</span></a>
+    <a class="hdr-docs" href="{switch["P"]}{DOCS}latest/{lang}/" aria-label="{esc_attr(docs.T[lang]["docs"])}">{mark("book")}<span>{docs.T[lang]["docs"]}</span></a>
     <a class="hdr-gh" href="{REPO}" aria-label="{esc_attr(t["gh_label"])}" title="{esc_attr(t["gh_label"])}">{mark("github")}</a>
     <a class="btn btn-sm" href="{home}#download">{t["nav_dl"]}</a>
   </div>
@@ -350,7 +360,7 @@ def footer(t, lang, P, privacy, legal_href, switch_html, top=True):
   </div>
   <div class="wrap ftr-bottom">
     <nav aria-label="{FOOTNAV[lang]}"><ul class="ftr-links">
-      <li><a href="{P}docs/latest/{lang}/">{docs.T[lang]["docs"]}</a></li>
+      <li><a href="{P}{DOCS}latest/{lang}/">{docs.T[lang]["docs"]}</a></li>
       <li><a href="{privacy}" data-gc="privacy">{t["f_privacy_link"]}</a></li>
       <li><a href="{legal_href}" data-gc="legal">{t["f_legal_link"]}</a></li>
       <li><a class="ftr-gh" href="{REPO}">{mark("github")}{t["gh_label"]}</a></li>
@@ -574,7 +584,7 @@ def doc_page(kind, lang):
                                             gc_privacy=GC_PRIVACY, optout=optout(t))
     if lang == "fr":
         body, updated = nbsp_fr(body), nbsp_fr(updated)
-    home = rel(d, PATH[lang])
+    home = rel(d, page_dir("home", lang))
     alternates = [(l, SITE + page_dir(kind, l)) for l in LANGS] + [("x-default", SITE + page_dir(kind, "en"))]
     html = head(lang, f"{title} – {NAME}", desc, SITE + d, alternates, P, f"{title} – {NAME}", desc) + f'''
 <body id="top">
@@ -590,6 +600,56 @@ def doc_page(kind, lang):
 </main>
 
 {footer(t, lang, P, rel(d, page_dir("privacy", lang)), rel(d, page_dir("legal", lang)), sw["html"])}
+</body>
+</html>
+'''
+    write(d + "index.html", html)
+
+# ---------------------------------------------------------------------------- published usage statistics
+
+# The weekly summary over all installations (feedback/worker.js, GET /v1/summary; it allows any origin). The
+# workers.dev address is only read by assets/stats.js: Chrome shows a lookalike-domain warning when it is opened.
+STATS_API = "https://compass-feedback.loonar-eu.workers.dev/v1/summary"
+STATS_V = 1
+STATS_T = {
+    "en": dict(title="Usage statistics", desc="Anonymous usage statistics of Loonar Compass: a weekly summary over all installations together.",
+               intro="If you leave usage statistics on, Loonar Compass sends anonymous statistics (see the <a href=\"{privacy}\">privacy policy</a>, section 8). Only the author sees the data of single installations; here is the summary of each week over all installations together. A value shared by fewer than 3 installations is counted as “other”. The summary of a week is computed the day after it ends.",
+               nojs="This page needs JavaScript."),
+    "pl": dict(title="Statystyki użycia", desc="Anonimowe statystyki użycia Loonar Compass: podsumowanie tygodnia dla wszystkich instalacji łącznie.",
+               intro="Jeśli zostawisz statystyki użycia włączone, Loonar Compass wysyła anonimowe statystyki (zob. <a href=\"{privacy}\">politykę prywatności</a>, punkt 8). Dane pojedynczych instalacji widzi tylko autor; tutaj jest podsumowanie każdego tygodnia dla wszystkich instalacji łącznie. Wartość, którą ma mniej niż 3 instalacje, jest liczona jako „inne”. Podsumowanie tygodnia powstaje dzień po jego końcu.",
+               nojs="Ta strona wymaga JavaScriptu."),
+    "de": dict(title="Nutzungsstatistik", desc="Anonyme Nutzungsstatistik von Loonar Compass: eine Wochenzusammenfassung über alle Installationen zusammen.",
+               intro="Wenn Sie die Nutzungsstatistik eingeschaltet lassen, sendet Loonar Compass anonyme Statistiken (siehe <a href=\"{privacy}\">Datenschutzerklärung</a>, Abschnitt 8). Die Daten einzelner Installationen sieht nur der Autor; hier steht die Zusammenfassung jeder Woche über alle Installationen zusammen. Ein Wert, den weniger als 3 Installationen haben, wird als „andere“ gezählt. Die Zusammenfassung einer Woche entsteht am Tag nach ihrem Ende.",
+               nojs="Diese Seite braucht JavaScript."),
+    "fr": dict(title="Statistiques d’utilisation", desc="Statistiques d’utilisation anonymes de Loonar Compass : un résumé hebdomadaire de toutes les installations ensemble.",
+               intro="Si vous laissez les statistiques d’utilisation activées, Loonar Compass envoie des statistiques anonymes (voir la <a href=\"{privacy}\">politique de confidentialité</a>, section 8). Seul l’auteur voit les données de chaque installation ; voici le résumé de chaque semaine pour toutes les installations ensemble. Une valeur partagée par moins de 3 installations est comptée comme « autres ». Le résumé d’une semaine est calculé le lendemain de sa fin.",
+               nojs="Cette page nécessite JavaScript."),
+}
+
+
+def stats_page(lang):
+    d, P, t, sw = common("stats", lang)
+    s = STATS_T[lang]
+    home = rel(d, page_dir("home", lang))
+    privacy = rel(d, page_dir("privacy", lang))
+    alternates = [(l, SITE + page_dir("stats", l)) for l in LANGS] + [("x-default", SITE + page_dir("stats", "en"))]
+    extra = (f'<link rel="stylesheet" href="{P}assets/stats.css?v={STATS_V}">\n'
+             f'<script src="{P}assets/stats.js?v={STATS_V}" defer></script>\n')
+    html = head(lang, f"{s['title']} – {NAME}", s["desc"], SITE + d, alternates, P, f"{s['title']} – {NAME}", s["desc"],
+                extra=extra, connect=STATS_API) + f'''
+<body id="top">
+{header(t, lang, home, sw)}
+
+<main id="main" class="doc-main">
+  <article class="wrap doc">
+    <h1>{s["title"]}</h1>
+    <p>{s["intro"].format(privacy=privacy)}</p>
+    <div id="stats" class="stats" aria-live="polite"><noscript><p>{s["nojs"]}</p></noscript></div>
+    <p class="doc-back"><a href="{home}">← {t["doc_home"]}</a></p>
+  </article>
+</main>
+
+{footer(t, lang, P, privacy, rel(d, page_dir("legal", lang)), sw["html"])}
 </body>
 </html>
 '''
@@ -658,7 +718,7 @@ def changelog_page(lang):
         raise SystemExit(f"ERROR: {CHANGELOGS[lang]} has no section for version {VER}")
     if lang == "fr":
         body = nbsp_fr(body)
-    home = rel(d, PATH[lang])
+    home = rel(d, page_dir("home", lang))
     alternates = [(l, SITE + page_dir("changelog", l)) for l in LANGS] + [("x-default", SITE + page_dir("changelog", "en"))]
     html = head(lang, f"{c['title']} – {NAME}", c["desc"], SITE + d, alternates, P, f"{c['title']} – {NAME}", c["desc"]) + f'''
 <body id="top">
@@ -678,6 +738,35 @@ def changelog_page(lang):
 '''
     write(d + "index.html", html)
 
+# ---------------------------------------------------------------------------- old addresses
+
+def legacy_redirects():
+    """Until 0.9.2 the Compass pages were at the root (/, /pl/, /docs/..., /changelog/). Every Compass page gets a
+    forwarding page at its old address, the root too (loonar.eu -> loonar.eu/compass/); old folders are removed
+    first, so no stale copy stays. PDFs of the user guide are copied too (the Start menu and old links point there)."""
+    compass_out = os.path.join(OUT, *COMPASS.strip("/").split("/"))
+    for old in ["docs"] + [PATH[l] + k for l in LANGS for k in ("changelog", "stats")]:
+        path = os.path.join(OUT, *old.strip("/").split("/"))
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+    for dirpath, _, files in os.walk(compass_out):
+        for f in files:
+            rp = os.path.relpath(os.path.join(dirpath, f), compass_out).replace(os.sep, "/")
+            if f.endswith(".pdf"):
+                dst = os.path.join(OUT, *rp.split("/"))
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copyfile(os.path.join(dirpath, f), dst)
+                continue
+            if not f.endswith(".html"):
+                continue
+            target = rel(posixpath.dirname(rp) + "/" if "/" in rp else "", COMPASS + (posixpath.dirname(rp) + "/" if "/" in rp else ""))
+            target += "" if f == "index.html" else f
+            write(rp, '<!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex">'
+                      f'<link rel="canonical" href="{SITE + COMPASS + rp.replace("index.html", "")}">'
+                      f'<meta http-equiv="refresh" content="0; url={target}"><title>Loonar Compass</title>'
+                      f'<script>location.replace("{target}" + location.hash)</script></head>'
+                      f'<body><a href="{target}">Loonar Compass</a></body></html>\n')
+
 # ---------------------------------------------------------------------------- 404 page
 
 def not_found():
@@ -685,13 +774,13 @@ def not_found():
     t = texts("en")
     blocks = ''.join(
         f'<section class="nf-l" lang="{l}"><h2>{texts(l)["nf_title"]}</h2><p>{texts(l)["nf_text"]}</p>'
-        f'<p><a class="btn{" btn-ghost" if l != "en" else ""}" href="/{PATH[l]}">{texts(l)["nf_link"]}</a></p></section>'
+        f'<p><a class="btn{" btn-ghost" if l != "en" else ""}" href="/{page_dir('home', l)}">{texts(l)["nf_link"]}</a></p></section>'
         for l in LANGS)
-    switch = lang_switch(t, {l: "/" + PATH[l] for l in LANGS}, None)
+    switch = lang_switch(t, {l: "/" + page_dir("home", l) for l in LANGS}, None)
     html = head("en", f"{t['nf_title']} – {NAME}", T["en"]["desc"], None, [], "/", f"{t['nf_title']} – {NAME}",
                 T["en"]["og_desc"], robots="noindex", gc_path="/404") + f'''
 <body id="top">
-{header(t, "en", "/", {"P": "/", "html": switch}, nav=False)}
+{header(t, "en", "/" + COMPASS, {"P": "/", "html": switch}, nav=False)}
 
 <main id="main" class="nf">
   <div class="wrap">
@@ -710,7 +799,7 @@ def not_found():
 
 def sitemap(extra=()):
     urls = [f'  <url>\n    <loc>{u}</loc>\n  </url>' for u in extra]
-    for kind in ("home", "privacy", "legal", "changelog"):
+    for kind in ("home", "privacy", "legal", "stats", "changelog"):
         for l in LANGS:
             alts = ''.join(f'\n    <xhtml:link rel="alternate" hreflang="{a}" href="{SITE + page_dir(kind, a)}"/>' for a in LANGS)
             alts += f'\n    <xhtml:link rel="alternate" hreflang="x-default" href="{SITE + page_dir(kind, "en")}"/>'
@@ -821,9 +910,11 @@ if __name__ == "__main__":
         home_page(l)
         doc_page("privacy", l)
         doc_page("legal", l)
+        stats_page(l)
         changelog_page(l)
     doc_urls = docs.generate(sys.modules[__name__])
     not_found()
+    legacy_redirects()
     sitemap(doc_urls)
     static_files()
     stale = os.path.join(OUT, ".htaccess")

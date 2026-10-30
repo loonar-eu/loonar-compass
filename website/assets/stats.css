@@ -1,0 +1,15 @@
+/* The published usage statistics (stats/ pages). */
+.stats { margin-top: 26px; }
+.stats-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.stats-bar select { font: inherit; padding: 4px 8px; border: 1px solid var(--navy-100, #cfdbe4); border-radius: 6px; background: #fff; }
+.stats-range { color: var(--muted, #5b6b78); font-size: .95rem; }
+.stats-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 18px; }
+.stats-tile { border: 1px solid var(--navy-100, #cfdbe4); border-radius: 10px; padding: 14px 16px; background: #fff; }
+.stats-tile b { display: block; font-size: 1.9rem; font-weight: 700; line-height: 1.1; color: var(--navy-900, #0e2a3b); }
+.stats-tile span { display: block; margin-top: 4px; font-size: .9rem; color: var(--muted, #5b6b78); }
+.stats-table { overflow-x: auto; margin-top: 10px; }
+.stats-table table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+.stats-table th, .stats-table td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--navy-50, #eef3f7); }
+.stats-table th { font-weight: 650; }
+.stats-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stats-empty { color: var(--muted, #5b6b78); }

@@ -19,6 +19,10 @@ evidence shows something else; it is blocked when the evidence does not show it 
 Be strict about facts in the expected result (numbers, names, messages), lenient about wording and formatting;
 "…" in an expected result stands for any value (an id, a count, a name). Something extra on the screen that the
 expected result does not mention (another window still open, more items) does not fail a step.
+A regression run executes the cases of an earlier version on a newer build: a newer version than the precondition
+names is not a reason to fail or block. When the evidence shows several builds, the newest build decides (an earlier
+build that failed and a newer one that passes = the step passes, say so). A step the evidence names as done by a
+person or another tester, with what they observed, counts as evidence.
 The overall verdict is FAIL if any step fails, otherwise BLOCKED if any step is blocked, otherwise PASS.
 Write the reasons in the language of the test case, one or two short sentences, naming what the evidence shows."""
 
@@ -66,12 +70,22 @@ def _evidence_blocks(evidence_dir):
     return blocks or [{"type": "text", "text": "No evidence was collected."}]
 
 
-def judge(case, evidence_dir, api_key):
-    """Returns ({"verdict", "reason", "steps": [...]}, usage) for one test case."""
-    client = anthropic.Anthropic(api_key=api_key)
+def judge(case, evidence_dir, api_key, base_url=None):
+    """Returns ({"verdict", "reason", "steps": [...]}, usage) for one test case. With base_url (for example a team hub's
+    https://hub/ai) the key is the hub token and the hub's own Claude key is used; its certificate is checked against
+    the Windows certificate store, so a hub with an in-house CA works."""
+    if base_url:
+        import ssl
+        try:
+            import httpx
+        except ImportError:
+            import httpx2 as httpx
+        client = anthropic.Anthropic(api_key=api_key, base_url=base_url, http_client=httpx.Client(verify=ssl.create_default_context(), timeout=600))
+    else:
+        client = anthropic.Anthropic(api_key=api_key)
     content = [{"type": "text", "text": _case_text(case)}] + _evidence_blocks(evidence_dir)
     response = client.messages.create(
-        model=MODEL, max_tokens=2000, system=SYSTEM,
+        model=MODEL, max_tokens=6000, system=SYSTEM,
         output_config={"effort": "medium", "format": {"type": "json_schema", "schema": SCHEMA}},
         messages=[{"role": "user", "content": content}],
     )

@@ -2,7 +2,7 @@
 <html lang="pl">
 <head>
 <meta charset="utf-8">
-<title>Loonar Compass 0.9.1 – Instrukcja użytkownika</title>
+<title>Loonar Compass 0.9.2 – Instrukcja użytkownika</title>
 <style>
   @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
   body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1f1e1b; }
@@ -39,7 +39,7 @@
   <img src="img/logo.png" alt="Logo Loonar Compass">
   <h1 style="margin-top: 10mm;">Loonar Compass</h1>
   <div class="sub">Instrukcja użytkownika</div>
-  <div class="sub" style="font-size: 11pt;">wersja 0.9.1 &middot; październik 2026</div>
+  <div class="sub" style="font-size: 11pt;">wersja 0.9.2 &middot; październik 2026</div>
   <div class="owner">
     Loonar Mariusz Głowacki<br>
     ul. Gombrowicza 12, 73-110 Stargard<br>
@@ -129,7 +129,7 @@
 <div class="note"><b>Ostrzeżenie Windows SmartScreen.</b> Instalator nie jest jeszcze podpisany cyfrowo, dlatego przy pierwszym uruchomieniu Windows może pokazać komunikat „System Windows ochronił ten komputer”. Kliknij <b>Więcej informacji</b>, a potem <b>Uruchom mimo to</b>. Gdy w systemie jest włączona Inteligentna kontrola aplikacji (Smart App Control), Windows blokuje niepodpisane aplikacje bez możliwości ich uruchomienia: poczekaj wtedy na wersję podpisaną. Instalator pobieraj tylko z loonar.eu albo z wydań projektu na GitHubie.</div>
 <figure class="small"><img src="img/en/installer-language.png" alt="Kreator instalacji: pierwsza strona z wyborem jednego z czterech języków"><figcaption>Pierwsza strona kreatora: wybór języka</figcaption></figure>
 <ol>
-  <li><b>Język.</b> Polski, angielski, niemiecki albo francuski. Przy nowej instalacji zaznaczony jest angielski, a przy aktualizacji język zapisany w Twoich ustawieniach. Wybrany język dotyczy kreatora, aplikacji, odpowiedzi asystenta i domyślnych szablonów dokumentów; później zmienisz go w ustawieniach (rozdział 5).</li>
+  <li><b>Język.</b> Polski, angielski, niemiecki albo francuski. Przy nowej instalacji zaznaczony jest angielski, a przy aktualizacji język zapisany w Twoich ustawieniach. Wybrany język dotyczy kreatora, aplikacji i odpowiedzi asystenta; później zmienisz go w ustawieniach (rozdział 5).</li>
   <li><b>Powitanie.</b> Warunki konieczne i lista rzeczy, które warto przygotować przed instalacją.</li>
   <li><b>Co nowego.</b> Przy aktualizacji: zmiany od zainstalowanej wersji. Przy nowej instalacji: najważniejsze zmiany w bieżącej wersji.</li>
   <li><b>Umowa licencyjna.</b> Zaznacz „Akceptuję warunki umowy licencyjnej”.</li>
@@ -228,7 +228,7 @@
 <ol>
   <li>Wybierz język z listy <b>Język</b>.</li>
   <li>Kliknij <b>Zapisz</b>. Interfejs od razu przełącza się na nowy język, a asystent odpowiada w nim od kolejnej wiadomości (jeśli napiszesz do niego w innym języku, odpowie w Twoim).</li>
-  <li>Aplikacja przenosi Twoje treści na nowy język: niezmodyfikowane szablony domyślne od razu zastępuje wersjami w nowym języku, a <b>pamięć asystenta oraz własne i zmodyfikowane szablony tłumaczy model AI</b>.</li>
+  <li>Aplikacja przenosi Twoje treści na nowy język: <b>pamięć asystenta i Twoje szablony tłumaczy model AI</b>.</li>
 </ol>
 <p>Tłumaczone są tylko pamięć asystenta i szablony. <b>Historia rozmów nigdy nie jest tłumaczona</b>: rozmowy zostają w języku, w którym je prowadziłeś.</p>
 <div class="note"><b>Brak połączenia z modelem AI.</b> Tłumaczenie wymaga działającego klucza API. Jeśli połączenia nie ma, na ikonach <b>Ustawienia</b>, <b>Pamięć asystenta</b> i <b>Szablony dokumentów</b> pojawia się pomarańczowy znak <b>„!”</b>, a podpowiedź po najechaniu myszą wyjaśnia, że treści nie są jeszcze przetłumaczone. Tłumaczenie wznowi się przy następnym uruchomieniu aplikacji albo od razu po kliknięciu <b>Przetłumacz teraz</b> w karcie „Język i zatwierdzanie zmian”. Zapisywanie innych kart go nie wznawia.</div>
@@ -764,6 +764,7 @@
   <li>Na wstążce <b>Start</b>, w grupie <b>Add-Ins</b>, kliknij <b>Loonar Compass</b> (przycisk znajdziesz też w <b>Specialize</b>). Przycisk działa tylko przy otwartym projekcie.</li>
   <li>Compass otwiera się jako okno zadokowane w EA, w tym samym miejscu co okno Properties. Możesz je przeciągnąć w inne miejsce, odpiąć albo dołączyć do grupy zakładek; EA zapamiętuje, gdzie je umieściłeś.</li>
 </ol>
+<div class="note"><b>„LoonarCompass – Error” w Zarządzaniu dodatkami.</b> Przy instalacji dla jednego użytkownika (domyślnej) dodatek jest zarejestrowany tylko dla tego użytkownika, a Windows nie używa takich rejestracji w programach uruchomionych jako administrator. Uruchamiaj Enterprise Architect normalnie, nie przez „Uruchom jako administrator”; jeśli EA musi działać jako administrator, zainstaluj Compass dla wszystkich użytkowników komputera.</div>
 <h3>Projekt i rozmowy</h3>
 <ul>
   <li>W EA Compass zawsze pracuje na projekcie otwartym w tym oknie EA: pliku albo dowolnej bazie danych. Czyta model przez sam Enterprise Architect, więc nie potrzebuje ustawień modelu, haseł ani wyboru modelu rozmowy. Otwarcie w EA innego projektu przełącza Compass na ten projekt; bez otwartego projektu Compass nie działa.</li>
@@ -924,26 +925,46 @@
 <div class="prompt">Przygotuj stronę Confluence z opisem procesu „Obsługa reklamacji” z diagramem i opublikuj ją w przestrzeni.</div>
 
 <h2 id="s14" class="break">14. Szablony dokumentów</h2>
-<p>Szablon mówi asystentowi, jak zbudować dokument: jakie sekcje ma mieć i co do nich wpisać. Asystent wypełnia go treścią z modelu i rozmowy i przygotowuje stronę Confluence albo dokument Word. Gdy prosisz o dokument, asystent sam sprawdza, czy pasuje do niego któryś szablon; czego nie wie, oznacza jako „do uzupełnienia”, zamiast zgadywać.</p>
-<p>Po instalacji są dostępne szablony domyślne, w języku aplikacji:</p>
+<p>Szablon mówi asystentowi, jak ma wyglądać dokument: jakie ma sekcje, co w nich umieścić, wskazówki i przykłady. Asystent wypełnia go treścią z modelu, rozmowy, Jiry, Confluence i kodu, a potem przygotowuje stronę Confluence, dokument Word albo opis zgłoszenia Jira. Szablonów może być dowolnie wiele - jeden, kilka albo setka - i każdy użytkownik ma własne. Compass nie dostarcza gotowych szablonów: dodajesz te, których używa Twój zespół.</p>
+<h3>Dodawanie szablonów</h3>
 <ul>
-  <li><b>Wstępna analiza wykonalności</b>,</li>
-  <li><b>BRD - Wymagania biznesowe</b>,</li>
-  <li><b>Opis zmian w systemie</b>,</li>
-  <li><b>Opis procesu</b>.</li>
+  <li><b>➕ Dodaj z plików…</b> - wybierz jeden lub kilka plików: Markdown (.md), tekst, Word (.docx), HTML, PDF, PowerPoint albo Excel. Z Worda i HTML zostają nagłówki, listy i tabele; z PDF, PowerPointa i Excela sam tekst. Przy jednym pliku otwiera się formularz szablonu, przy kilku szablony zapisują się od razu, a narzędzie i grupę ustawiasz potem przyciskiem <b>Właściwości</b>.</li>
+  <li><b>➕ Dodaj z Confluence</b> - wklej adres strony (z <code>/pages/ID</code> albo <code>pageId=ID</code>) albo jej id. Strona-wzór staje się szablonem dla Confluence.</li>
+  <li><b>➕ Nowy szablon</b> - pusty formularz, treść piszesz w Markdown.</li>
+  <li>Możesz też poprosić asystenta o zrobienie szablonu z przykładowego dokumentu (patrz niżej).</li>
 </ul>
+<h3>Właściwości szablonu</h3>
+<table>
+  <tr><th>Pole</th><th>Znaczenie</th></tr>
+  <tr><td><b>Nazwa</b></td><td>Pod tą nazwą wskazujesz szablon w rozmowie.</td></tr>
+  <tr><td><b>Opis</b></td><td>Czym jest dokument i kiedy go używać - asystent wybiera po nim szablon.</td></tr>
+  <tr><td><b>Narzędzie</b></td><td>Confluence, Jira, Word albo dowolne narzędzie.</td></tr>
+  <tr><td><b>Grupa</b></td><td>Dowolna nazwa, np. poziom dokumentacji (ogólny, biznesowy, techniczny), projekt albo zespół. Lista szablonów jest ułożona według narzędzi, a w nich według grup.</td></tr>
+  <tr><td><b>Model</b></td><td><b>Model z ustawień</b> albo <b>Mocniejszy model (najpierw pyta)</b>: gdy prosisz o dokument według tego szablonu, Compass proponuje mocniejszy model tego samego dostawcy (np. Claude Sonnet zamiast Haiku) tylko dla tej odpowiedzi, z informacją, ile razy jest droższy; następna odpowiedź znów idzie modelem z ustawień.</td></tr>
+  <tr><td><b>Treść</b></td><td>Markdown: <code>#</code> nagłówki, listy, tabele. Wiersze zaczynające się od <code>&gt; </code> to wskazówki i przykłady dla asystenta - nie trafiają do dokumentu.</td></tr>
+</table>
+<p>Szablon to plik Markdown w folderze <code>templates</code>. Właściwości są zapisane w jego pierwszych wierszach, więc pliki możesz też przygotować sam i wrzucić do folderu:</p>
+<div class="prompt">&gt; Szablon: Dokument techniczny - architektura, interfejsy, dane, wymagania niefunkcjonalne<br>&gt; Cel: Confluence<br>&gt; Grupa: Poziomy dokumentacji<br>&gt; Model: mocniejszy<br><br># 1. Kontekst architektoniczny<br>&gt; Systemy wokół rozwiązania. Przykład: …</div>
 <h3>Widok „Szablony dokumentów”</h3>
 <ul>
-  <li>Lista szablonów z krótkim opisem.</li>
-  <li><b>Użyj</b> wstawia do czatu polecenie „Przygotuj stronę Confluence według szablonu »…« dla: ”. Uzupełnij je (na przykład o nazwę pakietu albo procesu) i wyślij. Jeśli wolisz dokument Word, zmień polecenie przed wysłaniem.</li>
+  <li><b>Użyj</b> wstawia do rozmowy prośbę o dokument według szablonu (stronę Confluence, dokument Word albo zgłoszenie Jira - zależnie od narzędzia szablonu). Uzupełnij ją i wyślij.</li>
+  <li><b>Właściwości</b> otwiera formularz z nazwą, opisem, narzędziem, grupą, modelem i treścią.</li>
   <li><b>Edytuj</b> otwiera plik szablonu w Notatniku.</li>
-  <li><b>Otwórz folder szablonów</b> otwiera folder <code>templates</code> w Eksploratorze (starsze instalacje mogą nadal używać folderu <code>szablony</code>).</li>
+  <li><b>Usuń</b> (dwa kliknięcia) przenosi szablon do folderu <code>bin</code> w folderze szablonów - stamtąd możesz go przywrócić.</li>
+  <li><b>Otwórz folder szablonów</b> otwiera folder <code>templates</code> w Eksploratorze.</li>
 </ul>
-<h3>Własne szablony</h3>
-<p>Szablony to pliki Markdown (<code>.md</code>) ze wskazówkami dla asystenta. Pierwszy wiersz w postaci <code>&gt; Szablon: opis</code> jest opisem widocznym na liście, a kolejne wiersze zaczynające się od <code>&gt;</code> to wskazówki dla asystenta. Możesz zmieniać istniejące szablony, dodawać własne pliki do folderu szablonów albo poprosić asystenta, żeby zrobił szablon z przykładowego dokumentu:</p>
-<div class="prompt">Zrób szablon z załączonego dokumentu: zachowaj układ sekcji i dopisz, co w każdej powinno się znaleźć.</div>
-<p>Zapis szablonu przez asystenta zawsze wymaga Twojej zgody, także w trybie <b>auto</b>, a panel zgody pokazuje cały tekst szablonu (rozdział 16).</p>
-
+<p>Szablony dostarczane przez wcześniejsze wersje (BRD, opis procesu i inne), których nie zmieniałeś, po aktualizacji trafiają do folderu <code>bin</code>; zmienione przez Ciebie zostają.</p>
+<h3>Jak asystent pisze dokument</h3>
+<p>W rozmowie podaj nazwę szablonu albo grupy:</p>
+<div class="prompt">Przygotuj stronę Confluence według szablonu „Poziom techniczny” dla zmian z PRJ-123 i diagramów z pakietu Zamówienia.</div>
+<ul>
+  <li>Asystent najpierw spisuje listę Twoich próśb o dokument z całej rozmowy (sekcje, każde wymienione wymaganie, źródła, obrazy, format) i czyta wszystkie wskazane źródła, także obrazy załączone w zgłoszeniach Jira.</li>
+  <li>Trzyma się nagłówków szablonu w jego kolejności; każde wymaganie dostaje osobny wpis z numerem i treścią ze źródła; czego nie wie - oznacza „do uzupełnienia”.</li>
+  <li>Compass nie utworzy dokumentu, w którym brakuje sekcji z szablonu albo któraś prośba nie ma swojego miejsca - asystent musi go najpierw uzupełnić. W odpowiedzi pokazuje listę: prośba → sekcja.</li>
+</ul>
+<h3>Szablon z przykładowego dokumentu</h3>
+<p>Asystent zawsze prosi o zgodę przed zapisaniem szablonu, także w trybie <b>auto</b>, i pokazuje cały tekst.</p>
+<div class="prompt">Zrób szablon z załączonego dokumentu: zachowaj układ sekcji i dopisz, co każda z nich ma zawierać.</div>
 <h2 id="s15">15. Pamięć asystenta</h2>
 <p>Asystent pamięta ustalenia między rozmowami: konwencje modelowania, Twoje preferencje i poprawki oraz fakty o projektach i modelu. Zna je w każdej nowej rozmowie. Ustalenie na ten sam temat aktualizuje, zamiast dublować, a nieaktualne usuwa. Haseł, kluczy ani innych sekretów nie zapamiętuje.</p>
 <p>Ustalenia asystent zapisuje sam, gdy uzna, że przydadzą się w kolejnych rozmowach, i mówi o tym jednym zdaniem. Możesz też poprosić o to wprost, zaczynając od „zapamiętaj…”:</p>
@@ -1362,7 +1383,7 @@ compass-hub --service-uninstall</pre>
 <p><b>Znaki towarowe.</b> Sparx Systems i Enterprise Architect są zarejestrowanymi znakami towarowymi Sparx Systems Pty Ltd. Claude i Anthropic są znakami towarowymi Anthropic, PBC. OpenAI i GPT są znakami towarowymi OpenAI. Atlassian, Confluence i Jira są znakami towarowymi Atlassian. Microsoft, Windows, Word, Excel, PowerPoint, Visio, SharePoint, SQL Server, Entra ID, Power BI, Azure, Azure DevOps i GitHub są znakami towarowymi grupy Microsoft. Oracle i MySQL są zastrzeżonymi znakami towarowymi Oracle i/lub podmiotów powiązanych; MariaDB jest znakiem towarowym MariaDB plc; Okta jest znakiem towarowym Okta, Inc. GitLab jest znakiem towarowym GitLab Inc., ServiceNow – ServiceNow, Inc., a Docker – Docker, Inc. PostgreSQL jest zarejestrowanym znakiem towarowym PostgreSQL Community Association. Loonar Compass jest niezależnym produktem, niepowiązanym z tymi firmami, nieautoryzowanym ani niesponsorowanym przez nie.</p>
 <p><b>Właściciel i kontakt.</b> Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard.<br>E-mail: mariusz@loonar.eu, strona: <a href="https://loonar.eu">https://loonar.eu</a> (z pytaniami i odpowiedziami). Błędy najwygodniej zgłaszać przez widok <b>Zgłoś błąd</b> (rozdział 20). Problemy z bezpieczeństwem zgłaszaj prywatnie e-mailem na mariusz@loonar.eu, z tematem „Security: Loonar Compass”, a nie w publicznym zgłoszeniu na GitHubie.</p>
 <p><b>Wsparcie projektu.</b> Rozwój aplikacji możesz dobrowolnie wesprzeć na <a href="https://suppi.pl/loonar">https://suppi.pl/loonar</a> (widok <b>Wesprzyj projekt</b>, rozdział 4).</p>
-<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.9.1 &middot; © 2026 Loonar Mariusz Głowacki. Wszelkie prawa zastrzeżone.</p>
+<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.9.2 &middot; © 2026 Loonar Mariusz Głowacki. Wszelkie prawa zastrzeżone.</p>
 
 </body>
 </html>

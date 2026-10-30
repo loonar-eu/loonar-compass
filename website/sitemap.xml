@@ -1,72 +1,72 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
-    <loc>https://loonar.eu/docs/latest/en/</loc>
+    <loc>https://loonar.eu/compass/docs/latest/en/</loc>
   </url>
   <url>
-    <loc>https://loonar.eu/docs/latest/en/install.html</loc>
+    <loc>https://loonar.eu/compass/docs/latest/en/install.html</loc>
   </url>
   <url>
-    <loc>https://loonar.eu/docs/latest/pl/</loc>
+    <loc>https://loonar.eu/compass/docs/latest/pl/</loc>
   </url>
   <url>
-    <loc>https://loonar.eu/docs/latest/pl/install.html</loc>
+    <loc>https://loonar.eu/compass/docs/latest/pl/install.html</loc>
   </url>
   <url>
-    <loc>https://loonar.eu/docs/latest/de/</loc>
+    <loc>https://loonar.eu/compass/docs/latest/de/</loc>
   </url>
   <url>
-    <loc>https://loonar.eu/docs/latest/de/install.html</loc>
+    <loc>https://loonar.eu/compass/docs/latest/de/install.html</loc>
   </url>
   <url>
-    <loc>https://loonar.eu/docs/latest/fr/</loc>
+    <loc>https://loonar.eu/compass/docs/latest/fr/</loc>
   </url>
   <url>
-    <loc>https://loonar.eu/docs/latest/fr/install.html</loc>
+    <loc>https://loonar.eu/compass/docs/latest/fr/install.html</loc>
   </url>
   <url>
-    <loc>https://loonar.eu/docs/latest/en/hub.html</loc>
+    <loc>https://loonar.eu/compass/docs/latest/en/hub.html</loc>
   </url>
   <url>
-    <loc>https://loonar.eu/docs/latest/pl/hub.html</loc>
+    <loc>https://loonar.eu/compass/docs/latest/pl/hub.html</loc>
   </url>
   <url>
-    <loc>https://loonar.eu/docs/latest/de/hub.html</loc>
+    <loc>https://loonar.eu/compass/docs/latest/de/hub.html</loc>
   </url>
   <url>
-    <loc>https://loonar.eu/docs/latest/fr/hub.html</loc>
+    <loc>https://loonar.eu/compass/docs/latest/fr/hub.html</loc>
   </url>
   <url>
-    <loc>https://loonar.eu/</loc>
-    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/"/>
-    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/pl/"/>
-    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/de/"/>
-    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/fr/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/"/>
+    <loc>https://loonar.eu/compass/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/compass/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/compass/pl/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/compass/de/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/compass/fr/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/compass/"/>
   </url>
   <url>
-    <loc>https://loonar.eu/pl/</loc>
-    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/"/>
-    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/pl/"/>
-    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/de/"/>
-    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/fr/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/"/>
+    <loc>https://loonar.eu/compass/pl/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/compass/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/compass/pl/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/compass/de/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/compass/fr/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/compass/"/>
   </url>
   <url>
-    <loc>https://loonar.eu/de/</loc>
-    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/"/>
-    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/pl/"/>
-    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/de/"/>
-    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/fr/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/"/>
+    <loc>https://loonar.eu/compass/de/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/compass/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/compass/pl/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/compass/de/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/compass/fr/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/compass/"/>
   </url>
   <url>
-    <loc>https://loonar.eu/fr/</loc>
-    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/"/>
-    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/pl/"/>
-    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/de/"/>
-    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/fr/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/"/>
+    <loc>https://loonar.eu/compass/fr/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/compass/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/compass/pl/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/compass/de/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/compass/fr/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/compass/"/>
   </url>
   <url>
     <loc>https://loonar.eu/privacy/</loc>
@@ -133,35 +133,67 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/legal/"/>
   </url>
   <url>
-    <loc>https://loonar.eu/changelog/</loc>
-    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/changelog/"/>
-    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/pl/changelog/"/>
-    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/de/changelog/"/>
-    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/fr/changelog/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/changelog/"/>
+    <loc>https://loonar.eu/compass/stats/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/compass/stats/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/compass/pl/stats/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/compass/de/stats/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/compass/fr/stats/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/compass/stats/"/>
   </url>
   <url>
-    <loc>https://loonar.eu/pl/changelog/</loc>
-    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/changelog/"/>
-    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/pl/changelog/"/>
-    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/de/changelog/"/>
-    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/fr/changelog/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/changelog/"/>
+    <loc>https://loonar.eu/compass/pl/stats/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/compass/stats/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/compass/pl/stats/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/compass/de/stats/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/compass/fr/stats/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/compass/stats/"/>
   </url>
   <url>
-    <loc>https://loonar.eu/de/changelog/</loc>
-    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/changelog/"/>
-    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/pl/changelog/"/>
-    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/de/changelog/"/>
-    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/fr/changelog/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/changelog/"/>
+    <loc>https://loonar.eu/compass/de/stats/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/compass/stats/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/compass/pl/stats/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/compass/de/stats/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/compass/fr/stats/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/compass/stats/"/>
   </url>
   <url>
-    <loc>https://loonar.eu/fr/changelog/</loc>
-    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/changelog/"/>
-    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/pl/changelog/"/>
-    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/de/changelog/"/>
-    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/fr/changelog/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/changelog/"/>
+    <loc>https://loonar.eu/compass/fr/stats/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/compass/stats/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/compass/pl/stats/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/compass/de/stats/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/compass/fr/stats/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/compass/stats/"/>
+  </url>
+  <url>
+    <loc>https://loonar.eu/compass/changelog/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/compass/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/compass/pl/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/compass/de/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/compass/fr/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/compass/changelog/"/>
+  </url>
+  <url>
+    <loc>https://loonar.eu/compass/pl/changelog/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/compass/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/compass/pl/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/compass/de/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/compass/fr/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/compass/changelog/"/>
+  </url>
+  <url>
+    <loc>https://loonar.eu/compass/de/changelog/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/compass/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/compass/pl/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/compass/de/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/compass/fr/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/compass/changelog/"/>
+  </url>
+  <url>
+    <loc>https://loonar.eu/compass/fr/changelog/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://loonar.eu/compass/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://loonar.eu/compass/pl/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://loonar.eu/compass/de/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://loonar.eu/compass/fr/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://loonar.eu/compass/changelog/"/>
   </url>
 </urlset>

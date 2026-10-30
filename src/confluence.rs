@@ -357,6 +357,9 @@ impl Connection {
         let status = response.status();
         let text = response.text().unwrap_or_default();
         if !status.is_success() {
+            if crate::net::asks_for_client_certificate(status.as_u16(), &text) {
+                bail!("{}", crate::i18n::fmt("{0}: the server asks for a client certificate (mTLS): choose its file (.p12, .pfx or .pem) and password in Settings", &[what.to_string()]));
+            }
             let message = serde_json::from_str::<Value>(&text).ok().and_then(|v| v["message"].as_str().map(str::to_string)).unwrap_or_else(|| text.chars().take(300).collect());
             bail!("{}", crate::i18n::fmt("{0}: Confluence replied {1}: {2}", &[what.to_string(), status.to_string(), message]));
         }

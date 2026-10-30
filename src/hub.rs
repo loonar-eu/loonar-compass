@@ -1929,6 +1929,21 @@ pub fn known_team_policy(cfg: &AppConfig) -> Option<Value> {
 }
 
 /// The last policy received from this hub, for at most a week (the hub may be down for a while).
+/// Whether the team hub's policy switches usage statistics off, from what is already known (memory or the cache
+/// file; no request: called by the window).
+pub fn team_telemetry_off(cfg: &AppConfig) -> bool {
+    let url = cfg.hub_url.trim().trim_end_matches('/').to_string();
+    if url.is_empty() {
+        return false;
+    }
+    let remembered = POLICY.lock().unwrap_or_else(|p| p.into_inner()).as_ref().filter(|(_, u, _)| u.trim_end_matches('/') == url).map(|(_, _, p)| p.clone());
+    remembered.or_else(|| {
+        let cache: Value = serde_json::from_str(&std::fs::read_to_string(cfg.base_dir.join("hub_policy_cache.json")).ok()?).ok()?;
+        (cache["url"].as_str()?.trim_end_matches('/') == url).then(|| cache["policy"].clone())
+    })
+    .is_some_and(|p| p["telemetry"] == Value::Bool(false))
+}
+
 fn cached_policy(cfg: &AppConfig, url: &str) -> Option<Value> {
     let cache: Value = serde_json::from_str(&std::fs::read_to_string(cfg.base_dir.join("hub_policy_cache.json")).ok()?).ok()?;
     let time = chrono::DateTime::parse_from_rfc3339(cache["time"].as_str()?).ok()?;

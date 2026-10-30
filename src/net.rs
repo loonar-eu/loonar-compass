@@ -46,6 +46,46 @@ pub fn site_base(url: &str, pages: &[&str]) -> String {
 }
 
 /// A successful answer that is not data: a web page (sign-in, an address that is not the REST API).
+/// Whether an address answers a REST request with a web page instead of data (checked without signing in, so a wrong
+/// address is reported also before a token is entered). False when it cannot be reached at all. With the client
+/// certificate of the settings (LC-279): a server that asks for one answers without it with an error page (IIS 403.7,
+/// nginx 400), which is no sign of a wrong address (found in the 0.9.2 lab tests).
+pub fn answers_with_page(url: &str, identity: Option<reqwest::Identity>) -> bool {
+    let mut builder = reqwest::blocking::Client::builder().redirect(same_origin_redirects()).timeout(std::time::Duration::from_secs(15));
+    if let Some(identity) = identity {
+        builder = builder.identity(identity);
+    }
+    let Ok(client) = builder.build() else { return false };
+    let Ok(response) = client.get(url).header("Accept", "application/json").send() else { return false };
+    let status = response.status().as_u16();
+    response.text().is_ok_and(|t| not_json(&t) && !asks_for_client_certificate(status, &t))
+}
+
+/// Whether an error answer says the server wants a client certificate (mTLS) that was not sent: IIS 403.7 "The page
+/// requires a client certificate", nginx 400 "No required SSL certificate was sent" (LC-279).
+pub fn asks_for_client_certificate(status: u16, text: &str) -> bool {
+    (status == 400 || status == 403) && not_json(text) && {
+        let lower = text.to_lowercase();
+        lower.contains("client certificate") || lower.contains("ssl certificate") || lower.contains("certyfikat")
+    }
+}
+
+/// The key a copied address names: …/projects/KEY…, …/browse/KEY-12, …/spaces/KEY…, …/display/KEY/…
+pub fn key_in_address(url: &str, kinds: &[&str]) -> Option<String> {
+    for kind in kinds {
+        if let Some(i) = url.find(&format!("/{kind}/")) {
+            let rest = &url[i + kind.len() + 2..];
+            let key: String = rest.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '~').collect();
+            let key = if *kind == "browse" { key.split('-').next().unwrap_or("").to_string() } else { key };
+            let key = key.trim_end_matches(|c: char| c.is_ascii_digit() && *kind == "browse").to_string();
+            if !key.is_empty() && key.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '~') {
+                return Some(key);
+            }
+        }
+    }
+    None
+}
+
 pub fn not_json(text: &str) -> bool {
     let t = text.trim_start();
     !t.is_empty() && serde_json::from_str::<serde_json::Value>(t).is_err()
@@ -54,17 +94,31 @@ pub fn not_json(text: &str) -> bool {
 #[cfg(test)]
 mod site_base_tests {
     #[test]
+    fn keys_in_copied_addresses() {
+        assert_eq!(super::key_in_address("https://x.atlassian.net/jira/software/projects/LC/boards/1", &["projects", "browse"]).as_deref(), Some("LC"));
+        assert_eq!(super::key_in_address("https://jira.firma.pl/browse/ARCH-12", &["projects", "browse"]).as_deref(), Some("ARCH"));
+        assert_eq!(super::key_in_address("https://x.atlassian.net/wiki/spaces/PM/pages/1/Title", &["spaces", "display"]).as_deref(), Some("PM"));
+        assert_eq!(super::key_in_address("https://jira.firma.pl", &["projects", "browse"]), None);
+        assert_eq!(crate::jira::base("https://x.atlassian.net/jira/software/projects/LC/boards/1"), "https://x.atlassian.net");
+        assert_eq!(crate::jira::base("https://firma.pl/jira/browse/LC-1"), "https://firma.pl/jira");
+    }
+
+    #[test]
     fn copied_addresses() {
         let c = ["/spaces", "/display", "/pages", "/rest", "/dashboard.action"];
         assert_eq!(super::site_base("https://jira.example.com/confluence/spaces", &c), "https://jira.example.com/confluence");
-        assert_eq!(super::site_base("https://jira.example.com/confluence/spaces/P1805/pages/447655091/Wymagania", &c), "https://jira.example.com/confluence");
+        assert_eq!(super::site_base("https://jira.example.com/confluence/spaces/ARCH/pages/447655091/Wymagania", &c), "https://jira.example.com/confluence");
         assert_eq!(super::site_base("https://x.atlassian.net/wiki/spaces/LC/overview", &c), "https://x.atlassian.net/wiki");
         assert_eq!(super::site_base("https://confluence.example.com/display/ARCH/Home", &c), "https://confluence.example.com");
         assert_eq!(super::site_base("https://confluence.example.com/", &c), "https://confluence.example.com");
         let j = ["/browse", "/projects", "/secure", "/rest", "/issues"];
-        assert_eq!(super::site_base("https://jira.example.com/jira/browse/ITSPX-1", &j), "https://jira.example.com/jira");
+        assert_eq!(super::site_base("https://jira.example.com/jira/browse/PROJX-1", &j), "https://jira.example.com/jira");
         assert_eq!(super::site_base("https://jira.example.com/jira", &j), "https://jira.example.com/jira");
         assert!(super::not_json("<!DOCTYPE html><html>"));
         assert!(!super::not_json("") && !super::not_json("{\"a\":1}"));
+        // LC-279: the error page of a server that wants a client certificate is no wrong address.
+        assert!(super::asks_for_client_certificate(403, "<html><h3>The page requires a client certificate</h3></html>"));
+        assert!(super::asks_for_client_certificate(400, "<html><center>No required SSL certificate was sent</center></html>"));
+        assert!(!super::asks_for_client_certificate(403, "{\"errorMessages\":[\"no permission\"]}") && !super::asks_for_client_certificate(200, "<html>client certificate</html>"));
     }
 }

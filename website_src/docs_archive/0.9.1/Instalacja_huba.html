@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>Compass Hub 0.9.1 - Instrukcja instalacji dla działu IT</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+  body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1f1e1b; }
+  h1 { font-size: 26pt; color: #0d355c; margin: 0 0 4pt 0; }
+  h2 { font-size: 16pt; color: #0d355c; border-bottom: 1.5pt solid #0d355c; padding-bottom: 3pt; margin: 22pt 0 8pt 0; page-break-after: avoid; }
+  h3 { font-size: 12pt; color: #0d355c; margin: 14pt 0 4pt 0; page-break-after: avoid; }
+  p { margin: 0 0 7pt 0; }
+  ul, ol { margin: 0 0 8pt 0; padding-left: 18pt; }
+  li { margin-bottom: 2.5pt; }
+  table { border-collapse: collapse; width: 100%; margin: 6pt 0 10pt 0; page-break-inside: avoid; }
+  th, td { border: 0.75pt solid #c9c5b9; padding: 4pt 6pt; text-align: left; vertical-align: top; }
+  th { background: #eef2f7; color: #0d355c; }
+  code { font-family: Consolas, monospace; font-size: 9.5pt; background: #f1efe9; padding: 0 3pt; border-radius: 2pt; }
+  pre { font-family: Consolas, monospace; font-size: 8.5pt; background: #f6f5f1; border: 0.75pt solid #c9c5b9; padding: 5pt 8pt; margin: 4pt 0 8pt 0; white-space: pre-wrap; page-break-inside: avoid; }
+  .note { background: #fff8e5; border: 0.75pt solid #e3c770; padding: 6pt 9pt; margin: 6pt 0 10pt 0; page-break-inside: avoid; }
+  .cover { text-align: center; padding-top: 60mm; page-break-after: always; }
+  .cover img { width: 46mm; border-radius: 6mm; }
+  .cover .sub { font-size: 14pt; color: #706d64; margin-top: 4pt; }
+  .cover .owner { margin-top: 70mm; font-size: 10pt; color: #706d64; }
+  .toc { page-break-after: always; }
+  .toc ol { line-height: 1.9; font-size: 11.5pt; }
+  .break { page-break-before: always; }
+  .check { width: 14pt; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <img src="img/logo.png" alt="Logo Loonar Compass">
+  <h1 style="margin-top: 10mm;">Compass Hub</h1>
+  <div class="sub">Instrukcja instalacji dla działu IT</div>
+  <div class="sub" style="font-size: 11pt;">wersja 0.9.1 &middot; październik 2026</div>
+  <div class="owner">
+    Loonar Mariusz Głowacki<br>
+    ul. Gombrowicza 12, 73-110 Stargard<br>
+    loonar.eu &middot; mariusz@loonar.eu
+  </div>
+</div>
+
+<div class="toc">
+  <h2 style="margin-top: 0;">Spis treści</h2>
+  <ol>
+    <li><a href="#s1">Co instalujesz</a></li>
+    <li><a href="#s2">Zanim zaczniesz</a></li>
+    <li><a href="#s3">Krok 1 – Pliki i folder</a></li>
+    <li><a href="#s4">Krok 2 – hub.json i modele</a></li>
+    <li><a href="#s5">Krok 3 – Sekrety</a></li>
+    <li><a href="#s6">Krok 4 – Usługa Windows i pierwsze logowanie</a></li>
+    <li><a href="#s7">Krok 5 – HTTPS przez IIS (URL Rewrite + ARR)</a></li>
+    <li><a href="#s8">Krok 6 – Logowanie kontem firmowym (AD FS lub Entra ID)</a></li>
+    <li><a href="#s9">Krok 7 – Klucze AI, Jira, Confluence i polityka zespołu</a></li>
+    <li><a href="#s10">Krok 8 – Stacje robocze (zasady grupy)</a></li>
+    <li><a href="#s11">Krok 9 – Lista odbiorcza</a></li>
+    <li><a href="#s12">Eksploatacja: aktualizacja, kopia zapasowa, logi, usunięcie</a></li>
+    <li><a href="#s13">Rozwiązywanie problemów</a></li>
+    <li><a href="#s14">Linux i Docker</a></li>
+  </ol>
+</div>
+
+<h2 id="s1">1. Co instalujesz</h2>
+<p>Compass Hub to usługa zespołowa Loonar Compass. Jest to jeden program, <code>compass-hub.exe</code>, bez instalatora i bez Enterprise Architect. Działa jako usługa Windows i przechowuje:</p>
+<ul>
+  <li>modele EA zespołu (tylko do odczytu): pliki <code>.qea</code>/<code>.qeax</code> albo repozytorium PostgreSQL, SQL Server, MySQL lub Oracle;</li>
+  <li>politykę zespołu, którą stosują aplikacje Compass: minimalny tryb zatwierdzania, dostęp do internetu, AI tylko przez hub itd.;</li>
+  <li>dziennik audytu zmian ze wszystkich stacji, zestawy zmian do przeglądu i widok webowy dla osób bez EA;</li>
+  <li>bramkę AI: klucze Claude API zostają na serwerze, z kluczem i limitami na osobę lub rolę;</li>
+  <li>Jirę i Confluence przez jedno konto serwisowe, API GraphQL tylko do odczytu, tabele dla Power BI i serwer MCP.</li>
+</ul>
+
+<table>
+  <tr><th>Gdzie</th><th>Co</th><th>Sieć</th></tr>
+  <tr><td>Serwer huba</td><td>Usługa <code>CompassHub</code> (compass-hub.exe), nasłuchuje tylko na <code>127.0.0.1:8730</code></td><td>Tylko lokalnie</td></tr>
+  <tr><td>Serwer huba</td><td>Witryna IIS <code>https://hub.firma.pl</code> z URL Rewrite + ARR przed usługą</td><td>Ruch przychodzący 443 ze stacji</td></tr>
+  <tr><td>Dostawca tożsamości</td><td>AD FS albo Microsoft Entra ID: aplikacja „Compass Hub” (OpenID Connect)</td><td>Przeglądarka użytkownika</td></tr>
+  <tr><td>Serwer huba → internet</td><td><code>api.anthropic.com</code> (bramka AI), witryna Atlassian (Jira/Confluence)</td><td>Ruch wychodzący 443, tylko dla używanych części</td></tr>
+  <tr><td>Stacje robocze</td><td>Loonar Compass (aplikacja i dodatek w EA), ustawienia wymuszone zasadami grupy</td><td>Ruch wychodzący 443 do huba</td></tr>
+</table>
+
+<div class="note">To jest konfiguracja przetestowana od początku do końca na Windows Server 2022 z AD, AD CS, AD FS i IIS. Każdy krok kończy się sprawdzeniem, więc problem wychodzi w kroku, który go spowodował.</div>
+
+<h2 id="s2">2. Zanim zaczniesz</h2>
+<table>
+  <tr><th class="check">✓</th><th>Element</th><th>Uwagi</th></tr>
+  <tr><td>☐</td><td>Windows Server 2019 lub 2022, x64</td><td>2 vCPU, 4 GB RAM i 2 GB dysku wystarczą dla zespołu; więcej dysku na duże pliki modeli. Bez Enterprise Architect.</td></tr>
+  <tr><td>☐</td><td>Nazwa DNS, np. <code>hub.firma.pl</code></td><td>Rozwiązywalna ze stacji roboczych.</td></tr>
+  <tr><td>☐</td><td>Certyfikat TLS dla tej nazwy</td><td>Z firmowego CA albo publicznego. <b>Stacje muszą ufać jego głównemu urzędowi</b> (Compass sprawdza go w magazynie certyfikatów Windows). Nazwa huba musi być w SAN certyfikatu; z AD CS konto, które o niego prosi, potrzebuje prawa Enroll do szablonu Web Server.</td></tr>
+  <tr><td>☐</td><td>IIS z modułami URL Rewrite i Application Request Routing (ARR)</td><td>Do pobrania od Microsoft (iis.net).</td></tr>
+  <tr><td>☐</td><td>AD FS (Windows Server) albo Microsoft Entra ID</td><td>Tylko do logowania kontem firmowym, które jest zalecane. Bez niego hub ma własnych użytkowników i hasła.</td></tr>
+  <tr><td>☐</td><td>Grupy AD: <code>Compass-Admins</code>, <code>Compass-Architects</code>, <code>Compass-Viewers</code></td><td>Grupa daje rolę w hubie. Możliwe inne nazwy (krok 6).</td></tr>
+  <tr><td>☐</td><td>Modele</td><td>Pliki .qea skopiowane na serwer albo dostęp do bazy repozytorium EA (wystarczy konto tylko do odczytu).</td></tr>
+  <tr><td>☐</td><td>Sekrety u osoby, która instaluje</td><td>Klucz(e) Claude API, token API Atlassian, sekret klienta OIDC, hasło do bazy. Nigdy nie trafiają do hub.json.</td></tr>
+  <tr><td>☐</td><td>Wychodzące HTTPS z serwera</td><td><code>api.anthropic.com</code> (bramka AI), Twoja witryna Atlassian (Jira/Confluence). Przez proxy: ustaw <code>HTTPS_PROXY</code> dla usługi (krok 3).</td></tr>
+</table>
+<p>Pliki z wydania: <code>CompassHub-0.9.0-windows-x64.zip</code> (z <code>compass-hub.exe</code>, <code>hub.example.json</code>, <code>README.md</code> i licencjami), a dla stacji <code>LoonarCompass-Setup-0.9.exe</code> oraz folder <code>policies</code> (ADMX/ADML).</p>
+
+<h2 id="s3" class="break">3. Krok 1 – Pliki i folder</h2>
+<ol>
+  <li>Sprawdź SHA-256 pobranego pliku z wartością opublikowaną przy wydaniu:
+<pre>Get-FileHash .\CompassHub-0.9.0-windows-x64.zip -Algorithm SHA256</pre></li>
+  <li>Rozpakuj go do <code>C:\CompassHub</code> i utwórz podfoldery <code>models</code> i <code>secrets</code>.</li>
+  <li>Ogranicz dostęp do folderu do usługi i administratorów. Hub zapisuje tu swoje dane, a tu leżą sekrety:
+<pre>icacls C:\CompassHub /inheritance:r /grant:r "SYSTEM:(OI)(CI)F" "BUILTIN\Administrators:(OI)(CI)F"</pre>
+  W polskim Windows grupa nazywa się <code>BUILTIN\Administratorzy</code>; zamiast nazwy można podać SID <code>*S-1-5-32-544</code>.</li>
+</ol>
+<p><b>Sprawdzenie:</b> <code>C:\CompassHub\compass-hub.exe --version</code> wypisuje <code>0.9.0</code>.</p>
+
+<h2 id="s4">4. Krok 2 – hub.json i modele</h2>
+<p>Skopiuj <code>hub.example.json</code> do <code>C:\CompassHub\hub.json</code>. Minimalny start:</p>
+<pre>{
+  "listen": "127.0.0.1:8730",
+  "sources": [
+    { "id": "architecture", "name": "Architektura korporacyjna", "properties": "models/architecture.properties" }
+  ],
+  "policy": { "min_approval": "ask" }
+}</pre>
+<ul>
+  <li><code>listen</code> zostaje na <code>127.0.0.1</code>: z hubem rozmawia tylko IIS na tym samym serwerze.</li>
+  <li><code>sources</code>: jeden wpis na model. <code>id</code> ma być krótkie i stałe, bo używają go użytkownicy i Power BI. <code>properties</code> jest względne wobec hub.json.</li>
+  <li>Pomiń <code>users</code>: hub utworzy wtedy konto <code>admin</code> (krok 4) i sam zapisze użytkowników, tylko jako skróty.</li>
+</ul>
+<p>Plik modelu, np. <code>C:\CompassHub\models\architecture.properties</code>:</p>
+<pre># Plik projektu EA (tylko odczyt)
+model.source=file
+model.file=C:/CompassHub/models/Architecture.qea
+
+# ... albo baza repozytorium (hasło to sekret DB_PASSWORD):
+# model.source=sqlserver          (albo postgres, mysql, oracle)
+# db.host=sql.firma.pl
+# db.port=1433
+# db.name=ea_repository
+# db.user=compass_reader
+# db.sslmode=verify-full</pre>
+<p>SQL Server, MySQL i Oracle są czytane przez 64-bitowy sterownik ODBC producenta, który musi być zainstalowany na serwerze. Dla SQL Server wystarczy „ODBC Driver 17 for SQL Server” (instaluje się z SQL Server 2022) albo 18; zainstalowane sterowniki: <code>Get-OdbcDriver -Name '*SQL Server*' -Platform 64-bit</code>. PostgreSQL i pliki nie potrzebują niczego więcej. Każdy odczyt jest wycofywany, więc wystarczy konto bazy tylko do odczytu. SQL Server bez sekretu <code>DB_PASSWORD</code> używa uwierzytelniania Windows: usługa huba (LocalSystem) loguje się kontem komputera (<code>DOMENA\SERWER$</code>), które potrzebuje roli <code>db_datareader</code> w bazie modelu.</p>
+<ul>
+  <li><b>Instancja nazwana</b> (np. SQL Server Express): <code>db.host=SERWER\SQLEXPRESS</code> bez portu, przy działającej usłudze SQL Server Browser; albo stały port TCP (SQL Server Configuration Manager → TCP/IP → IPAll: TcpPort 1433, TcpDynamicPorts puste) i <code>db.host</code>/<code>db.port</code>.</li>
+  <li><b>Własny ciąg połączenia:</b> <code>db.odbc=Driver={ODBC Driver 17 for SQL Server};Server=sql.firma.pl,1433;Database=ea_repository;Trusted_Connection=Yes</code> zastępuje host, port, nazwę i użytkownika (bez hasła; <code>DB_PASSWORD</code>, jeśli jest, zostaje dodane).</li>
+  <li><b>db.sslmode</b> dla SQL Server: <code>prefer</code> = szyfrowanie, gdy serwer i sterownik go używają (bez sprawdzania certyfikatu); <code>require</code> = zawsze szyfrowane, certyfikat nie jest sprawdzany; <code>verify-full</code> = szyfrowane, a certyfikat musi być zaufany i zgodny z nazwą serwera (nie z certyfikatem samopodpisanym SQL Server).</li>
+</ul>
+<div class="note">Trzymaj pliki modeli huba osobno od plików, które ludzie edytują w EA. Aby odświeżyć model plikowy, podmień plik. Hub otwiera go tylko do odczytu przy każdym zapytaniu, więc restart nie jest potrzebny.</div>
+
+<h2 id="s5">5. Krok 3 – Sekrety</h2>
+<p>Każdy sekret to plik tekstowy w <code>C:\CompassHub\secrets</code>, który zawiera tylko wartość. Usługa poznaje ścieżkę ze zmiennej środowiskowej <code>LOONAR_SECRET_&lt;NAZWA&gt;_FILE</code>. Plik tworzy osoba, która zna wartość, np. w Notatniku albo poleceniem:</p>
+<pre>Read-Host -AsSecureString "Wartość" | ConvertFrom-SecureString -AsPlainText | Set-Content C:\CompassHub\secrets\claude_key_team -NoNewline</pre>
+<p>(<code>-AsPlainText</code> wymaga PowerShell 7; w Windows PowerShell 5.1 prościej użyć Notatnika.)</p>
+<table>
+  <tr><th>Plik (przykład)</th><th>Zmienna dla usługi</th><th>Potrzebny do</th></tr>
+  <tr><td><code>claude_key_team</code></td><td><code>LOONAR_SECRET_CLAUDE_KEY_TEAM_FILE</code></td><td>Bramka AI: jedna zmienna na każdy klucz wskazany w hub.json (krok 7)</td></tr>
+  <tr><td><code>claude_api_key</code></td><td><code>LOONAR_SECRET_CLAUDE_API_KEY_FILE</code></td><td>„Zapytaj” w widoku webowym</td></tr>
+  <tr><td><code>jira_token</code></td><td><code>LOONAR_SECRET_JIRA_TOKEN_FILE</code></td><td>Jira</td></tr>
+  <tr><td><code>confluence_token</code></td><td><code>LOONAR_SECRET_CONFLUENCE_TOKEN_FILE</code></td><td>Confluence</td></tr>
+  <tr><td><code>oidc_client_secret</code></td><td><code>LOONAR_SECRET_OIDC_CLIENT_SECRET_FILE</code></td><td>Logowanie kontem firmowym</td></tr>
+  <tr><td><code>db_password</code></td><td><code>LOONAR_SECRET_DB_PASSWORD_FILE</code></td><td>Baza modelu</td></tr>
+</table>
+<p>Nazwa w zmiennej to nazwa sekretu wielkimi literami, z innymi znakami zamienionymi na <code>_</code>: sekret <code>claude_key_anna</code> z hub.json to <code>LOONAR_SECRET_CLAUDE_KEY_ANNA_FILE</code>.</p>
+<p>Zmienne ustawia się <b>tylko dla usługi</b>, nie dla całego komputera, po zainstalowaniu usługi (krok 4). Działa to od następnego startu usługi, bez restartu serwera:</p>
+<pre>$vars = @(
+  'LOONAR_SECRET_CLAUDE_KEY_TEAM_FILE=C:\CompassHub\secrets\claude_key_team',
+  'LOONAR_SECRET_JIRA_TOKEN_FILE=C:\CompassHub\secrets\jira_token',
+  'LOONAR_SECRET_CONFLUENCE_TOKEN_FILE=C:\CompassHub\secrets\confluence_token',
+  'LOONAR_SECRET_OIDC_CLIENT_SECRET_FILE=C:\CompassHub\secrets\oidc_client_secret'
+  # 'HTTPS_PROXY=http://proxy.firma.pl:8080'   tylko gdy serwer wychodzi przez proxy
+)
+Set-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Services\CompassHub -Name Environment -Type MultiString -Value $vars
+Restart-Service CompassHub</pre>
+<p>Hub czyta sekret, gdy pierwszy raz go potrzebuje. Brakujący jest zgłaszany tam, gdzie jest używany, np. „secret 'jira_token' is not set: give it as LOONAR_SECRET_JIRA_TOKEN (or a file named in LOONAR_SECRET_JIRA_TOKEN_FILE)”. Wartości nigdy nie pojawiają się w hub.json, w logach ani w widoku webowym. Znacznik BOM na początku oraz spacje i znak nowej linii na końcu pliku sekretu (Notatnik) są pomijane.</p>
+
+<h2 id="s6" class="break">6. Krok 4 – Usługa Windows i pierwsze logowanie</h2>
+<ol>
+  <li>W PowerShell jako administrator:
+<pre>C:\CompassHub\compass-hub.exe --service-install C:\CompassHub\hub.json</pre>
+  Polecenie tworzy usługę <code>CompassHub</code> („Compass Hub (Loonar Compass team service)”) z automatycznym startem na koncie LocalSystem i ją uruchamia.</li>
+  <li>Teraz ustaw sekrety usługi (krok 3) i wykonaj <code>Restart-Service CompassHub</code>.</li>
+  <li>Na serwerze otwórz <code>http://127.0.0.1:8730/</code> i zaloguj się jako <code>admin</code> / <code>passw0rd</code> (z zerem). Hub od razu żąda nowego hasła i do tego czasu nie pozwala na nic innego. Hasło ma co najmniej 10 znaków. Zrób to <b>przed</b> krokiem 5, który udostępni hub w sieci.</li>
+</ol>
+<p><b>Sprawdzenie:</b></p>
+<ul>
+  <li><code>Get-Service CompassHub</code> pokazuje Running;</li>
+  <li><code>C:\CompassHub\hub.log</code> pokazuje start i Twoje logowanie;</li>
+  <li>widok webowy pokazuje model z kroku 2.</li>
+</ul>
+
+<h2 id="s7">7. Krok 5 – HTTPS przez IIS (URL Rewrite + ARR)</h2>
+<p>Hub mówi zwykłym HTTP na 127.0.0.1. IIS daje mu firmową nazwę i certyfikat.</p>
+<ol>
+  <li>Zainstaluj IIS z URL Rewrite i ARR. Utwórz witrynę, np. <b>CompassHub</b>, z powiązaniem <code>https</code>, port 443, nazwą hosta <code>hub.firma.pl</code> i certyfikatem. Ścieżka fizyczna to pusty folder, np. <code>C:\inetpub\compasshub</code>.</li>
+  <li>Włącz proxy i wyłącz przepisywanie hosta w przekierowaniach. To jest <b>konieczne</b>; inaczej ARR przepisze przekierowanie do AD FS na adres huba i logowanie firmowe się nie uda. Ustaw też limit czasu dla długich odpowiedzi AI:
+<pre>Import-Module WebAdministration
+$p = 'MACHINE/WEBROOT/APPHOST'
+Set-WebConfigurationProperty -PSPath $p -Filter system.webServer/proxy -Name enabled -Value True
+Set-WebConfigurationProperty -PSPath $p -Filter system.webServer/proxy -Name reverseRewriteHostInResponseHeaders -Value False
+Set-WebConfigurationProperty -PSPath $p -Filter system.webServer/proxy -Name timeout -Value '00:05:00'</pre></li>
+  <li>Wstaw ten <code>web.config</code> do folderu witryny. Przekazuje on wszystko do huba i pozwala na zapytania do 32 MB, bo pytania z diagramami modelu są duże:
+<pre>&lt;?xml version="1.0" encoding="utf-8"?&gt;
+&lt;configuration&gt;
+  &lt;system.webServer&gt;
+    &lt;rewrite&gt;
+      &lt;rules&gt;
+        &lt;rule name="CompassHub" stopProcessing="true"&gt;
+          &lt;match url="(.*)" /&gt;
+          &lt;action type="Rewrite" url="http://127.0.0.1:8730/{R:1}" /&gt;
+        &lt;/rule&gt;
+      &lt;/rules&gt;
+    &lt;/rewrite&gt;
+    &lt;security&gt;
+      &lt;requestFiltering&gt;
+        &lt;requestLimits maxAllowedContentLength="33554432" /&gt;
+      &lt;/requestFiltering&gt;
+    &lt;/security&gt;
+  &lt;/system.webServer&gt;
+&lt;/configuration&gt;</pre></li>
+  <li>Zapora: wpuść tylko ruch przychodzący 443. Portu 8730 nie otwiera się nigdy, bo hub nasłuchuje na 127.0.0.1.</li>
+  <li>AD FS na tym samym serwerze: AD FS też używa portu 443 (HTTP.sys). Zaznacz <b>Wymagaj oznaczania nazwy serwera (SNI)</b> w powiązaniu IIS (<code>New-WebBinding … -SslFlags 1</code>), inaczej IIS i AD FS sobie przeszkadzają.</li>
+  <li>Hub nie potrzebuje <code>preserveHostHeader</code> ani <code>X-Forwarded-Proto</code>: jego adresy wynikają z <code>redirect_uri</code> w hub.json.</li>
+</ol>
+<p>Hub ufa nagłówkowi <code>X-Forwarded-For</code> (dodawanemu przez ARR) tylko od proxy na tym samym komputerze. Dziennik audytu i blokada błędnych tokenów widzą wtedy prawdziwy adres klienta.</p>
+<p><b>Sprawdzenie:</b> ze stacji roboczej <code>https://hub.firma.pl/</code> pokazuje stronę logowania bez ostrzeżenia o certyfikacie.</p>
+
+<h2 id="s8" class="break">8. Krok 6 – Logowanie kontem firmowym (AD FS lub Entra ID)</h2>
+<h3>AD FS</h3>
+<ol>
+  <li>AD FS Management → Application Groups → Add, potem szablon <b>Server application accessing a web API</b>, nazwa „Compass Hub”.</li>
+  <li>Server application:
+    <ul>
+      <li>zanotuj <b>client identifier</b>;</li>
+      <li>redirect URI: <code>https://hub.firma.pl/auth/callback</code>;</li>
+      <li>credentials: <b>Generate a shared secret</b>. Zapisz go od razu do <code>C:\CompassHub\secrets\oidc_client_secret</code>; AD FS pokazuje go tylko raz.</li>
+    </ul></li>
+  <li>Web API:
+    <ul>
+      <li>identifier: client identifier z poprzedniego kroku;</li>
+      <li>access control policy: osoby, które mogą używać huba, np. „Permit everyone” (role i tak wynikają z grup);</li>
+      <li>permitted scopes: <code>openid</code>, <code>profile</code>, <code>email</code>, <code>allatclaims</code>.</li>
+    </ul></li>
+  <li>Web API → Issuance Transform Rules → „Send LDAP Attributes as Claims” (Active Directory):
+    <ul>
+      <li><i>User-Principal-Name</i> → <code>upn</code>;</li>
+      <li><i>E-Mail-Addresses</i> → <code>email</code>;</li>
+      <li><i>Display-Name</i> → <code>name</code>;</li>
+      <li><i>Token-Groups - Unqualified Names</i> → <code>groups</code>.</li>
+    </ul>
+    (Nazwy oświadczeń wyjściowych wpisz dokładnie tak.)</li>
+</ol>
+<p>W <code>hub.json</code> (hub sam dodaje <code>allatclaims</code> dla AD FS, żeby oświadczenia trafiły do ID tokenu):</p>
+<pre>"oidc": {
+  "issuer": "https://adfs.firma.pl/adfs",
+  "client_id": "&lt;client identifier&gt;",
+  "redirect_uri": "https://hub.firma.pl/auth/callback",
+  "groups_claim": "groups",
+  "roles": { "admin": ["Compass-Admins"], "architect": ["Compass-Architects"], "viewer": ["Compass-Viewers"] },
+  "password_login": true
+}</pre>
+<h3>Microsoft Entra ID</h3>
+<p>Konfiguracja w Entra ID:</p>
+<ul>
+  <li><b>App registration:</b> platforma <i>Web</i>, redirect URI <code>https://hub.firma.pl/auth/callback</code>, client secret (do pliku sekretu) i ID token z opcjonalnymi oświadczeniami <code>upn</code> i <code>email</code>.</li>
+  <li><b>Issuer:</b> <code>https://login.microsoftonline.com/&lt;tenant-id&gt;/v2.0</code>.</li>
+  <li><b>Grupy:</b> Entra domyślnie wysyła ich identyfikatory obiektów. Wpisz te identyfikatory w <code>roles</code> albo, dla grup synchronizowanych z AD, wybierz „sAMAccountName” w konfiguracji tokenu.</li>
+</ul>
+<h3>Zasady, które stosuje hub</h3>
+<ul>
+  <li>Rola wynika z grup przy każdym logowaniu i wygrywa najwyższa. Osoba spoza wszystkich grup nie dostaje dostępu.</li>
+  <li>Konto firmowe o tej samej nazwie co lokalny użytkownik huba jest odrzucane, dopóki lokalny użytkownik nie zostanie przemianowany lub usunięty.</li>
+  <li>Hub sam sprawdza ID token: podpis RS256, wystawcę, odbiorcę, ważność i nonce, z PKCE i jednorazowym state.</li>
+  <li>Gdy wszystko działa, ustaw <code>"password_login": false</code>: zostaje tylko przycisk konta firmowego. Tokeny API dla klientów MCP dalej działają. Zachowaj w sejfie haseł jedno lokalne hasło admina na wypadek awarii dostawcy tożsamości.</li>
+</ul>
+<p><b>Sprawdzenie:</b> po <code>Restart-Service CompassHub</code> przycisk „Sign in with your company account” prowadzi do AD FS i z powrotem. hub.log pokazuje „… signed in with a company account as architect”, a zakładka <b>Users</b> pokazuje konto firmowe z rolą.</p>
+
+<h2 id="s9">9. Krok 7 – Klucze AI, Jira, Confluence i polityka zespołu</h2>
+<p>Dodaj sekcje do <code>hub.json</code>. Każdy wskazany tu sekret potrzebuje też swojej zmiennej <code>…_FILE</code> (krok 3). Potem wykonaj <code>Restart-Service CompassHub</code>; zalogowane osoby pozostają zalogowane.</p>
+<pre>"ai": {
+  "keys":   [ { "for": "role:architect", "secret": "claude_key_team" },
+              { "for": "anna@firma.pl", "secret": "claude_key_anna" } ],
+  "limits": [ { "for": "*", "tokens_per_day": 2000000, "tokens_per_month": 30000000 } ],
+  "models": [ "claude-haiku-5-5", "claude-sonnet-5-5" ]
+},
+"integrations": {
+  "jira":       { "url": "https://firma.atlassian.net", "user": "svc-compass@firma.pl", "project": "ARCH", "issue_type": "Task" },
+  "confluence": { "url": "https://firma.atlassian.net/wiki", "user": "svc-compass@firma.pl", "space": "ARCH" }
+},
+"policy": {
+  "min_approval": "ask",
+  "ai_via_hub": true,
+  "jira_via_hub": true,
+  "confluence_via_hub": true,
+  "web_access": false,
+  "update_check": false
+}</pre>
+<table>
+  <tr><th>Ustawienie</th><th>Znaczenie</th></tr>
+  <tr><td><code>ai.keys</code></td><td>Którego klucza Claude używa osoba. Kolejność: nazwa użytkownika, potem <code>role:&lt;rola&gt;</code>, potem <code>*</code>. Brak dopasowania oznacza brak AI dla tej osoby.</td></tr>
+  <tr><td><code>ai.limits</code></td><td>Tokeny na dzień i na miesiąc. Po przekroczeniu hub odmawia z czytelnym komunikatem.</td></tr>
+  <tr><td><code>ai.models</code></td><td>Dozwolone modele; inne są odrzucane.</td></tr>
+  <tr><td><code>policy.ai_via_hub</code></td><td>Compass pyta AI tylko przez hub: na stacjach nie ma klucza API.</td></tr>
+  <tr><td><code>policy.jira_via_hub</code>, <code>confluence_via_hub</code></td><td>Jira/Confluence przez konto serwisowe huba. Viewer może tylko czytać; każda zmiana jest w audycie.</td></tr>
+  <tr><td><code>policy.min_approval</code></td><td>Najsłabszy dozwolony w Compass tryb zatwierdzania zapisów do modelu (<code>ask</code> jest najostrzejszy).</td></tr>
+  <tr><td><code>policy.web_access</code>, <code>web_allowed_domains</code></td><td>Czy asystent może szukać w internecie i czytać strony, i z jakich domen.</td></tr>
+  <tr><td><code>policy.update_check</code></td><td>Czy Compass co godzinę sprawdza na GitHubie nową wersję.</td></tr>
+</table>
+<p>Administratorzy zmieniają później politykę w zakładce <b>Team policy</b> widoku webowego, a zużycie na osobę jest w <b>Users → AI usage</b>.</p>
+
+<h2 id="s10" class="break">10. Krok 8 – Stacje robocze (zasady grupy)</h2>
+<ol>
+  <li><b>Zaufanie do certyfikatu.</b> Jeśli certyfikat huba pochodzi z firmowego CA, rozdaj jego główny urząd na stacje (GPO: Konfiguracja komputera → Zasady → Ustawienia systemu Windows → Ustawienia zabezpieczeń → Zasady kluczy publicznych → Zaufane główne urzędy certyfikacji). Bez tego Compass zgłasza niezaufany certyfikat (UnknownIssuer).</li>
+  <li><b>Szablony.</b> Skopiuj <code>LoonarCompass.admx</code> do <code>\\&lt;domena&gt;\SYSVOL\&lt;domena&gt;\Policies\PolicyDefinitions</code>, a <code>pl-PL\LoonarCompass.adml</code> (i <code>en-US</code>) do podfolderów językowych. Bez magazynu centralnego skopiuj je do <code>C:\Windows\PolicyDefinitions</code> na komputerze, na którym edytujesz GPO.</li>
+  <li><b>GPO</b> dla OU stacji: Konfiguracja komputera → Szablony administracyjne → Loonar → Loonar Compass.</li>
+</ol>
+<table>
+  <tr><th>Zasada</th><th>Wartość rejestru (HKLM\SOFTWARE\Policies\Loonar\Compass)</th><th>Działanie</th></tr>
+  <tr><td>Adres huba</td><td><code>HubUrl</code> (tekst)</td><td>Adres huba jest ustalony w Compass i nie można go zmienić.</td></tr>
+  <tr><td>Wymagaj huba</td><td><code>RequireHub</code> = 1</td><td>Asystent działa tylko wtedy, gdy osoba jest zalogowana do huba.</td></tr>
+  <tr><td>Dostęp do internetu</td><td><code>WebAccess</code> = 0</td><td>Bez wyszukiwania i czytania stron; przycisk 🌐 jest wyłączony.</td></tr>
+  <tr><td>Sprawdzanie aktualizacji</td><td><code>UpdateCheck</code> = 0</td><td>Bez codziennego sprawdzania nowej wersji.</td></tr>
+  <tr><td>Minimalny tryb zatwierdzania</td><td><code>MinApproval</code> = ask / plan / auto</td><td>Nie można wybrać słabszego trybu.</td></tr>
+  <tr><td>Dozwoleni dostawcy AI</td><td><code>AllowedProviders</code>, np. <code>anthropic</code></td><td>Inni dostawcy (np. OpenAI) są odrzucani.</td></tr>
+</table>
+<p>Bez domeny te same wartości można zaimportować plikiem <code>LoonarCompass-company-policy.reg</code> (i usunąć plikiem <code>LoonarCompass-remove-policy.reg</code>). Zasady komputera są silniejsze niż polityka huba i ustawienia użytkownika; mogą Compass tylko zaostrzyć.</p>
+<p><b>Instalacja Compass.</b> <code>LoonarCompass-Setup-0.9.exe</code> instaluje dla bieżącego użytkownika (<code>%LOCALAPPDATA%\Programs\Loonar Compass</code>) albo dla wszystkich (<code>Program Files</code>) i rejestruje dodatek w Enterprise Architect. Dla narzędzi wdrożeniowych (Intune, Configuration Manager, skrypt startowy) instaluje bez okna:</p>
+<pre>LoonarCompass-Setup-0.9.exe --quiet --all-users</pre>
+<table>
+  <tr><th>Opcja</th><th>Działanie</th></tr>
+  <tr><td><code>--quiet</code></td><td>Bez okna i bez pytań. Kod wyjścia 0 = zainstalowano, 1 = błąd, 740 = <code>--all-users</code> bez uprawnień administratora. Wynik jest w <code>%TEMP%\LoonarCompass-Setup.log</code> (dla SYSTEM: <code>C:\Windows\Temp</code>).</td></tr>
+  <tr><td><code>--all-users</code></td><td>Dla wszystkich: Program Files, wspólne menu Start, dodatek w EA dla wszystkich użytkowników (HKLM). Uruchamiaj jako SYSTEM albo administrator.</td></tr>
+  <tr><td><code>--dir &lt;folder&gt;</code></td><td>Inny folder programu.</td></tr>
+  <tr><td><code>--lang en|pl|de|fr</code></td><td>Język plików licencji i listy zmian.</td></tr>
+  <tr><td><code>--no-desktop</code>, <code>--no-start-menu</code></td><td>Bez tych skrótów.</td></tr>
+  <tr><td><code>--no-ea-addin</code></td><td>Bez dodatku w Enterprise Architect.</td></tr>
+</table>
+<p>To samo polecenie aktualizuje istniejącą instalację. Najpierw zamknij Compass i EA na komputerze. Ustawienia użytkownika nie są zmieniane; przy zasadach komputera (adres huba, wymagany hub) nikt nie musi niczego konfigurować. Ciche usunięcie: <code>"C:\Program Files\Loonar Compass\uninstall.exe" --uninstall --quiet</code>.</p>
+<p><b>Pierwsze logowanie użytkownika.</b> W Compass: Ustawienia → Zespół (Compass Hub) → <b>Zaloguj się kontem firmowym</b>. Przeglądarka otwiera AD FS i wraca do Compass. Logowanie trwa 12 godzin i przetrwa restart huba.</p>
+
+<h2 id="s11">11. Krok 9 – Lista odbiorcza</h2>
+<table>
+  <tr><th class="check">✓</th><th>Test</th><th>Oczekiwane</th></tr>
+  <tr><td>☐</td><td>Otwórz <code>https://hub.firma.pl/</code> ze stacji</td><td>Strona logowania, bez ostrzeżenia o certyfikacie</td></tr>
+  <tr><td>☐</td><td>Logowanie firmowe członka Compass-Architects</td><td>Rola architect; hub.log „signed in with a company account as architect”</td></tr>
+  <tr><td>☐</td><td>Osoba spoza grup Compass</td><td>Odmowa</td></tr>
+  <tr><td>☐</td><td>Compass z GPO, przed zalogowaniem: wyślij pytanie</td><td>„Twoja organizacja wymaga huba zespołu: zaloguj się w Ustawienia → Zespół (Compass Hub)…”</td></tr>
+  <tr><td>☐</td><td>To samo po zalogowaniu</td><td>Odpowiedź, bez klucza API na stacji; wiersz w Users → AI usage</td></tr>
+  <tr><td>☐</td><td>Viewer zadaje pytanie (brak klucza dla viewerów)</td><td>„the hub has no AI key for you”</td></tr>
+  <tr><td>☐</td><td>Przycisk 🌐 w Compass</td><td>Wyłączony: „wyłączyła Twoja organizacja”</td></tr>
+  <tr><td>☐</td><td><code>Restart-Service CompassHub</code>, potem pytanie</td><td>Działa bez ponownego logowania</td></tr>
+  <tr><td>☐</td><td>Hub zatrzymany, pytanie</td><td>Krótki komunikat, że hub nie odpowiada; EA działa dalej</td></tr>
+  <tr><td>☐</td><td>Jira: „Utwórz w Jirze zadanie: test” (architect)</td><td>Zadanie w projekcie; wpis w audycie huba z nazwą osoby</td></tr>
+</table>
+
+<h2 id="s12" class="break">12. Eksploatacja: aktualizacja, kopia zapasowa, logi, usunięcie</h2>
+<h3>Aktualizacja</h3>
+<pre>Stop-Service CompassHub
+Copy-Item .\compass-hub.exe C:\CompassHub\compass-hub.exe -Force   # z nowego zipa, po sprawdzeniu SHA-256
+Start-Service CompassHub</pre>
+<p>hub.json, sekrety i logowania zostają bez zmian. Ludzie pozostają zalogowani.</p>
+<h3>Co archiwizować (C:\CompassHub)</h3>
+<table>
+  <tr><th>Plik / folder</th><th>Zawartość</th></tr>
+  <tr><td><code>hub.json</code></td><td>Konfiguracja, lokalni użytkownicy (tylko skróty haseł i tokenów), polityka</td></tr>
+  <tr><td><code>audit.jsonl</code></td><td>Dziennik audytu zmian i logowań</td></tr>
+  <tr><td><code>changes\</code>, <code>notes\</code></td><td>Zestawy zmian do przeglądu i notatki zespołu</td></tr>
+  <tr><td><code>ai_usage.jsonl</code></td><td>Zużycie AI na osobę (podstawa limitów)</td></tr>
+  <tr><td><code>company_accounts.json</code>, <code>sessions.json</code></td><td>Widziane konta firmowe i bieżące logowania (skróty); ich utrata nie szkodzi, ludzie zalogują się ponownie</td></tr>
+  <tr><td><code>secrets\</code></td><td>Tylko jeśli kopia jest szyfrowana. W przeciwnym razie trzymaj wartości w sejfie haseł.</td></tr>
+  <tr><td><code>models\</code></td><td>Pliki modeli, jeśli nie są przechowywane gdzie indziej</td></tr>
+</table>
+<h3>Logi</h3>
+<ul>
+  <li><code>hub.log</code>: start, logowania, odrzucone zapytania, błędy. „Internal error (id …)” pokazany użytkownikowi ma tu szczegóły pod tym samym id.</li>
+  <li><code>audit.jsonl</code> i <code>hub.log</code> dostają datę w nazwie, gdy urosną.</li>
+</ul>
+<h3>Usunięcie</h3>
+<pre>C:\CompassHub\compass-hub.exe --service-uninstall</pre>
+<p>Potem usuń witrynę IIS, grupę aplikacji AD FS i GPO, a po archiwizacji usuń <code>C:\CompassHub</code>.</p>
+
+<h2 id="s13">13. Rozwiązywanie problemów</h2>
+<table>
+  <tr><th>Objaw</th><th>Przyczyna i rozwiązanie</th></tr>
+  <tr><td>Compass: certyfikat niezaufany / UnknownIssuer; przeglądarka pokazuje „Niezabezpieczona”</td><td>Stacja nie ufa głównemu urzędowi certyfikatu huba. Rozdaj główny urząd CA (krok 8), potem uruchom ponownie przeglądarkę i Compass.</td></tr>
+  <tr><td>Logowanie firmowe kończy się na <code>https://hub.firma.pl/adfs/…</code> albo błędem 404</td><td>ARR przepisuje przekierowanie. Ustaw <code>reverseRewriteHostInResponseHeaders</code> = False (krok 5).</td></tr>
+  <tr><td>„&lt;nazwa&gt; is not in any group of the hub (…): ask the administrator for access”</td><td>Osoba nie należy do żadnej grupy ról albo brakuje oświadczenia <code>groups</code>. Sprawdź regułę „Token-Groups - Unqualified Names → groups” i zakres <code>allatclaims</code>.</td></tr>
+  <tr><td>„A local user of the hub has the same name”</td><td>Zmień nazwę lub usuń tego lokalnego użytkownika w zakładce Users.</td></tr>
+  <tr><td>Compass: „Hub zespołu albo serwer przed nim nie odpowiada poprawnie (502)”</td><td>Usługa jest zatrzymana albo się uruchamia: <code>Get-Service CompassHub</code>, potem hub.log.</td></tr>
+  <tr><td>Compass: „Logowanie do huba zespołu wygasło”</td><td>Minęło 12 godzin albo zginął sessions.json. Zaloguj się ponownie w Ustawienia → Zespół.</td></tr>
+  <tr><td>„the hub has no AI key for you”</td><td>Brak wpisu <code>ai.keys</code> dla osoby, jej roli albo <code>*</code>.</td></tr>
+  <tr><td>„your AI limit for today is used up”</td><td>Podnieś <code>ai.limits</code> dla osoby lub roli albo poczekaj do następnego dnia.</td></tr>
+  <tr><td>„secret '…' is not set: give it as LOONAR_SECRET_…”</td><td>Brak zmiennej <code>…_FILE</code> w <code>Environment</code> usługi albo plik jest pusty lub nieczytelny dla SYSTEM.</td></tr>
+  <tr><td>hub.log: „&lt;adres&gt;: 20 wrong tokens, refused for 10 minutes”</td><td>Z jednego adresu przyszło 20 <b>różnych</b> błędnych tokenów (ten sam stary token liczy się raz). Prawidłowe tokeny dalej działają. Znajdź klienta w hub.log.</td></tr>
+  <tr><td>Duże pytania kończą się błędem 413 albo 404.13</td><td><code>maxAllowedContentLength</code> w web.config (krok 5).</td></tr>
+  <tr><td>Długie odpowiedzi kończą się 502.3 po 2 minutach</td><td><code>timeout</code> ARR (krok 5).</td></tr>
+  <tr><td>AD FS: MSIS7628 z <code>Grant-AdfsApplicationPermission</code> zaraz po instalacji AD FS</td><td>Farma jeszcze się uruchamia: powtórz polecenie po kilku minutach.</td></tr>
+  <tr><td>hub.log / AD FS: MSIS9622 „Client authentication failed”</td><td>Plik sekretu nie zgadza się z AD FS. Wygeneruj nowy sekret: <code>Set-AdfsServerApplication -TargetIdentifier &lt;client id&gt; -ResetClientSecret</code>, zapisz go do pliku, <code>Restart-Service CompassHub</code>.</td></tr>
+  <tr><td>Compass na Windows Server (np. Usługi pulpitu zdalnego): eksport do PDF nie działa albo pierwsze logowanie do Office jest blokowane</td><td>Compass tworzy PDF-y Wordem i PowerPointem na komputerze, na którym działa. Na Windows Server pierwsze logowanie do Office może blokować Konfiguracja zwiększonych zabezpieczeń programu IE (<code>odc.officeapps.live.com</code>): dodaj strony logowania Office do zaufanych albo wyłącz to ustawienie dla użytkowników w Menedżerze serwera.</td></tr>
+</table>
+
+<h2 id="s14">14. Linux i Docker</h2>
+<p>Ten sam hub działa w kontenerze. Folder danych (hub.json z <code>"listen": "0.0.0.0:8730"</code>, modele i pliki huba) jest montowany jako <code>/data</code> i musi być zapisywalny dla użytkownika 10001. Sekrety pochodzą ze zmiennych <code>LOONAR_SECRET_*</code> albo z sekretów Dockera przez <code>LOONAR_SECRET_*_FILE</code>:</p>
+<pre>docker run -d --name compass-hub -p 127.0.0.1:8730:8730 -v /srv/compass-hub:/data \
+  -e LOONAR_SECRET_CLAUDE_KEY_TEAM_FILE=/run/secrets/claude_key_team \
+  ghcr.io/loonar-eu/compass-hub:0.9.0</pre>
+<p>Przed nim postaw nginx albo inne proxy HTTPS, jak w kroku 5. Proxy ma nie zmieniać nagłówka <code>Location</code> przekierowań, przekazywać <code>X-Forwarded-For</code>, przyjmować zapytania do 32 MB i mieć limit czasu 5 minut. Dla modeli w SQL Server, MySQL lub Oracle zbuduj własny obraz na bazie tego i dodaj linuksowy sterownik ODBC producenta.</p>
+
+</body>
+</html>

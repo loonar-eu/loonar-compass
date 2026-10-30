@@ -5,7 +5,7 @@ trail, change sets with review, a web view for people without EA, Jira and Confl
 company sign-in (OpenID Connect), a read-only GraphQL API and tables for Power BI, and an MCP server for other AI tools.
 It needs no Enterprise Architect and runs on Windows or Linux.
 
-Full documentation: the "Compass Hub" chapter of the user guide at https://loonar.eu/docs/.
+Full documentation: the "Compass Hub" chapter of the user guide at https://loonar.eu/compass/docs/.
 Step-by-step installation on Windows Server with IIS, AD FS and Group Policy: the "Compass Hub – Installation guide
 for IT" (`docs/Hub_Installation_Guide.en.pdf`, Polish: `docs/Instalacja_huba.pdf`).
 

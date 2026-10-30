@@ -534,6 +534,58 @@ impl Job<'_> {
         Ok(object)
     }
 
+    /// The one diagram link of a connector on a diagram (LC-303). A diagram must have at most one link per connector:
+    /// EA uses the first, so an extra one (e.g. hidden by an earlier hide_connectors and added again by a script)
+    /// keeps the arrow invisible. Extra links are removed here, keeping a visible one when there is one; without any
+    /// link a new one is added.
+    fn single_link(&self, links: &Disp, cid: i32) -> Result<Disp> {
+        // EA's DiagramLinks collection shows one link per connector even when the table has more rows, so extra rows
+        // are removed in the table first (a visible one is kept).
+        if let Some(diagram_id) = links.items()?.first().and_then(|l| l.int("DiagramID").ok()) {
+            self.dedupe_links(diagram_id, Some(cid))?;
+        }
+        links.call("Refresh", &[])?;
+        let mut found: Vec<(i32, bool)> = Vec::new();
+        for (index, link) in links.items()?.iter().enumerate() {
+            if link.int("ConnectorID")? == cid {
+                found.push((index as i32, link.get("IsHidden")?.bool()));
+            }
+        }
+        if found.is_empty() {
+            let link = links.call_obj("AddNew", &[s(""), s("")])?;
+            link.set("ConnectorID", i(cid))?;
+            return Ok(link);
+        }
+        let keep = found.iter().find(|(_, hidden)| !hidden).unwrap_or(&found[0]).0;
+        for (index, _) in found.iter().rev().filter(|(index, _)| *index != keep) {
+            links.call("DeleteAt", &[(*index).into(), b(false)])?;
+        }
+        links.call("Refresh", &[])?;
+        for link in links.items()? {
+            if link.int("ConnectorID")? == cid {
+                return Ok(link);
+            }
+        }
+        bail!("{}", crate::i18n::fmt("The link of connector id={0} disappeared from the diagram.", &[cid.to_string()]))
+    }
+
+    /// Removes extra rows of t_diagramlinks on a diagram (one connector, or all): per connector the first visible row stays,
+    /// otherwise the first one. Returns how many rows were removed.
+    fn dedupe_links(&self, diagram_id: i32, cid: Option<i32>) -> Result<usize> {
+        let only = cid.map(|c| format!(" AND ConnectorID = {c}")).unwrap_or_default();
+        let count = |repo: &Disp| -> Result<usize> {
+            let xml = repo.call("SQLQuery", &[s(&format!("SELECT COUNT(*) AS n FROM t_diagramlinks WHERE DiagramID = {diagram_id}{only}"))])?.text();
+            Ok(xml_rows(&xml).first().and_then(|r| r.get("n")).and_then(|n| n.trim().parse().ok()).unwrap_or(0))
+        };
+        let before = count(&self.repo)?;
+        self.repo.call("Execute", &[s(&format!(
+            "DELETE FROM t_diagramlinks WHERE DiagramID = {diagram_id}{only} AND Instance_ID NOT IN (SELECT keep FROM (SELECT \
+             COALESCE(MIN(CASE WHEN Hidden = 0 THEN Instance_ID END), MIN(Instance_ID)) AS keep FROM t_diagramlinks \
+             WHERE DiagramID = {diagram_id}{only} GROUP BY ConnectorID) kept)"
+        ))])?;
+        Ok(before.saturating_sub(count(&self.repo)?))
+    }
+
     /// Removes the items with the given identifier from an EA collection. Error when nothing was removed.
     fn remove_from(&self, collection: &Disp, id_property: &str, id: i32, what: &str) -> Result<()> {
         collection.call("Refresh", &[])?;
@@ -789,8 +841,11 @@ impl Job<'_> {
                 let title = text_field(op, "name");
                 let connector = self.new_typed(&source.obj("Connectors")?, &title, &text_field(op, "type"), &text_field(op, "stereotype"))?;
                 connector.set("SupplierID", i(target.int("ElementID")?))?;
-                // A message of a sequence diagram belongs to that diagram and has its place in the order.
-                if !op["diagram"].is_null() {
+                // A message of a sequence (or communication) diagram belongs to that diagram and has its place in the order.
+                // Any other connector keeps DiagramID 0: a diagram id there binds it to that one diagram, and EA then
+                // draws it nowhere else and does not offer it in "Show/Hide Relation" (LC-303).
+                let is_message = matches!(text_field(op, "type").to_lowercase().as_str(), "sequence" | "collaboration");
+                if is_message && !op["diagram"].is_null() {
                     connector.set("DiagramID", i(self.diagram(&op["diagram"])?.int("DiagramID")?))?;
                 }
                 if let Some(n) = int_of(&op["sequence"]) {
@@ -913,9 +968,18 @@ impl Job<'_> {
                     bail!("{}", crate::i18n::tr("the report file must end with .docx, .pdf or .rtf"));
                 }
                 let template = op["template"].as_str().unwrap_or("Model Report").to_string();
-                let project = self.repo.call("GetProjectInterface", &[])?.object().ok_or_else(|| anyhow!("Project interface"))?;
                 let _ = std::fs::remove_file(&file);
-                project.call("RunReport", &[s(&package.text("PackageGUID")?), s(&template), s(&file)])?;
+                // The document generator works without windows; Project.RunReport opens the "Generate Documentation"
+                // dialog in EA 17 and writes nothing (found in the 0.9.2 live tests).
+                let generator = self.repo.call_obj("CreateDocumentGenerator", &[])?;
+                generator.call("NewDocument", &[s("")])?;
+                generator.call("DocumentPackage", &[i(package.int("PackageID")?), i(0), s(&template)])?;
+                // DocumentType: dtRTF = 0, dtHTML = 1, dtPDF = 2, dtDOCX = 3.
+                let kind = if lower.ends_with(".pdf") { 2 } else if lower.ends_with(".rtf") { 0 } else { 3 };
+                if !generator.call("SaveDocument", &[s(&file), i(kind)])?.bool() {
+                    let error = generator.call("GetLastError", &[]).map(|v| v.text()).unwrap_or_default();
+                    bail!("{} {error}", crate::i18n::fmt("EA did not create the report (template \"{0}\" may not exist)", &[template.clone()]));
+                }
                 let size = std::fs::metadata(&file).map(|m| m.len()).unwrap_or(0);
                 if size == 0 {
                     bail!("{}", crate::i18n::fmt("EA did not create the report (template \"{0}\" may not exist)", &[template]));
@@ -1427,21 +1491,58 @@ impl Job<'_> {
                 }
                 let hidden = op["hidden"].as_bool().unwrap_or(true);
                 let links = diagram.obj("DiagramLinks")?;
-                links.call("Refresh", &[])?;
-                let existing = links.items()?;
                 for cid in &ids {
-                    let link = match existing.iter().find(|l| l.int("ConnectorID").ok() == Some(*cid)) {
-                        Some(link) => link.clone(),
-                        None => {
-                            let link = links.call_obj("AddNew", &[s(""), s("")])?;
-                            link.set("ConnectorID", i(*cid))?;
-                            link
-                        }
-                    };
+                    let link = self.single_link(&links, *cid)?;
                     link.set("IsHidden", b(hidden))?;
                     link.update(crate::i18n::tr("connector visibility on the diagram"))?;
                 }
                 diagram.update(crate::i18n::tr("diagram"))?;
+            }
+            "repair_diagram_links" => {
+                // Connectors not visible on a diagram (LC-303): duplicate links of one connector are removed (a visible
+                // one is kept); with show_hidden also hidden links whose both ends are on the diagram are shown.
+                let diagram = self.diagram(&op["diagram"])?;
+                let diagram_id = diagram.int("DiagramID")?;
+                let show_hidden = op["show_hidden"].as_bool().unwrap_or(false);
+                // 1. Connectors between elements of this diagram bound to one diagram (t_connector.DiagramID) although
+                //    they are not messages: EA draws them only there. Unbound (0).
+                let ends = format!("SELECT Object_ID FROM t_diagramobjects WHERE Diagram_ID = {diagram_id}");
+                let bound_where = format!(
+                    "Connector_Type NOT IN ('Sequence', 'Collaboration') AND DiagramID <> 0 AND Start_Object_ID IN ({ends}) AND End_Object_ID IN ({ends})"
+                );
+                let bound = xml_rows(&self.repo.call("SQLQuery", &[s(&format!("SELECT COUNT(*) AS n FROM t_connector WHERE {bound_where}"))])?.text())
+                    .first()
+                    .and_then(|r| r.get("n"))
+                    .and_then(|n| n.trim().parse::<usize>().ok())
+                    .unwrap_or(0);
+                if bound > 0 {
+                    self.repo.call("Execute", &[s(&format!("UPDATE t_connector SET DiagramID = 0 WHERE {bound_where}"))])?;
+                }
+                // 2. Duplicate links of one connector (EA uses the first, often a hidden one).
+                let removed = self.dedupe_links(diagram_id, None)?;
+                let links = diagram.obj("DiagramLinks")?;
+                links.call("Refresh", &[])?;
+                let objects = diagram.obj("DiagramObjects")?;
+                objects.call("Refresh", &[])?;
+                let on_diagram: Vec<i32> = objects.items()?.iter().filter_map(|o| o.int("ElementID").ok()).collect();
+                let mut shown = 0usize;
+                // 3. With show_hidden: hidden links whose both ends are on the diagram.
+                for link in links.items()? {
+                    let cid = link.int("ConnectorID")?;
+                    if show_hidden && link.get("IsHidden")?.bool() {
+                        let ends = self.repo.call("GetConnectorByID", &[i(cid)]).ok().and_then(|v| v.object());
+                        if let Some(c) = ends {
+                            if on_diagram.contains(&c.int("ClientID")?) && on_diagram.contains(&c.int("SupplierID")?) {
+                                link.set("IsHidden", b(false))?;
+                                link.update(crate::i18n::tr("connector visibility on the diagram"))?;
+                                shown += 1;
+                            }
+                        }
+                    }
+                }
+                diagram.update(crate::i18n::tr("diagram"))?;
+                self.repo.call("ReloadDiagram", &[i(diagram_id)]).ok();
+                self.created.push(json!({ "key": op["key"], "kind": "diagram_links", "id": diagram_id, "unbound_from_one_diagram": bound, "duplicates_removed": removed, "hidden_shown": shown }));
             }
             "route_connector" => {
                 // Route of one connector on a diagram: bend points and the points where it touches the elements.
@@ -1481,16 +1582,7 @@ impl Job<'_> {
                     (p.0 - cx, -(p.1 - cy))
                 };
                 let links = diagram.obj("DiagramLinks")?;
-                links.call("Refresh", &[])?;
-                let existing = links.items()?.into_iter().find(|l| l.int("ConnectorID").ok() == Some(cid));
-                let link = match existing {
-                    Some(link) => link,
-                    None => {
-                        let link = links.call_obj("AddNew", &[s(""), s("")])?;
-                        link.set("ConnectorID", i(cid))?;
-                        link
-                    }
-                };
+                let link = self.single_link(&links, cid)?;
                 let mut style: Vec<String> = link
                     .text("Style")?
                     .split(';')
@@ -1563,17 +1655,8 @@ impl Job<'_> {
                 // A route given in this batch wins over a style of the whole diagram (no error when nothing is left).
                 connectors.retain(|c| !self.routed.contains(c));
                 let links = diagram.obj("DiagramLinks")?;
-                links.call("Refresh", &[])?;
-                let existing = links.items()?;
                 for cid in &connectors {
-                    let link = match existing.iter().find(|l| l.int("ConnectorID").ok() == Some(*cid)) {
-                        Some(link) => link.clone(),
-                        None => {
-                            let link = links.call_obj("AddNew", &[s(""), s("")])?;
-                            link.set("ConnectorID", i(*cid))?;
-                            link
-                        }
-                    };
+                    let link = self.single_link(&links, *cid)?;
                     // A style for the whole diagram keeps lines that already have their own route (bend points);
                     // naming the connectors changes them too.
                     if wanted.is_none() && !link.text("Path").unwrap_or_default().trim().is_empty() {
@@ -1649,7 +1732,21 @@ impl Job<'_> {
                     }
                 };
                 let project = self.repo.call_obj("GetProjectInterface", &[])?;
-                project.call("PutDiagramImageToFile", &[s(&diagram.text("DiagramGUID")?), s(&text_field(op, "path")), i(1)])?;
+                let scale = op["scale"].as_f64().unwrap_or(1.0) as f32;
+                if scale > 1.0 {
+                    // A sharper image (LC-305): EA saves the diagram as a metafile (vector) and Windows draws it larger.
+                    // The size of EA's own bitmap is the base: the metafile is drawn `scale` times larger.
+                    let path = text_field(op, "path");
+                    project.call("PutDiagramImageToFile", &[s(&diagram.text("DiagramGUID")?), s(&path), i(1)])?;
+                    let (w, h) = image::image_dimensions(&path).map_err(|e| anyhow!("{e}"))?;
+                    let emf = std::env::temp_dir().join(format!("loonar_{}.emf", uuid::Uuid::new_v4().simple()));
+                    project.call("PutDiagramImageToFile", &[s(&diagram.text("DiagramGUID")?), s(&emf.to_string_lossy()), i(0)])?;
+                    let drawn = crate::emf::emf_to_png(&emf, std::path::Path::new(&path), (w as f32 * scale) as u32, (h as f32 * scale) as u32);
+                    let _ = std::fs::remove_file(&emf);
+                    drawn?;
+                } else {
+                    project.call("PutDiagramImageToFile", &[s(&diagram.text("DiagramGUID")?), s(&text_field(op, "path")), i(1)])?;
+                }
             }
             "delete_package" => {
                 let package = self.package(&op["package"])?;

@@ -18,6 +18,86 @@ use serde_json::{json, Value};
 use std::cell::Cell;
 
 
+/// The width of attached images in the description (LC-305).
+static IMAGE_WIDTH_SCHEMA: std::sync::LazyLock<Value> = std::sync::LazyLock::new(|| {
+    json!({ "type": "integer", "description": "Jira Server / Data Center: the width in pixels the images are shown with in the description; omitted = their own size (diagram images are exported at twice the size, sharp). To resize an image already in the description, change its markup there with jira_update_issue: !file.png|width=900!" })
+});
+
+/// What the user asked for in a document and where the document covers it (LC-308).
+static DOC_CHECKLIST_SCHEMA: std::sync::LazyLock<Value> = std::sync::LazyLock::new(|| {
+    json!({ "type": "array", "minItems": 1,
+            "items": { "type": "object", "properties": {
+                "ask": { "type": "string", "description": "One thing the user asked for, in their words." },
+                "where": { "type": "string", "description": "The heading of the section that covers it, exactly as in the markdown (or a phrase quoted from the document)." }
+            }, "required": ["ask", "where"] },
+            "description": "Every request of the user about this document from the whole conversation (content, sections, each requirement or item they named, sources such as Jira issues or pages, images, diagrams, format, language, length), one item each, with where the document covers it. Write it BEFORE the markdown, then make the markdown cover every item. An item you cannot cover still gets a section marked \"to be completed\" with the reason." })
+});
+
+/// The template a document follows (LC-308).
+static DOC_TEMPLATE_SCHEMA: std::sync::LazyLock<Value> = std::sync::LazyLock::new(|| {
+    json!({ "type": "string", "description": "The name of the template from <templates> that the document follows (read it with read_template first and keep every heading of it, in its order), or \"none\" when no template fits." })
+});
+
+/// Normalised heading or phrase: lower case, without #, numbering and punctuation at the ends.
+fn doc_key(text: &str) -> String {
+    let t = text.trim().trim_start_matches('#').trim();
+    let t = t.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.' || c == ')').trim();
+    t.trim_matches(|c: char| c.is_ascii_punctuation() || c.is_whitespace()).replace("**", "").to_lowercase()
+}
+
+/// Document discipline (LC-308): before a document or page is made, every request of the user has a place in it and
+/// every heading of the chosen template is there. Returns a line for the result, or an error telling what is missing.
+fn doc_discipline(input: &Value, markdown: &str, ctx: &ToolContext) -> Result<String> {
+    let items = input["checklist"].as_array().filter(|a| !a.is_empty()).with_context(|| {
+        "Not made: first list in \"checklist\" every request of the user about this document (from the whole conversation: content, sections, each requirement or item they named, sources, images, format) with the section that covers it, then call again."
+    })?;
+    let text = markdown.to_lowercase();
+    let headings: Vec<String> = markdown.lines().filter(|l| l.trim_start().starts_with('#')).map(doc_key).collect();
+    let mut missing = Vec::new();
+    for item in items {
+        let ask = item["ask"].as_str().unwrap_or("").trim();
+        let place = doc_key(item["where"].as_str().unwrap_or(""));
+        if ask.is_empty() || place.is_empty() || !(headings.iter().any(|h| h.contains(&place)) || text.contains(&place)) {
+            missing.push(format!("- {ask} → \"{}\"", item["where"].as_str().unwrap_or("")));
+        }
+    }
+    let mut problems = Vec::new();
+    if !missing.is_empty() {
+        problems.push(format!("These requests have no place in the document (the section or phrase is not in the markdown):
+{}", missing.join("
+")));
+    }
+    let template = input["template"].as_str().unwrap_or("").trim();
+    if !template.is_empty() && !template.eq_ignore_ascii_case("none") {
+        let content = crate::templates::read(&ctx.cfg.templates_dir, template)?;
+        let lacking: Vec<String> = content
+            .lines()
+            .filter(|l| l.trim_start().starts_with('#'))
+            .map(|l| (l.trim().to_string(), doc_key(l)))
+            .filter(|(_, k)| !k.is_empty() && !k.contains(['<', '{', '[']))
+            .filter(|(_, k)| !headings.iter().any(|h| h.contains(k.as_str())))
+            .map(|(l, _)| format!("- {l}"))
+            .collect();
+        if !lacking.is_empty() {
+            problems.push(format!("Headings of the template \"{template}\" missing in the document (keep each, in order; mark what you do not know \"to be completed\"):
+{}", lacking.join("
+")));
+        }
+    }
+    if !problems.is_empty() {
+        bail!("Not made yet - complete the document and call again.
+{}", problems.join("
+"));
+    }
+    Ok(format!("Checked: {} requests of the user have their place in the document{}.", items.len(), if template.is_empty() || template.eq_ignore_ascii_case("none") { String::new() } else { format!(", all headings of the template \"{template}\" are there") }))
+}
+
+/// The attachments of the Jira tools (LC-304).
+static ATTACHMENTS_SCHEMA: std::sync::LazyLock<Value> = std::sync::LazyLock::new(|| {
+    json!({ "type": "array", "items": { "type": "string" },
+            "description": "Files to attach: diagram:ID (an image of the diagram exported from the model), image:FILE_NAME (an image shown in this conversation) or file:FILE_NAME (another file of the conversation, e.g. a document you made)." })
+});
+
 /// The questions that are asked in every approval mode (they send something outside the model or run code), by kind.
 /// After the first one of a kind, the approval card offers to approve all of that kind until Compass is closed.
 const SAVE_SCRIPT_QUESTION: &str = "Save the EA script {0}.{1} ({2}, {3} lines){4}:\n{5}";
@@ -25,6 +105,7 @@ const RUN_SCRIPT_QUESTION: &str = "Run the EA script {0}.{1} ({2}) in the open E
 const JIRA_CREATE_QUESTION: &str = "Create a Jira issue in project {0}:\n{1}: {2}\n\n{3}";
 const JIRA_ADD_QUESTION: &str = "Add to the Jira issue {0}:\n{1}";
 const JIRA_UPDATE_QUESTION: &str = "Change the Jira issue {0}:\n{1}";
+const JIRA_ATTACH_QUESTION: &str = "Attach to the Jira issue {0}:\n{1}";
 const CONFLUENCE_REPLACE_QUESTION: &str = "Publishing to Confluence will REPLACE the content of an existing page:\n\"{0}\" (ID {1}, version {2}) in space {3}.\nThe previous version stays in the page history.";
 const CONFLUENCE_NEW_QUESTION: &str = "Publishing a new page to Confluence:\n\"{0}\" in space {1}";
 const MEMORY_SAVE_QUESTION: &str = "Save a note to the assistant's memory:\n\"{0}\"\n{1}";
@@ -36,7 +117,7 @@ pub const SHAREPOINT_UPLOAD_QUESTION: &str = "Upload {0} to {1}: {2}/{3}";
 /// Kinds of always-asked actions: (kind, its questions, the button of the approval card).
 const TRUSTABLE: &[(&str, &[&str], &str)] = &[
     ("script", &[SAVE_SCRIPT_QUESTION, RUN_SCRIPT_QUESTION], "Approve all scripts until Compass is closed"),
-    ("jira", &[JIRA_CREATE_QUESTION, JIRA_ADD_QUESTION, JIRA_UPDATE_QUESTION], "Approve all Jira issues until Compass is closed"),
+    ("jira", &[JIRA_CREATE_QUESTION, JIRA_ADD_QUESTION, JIRA_UPDATE_QUESTION, JIRA_ATTACH_QUESTION], "Approve all Jira issues until Compass is closed"),
     ("confluence", &[CONFLUENCE_REPLACE_QUESTION, CONFLUENCE_NEW_QUESTION], "Approve all Confluence publishing until Compass is closed"),
     ("memory", &[MEMORY_SAVE_QUESTION, MEMORY_REMOVE_QUESTION], "Approve all memory notes until Compass is closed"),
     ("mcp", &[MCP_QUESTION], "Approve all MCP tool calls until Compass is closed"),
@@ -310,7 +391,16 @@ set_linked_document {element, text} (the element's linked document (Ctrl+Alt+D i
 set_swimlanes {diagram, lanes: [{title, width?, color?}], orientation?} (diagram swimlanes (Diagram → Swimlanes), replaces existing ones; orientation vertical (default) or horizontal); \
 set_composite {element, diagram} (links the element to an existing diagram as its composite diagram (in EA: New Child Diagram → Composite → Select Composite Diagram): when the element is double-clicked, EA opens that diagram instead of the properties; this is how you link a BPMN subprocess to the subprocess diagram, also when the diagram is in an ordinary package; in the database the linked element has t_object.ntype = 8 and the diagram id in the pdata1 column); \
 create_attribute {element, name, type?, visibility?, notes?, default?, stereotype?, alias?} (a class attribute, visibility: Public|Private|Protected|Package); create_operation {element, name, return_type?, visibility?, notes?, stereotype?, alias?, parameters?: [{name, type}]} (a class operation with parameters; alias is the operation's alias in EA, e.g. the REST path of an endpoint: set it here, no script is needed); update_attribute {attribute, name?, type?, visibility?, notes?, default?, stereotype?, alias?, static?} and delete_attribute {attribute} (attribute = t_attribute.id); update_operation {operation, name?, return_type?, visibility?, notes?, stereotype?, alias?, static?} and delete_operation {operation} (operation = t_operation.operationid); clone_package {package, name?, key?} (a copy of the package with all its contents next to the original, e.g. a variant to experiment with); update_scenario {element, scenario, name?, type?, notes?, steps?} (changes an existing structured scenario found by its name or GUID; steps, when given, replace all steps); delete_scenario {element, scenario}; create_scenario {element, name, type?, notes?, steps: [{text, actor?, uses?, results?}]} (a STRUCTURED SCENARIO of an element, e.g. a use case: the Scenarios tab of the element, with numbered steps; ALWAYS use this, never notes, when the user asks for scenarios, flows or structured scenarios; type: Basic Path (default), Alternate or Exception; actor = true for a step done by the actor, false for the system; in the database t_objectscenarios, steps in its xmlcontent); add_glossary_term {term, type?, meaning, forms?: [..]} (a term in the EA PROJECT GLOSSARY, the list EA highlights in notes and documents with its meaning - not a model element; t_glossary holds the terms; EA highlights only the exact written form, so for a Polish term ALWAYS pass in forms every inflected form of it: singular and plural in all seven cases from the nominative to the vocative, for a multi-word term the whole phrase inflected; type: the one the user names, otherwise Glossary (the type appears in EA once used); ask the user for the meaning if they did not give it); create_baseline {package, version, notes?} (saves a version of the package in the model; ALWAYS make a baseline before deleting from or substantially restructuring an existing package that you did not create in this conversation, and tell the user they can restore it in EA: package in the browser → Manage Baselines → Compare/Restore; baselines are in t_document with doctype = 'Baseline'); \
-update_diagram {diagram, name?, notes?, stereotype?} (changes the name, notes or stereotype of an existing diagram); hide_connectors {diagram, connectors, hidden?} (hides the given connectors on this one diagram only, a list of ids from t_connector.connector_id; hidden=false shows them again; the connectors stay in the model and on other diagrams, so this is how you declutter a dense diagram instead of deleting relationships; in the database: t_diagramlinks.hidden); \
+update_diagram {diagram, name?, notes?, stereotype?} (changes the name, notes or stereotype of an existing diagram); repair_diagram_links {diagram, show_hidden?} \
+(connectors not visible on a diagram although both ends are on it. It fixes, in this order: connectors that are not messages but are bound to one \
+diagram (t_connector.diagramid <> 0: EA draws them only on that diagram) - set back to 0; duplicate links of one connector in t_diagramlinks (EA uses \
+the first, often a hidden one); with show_hidden: true, hidden links whose both ends are on the diagram. When the user says arrows or relationships are \
+missing on a diagram, check in this order with db_query: t_connector.diagramid of the connectors between the diagram's elements (non-zero outside \
+sequence/communication messages = the cause), then t_diagramlinks rows with hidden = 1 and connectorid with more than one row (select connectorid, \
+count(*) from t_diagramlinks where diagramid = N group by connectorid having count(*) > 1); then repair with this operation. An empty geometry or path \
+is fine, EA then draws a straight line - never blame it first. Never add or change t_diagramlinks rows or t_connector.diagramid with SQL or an EA \
+script: use hide_connectors, route_connector, set_line_style or this operation); \
+hide_connectors {diagram, connectors, hidden?} (hides the given connectors on this one diagram only, a list of ids from t_connector.connector_id; hidden=false shows them again; the connectors stay in the model and on other diagrams, so this is how you declutter a dense diagram instead of deleting relationships; in the database: t_diagramlinks.hidden); \
 route_connector {diagram, connector, start?, points?, end?} (routes one connector along the given path, e.g. following the user's sketch: start = [x, y] the attachment point on the edge of the source element, end = [x, y] the attachment point on the edge of the target element, points = a list of bend points [[x, y], ...]; coordinates as in place (pixels from the top-left corner of the diagram, Y axis downwards), and take the element positions from t_diagramobjects (rectleft, -recttop, rectright, -rectbottom); for purely horizontal and vertical lines, each successive point (from start through points to end) must have the same x or y coordinate as the previous one; example: from the left side of element B to the left, then up to the bottom side of element A: start at the middle of B's left side, one bend point below the middle of A at the height of start, end at the middle of A's bottom side; connector = t_connector.connector_id); \
 set_line_style {diagram, style, connectors?} (the routing of connector lines on the diagram, as in EA Line Style: style = direct (straight) | auto (automatic) | custom (manually bent) | orthogonal_square (orthogonal) | orthogonal_rounded (orthogonal, rounded) | tree_vertical | tree_horizontal | lateral_vertical | lateral_horizontal; connectors = a list of connector ids (t_connector.connector_id), without it all connectors between the diagram's elements get the style; bend points are cleared; in the database the style is in t_diagramlinks.style as Mode= and TREE=); \
 set_bounds {diagram, element, left?, top?, width?, height?} (moves or resizes an element that is already on the diagram; connectors are kept; omitted fields stay unchanged; for enlarging frames, pools, lanes and subprocesses, instead of removing them and placing them again); \
@@ -419,9 +509,11 @@ drawn earlier with render_image (NAME from its result). Use it when the user ask
                     "file_name": { "type": "string", "description": "File name without extension." },
                     "title": { "type": "string", "description": "Title at the beginning of the document (optional)." },
                     "markdown": { "type": "string", "description": "Document content in Markdown." },
-                    "format": { "type": "string", "enum": ["docx", "pdf", "both"], "description": "docx (default), pdf (made with Microsoft Word on this computer) or both." }
+                    "format": { "type": "string", "enum": ["docx", "pdf", "both"], "description": "docx (default), pdf (made with Microsoft Word on this computer) or both." },
+                    "checklist": DOC_CHECKLIST_SCHEMA.clone(),
+                    "template": DOC_TEMPLATE_SCHEMA.clone(),
                 },
-                "required": ["file_name", "markdown"]
+                "required": ["file_name", "markdown", "checklist", "template"]
             }
         },
         {
@@ -480,10 +572,29 @@ Optionally adds a web link, e.g. to the model element (title \"EA: name\", url e
                     "description": { "type": "string", "description": "Plain text; one paragraph per line." },
                     "labels": { "type": "array", "items": { "type": "string" } },
                     "parent": { "type": "string", "description": "Optionally the parent issue (epic or story) key." },
+                    "attachments": ATTACHMENTS_SCHEMA.clone(),
+                    "image_width": IMAGE_WIDTH_SCHEMA.clone(),
                     "link_url": { "type": "string" },
                     "link_title": { "type": "string" }
                 },
                 "required": ["summary"]
+            }
+        },
+        {
+            "name": "jira_attach",
+            "description": "Adds files to an existing Jira issue: images of diagrams straight from the model (diagram:ID), images shown in this \
+conversation (image:FILE_NAME) or other files of the conversation (file:FILE_NAME, e.g. a Word document you made). On Jira Server / Data Center the \
+images are also shown in the description. jira_create_issue and jira_update_issue take the same attachments, so a new issue gets its diagrams in the \
+same step. The user approves it (once for all Jira changes if they choose).",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "key": { "type": "string" },
+                    "attachments": ATTACHMENTS_SCHEMA.clone(),
+                    "image_width": IMAGE_WIDTH_SCHEMA.clone(),
+                    "show_in_description": { "type": "boolean", "description": "Jira Server / Data Center: also show the images at the end of the description (default true)." }
+                },
+                "required": ["key", "attachments"]
             }
         },
         {
@@ -498,7 +609,9 @@ conversation. The user approves it (once for all Jira changes if they choose).",
                     "summary": { "type": "string" },
                     "description": { "type": "string", "description": "The whole new description, plain text; one paragraph per line." },
                     "add_labels": { "type": "array", "items": { "type": "string" } },
-                    "remove_labels": { "type": "array", "items": { "type": "string" } }
+                    "remove_labels": { "type": "array", "items": { "type": "string" } },
+                    "attachments": ATTACHMENTS_SCHEMA.clone(),
+                    "image_width": IMAGE_WIDTH_SCHEMA.clone()
                 },
                 "required": ["key"]
             }
@@ -518,6 +631,20 @@ conversation. The user approves it (once for all Jira changes if they choose).",
             }
         },
         {
+            "name": "jira_download_attachments",
+            "description": "Downloads the attachments of a Jira issue (jira_issue lists them) into this conversation: images come back so you can see them \
+and go into documents and pages as ![caption](image:NAME) (create_document, create_confluence_page) or to other issues as image:NAME (jira_attach); \
+other files as file:NAME. Use it when a document, page or analysis should include or describe pictures from Jira (screens, mock-ups, diagrams).",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "key": { "type": "string", "description": "Issue key, e.g. PRJ-123." },
+                    "names": { "type": "array", "items": { "type": "string" }, "description": "Only these file names (default: all, at most 20)." }
+                },
+                "required": ["key"]
+            }
+        },
+        {
             "name": "create_confluence_page",
             "description": "Prepares a Confluence page: the page code in the source editor format (storage XHTML) and the images as attachments. The user gets a card \
 with the \"Copy page code\" and \"Open images folder\" buttons. Content in Markdown: # headings, paragraphs, **bold**, `code`, lists, tables, [link](url), \
@@ -529,9 +656,11 @@ and stick to its structure; template lines starting with \"> \" are hints for yo
                 "type": "object",
                 "properties": {
                     "title": { "type": "string", "description": "Page title." },
-                    "markdown": { "type": "string", "description": "Page content." }
+                    "markdown": { "type": "string", "description": "Page content." },
+                    "checklist": DOC_CHECKLIST_SCHEMA.clone(),
+                    "template": DOC_TEMPLATE_SCHEMA.clone(),
                 },
-                "required": ["title", "markdown"]
+                "required": ["title", "markdown", "checklist", "template"]
             }
         },
         {
@@ -696,6 +825,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "create_presentation" => create_presentation(input, ctx),
         "create_spreadsheet" => create_spreadsheet(input, ctx),
         "create_confluence_page" => create_confluence_page(input, ctx),
+        "jira_download_attachments" => jira_download_attachments(input, ctx),
         "publish_confluence" => publish_confluence(input, ctx),
         "confluence_pages" => confluence_pages(ctx.cfg).map(Into::into),
         "confluence_read" => confluence_read(input, ctx.cfg).map(Into::into),
@@ -774,6 +904,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "jira_create_issue" => jira_create_issue(input, ctx).map(Into::into),
         "jira_comment" => jira_comment(input, ctx).map(Into::into),
         "jira_update_issue" => jira_update_issue(input, ctx).map(Into::into),
+        "jira_attach" => jira_attach(input, ctx).map(Into::into),
         "gap_analysis" => crate::governance::gap(input, ctx.cfg).map(Into::into),
         "operation_usage" => operation_usage(input, ctx.cfg).map(Into::into),
         "ea_ui" => {
@@ -821,7 +952,8 @@ fn picture(ctx: &ToolContext, source: &str) -> Result<Vec<u8>> {
     if let Some(id) = source.strip_prefix("diagram:") {
         let id: i64 = id.trim().parse().context(crate::i18n::tr("diagram id"))?;
         let path = std::env::temp_dir().join(format!("loonar_img_{}.png", uuid::Uuid::new_v4().simple()));
-        let op = json!({ "op": "export_diagram", "diagram": id, "path": path.to_string_lossy() });
+        // Images for Jira, Confluence and documents: twice the size, drawn from the diagram's vectors (LC-305).
+        let op = json!({ "op": "export_diagram", "diagram": id, "path": path.to_string_lossy(), "scale": 2.0 });
         ea::run_batch(ctx.cfg, &[op], &BatchOptions::default())?;
         let png = std::fs::read(&path).with_context(|| crate::i18n::fmt("EA did not save the image of diagram {0}", &[id.to_string()]))?;
         let _ = std::fs::remove_file(&path);
@@ -1014,6 +1146,7 @@ fn ea_script(input: &Value, ctx: &ToolContext) -> Result<String> {
             let group = input["group"].as_str().filter(|g| !g.trim().is_empty()).unwrap_or("Compass").to_string();
             let language = input["language"].as_str().unwrap_or("JScript").to_string();
             let code = input["code"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["code".to_string()]))?.to_string();
+            refuse_alias_script(&code)?;
             let (statements, updated) = crate::scripts::save_statements(ctx.cfg, &group, &name, &language, &code)?;
             // A script in the model can be run later by anyone from EA: saving it is always asked, with the whole code.
             ctx.approver.confirm_script("save", &code, &crate::i18n::fmt(SAVE_SCRIPT_QUESTION, &[
@@ -1031,6 +1164,7 @@ fn ea_script(input: &Value, ctx: &ToolContext) -> Result<String> {
             let s = crate::scripts::find(ctx.cfg, &name)?;
             // The whole code with its includes is shown, and exactly that code runs.
             let resolved = crate::scripts::resolve_includes(ctx.cfg, &s)?;
+            refuse_alias_script(&resolved)?;
             ctx.approver.confirm_script("run", &resolved, &crate::i18n::fmt(RUN_SCRIPT_QUESTION, &[s.group.clone(), s.name.clone(), s.language.clone(), script_for_approval(&resolved)?]))?;
             crate::scripts::run(ctx.cfg, &name, &resolved)
         }
@@ -1066,7 +1200,15 @@ fn jira_create_issue(input: &Value, ctx: &ToolContext) -> Result<String> {
     }
     let summary = input["summary"].as_str().unwrap_or("").trim().to_string();
     let issue_type = input["type"].as_str().unwrap_or("Task").to_string();
-    let description = input["description"].as_str().unwrap_or("").to_string();
+    let mut description = input["description"].as_str().unwrap_or("").to_string();
+    let files = jira_files(ctx, input)?;
+    // Jira Server / Data Center shows attached images in the description through wiki markup.
+    if !connection.cloud() {
+        let markup = jira_image_markup(&files.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>(), input["image_width"].as_u64());
+        if !markup.is_empty() {
+            description = format!("{}\n\n{markup}", description.trim_end());
+        }
+    }
     let labels: Vec<String> = input["labels"].as_array().into_iter().flatten().filter_map(|v| v.as_str()).map(String::from).collect();
     let parent = input["parent"].as_str();
     let link = input["link_url"].as_str().filter(|s| !s.trim().is_empty());
@@ -1080,20 +1222,195 @@ fn jira_create_issue(input: &Value, ctx: &ToolContext) -> Result<String> {
     if let Some(l) = link {
         extra.push(format!("🔗 {l}"));
     }
+    if !files.is_empty() {
+        extra.push(jira_files_lines(&files));
+    }
     ctx.approver.confirm_kind("jira", &crate::i18n::fmt(JIRA_CREATE_QUESTION, &[project.clone(), issue_type.clone(), summary.clone(), format!("{}{}", shorten_for_approval(&description), if extra.is_empty() { String::new() } else { format!("\n\n{}", extra.join("\n")) })]))?;
     let (key, url) = connection.create_issue(&project, &issue_type, &summary, &description, &labels, parent)?;
+    let attached = jira_upload(&connection, &key, files)?;
     if let Some(link) = link {
         connection.add_web_link(&key, link, input["link_title"].as_str().unwrap_or(link))?;
     }
-    Ok(crate::i18n::fmt("Created the Jira issue {0}: {1}", &[key, url]))
+    let note = if attached.is_empty() { String::new() } else { format!(" {}", crate::i18n::fmt("Attached: {0}", &[attached.join(", ")])) };
+    Ok(format!("{}{note}", crate::i18n::fmt("Created the Jira issue {0}: {1}", &[key, url])))
 }
 
 /// Comment or web link on an existing issue: always with the user's consent.
+/// The files to attach to a Jira issue (LC-304): diagram:ID (an image exported from the model), image:NAME or file:NAME (a
+/// file of the conversation's attachments). Returns (file name, bytes).
+fn jira_files(ctx: &ToolContext, input: &Value) -> Result<Vec<(String, Vec<u8>)>> {
+    let mut files = Vec::new();
+    for source in input["attachments"].as_array().into_iter().flatten().filter_map(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty()) {
+        if let Some(id) = source.strip_prefix("diagram:") {
+            let id: i64 = id.trim().parse().context(crate::i18n::tr("diagram id"))?;
+            let name = query_rows(ctx.cfg, &format!("select name from t_diagram where diagram_id = {id}"))?
+                .first()
+                .and_then(|r| r.first().cloned())
+                .with_context(|| crate::i18n::fmt("there is no diagram with id {0}", &[id.to_string()]))?;
+            files.push((format!("{}.png", crate::history::sanitize_name(&name)), picture(ctx, source)?));
+        } else if let Some(stored) = source.strip_prefix("image:").or_else(|| source.strip_prefix("file:")) {
+            let stored = std::path::Path::new(stored.trim()).file_name().context(crate::i18n::tr("image name"))?.to_string_lossy().to_string();
+            let bytes = std::fs::read(ctx.cfg.attachments_dir.join(&stored)).with_context(|| crate::i18n::fmt("there is no file {0} in this conversation", &[stored.clone()]))?;
+            files.push((crate::history::display_name(&stored).to_string(), bytes));
+        } else {
+            bail!("{}", crate::i18n::fmt("unknown attachment '{0}' (use diagram:ID, image:FILE_NAME or file:FILE_NAME)", &[source.to_string()]));
+        }
+    }
+    if files.len() > 20 {
+        bail!("{}", crate::i18n::tr("at most 20 files at once"));
+    }
+    Ok(files)
+}
+
+thread_local! {
+    /// Downloaded images the model already saw in this answer (an answer runs on one thread): not shown twice.
+    static SHOWN_IN_ANSWER: std::cell::RefCell<std::collections::HashSet<String>> = std::cell::RefCell::new(std::collections::HashSet::new());
+}
+
+/// A new answer: images shown in earlier answers are not in the model's view any more (the history keeps texts).
+pub fn begin_answer() {
+    SHOWN_IN_ANSWER.with(|s| s.borrow_mut().clear());
+}
+
+/// Aliases of attributes and operations are written by ea_write, not by a script (found in the 0.9.2 lab tests: a
+/// small model wrote alias scripts again and again, each asking for approval, and the aliases were not saved).
+fn refuse_alias_script(code: &str) -> Result<()> {
+    let lower = code.to_lowercase();
+    let sets_alias = [".alias", ".styleex"].iter().any(|p| lower.split(p).skip(1).any(|rest| rest.trim_start().starts_with('=') && !rest.trim_start().starts_with("==")));
+    if sets_alias && (lower.contains("attribute") || lower.contains("method") || lower.contains("operation")) {
+        bail!("Not saved and not run: aliases of attributes and operations are set with ea_write, without a script and without approval cards: \
+update_attribute {{attribute, alias}} and update_operation {{operation, alias}} (ids from t_attribute.id and t_operation.operationid; many in one ea_write call). \
+Element aliases: update_element {{element, alias}}.");
+    }
+    Ok(())
+}
+
+/// Images the model sees from one jira_download_attachments call (each costs about 1 500 tokens in every later round).
+const DOWNLOADED_IMAGES_SHOWN: usize = 4;
+
+/// Downloads attachments of an issue into the conversation's files (LC-309).
+fn jira_download_attachments(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
+    let key = input["key"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["key".to_string()]))?.trim().to_string();
+    let wanted: Vec<String> = input["names"].as_array().into_iter().flatten().filter_map(|v| v.as_str()).map(|n| n.trim().to_lowercase()).filter(|n| !n.is_empty()).collect();
+    let connection = jira(ctx.cfg)?;
+    let all = connection.attachments(&key)?;
+    let chosen: Vec<_> = all.iter().filter(|(name, _, _)| wanted.is_empty() || wanted.contains(&name.to_lowercase())).take(20).collect();
+    if chosen.is_empty() {
+        let names = all.iter().map(|(n, _, _)| n.as_str()).collect::<Vec<_>>().join(", ");
+        return Ok(format!("{key} has no such attachments. Attachments: {}", if names.is_empty() { "none" } else { &names }).into());
+    }
+    std::fs::create_dir_all(&ctx.cfg.attachments_dir).context(crate::i18n::tr("attachments folder"))?;
+    let (mut lines, mut images) = (Vec::new(), Vec::new());
+    for (name, url, _) in chosen {
+        // Downloaded earlier in this conversation: the same file again, not shown again (the model saw it already;
+        // found in the 0.9.2 tests: four downloads of one issue doubled the prompt).
+        let suffix = format!("_{}_{}", key, crate::history::sanitize_name(name));
+        let earlier = std::fs::read_dir(&ctx.cfg.attachments_dir).ok().into_iter().flatten().flatten()
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .find(|f| f.len() == 32 + suffix.len() && f.ends_with(&suffix));
+        if let Some(stored) = earlier {
+            let lower = name.to_lowercase();
+            let image = [".png", ".jpg", ".jpeg", ".gif"].iter().any(|e| lower.ends_with(e));
+            let seen = SHOWN_IN_ANSWER.with(|s| s.borrow().contains(&stored));
+            if image && !seen && images.len() < DOWNLOADED_IMAGES_SHOWN {
+                SHOWN_IN_ANSWER.with(|s| s.borrow_mut().insert(stored.clone()));
+                images.push(stored.clone());
+                lines.push(format!("- {name}: image:{stored}"));
+            } else {
+                lines.push(format!("- {name}: {}:{stored}{}", if image { "image" } else { "file" }, if seen { " (you saw it earlier in this answer)" } else { "" }));
+            }
+            continue;
+        }
+        match connection.download(url) {
+            Ok(bytes) => {
+                let stored = format!("{}_{}_{}", uuid::Uuid::new_v4().simple(), key, crate::history::sanitize_name(name));
+                std::fs::write(ctx.cfg.attachments_dir.join(&stored), &bytes).with_context(|| crate::i18n::fmt("saving {0}", &[name.clone()]))?;
+                let lower = name.to_lowercase();
+                let image = [".png", ".jpg", ".jpeg", ".gif"].iter().any(|e| lower.ends_with(e));
+                if image && images.len() < DOWNLOADED_IMAGES_SHOWN {
+                    SHOWN_IN_ANSWER.with(|s| s.borrow_mut().insert(stored.clone()));
+                    images.push(stored.clone());
+                }
+                lines.push(format!("- {name}: {}:{stored}", if image { "image" } else { "file" }));
+            }
+            Err(e) => lines.push(format!("- {name}: not downloaded ({e:#})")),
+        }
+    }
+    let note = if images.len() == DOWNLOADED_IMAGES_SHOWN {
+        format!(" You see the first {DOWNLOADED_IMAGES_SHOWN} images; the others are in the conversation by their names: use them without downloading again.")
+    } else {
+        " Use these names; do not download them again.".to_string()
+    };
+    Ok(ToolOutput { text: format!("Attachments of {key} in this conversation:\n{}{note}", lines.join("\n")), images, files: Vec::new() })
+}
+
+/// The files of `jira_files` as lines of the approval question.
+fn jira_files_lines(files: &[(String, Vec<u8>)]) -> String {
+    files.iter().map(|(name, bytes)| format!("📎 {name} ({} KB)", bytes.len().div_ceil(1024))).collect::<Vec<_>>().join("\n")
+}
+
+/// Uploads the files to the issue; on Jira Server / Data Center the images are also shown in the description (wiki
+/// markup !name!) when `show_in` holds the description to extend. Returns the names Jira stored.
+fn jira_upload(connection: &crate::jira::Connection, key: &str, files: Vec<(String, Vec<u8>)>) -> Result<Vec<String>> {
+    let mut stored = Vec::new();
+    for (name, bytes) in files {
+        stored.push(connection.add_attachment(key, &name, bytes)?);
+    }
+    Ok(stored)
+}
+
+/// Wiki markup that shows the images in the description of a Jira Server / Data Center issue.
+/// `width`: the width in pixels the image is shown with; None = its own size (LC-305: thumbnails were too small to read).
+fn jira_image_markup(names: &[String], width: Option<u64>) -> String {
+    names
+        .iter()
+        .filter(|n| matches!(n.to_lowercase().rsplit('.').next(), Some("png" | "jpg" | "jpeg" | "gif")))
+        .map(|n| match width {
+            Some(w) => format!("!{n}|width={w}!"),
+            None => format!("!{n}!"),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn jira_attach(input: &Value, ctx: &ToolContext) -> Result<String> {
+    let connection = jira(ctx.cfg)?;
+    let key = input["key"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["key".to_string()]))?.trim().to_string();
+    let files = jira_files(ctx, input)?;
+    if files.is_empty() {
+        bail!("{}", crate::i18n::tr("no files to attach"));
+    }
+    ctx.approver.confirm_kind("jira", &crate::i18n::fmt(JIRA_ATTACH_QUESTION, &[key.clone(), jira_files_lines(&files)]))?;
+    let names: Vec<String> = files.iter().map(|(n, _)| n.clone()).collect();
+    let stored = jira_upload(&connection, &key, files)?;
+    // Jira Server / Data Center: the images also at the end of the description (unless the model says not to).
+    if !connection.cloud() && input["show_in_description"] != false {
+        let markup = jira_image_markup(&stored, input["image_width"].as_u64());
+        if !markup.is_empty() {
+            let current = connection.description(&key)?;
+            connection.update_issue(&key, None, Some(&format!("{}
+
+{markup}", current.trim_end())), &[], &[])?;
+        }
+    }
+    let _ = names;
+    Ok(format!("{} ({})", crate::i18n::fmt("Attached to the Jira issue {0}: {1}", &[key.clone(), stored.join(", ")]), connection.browse(&key)))
+}
+
 fn jira_update_issue(input: &Value, ctx: &ToolContext) -> Result<String> {
     let connection = jira(ctx.cfg)?;
     let key = input["key"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["key".to_string()]))?.trim().to_string();
     let summary = input["summary"].as_str().map(str::trim).filter(|s| !s.is_empty());
-    let description = input["description"].as_str();
+    let files = jira_files(ctx, input)?;
+    let with_images;
+    let description = match input["description"].as_str() {
+        // A new description on Jira Server / Data Center shows the attached images too.
+        Some(d) if !connection.cloud() && !jira_image_markup(&files.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>(), input["image_width"].as_u64()).is_empty() => {
+            with_images = format!("{}\n\n{}", d.trim_end(), jira_image_markup(&files.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>(), input["image_width"].as_u64()));
+            Some(with_images.as_str())
+        }
+        other => other,
+    };
     let list = |name: &str| -> Vec<String> { input[name].as_array().into_iter().flatten().filter_map(|v| v.as_str()).map(String::from).collect() };
     let (add, remove) = (list("add_labels"), list("remove_labels"));
     let mut what = Vec::new();
@@ -1109,8 +1426,14 @@ fn jira_update_issue(input: &Value, ctx: &ToolContext) -> Result<String> {
     if !remove.is_empty() {
         what.push(crate::i18n::fmt("remove labels: {0}", &[remove.join(", ")]));
     }
+    if !files.is_empty() {
+        what.push(jira_files_lines(&files));
+    }
     ctx.approver.confirm_kind("jira", &crate::i18n::fmt(JIRA_UPDATE_QUESTION, &[key.clone(), what.join("\n")]))?;
-    connection.update_issue(&key, summary, description, &add, &remove)?;
+    if summary.is_some() || description.is_some() || !add.is_empty() || !remove.is_empty() {
+        connection.update_issue(&key, summary, description, &add, &remove)?;
+    }
+    jira_upload(&connection, &key, files)?;
     Ok(crate::i18n::fmt("Changed the Jira issue {0}: {1}", &[key.clone(), connection.browse(&key)]))
 }
 
@@ -1146,6 +1469,7 @@ fn shorten_for_approval(text: &str) -> String {
 fn create_confluence_page(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
     let title = input["title"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["title".to_string()]))?;
     let markdown = input["markdown"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["markdown".to_string()]))?;
+    let checked = doc_discipline(input, markdown, ctx)?;
     std::fs::create_dir_all(&ctx.cfg.attachments_dir).context(crate::i18n::tr("attachments folder"))?;
     let (storage, attachments) = crate::confluence::to_storage(markdown, |source| picture(ctx, source))?;
     let stem = format!("{}_{}", uuid::Uuid::new_v4().simple(), crate::history::sanitize_name(title));
@@ -1166,16 +1490,18 @@ fn create_confluence_page(input: &Value, ctx: &ToolContext) -> Result<ToolOutput
     Ok(ToolOutput {
         text: format!(
             "Page \"{title}\" is ready: file {stored} ({} KB of code, images: {}). In the chat the user sees a card with the buttons \
-             \"Copy page code\" (to paste into the Confluence source editor) and \"Open images folder\" (to attach the images). {publish_hint}",
+             \"{}\" (to paste into the Confluence source editor) and \"{}\" (to attach the images). {publish_hint} {checked}",
             storage.len() / 1024,
-            attachments.len()
+            attachments.len(),
+            crate::i18n::tr("Copy page code"),
+            crate::i18n::tr("Open images folder")
         ),
         images: Vec::new(),
         files: vec![stored],
     })
 }
 
-fn confluence_connection(cfg: &AppConfig) -> Result<crate::confluence::Connection> {
+pub(crate) fn confluence_connection(cfg: &AppConfig) -> Result<crate::confluence::Connection> {
     if let Some((hub, token)) = crate::hub::via_hub(cfg, "confluence") {
         return Ok(crate::confluence::Connection { base_url: format!("{hub}/proxy/confluence"), user: String::new(), token, identity: None });
     }
@@ -1307,6 +1633,7 @@ fn create_document(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
     let markdown = input["markdown"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["markdown".to_string()]))?;
     let file_name = input["file_name"].as_str().unwrap_or(crate::i18n::tr("Document"));
     let title = input["title"].as_str().unwrap_or("");
+    let checked = doc_discipline(input, markdown, ctx)?;
     std::fs::create_dir_all(&ctx.cfg.attachments_dir).context(crate::i18n::tr("attachments folder"))?;
     let mut pictures = 0;
     let bytes = crate::docx::build(title, markdown, |source, caption| {
@@ -1326,11 +1653,11 @@ fn create_document(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         } else {
             let _ = std::fs::remove_file(ctx.cfg.attachments_dir.join(&stored));
         }
-        return Ok(ToolOutput { text: format!("Document \"{file_name}\" is ready as PDF{} (images: {pictures}). The user sees it in the chat.", if format == "both" { " and DOCX" } else { "" }), images: Vec::new(), files });
+        return Ok(ToolOutput { text: format!("Document \"{file_name}\" is ready as PDF{} (images: {pictures}). The user sees it in the chat. {checked}", if format == "both" { " and DOCX" } else { "" }), images: Vec::new(), files });
     }
     Ok(ToolOutput {
         text: format!(
-            "Document \"{file_name}.docx\" is ready ({} KB, images: {pictures}). The user sees it in the chat with the \"Open\" and \"Save as…\" buttons. It is kept only in Compass: do not name a folder or path for it; the user chooses where to keep it with \"Save as…\".",
+            "Document \"{file_name}.docx\" is ready ({} KB, images: {pictures}). The user sees it in the chat with the \"Open\" and \"Save as…\" buttons. It is kept only in Compass: do not name a folder or path for it; the user chooses where to keep it with \"Save as…\". {checked}",
             bytes.len() / 1024
         ),
         images: Vec::new(),
@@ -1776,7 +2103,8 @@ mod tests {
 
     /// The developer's app.properties; without it (CI) the default settings, enough for the tests that refuse before touching a model.
     fn test_config() -> AppConfig {
-        let props = Path::new(env!("CARGO_MANIFEST_DIR")).join("app.properties");
+        // LOONAR_TEST_PROPS points the live tests at another model (a file copy), like the EA tests.
+        let props = std::env::var("LOONAR_TEST_PROPS").map(std::path::PathBuf::from).unwrap_or_else(|_| Path::new(env!("CARGO_MANIFEST_DIR")).join("app.properties"));
         if props.exists() {
             return AppConfig::load(&props).expect("app.properties");
         }
@@ -1784,6 +2112,47 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("app.properties"), "").unwrap();
         AppConfig::load(&dir.join("app.properties")).unwrap()
+    }
+
+    /// LC-308: a document is made only when every request of the user and every heading of its template is in it.
+    #[test]
+    fn alias_scripts_are_refused() {
+        assert!(refuse_alias_script("var a = el.Attributes.GetAt(0); a.Alias = 'GET /x'; a.Update();").is_err());
+        assert!(refuse_alias_script("op = el.Methods.GetAt(i); op.StyleEx = 'alias=x'; op.Update();").is_err());
+        assert!(refuse_alias_script("if (el.Alias == 'x') Session.Output(el.Name);").is_ok());
+        assert!(refuse_alias_script("Session.Output(Repository.Models.Count);").is_ok());
+    }
+
+    #[test]
+    fn document_discipline() {
+        let mut cfg = test_config();
+        cfg.templates_dir = std::env::temp_dir().join(format!("loonar-doc-discipline-{}", std::process::id()));
+        std::fs::create_dir_all(&cfg.templates_dir).unwrap();
+        std::fs::write(cfg.templates_dir.join("Spec.md"), "# Spec
+## 1. Goal
+> hint
+## 2. Requirements
+## 3. Screens of <system>
+").unwrap();
+        let approver = Approver::new(ApprovalMode::Auto, Box::new(|_| true));
+        let ctx = ToolContext { cfg: &cfg, approver: &approver };
+        let md = "# Spec
+## 1. Goal
+Text.
+## 2. Requirements
+- W1 Login
+![Screen](image:a.png)
+";
+        let ask = |checklist: Value, template: &str| doc_discipline(&json!({ "checklist": checklist, "template": template }), md, &ctx);
+        assert!(ask(json!([]), "none").unwrap_err().to_string().contains("checklist"));
+        let missing = ask(json!([{ "ask": "W1", "where": "Requirements" }, { "ask": "W2 Logout", "where": "W2 Logout" }]), "none").unwrap_err().to_string();
+        assert!(missing.contains("W2 Logout") && !missing.contains("- W1"), "{missing}");
+        let ok = ask(json!([{ "ask": "each requirement", "where": "2. Requirements" }, { "ask": "screens from Jira", "where": "![Screen]" }]), "Spec").unwrap();
+        assert!(ok.contains("2 requests") && ok.contains("Spec"), "{ok}");
+        let lacking = doc_discipline(&json!({ "checklist": [{ "ask": "goal", "where": "Goal" }], "template": "Spec" }), "# Spec
+## Goal
+", &ctx).unwrap_err().to_string();
+        assert!(lacking.contains("## 2. Requirements") && !lacking.contains("<system>"), "{lacking}");
     }
 
     /// Persistent EA session: the first call starts EA (tens of seconds), the following ones reuse the open session.
@@ -2039,7 +2408,7 @@ for (var id in map) { var m = Repository.GetMethodByID(id); m.Style = map[id]; m
 mod trust_tests {
     #[test]
     fn approval_questions_are_recognised_by_kind() {
-        let jira = crate::i18n::fmt(super::JIRA_CREATE_QUESTION, &["ITSPX".into(), "Story".into(), "US-05".into(), "text".into()]);
+        let jira = crate::i18n::fmt(super::JIRA_CREATE_QUESTION, &["PROJX".into(), "Story".into(), "US-05".into(), "text".into()]);
         assert_eq!(super::trustable_kind(&jira).map(|k| k.0), Some("jira"));
         let page = crate::i18n::fmt(super::CONFLUENCE_NEW_QUESTION, &["T".into(), "PM".into()]);
         assert_eq!(super::trustable_kind(&page).map(|k| k.0), Some("confluence"));

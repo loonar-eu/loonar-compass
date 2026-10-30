@@ -45,8 +45,8 @@ const LICENSE_FILE: &str = "LICENSE.txt";
 const LICENSE_PL_FILE: &str = "LICENSE.pl.txt";
 const CHANGELOG_FILE: &str = "CHANGELOG.md";
 const NOTICES_FILE: &str = "THIRD-PARTY-NOTICES.txt";
-const URL_INFO: &str = "https://loonar.eu";
-const URL_HELP: &str = "https://loonar.eu/#faq";
+const URL_INFO: &str = "https://loonar.eu/compass/";
+const URL_HELP: &str = "https://loonar.eu/compass/#faq";
 const DEFAULT_EA_PATH: &str = r"C:\Program Files\Sparx Systems\EA\EA.exe";
 const CRASH_LOG: &str = "loonar-compass-setup-crash.log";
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -121,7 +121,7 @@ fn payload_changelog(lang: Lang) -> &'static [u8] {
 
 /// The user guide of this version on the website, in the installation language.
 fn docs_url(lang: Lang) -> String {
-    format!("https://loonar.eu/docs/{}/{}/", display_version(app_version()), lang.code())
+    format!("https://loonar.eu/compass/docs/{}/{}/", display_version(app_version()), lang.code())
 }
 
 /// File name of the user guide PDF that versions before 0.5 put into the program folder (removed on update).
@@ -649,19 +649,71 @@ fn read_install(product: &Product, scope: Scope) -> Option<Installed> {
 }
 
 /// Closes the application started from `dir` (its windows first, as a person would; whatever is still running after
-/// a few seconds is stopped), so that a failed installation can be retried (LC-284).
+/// a few seconds is stopped), so that a failed installation can be retried (LC-284). Done with Windows calls, without
+/// PowerShell (found in the 0.9.2 lab tests: the PowerShell way closed nothing there, silently). A copy whose path
+/// cannot be read (it runs with other rights) is asked to close its window, not stopped.
 fn close_app_in(dir: &Path) {
-    let exe = dir.join(APP_EXE).display().to_string().replace('\'', "''");
-    let script = format!(
-        "$p = Get-Process -Name LoonarCompass -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -eq '{exe}' }}; \
-         $p | ForEach-Object {{ [void]$_.CloseMainWindow() }}; \
-         for ($i = 0; $i -lt 20 -and ($p | Where-Object {{ -not $_.HasExited }})); $i++) {{ Start-Sleep -Milliseconds 250; $p | ForEach-Object {{ $_.Refresh() }} }}; \
-         $p | Where-Object {{ -not $_.HasExited }} | Stop-Process -Force -ErrorAction SilentlyContinue"
-    );
-    let _ = Command::new(windows_dir().join("System32").join("WindowsPowerShell").join("v1.0").join("powershell.exe"))
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .status();
+    use windows::Win32::Foundation::{CloseHandle, BOOL, HWND, LPARAM, WPARAM};
+    use windows::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS};
+    use windows::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, TerminateProcess, WaitForSingleObject, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE};
+    use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowThreadProcessId, IsWindowVisible, PostMessageW, WM_CLOSE};
+    use windows::core::PWSTR;
+
+    let exe = dir.join(APP_EXE);
+    // (process id, whether its path is the one in `dir`; false = the path could not be read)
+    let mut found: Vec<(u32, bool)> = Vec::new();
+    unsafe {
+        let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return };
+        let mut entry = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
+        let mut more = Process32FirstW(snapshot, &mut entry).is_ok();
+        while more {
+            let len = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
+            let name = String::from_utf16_lossy(&entry.szExeFile[..len]);
+            if name.eq_ignore_ascii_case(APP_EXE) {
+                let pid = entry.th32ProcessID;
+                let path = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok().and_then(|h| {
+                    let mut buf = [0u16; 1024];
+                    let mut size = buf.len() as u32;
+                    let ok = QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut size).is_ok();
+                    let _ = CloseHandle(h);
+                    ok.then(|| PathBuf::from(String::from_utf16_lossy(&buf[..size as usize])))
+                });
+                match path {
+                    Some(p) if same_path(&p, &exe) => found.push((pid, true)),
+                    None => found.push((pid, false)),
+                    _ => {}
+                }
+            }
+            more = Process32NextW(snapshot, &mut entry).is_ok();
+        }
+        let _ = CloseHandle(snapshot);
+        if found.is_empty() {
+            return;
+        }
+        // Its windows are asked to close (the application saves and ends as when the user closes it).
+        unsafe extern "system" fn ask_to_close(hwnd: HWND, data: LPARAM) -> BOOL {
+            let pids = &*(data.0 as *const Vec<u32>);
+            let mut pid = 0u32;
+            GetWindowThreadProcessId(hwnd, Some(&mut pid));
+            if pids.contains(&pid) && IsWindowVisible(hwnd).as_bool() {
+                let _ = PostMessageW(hwnd, WM_CLOSE, WPARAM(0), LPARAM(0));
+            }
+            BOOL(1)
+        }
+        let pids: Vec<u32> = found.iter().map(|(p, _)| *p).collect();
+        let _ = EnumWindows(Some(ask_to_close), LPARAM(&pids as *const Vec<u32> as isize));
+        for (pid, ours) in found {
+            let access = if ours { PROCESS_SYNCHRONIZE | PROCESS_TERMINATE } else { PROCESS_SYNCHRONIZE };
+            if let Ok(h) = OpenProcess(access, false, pid) {
+                // Up to 5 s to close by itself; then the one in `dir` is stopped.
+                if WaitForSingleObject(h, 5000).0 != 0 && ours {
+                    let _ = TerminateProcess(h, 1);
+                    let _ = WaitForSingleObject(h, 3000);
+                }
+                let _ = CloseHandle(h);
+            }
+        }
+    }
 }
 
 /// Whether this program is the uninstaller in `dir` (it cannot delete itself while it runs).
@@ -1288,7 +1340,10 @@ fn save_user_settings(c: &ConfigForm, lang: Lang) -> Result<Vec<String>> {
         ("telemetry.notice", "shown".to_string()),
     ])?;
     if !c.configure_now {
-        return Ok(vec![crate::i18n::tr("Settings: to be completed in the application, in the \"Settings\" view").to_string()]);
+        // An update keeps the settings (found in the 0.9.2 lab tests: the finish page said they were to be completed).
+        let configured = !new_file && std::fs::read_to_string(&props).is_ok_and(|t| config::parse_properties(&t).contains_key("model.source"));
+        let note = if configured { crate::i18n::tr("Settings: kept from the earlier installation") } else { crate::i18n::tr("Settings: to be completed in the application, in the \"Settings\" view") };
+        return Ok(vec![note.to_string()]);
     }
     let mode = config::ApprovalMode::parse(&c.approval_mode)?;
     let mut updates: Vec<(&str, String)> = vec![
@@ -2283,7 +2338,7 @@ impl Setup {
         ui.add_space(10.0);
         ui.label(bold(crate::i18n::tr("Prerequisites:"), 14.5));
         for line in [
-            crate::i18n::tr("• the EA model is a file (.qea, .qeax) or is in a PostgreSQL database,"),
+            crate::i18n::tr("• the EA model is a file (.qea, .qeax) or is in a database (PostgreSQL, SQL Server, MySQL/MariaDB or Oracle),"),
             crate::i18n::tr("• a model in a database has user security enabled (Enable Security) and a user account for the assistant (any name)."),
         ] {
             ui.label(line);
@@ -2380,7 +2435,7 @@ impl Setup {
         ui.add_space(6.0);
         ui.horizontal_wrapped(|ui| {
             ui.label(crate::i18n::tr("Only the author sees the data; summaries over all installations together are published:"));
-            ui.hyperlink_to(crate::i18n::tr("Published statistics"), "https://compass-feedback.loonar-eu.workers.dev/v1/summary");
+            ui.hyperlink_to(crate::i18n::tr("Published statistics"), crate::i18n::current().stats_url());
         });
         ui.add_space(12.0);
         ui.checkbox(&mut self.config.statistics, egui::RichText::new(crate::i18n::tr("Send anonymous usage statistics (recommended)")).strong());
@@ -2706,6 +2761,17 @@ fn mode_label(mode: &str) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    /// LC-284: a running copy of the application in LOONAR_TEST_APP_DIR is closed (run it first, then
+    /// `cargo test close_app_live -- --ignored --nocapture`).
+    #[test]
+    #[ignore = "requires a running copy of the application"]
+    fn close_app_live() {
+        let dir = PathBuf::from(std::env::var("LOONAR_TEST_APP_DIR").unwrap());
+        let started = std::time::Instant::now();
+        close_app_in(&dir);
+        println!("closed in {} ms", started.elapsed().as_millis());
+    }
+
     /// Registers the add-in of the installed copy (manual: `cargo test register_installed_addin -- --ignored`).
     #[test]
     #[ignore]

@@ -26,8 +26,6 @@ use std::time::{Duration, Instant};
 /// The feedback service (statistics and bug reports). `LOONAR_FEEDBACK_URL` replaces it (https, or http on this
 /// computer for tests).
 pub const SERVICE_URL: &str = "https://compass-feedback.loonar-eu.workers.dev";
-/// The public repository with the statistics.
-pub const STATS_URL: &str = "https://compass-feedback.loonar-eu.workers.dev/v1/summary";
 /// Days kept: sent ones (shown in the view) and unsent ones (waiting for a connection).
 const KEEP_DAYS: i64 = 30;
 /// Counters are written to disk at most this often (and at the end of every answer).
@@ -448,11 +446,15 @@ pub fn install_id() -> String {
     id
 }
 
-/// A new identifier: later days can no longer be joined with the earlier ones.
+/// A new identifier: later days can no longer be joined with the earlier ones. What was counted and not sent yet
+/// (also today so far) is deleted, so nothing from before goes under the new identifier (found in the 0.9.2 lab tests).
 pub fn new_install_id() -> String {
-    if let Some(dir) = STATE.lock().unwrap().as_ref().map(|s| s.dir.clone()) {
-        let _ = std::fs::remove_file(dir.join("install_id"));
+    if let Some(state) = STATE.lock().unwrap().as_mut() {
+        let _ = std::fs::remove_file(state.dir.join("install_id"));
+        state.counters = Map::new();
+        state.dirty = false;
     }
+    discard_unsent();
     install_id()
 }
 
@@ -530,33 +532,37 @@ pub fn today_preview() -> Option<Value> {
     day_summary(&today())
 }
 
-/// "Windows 10" / "Windows 11" and the build number.
+/// "Windows 10" / "Windows 11" / "Windows Server" and the build number.
 fn os_name() -> String {
-    let version = os_build();
-    match version {
+    let server = os_value("InstallationType").is_some_and(|t| t.eq_ignore_ascii_case("Server"));
+    match os_value("CurrentBuildNumber").and_then(|b| b.parse::<u32>().ok()) {
+        Some(build) if server => format!("Windows Server ({build})"),
         Some(build) if build >= 22000 => format!("Windows 11 ({build})"),
         Some(build) => format!("Windows 10 ({build})"),
         None => std::env::consts::OS.to_string(),
     }
 }
 
+/// A text value under HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion (CurrentBuildNumber, InstallationType: Client
+/// or Server, found in the 0.9.2 lab tests: Windows Server 2022 was reported as Windows 10).
 #[cfg(windows)]
-fn os_build() -> Option<u32> {
-    use windows::core::w;
+fn os_value(name: &str) -> Option<String> {
+    use windows::core::{w, PCWSTR};
     use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ};
-    let mut buf = [0u16; 32];
+    let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut buf = [0u16; 64];
     let mut size = (buf.len() * 2) as u32;
     let ok = unsafe {
-        RegGetValueW(HKEY_LOCAL_MACHINE, w!("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion"), w!("CurrentBuildNumber"), RRF_RT_REG_SZ, None, Some(buf.as_mut_ptr() as *mut _), Some(&mut size))
+        RegGetValueW(HKEY_LOCAL_MACHINE, w!("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion"), PCWSTR(wide.as_ptr()), RRF_RT_REG_SZ, None, Some(buf.as_mut_ptr() as *mut _), Some(&mut size))
     };
     if ok.is_err() {
         return None;
     }
-    String::from_utf16_lossy(&buf).trim_end_matches('\0').trim().parse().ok()
+    Some(String::from_utf16_lossy(&buf).trim_end_matches('\0').trim().to_string())
 }
 
 #[cfg(not(windows))]
-fn os_build() -> Option<u32> {
+fn os_value(_name: &str) -> Option<String> {
     None
 }
 

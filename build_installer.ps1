@@ -66,7 +66,11 @@ function Assert-NoBuildPaths([string]$file) {
         [Text.Encoding]::Unicode.GetString($bytes),
         [Text.Encoding]::Unicode.GetString($bytes, 1, $bytes.Length - 1)
     )
-    foreach ($needle in @($env:USERNAME, $root, 'Users\')) {
+    # A user name shorter than 5 characters also turns up by chance in the binary (e.g. "mgl" in "ProgramglTexParameteri"
+    # of the OpenGL loader); 'Users\' still catches a profile path then.
+    $needles = @($root, 'Users\')
+    if ($env:USERNAME.Length -ge 5) { $needles += $env:USERNAME }
+    foreach ($needle in $needles) {
         foreach ($text in $texts) {
             if ($text.IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
                 throw "$file contains the build path fragment '$needle' (check --remap-path-prefix and the PDB path)"

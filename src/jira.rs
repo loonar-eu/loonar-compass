@@ -86,8 +86,14 @@ pub fn to_adf(text: &str) -> Value {
 }
 
 /// The Jira address without the part of a page copied from the browser (".../browse/KEY-1", "/projects/...").
+/// The largest attachment downloaded (bytes).
+const MAX_DOWNLOAD: usize = 25 << 20;
+
 pub fn base(url: &str) -> String {
-    crate::net::site_base(url, &["/browse", "/projects", "/secure", "/rest", "/issues", "/plugins"])
+    // Also the pages of Jira Cloud under /jira/… (found in the 0.9.2 lab tests: …/jira/software/projects/X/boards/1 kept
+    // "/jira/software").
+    crate::net::site_base(url, &["/browse", "/projects", "/secure", "/rest", "/issues", "/plugins", "/jira/software", "/jira/core", "/jira/servicemanagement",
+        "/jira/servicedesk", "/jira/your-work", "/jira/for-you", "/jira/projects", "/jira/dashboards", "/jira/plans", "/jira/boards", "/jira/filters"])
 }
 
 impl Connection {
@@ -117,6 +123,9 @@ impl Connection {
         let status = response.status();
         let text = response.text().unwrap_or_default();
         if !status.is_success() {
+            if crate::net::asks_for_client_certificate(status.as_u16(), &text) {
+                bail!("{}", crate::i18n::fmt("{0}: the server asks for a client certificate (mTLS): choose its file (.p12, .pfx or .pem) and password in Settings", &[what.to_string()]));
+            }
             let parsed = serde_json::from_str::<Value>(&text).ok();
             let message = parsed
                 .as_ref()
@@ -176,11 +185,14 @@ impl Connection {
         check_issue_key(key)?;
         let client = self.client()?;
         let value = self.send(
-            client.get(self.url(&format!("/issue/{key}"))).query(&[("fields", "summary,status,issuetype,priority,assignee,reporter,labels,description,issuelinks,comment,parent,fixVersions,components,updated")]),
+            client.get(self.url(&format!("/issue/{key}"))).query(&[("fields", "summary,status,issuetype,priority,assignee,reporter,labels,description,issuelinks,comment,parent,fixVersions,components,updated,attachment")]),
             crate::i18n::tr("reading the issue"),
         )?;
         let f = &value["fields"];
-        let mut out = vec![format!("{key}: {}", f["summary"].as_str().unwrap_or(""))];
+        // The link from the issue's own address ("self"): right also through the team hub, whose proxy address is no
+        // page for a person (found in the 0.9.2 lab tests).
+        let link = value["self"].as_str().and_then(|u| u.find("/rest/").map(|i| format!("{}/browse/{key}", &u[..i]))).unwrap_or_else(|| self.browse(key));
+        let mut out = vec![format!("{key}: {}", f["summary"].as_str().unwrap_or("")), format!("{}: {link}", crate::i18n::tr("Link"))];
         let names = |list: &Value| list.as_array().into_iter().flatten().filter_map(|v| v["name"].as_str().or(v.as_str())).collect::<Vec<_>>().join(", ");
         out.push(format!(
             "{}: {} | {}: {} | {}: {} | {}: {}",
@@ -217,6 +229,15 @@ impl Connection {
                 out.push(format!("\n{}:\n{}", crate::i18n::tr("Web links"), web.join("\n")));
             }
         }
+        let attached: Vec<String> = f["attachment"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|a| format!("- {} ({} KB)", a["filename"].as_str().unwrap_or(""), a["size"].as_u64().unwrap_or(0).div_ceil(1024)))
+            .collect();
+        if !attached.is_empty() {
+            out.push(format!("\n{} (jira_download_attachments):\n{}", crate::i18n::tr("Attachments"), attached.join("\n")));
+        }
         let comments = f["comment"]["comments"].as_array().cloned().unwrap_or_default();
         if !comments.is_empty() {
             out.push(format!("\n{}:", crate::i18n::fmt("Comments ({0}, the latest 10)", &[comments.len().to_string()])));
@@ -251,14 +272,21 @@ impl Connection {
                 fields["parent"] = json!({ "key": parent });
             } else {
                 // Jira Server / Data Center: "parent" is only for sub-tasks; a story or task joins its epic through the
-                // "Epic Link" field ("Issue type … is not a sub-task but a parent is specified" otherwise).
-                let field = self.epic_link_field()?;
-                fields[field.as_str()] = json!(parent);
+                // "Epic Link" field ("Issue type … is not a sub-task but a parent is specified" otherwise). A Jira without
+                // that field joins epics through "parent" too: Jira Cloud behind the team hub (its address is the hub's,
+                // so it does not look like Cloud; found in the 0.9.2 lab tests, LC-T92) and Data Center 10.
+                match self.epic_link_field() {
+                    Ok(field) => fields[field.as_str()] = json!(parent),
+                    Err(_) => fields["parent"] = json!({ "key": parent }),
+                }
             }
         }
         let created = self.send(self.client()?.post(self.url("/issue")).json(&json!({ "fields": fields })), crate::i18n::tr("creating the issue"))?;
         let key = created["key"].as_str().context(crate::i18n::tr("Jira did not return the issue key"))?.to_string();
-        Ok((key.clone(), self.browse(&key)))
+        // The link from the new issue's own address ("self"), as when an issue is read: through the team hub the
+        // connection's address is the hub's proxy, which a person's browser cannot open (401; LC-T92 in the lab).
+        let link = created["self"].as_str().and_then(|u| u.find("/rest/").map(|i| format!("{}/browse/{key}", &u[..i]))).unwrap_or_else(|| self.browse(&key));
+        Ok((key, link))
     }
 
     /// Whether the issue type is a sub-task type (Jira Server / Data Center).
@@ -300,6 +328,86 @@ impl Connection {
         }
         self.send(self.client()?.put(self.url(&format!("/issue/{key}"))).json(&json!({ "fields": fields, "update": update })), crate::i18n::tr("changing the issue"))?;
         Ok(())
+    }
+
+    /// The description of an issue as stored (wiki text on Server / Data Center; on Cloud the ADF as JSON text).
+    pub fn description(&self, key: &str) -> Result<String> {
+        check_issue_key(key)?;
+        let issue = self.send(self.client()?.get(self.url(&format!("/issue/{key}"))).query(&[("fields", "description")]), crate::i18n::tr("reading the issue"))?;
+        Ok(match &issue["fields"]["description"] {
+            Value::String(text) => text.clone(),
+            Value::Null => String::new(),
+            other => other.to_string(),
+        })
+    }
+
+    /// Adds a file to an issue (LC-304), e.g. the image of a diagram. Returns the file name Jira stored it under.
+    pub fn add_attachment(&self, key: &str, name: &str, bytes: Vec<u8>) -> Result<String> {
+        check_issue_key(key)?;
+        let lower = name.to_lowercase();
+        let mime = match lower.rsplit('.').next().unwrap_or("") {
+            "png" => "image/png",
+            "jpg" | "jpeg" => "image/jpeg",
+            "gif" => "image/gif",
+            "svg" => "image/svg+xml",
+            "pdf" => "application/pdf",
+            "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "txt" | "md" | "csv" => "text/plain",
+            _ => "application/octet-stream",
+        };
+        let part = reqwest::blocking::multipart::Part::bytes(bytes).file_name(name.to_string()).mime_str(mime).context(crate::i18n::tr("adding the attachment"))?;
+        let form = reqwest::blocking::multipart::Form::new().part("file", part);
+        // Jira refuses uploads without this header (XSRF protection).
+        let added = self.send(
+            self.client()?.post(self.url(&format!("/issue/{key}/attachments"))).header("X-Atlassian-Token", "no-check").multipart(form),
+            crate::i18n::tr("adding the attachment"),
+        )?;
+        Ok(added[0]["filename"].as_str().unwrap_or(name).to_string())
+    }
+
+    /// The attachments of an issue: file name, address of the content, size in bytes (LC-309).
+    pub fn attachments(&self, key: &str) -> Result<Vec<(String, String, u64)>> {
+        check_issue_key(key)?;
+        let value = self.send(self.client()?.get(self.url(&format!("/issue/{key}"))).query(&[("fields", "attachment")]), crate::i18n::tr("reading the issue"))?;
+        Ok(value["fields"]["attachment"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|a| Some((a["filename"].as_str()?.to_string(), a["content"].as_str()?.to_string(), a["size"].as_u64().unwrap_or(0))))
+            .collect())
+    }
+
+    /// The content of an attachment. Only from this Jira (with the sign-in); Jira Cloud then sends the file from
+    /// Atlassian's media service (a signed address, fetched without the sign-in).
+    pub fn download(&self, content_url: &str) -> Result<Vec<u8>> {
+        let site = base(&self.base_url).trim_end_matches('/').to_lowercase();
+        if !content_url.to_lowercase().starts_with(&format!("{site}/")) {
+            bail!("{}", crate::i18n::fmt("the attachment {0} is not in this Jira", &[content_url.to_string()]));
+        }
+        let what = crate::i18n::tr("downloading the attachment");
+        let request = self.client()?.get(content_url);
+        let request = if self.user.trim().is_empty() { request.bearer_auth(&self.token) } else { request.basic_auth(self.user.trim(), Some(&self.token)) };
+        let mut response = request.send().with_context(|| crate::i18n::fmt("{0}: no connection to Jira", &[what.to_string()]))?;
+        if response.status().is_redirection() {
+            let target = response.headers().get("location").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+            let url = reqwest::Url::parse(&target).with_context(|| what.to_string())?;
+            let host = url.host_str().unwrap_or("").to_lowercase();
+            if url.scheme() != "https" || !(host.ends_with(".atlassian.com") || host.ends_with(".atlassian.net")) {
+                bail!("{}", crate::i18n::fmt("{0}: Jira sent the file from another address ({1})", &[what.to_string(), host]));
+            }
+            let media = reqwest::blocking::Client::builder().redirect(reqwest::redirect::Policy::none()).timeout(Duration::from_secs(120)).build()?;
+            response = media.get(url).send().with_context(|| what.to_string())?;
+        }
+        if !response.status().is_success() {
+            bail!("{}", crate::i18n::fmt("{0}: Jira replied {1}: {2}", &[what.to_string(), response.status().to_string(), String::new()]));
+        }
+        let bytes = response.bytes().with_context(|| what.to_string())?;
+        if bytes.len() > MAX_DOWNLOAD {
+            bail!("{}", crate::i18n::fmt("{0}: the file is larger than {1} MB", &[what.to_string(), (MAX_DOWNLOAD >> 20).to_string()]));
+        }
+        Ok(bytes.to_vec())
     }
 
     pub fn add_comment(&self, key: &str, text: &str) -> Result<()> {
@@ -408,6 +516,7 @@ pub mod mock {
                             }
                         }
                         ("PUT", p) if p.starts_with("/issue/ARCH-7") => (204, json!(null)),
+                        ("POST", p) if p.ends_with("/attachments") => (200, json!([{"id": "10001", "filename": "Order process.png"}])),
                         ("GET", "/issuetype") => (200, json!([{"name":"Story","subtask":false},{"name":"Sub-task","subtask":true}])),
                         ("GET", "/field") => (200, json!([{"id":"summary","name":"Summary","schema":{}},{"id":"customfield_10006","name":"Epic Link","schema":{"custom":"com.pyxis.greenhopper.jira:gh-epic-link"}}])),
                         ("POST", p) if p.ends_with("/comment") => (201, json!({"id":"1"})),
@@ -426,6 +535,25 @@ pub mod mock {
 
 #[cfg(test)]
 mod tests {
+    /// LC-309 on a real Jira Cloud (the file comes from Atlassian's media service): LOONAR_TEST_JIRA_URL, _USER, _TOKEN and
+    /// LOONAR_TEST_JIRA_ISSUE (an issue with a PNG attachment).
+    #[test]
+    #[ignore = "requires a Jira account (LOONAR_TEST_JIRA_*)"]
+    fn attachments_download_live() {
+        let env = |k: &str| std::env::var(k).unwrap();
+        let c = Connection { base_url: env("LOONAR_TEST_JIRA_URL"), user: env("LOONAR_TEST_JIRA_USER"), token: env("LOONAR_TEST_JIRA_TOKEN"), identity: None };
+        let key = env("LOONAR_TEST_JIRA_ISSUE");
+        assert!(c.issue(&key).unwrap().contains("jira_download_attachments"));
+        let list = c.attachments(&key).unwrap();
+        let (name, url, size) = list.iter().find(|(n, _, _)| n.ends_with(".png")).expect("a PNG");
+        let bytes = c.download(url).unwrap();
+        println!("DOWNLOADED {name} {} of {size} bytes", bytes.len());
+        assert!(bytes.starts_with(&[0x89, b'P', b'N', b'G']) && bytes.len() as u64 == *size);
+        let other = c.download("https://example.com/x.png");
+        println!("REJECTED an address outside this Jira: {}", other.as_ref().err().map(|e| e.to_string()).unwrap_or_else(|| "NOT rejected".into()));
+        assert!(other.is_err());
+    }
+
     use super::*;
 
     fn connection(mock: &mock::Mock, cloud: bool, token: &str) -> Connection {
@@ -476,7 +604,8 @@ mod tests {
             jira.create_issue("ARCH", "Story", "Under the epic", "x", &[], Some("ARCH-1")).unwrap();
             jira.create_issue("ARCH", "Sub-task", "A step", "x", &[], Some("ARCH-7")).unwrap();
             jira.add_comment("ARCH-7", "Checked against the model.").unwrap();
-            jira.update_issue("ARCH-7", None, Some("Clean text"), &["p1805".into()], &["old label".into()]).unwrap();
+            jira.update_issue("ARCH-7", None, Some("Clean text"), &["release-1".into()], &["old label".into()]).unwrap();
+            assert_eq!(jira.add_attachment("ARCH-7", "Order process.png", vec![137, 80, 78, 71]).unwrap(), "Order process.png");
             assert!(jira.update_issue("ARCH-7", None, None, &[], &[]).is_err());
             jira.add_web_link("ARCH-7", "ea://{1234}", "EA: PaymentGateway").unwrap();
 
@@ -491,7 +620,7 @@ mod tests {
             let step = requests.iter().find(|r| r.0 == "POST" && r.1.ends_with("/issue") && r.2["fields"]["summary"] == "A step").unwrap();
             assert_eq!(step.2["fields"]["parent"]["key"], "ARCH-7");
             let changed = requests.iter().find(|r| r.0 == "PUT").unwrap();
-            assert_eq!(changed.2["update"]["labels"], json!([{"add":"p1805"},{"remove":"old_label"}]));
+            assert_eq!(changed.2["update"]["labels"], json!([{"add":"release-1"},{"remove":"old_label"}]));
             assert!(changed.2["fields"]["summary"].is_null() && !changed.2["fields"]["description"].is_null());
             let created = requests.iter().find(|r| r.0 == "POST" && r.1.ends_with("/issue")).unwrap();
             assert_eq!(created.2["fields"]["labels"], json!(["from_model"]));

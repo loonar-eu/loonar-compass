@@ -6,7 +6,7 @@
 
 <p align="center">
   A free AI assistant for <b>Sparx Enterprise Architect</b>: talk to your model in plain language.<br>
-  <a href="https://loonar.eu">loonar.eu</a> · English · Polski · Deutsch · Français
+  <a href="https://loonar.eu/compass/">loonar.eu/compass</a> · English · Polski · Deutsch · Français
 </p>
 
 ---
@@ -34,7 +34,7 @@ your own API key.
 
 ## Download
 
-Get the installer from **[loonar.eu](https://loonar.eu)**. The installer starts with a language
+Get the installer from **[loonar.eu/compass](https://loonar.eu/compass/)**. The installer starts with a language
 choice and keeps your settings and conversations on update. The current version is not digitally
 signed yet, so Windows SmartScreen may warn about an unknown publisher; compare the SHA-256 checksum
 shown on the download page.

@@ -146,6 +146,35 @@ impl Drive {
         Ok(id)
     }
 
+    /// The id of the folder to upload into: like `folder_id`, but missing folders of the name path are created, as
+    /// OneDrive does (LC-282: "send it to the folder Compass-test" ended with "there is no folder" on Google Drive).
+    pub fn upload_folder_id(&self, folder: &str) -> Result<String> {
+        let folder = folder.trim().trim_matches('/');
+        if folder.is_empty() || folder.eq_ignore_ascii_case("root") || (!folder.contains('/') && looks_like_id(folder)) {
+            return self.folder_id(folder);
+        }
+        let mut id = "root".to_string();
+        for part in folder.split('/').map(str::trim).filter(|p| !p.is_empty()) {
+            id = match self.child(&id, part, true)? {
+                Some(item) => item["id"].as_str().unwrap_or("").to_string(),
+                None => self.create_folder(&id, part)?,
+            };
+        }
+        Ok(id)
+    }
+
+    fn create_folder(&self, parent: &str, name: &str) -> Result<String> {
+        let response = self
+            .http
+            .post(format!("{}/files", self.api))
+            .bearer_auth(&self.token)
+            .query(&[("supportsAllDrives", "true"), ("fields", "id")])
+            .json(&json!({ "name": name, "mimeType": FOLDER, "parents": [parent] }))
+            .send()?;
+        let answer: Value = Self::check(response)?.json()?;
+        answer["id"].as_str().map(String::from).with_context(|| crate::i18n::fmt("there is no folder {0} in Google Drive", &[name.to_string()]))
+    }
+
     /// A file by its name path ("Projects/2026/Spec").
     pub fn item_at(&self, path: &str) -> Result<Value> {
         let path = path.trim().trim_matches('/');
@@ -280,7 +309,7 @@ pub fn run(input: &Value, ctx: &crate::tools::ToolContext) -> Result<String> {
             let name = input["name"].as_str().map(str::trim).filter(|n| !n.is_empty()).map(String::from).unwrap_or_else(|| crate::history::display_name(&file).to_string());
             let shown = if folder.is_empty() || folder.eq_ignore_ascii_case("root") { crate::i18n::tr("My Drive").to_string() } else { folder.to_string() };
             ctx.approver.confirm_upload(&crate::i18n::fmt(crate::tools::GDRIVE_UPLOAD_QUESTION, &[name.clone(), shown]))?;
-            let parent = drive.folder_id(folder)?;
+            let parent = drive.upload_folder_id(folder)?;
             let url = drive.upload(&parent, &name, &std::fs::read(&local)?)?;
             Ok(format!("Uploaded to Google Drive: {url}"))
         }
@@ -312,12 +341,13 @@ pub fn definition() -> Value {
         "description": "The user's Google Drive (their own Google account, signed in in the browser on first use; set up in Settings): \
 list a folder (action list, folder = folder id or name path like \"Projects/2026\", empty = My Drive) or find files by name (action list, query), \
 read a file's text (action read, id or path: Google Docs, Sheets (as CSV), Slides, PDF, Word, PowerPoint, Visio, Excel, text) \
-or upload a file you created in this conversation (action upload, file = its name in the attachments folder, folder, optional name; the user approves every upload).",
+or upload a file you created in this conversation (action upload, file = its name in the attachments folder, folder, optional name; the user approves every upload; \
+a folder of the path that does not exist yet is created by the upload, so upload straight to the folder the user named).",
         "input_schema": {
             "type": "object",
             "properties": {
                 "action": { "type": "string", "enum": ["list", "read", "upload"] },
-                "folder": { "type": "string", "description": "folder id or name path from My Drive (\"Projects/2026\"); empty or \"root\" = My Drive" },
+                "folder": { "type": "string", "description": "folder id or name path from My Drive (\"Projects/2026\"); empty or \"root\" = My Drive; upload creates missing folders" },
                 "query": { "type": "string", "description": "list: text to find in file names (instead of folder)" },
                 "id": { "type": "string", "description": "read: file id (from list)" },
                 "path": { "type": "string", "description": "read: name path of the file (\"Projects/2026/Spec\")" },
@@ -420,8 +450,17 @@ mod tests {
                     (200, b"item,cost\nlicence,100".to_vec())
                 } else if path == "/drive/v3/files/md-1" && param(&target, "alt") == "media" {
                     (200, b"# Order\nW2 The order is paid.".to_vec())
+                } else if path == "/drive/v3/files" && method == "POST" {
+                    // A missing folder of an upload path is created (LC-282).
+                    if body.contains(r#""name":"Reports""#) && body.contains(FOLDER) && body.contains(r#""parents":["root"]"#) {
+                        (200, br#"{"id":"f-new"}"#.to_vec())
+                    } else {
+                        (400, br#"{"error":{"message":"bad folder"}}"#.to_vec())
+                    }
                 } else if path == "/upload/drive/v3/files" && method == "POST" && param(&target, "uploadType") == "multipart" {
-                    if body.contains(r#""parents":["f-2026"]"#) && body.contains(r#""name":"Review.pptx""#) && body.contains("pptx bytes") {
+                    if body.contains(r#""parents":["f-new"]"#) && body.contains(r#""name":"Review.pptx""#) {
+                        (200, br#"{"id":"up-2","name":"Review.pptx","webViewLink":"https://drive.google.com/file/d/up-2/view"}"#.to_vec())
+                    } else if body.contains(r#""parents":["f-2026"]"#) && body.contains(r#""name":"Review.pptx""#) && body.contains("pptx bytes") {
                         (200, br#"{"id":"up-1","name":"Review.pptx","webViewLink":"https://drive.google.com/file/d/up-1/view"}"#.to_vec())
                     } else {
                         (400, br#"{"error":{"message":"bad multipart"}}"#.to_vec())
@@ -478,6 +517,8 @@ mod tests {
         std::fs::write(cfg.attachments_dir.join("27f7f074a214445481c5a853f29f5b70_Review.pptx"), b"pptx bytes").unwrap();
         let up = run(&json!({ "action": "upload", "file": "Review.pptx", "folder": "Projects/2026" }), &ctx).unwrap();
         assert_eq!(up, "Uploaded to Google Drive: https://drive.google.com/file/d/up-1/view");
+        let into_new = run(&json!({ "action": "upload", "file": "Review.pptx", "folder": "Reports" }), &ctx).unwrap();
+        assert_eq!(into_new, "Uploaded to Google Drive: https://drive.google.com/file/d/up-2/view", "a missing folder is created");
         assert!(run(&json!({ "action": "upload", "file": "..\\app.properties" }), &ctx).is_err(), "only attachments");
         assert!(run(&json!({ "action": "upload", "file": "app.properties" }), &ctx).is_err(), "only attachments");
         let asked = std::sync::Arc::new(std::sync::Mutex::new(String::new()));

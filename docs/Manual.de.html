@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<title>Loonar Compass 0.9.1 - Benutzerhandbuch</title>
+<title>Loonar Compass 0.9.2 - Benutzerhandbuch</title>
 <style>
   @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
   body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1f1e1b; }
@@ -39,7 +39,7 @@
   <img src="img/logo.png" alt="Logo von Loonar Compass">
   <h1 style="margin-top: 10mm;">Loonar Compass</h1>
   <div class="sub">Benutzerhandbuch</div>
-  <div class="sub" style="font-size: 11pt;">Version 0.9.1 &middot; Oktober 2026</div>
+  <div class="sub" style="font-size: 11pt;">Version 0.9.2 &middot; Oktober 2026</div>
   <div class="owner">
     Loonar Mariusz Głowacki<br>
     ul. Gombrowicza 12, 73-110 Stargard<br>
@@ -129,7 +129,7 @@
 <div class="note"><b>Warnung von Windows SmartScreen.</b> Das Installationsprogramm ist noch nicht digital signiert, daher kann Windows beim ersten Start die Meldung „Der Computer wurde durch Windows geschützt“ anzeigen. Klicken Sie auf <b>Weitere Informationen</b> und dann auf <b>Trotzdem ausführen</b>. Ist auf dem Computer die <b>Intelligente App-Steuerung</b> (Smart App Control) aktiviert, blockiert Windows nicht signierte Anwendungen ohne Möglichkeit, sie zu starten; warten Sie in diesem Fall auf die signierte Version. Laden Sie das Installationsprogramm nur von loonar.eu oder aus den Releases des Projekts auf GitHub herunter.</div>
 <figure class="small"><img src="img/en/installer-language.png" alt="Installationsassistent: Seite „Sprache wählen“ mit Polnisch, Englisch, Deutsch und Französisch"><figcaption>Die erste Seite des Installationsassistenten: Auswahl der Sprache</figcaption></figure>
 <ol>
-  <li><b>Sprache.</b> Zu Beginn fragt das Installationsprogramm nach der Sprache: Polnisch, Englisch, Deutsch oder Französisch. Bei einer Neuinstallation ist Englisch ausgewählt, bei einer Aktualisierung die in Ihren Einstellungen gespeicherte Sprache. Die gewählte Sprache gilt für den Installationsassistenten, die Anwendung, die Antworten des Assistenten und die Standard-Dokumentvorlagen; später ändern Sie sie in den Einstellungen (Kapitel 5).</li>
+  <li><b>Sprache.</b> Zu Beginn fragt das Installationsprogramm nach der Sprache: Polnisch, Englisch, Deutsch oder Französisch. Bei einer Neuinstallation ist Englisch ausgewählt, bei einer Aktualisierung die in Ihren Einstellungen gespeicherte Sprache. Die gewählte Sprache gilt für den Installationsassistenten, die Anwendung und die Antworten des Assistenten; später ändern Sie sie in den Einstellungen (Kapitel 5).</li>
   <li><b>Begrüßung.</b> Die Voraussetzungen und eine Liste der Dinge, die Sie vor der Installation bereithalten sollten.</li>
   <li><b>Neu in Version 0.9.</b> Bei einer Aktualisierung: die Änderungen seit der installierten Version. Bei einer Neuinstallation: die wichtigsten Änderungen der aktuellen Version.</li>
   <li><b>Lizenzvereinbarung.</b> Wählen Sie „Ich akzeptiere die Bedingungen der Lizenzvereinbarung“.</li>
@@ -227,7 +227,7 @@
 <ol>
   <li>Wählen Sie eine Sprache aus der Liste <b>Sprache</b>.</li>
   <li>Klicken Sie auf <b>Speichern</b>. Die Oberfläche wechselt sofort in die neue Sprache, und der Assistent antwortet ab der nächsten Nachricht in ihr (schreiben Sie ihm in einer anderen Sprache, antwortet er in Ihrer).</li>
-  <li>Die Anwendung überträgt Ihre Inhalte in die neue Sprache: Unveränderte Standardvorlagen ersetzt sie durch die Versionen in der neuen Sprache, und <b>das Gedächtnis des Assistenten sowie eigene und geänderte Vorlagen übersetzt das KI-Modell</b>.</li>
+  <li>Die Anwendung überträgt Ihre Inhalte in die neue Sprache: <b>das Gedächtnis des Assistenten und Ihre Vorlagen übersetzt das KI-Modell</b>.</li>
 </ol>
 <p>Übersetzt werden nur das Gedächtnis und die Vorlagen. <b>Der Unterhaltungsverlauf wird nie übersetzt</b>: Unterhaltungen bleiben in der Sprache, in der Sie sie geführt haben.</p>
 <div class="note"><b>Keine Verbindung zum KI-Modell.</b> Die Übersetzung erfordert einen funktionierenden API-Schlüssel. Besteht keine Verbindung, erscheint auf den Symbolen <b>Einstellungen</b>, <b>Gedächtnis des Assistenten</b> und <b>Dokumentvorlagen</b> ein orangefarbenes <b>„!“</b>, und der Tooltip erklärt, dass die Inhalte noch nicht übersetzt sind. Die Übersetzung wird beim nächsten Start der Anwendung fortgesetzt oder sofort nach einem Klick auf <b>Jetzt übersetzen</b> auf der Karte „Sprache und Freigabe von Änderungen“. Das Speichern anderer Karten setzt sie nicht fort.</div>
@@ -762,6 +762,7 @@
   <li>Klicken Sie im Menüband <b>Start</b>, Gruppe <b>Add-Ins</b>, auf <b>Loonar Compass</b> (die Schaltfläche finden Sie auch unter <b>Specialize</b>). Sie ist nur bei geöffnetem Projekt aktiv.</li>
   <li>Compass öffnet sich als angedocktes Fenster in EA, an derselben Stelle wie das Fenster Properties. Sie können es an eine andere Stelle ziehen, lösen oder einer Registerkartengruppe hinzufügen; EA merkt sich, wo Sie es platziert haben.</li>
 </ol>
+<div class="note"><b>„LoonarCompass – Error“ in der Add-In-Verwaltung.</b> Bei der Installation für einen Benutzer (Standard) ist das Add-In nur für diesen Benutzer registriert, und Windows verwendet solche Registrierungen nicht in Programmen, die als Administrator laufen. Starten Sie Enterprise Architect normal, nicht mit „Als Administrator ausführen“; muss EA als Administrator laufen, installieren Sie Compass für alle Benutzer des Computers.</div>
 <h3>Projekt und Unterhaltungen</h3>
 <ul>
   <li>In EA arbeitet Compass immer mit dem in diesem EA-Fenster geöffneten Projekt: einer Datei oder einer beliebigen Datenbank. Es liest das Modell über Enterprise Architect selbst und braucht daher weder Modelleinstellungen noch Passwörter noch eine Modellwahl für die Unterhaltung. Öffnen Sie in EA ein anderes Projekt, wechselt Compass zu diesem Projekt; ohne geöffnetes Projekt arbeitet Compass nicht.</li>
@@ -922,26 +923,46 @@
 <div class="prompt">Erstelle eine Confluence-Seite mit einer Beschreibung des Prozesses „Reklamationsbearbeitung“ samt Diagramm und veröffentliche sie im Bereich.</div>
 
 <h2 id="s14" class="break">14. Dokumentvorlagen</h2>
-<p>Eine Vorlage sagt dem Assistenten, wie er ein Dokument aufbauen soll: welche Abschnitte es haben soll und was darin stehen soll. Der Assistent füllt sie mit Inhalten aus dem Modell und der Unterhaltung und erstellt daraus eine Confluence-Seite oder ein Word-Dokument.</p>
-<p>Nach der Installation stehen folgende Standardvorlagen in der gewählten Sprache zur Verfügung:</p>
+<p>Eine Vorlage sagt dem Assistenten, wie ein Dokument aussehen soll: seine Abschnitte, ihr Inhalt, Hinweise und Beispiele. Der Assistent füllt sie mit Inhalten aus dem Modell, der Unterhaltung, Jira, Confluence und dem Code und erstellt eine Confluence-Seite, ein Word-Dokument oder die Beschreibung eines Jira-Vorgangs. Sie können beliebig viele Vorlagen haben - eine, einige oder hundert -, und jeder Benutzer hat seine eigenen. Compass liefert keine fertigen Vorlagen: Sie fügen die hinzu, die Ihr Team verwendet.</p>
+<h3>Vorlagen hinzufügen</h3>
 <ul>
-  <li><b>Vorläufige Machbarkeitsanalyse</b>,</li>
-  <li><b>BRD - Geschäftsanforderungen</b>,</li>
-  <li><b>Beschreibung der Systemänderungen</b>,</li>
-  <li><b>Prozessbeschreibung</b>.</li>
+  <li><b>➕ Aus Dateien hinzufügen…</b> - wählen Sie eine oder mehrere Dateien: Markdown (.md), Text, Word (.docx), HTML, PDF, PowerPoint oder Excel. Aus Word und HTML bleiben Überschriften, Listen und Tabellen erhalten; PDF, PowerPoint und Excel liefern ihren Text. Bei einer Datei öffnet sich das Vorlagenformular; mehrere Dateien werden sofort gespeichert, Werkzeug und Gruppe legen Sie danach mit <b>Eigenschaften</b> fest.</li>
+  <li><b>➕ Aus Confluence hinzufügen</b> - fügen Sie die Adresse einer Seite (mit <code>/pages/ID</code> oder <code>pageId=ID</code>) oder ihre ID ein. Die Musterseite wird zur Vorlage für Confluence.</li>
+  <li><b>➕ Neue Vorlage</b> - ein leeres Formular; den Inhalt schreiben Sie in Markdown.</li>
+  <li>Sie können den Assistenten auch bitten, eine Vorlage aus einem Musterdokument zu erstellen (siehe unten).</li>
 </ul>
+<h3>Eigenschaften einer Vorlage</h3>
+<table>
+  <tr><th>Feld</th><th>Bedeutung</th></tr>
+  <tr><td><b>Name</b></td><td>Damit nennen Sie die Vorlage in der Unterhaltung.</td></tr>
+  <tr><td><b>Beschreibung</b></td><td>Was das Dokument ist und wann man es verwendet - danach wählt der Assistent die Vorlage.</td></tr>
+  <tr><td><b>Werkzeug</b></td><td>Confluence, Jira, Word oder beliebiges Werkzeug.</td></tr>
+  <tr><td><b>Gruppe</b></td><td>Ein beliebiger Name, z. B. eine Dokumentationsebene (Überblick, fachlich, technisch), ein Projekt oder ein Team. Die Liste ist nach Werkzeug und darin nach Gruppe geordnet.</td></tr>
+  <tr><td><b>Modell</b></td><td><b>Modell aus den Einstellungen</b> oder <b>Stärkeres Modell (fragt vorher)</b>: Wenn Sie ein Dokument nach dieser Vorlage anfordern, bietet Compass ein stärkeres Modell desselben Anbieters (z. B. Claude Sonnet statt Haiku) nur für diese Antwort an und nennt, wie viel teurer es ist; die nächste Antwort nutzt wieder das Modell aus den Einstellungen.</td></tr>
+  <tr><td><b>Inhalt</b></td><td>Markdown: <code>#</code> Überschriften, Listen, Tabellen. Zeilen, die mit <code>&gt; </code> beginnen, sind Hinweise und Beispiele für den Assistenten - sie kommen nicht ins Dokument.</td></tr>
+</table>
+<p>Eine Vorlage ist eine Markdown-Datei im Ordner <code>templates</code>. Ihre Eigenschaften stehen in den ersten Zeilen, Sie können Dateien also auch selbst vorbereiten und in den Ordner legen:</p>
+<div class="prompt">&gt; Vorlage: Technisches Dokument - Architektur, Schnittstellen, Daten, nichtfunktionale Anforderungen<br>&gt; Ziel: Confluence<br>&gt; Gruppe: Dokumentationsebenen<br>&gt; Modell: stärker<br><br># 1. Architekturkontext<br>&gt; Systeme rund um die Lösung. Beispiel: …</div>
 <h3>Die Ansicht „Dokumentvorlagen“</h3>
 <ul>
-  <li>Liste der Vorlagen mit kurzer Beschreibung.</li>
-  <li><b>Verwenden</b> fügt im Chat eine Anfrage ein, nach der Vorlage ein Dokument zu erstellen (standardmäßig eine Confluence-Seite). Ergänzen Sie sie, zum Beispiel um den Namen eines Pakets oder Prozesses, und senden Sie sie. Möchten Sie stattdessen ein Word-Dokument, schreiben Sie das in die Anfrage.</li>
-  <li><b>Bearbeiten</b> öffnet die Vorlagendatei im Windows-Editor.</li>
-  <li><b>Vorlagenordner öffnen</b> öffnet den Ordner <code>templates</code> im Explorer (ältere Installationen verwenden möglicherweise noch den Ordner <code>szablony</code>).</li>
+  <li><b>Verwenden</b> fügt in den Chat eine Anfrage nach einem Dokument nach der Vorlage ein (Confluence-Seite, Word-Dokument oder Jira-Vorgang - je nach Werkzeug der Vorlage). Ergänzen und senden Sie sie.</li>
+  <li><b>Eigenschaften</b> öffnet das Formular mit Name, Beschreibung, Werkzeug, Gruppe, Modell und Inhalt.</li>
+  <li><b>Bearbeiten</b> öffnet die Vorlagendatei im Editor.</li>
+  <li><b>Entfernen</b> (zwei Klicks) verschiebt die Vorlage in den Ordner <code>bin</code> im Vorlagenordner - von dort können Sie sie zurückholen.</li>
+  <li><b>Vorlagenordner öffnen</b> öffnet den Ordner <code>templates</code> im Explorer.</li>
 </ul>
-<h3>Eigene Vorlagen</h3>
-<p>Vorlagen sind Markdown-Dateien mit Hinweisen für den Assistenten. Die erste Zeile hat die Form <code>&gt; Vorlage: Beschreibung</code>; die Beschreibung erscheint in der Liste. Weitere Zeilen, die mit <code>&gt;</code> beginnen, sind Hinweise für den Assistenten. Sie können bestehende Vorlagen ändern, eigene Dateien in den Vorlagenordner legen oder den Assistenten bitten, eine Vorlage aus einem Beispieldokument zu erstellen:</p>
-<div class="prompt">Erstelle eine Vorlage aus dem angehängten Dokument: Behalte die Gliederung der Abschnitte bei und ergänze, was in jedem stehen soll.</div>
-<p>Speichert oder überschreibt der Assistent eine Vorlage, fragt er immer vorher nach Ihrer Freigabe, auch im Modus <b>auto</b>, und zeigt den ganzen Text der Vorlage.</p>
-
+<p>Von früheren Versionen mitgelieferte Vorlagen (BRD, Prozessbeschreibung und andere), die Sie nicht geändert haben, kommen nach dem Update in den Ordner <code>bin</code>; geänderte bleiben.</p>
+<h3>Wie der Assistent ein Dokument schreibt</h3>
+<p>Nennen Sie in der Unterhaltung die Vorlage oder ihre Gruppe:</p>
+<div class="prompt">Erstelle eine Confluence-Seite nach der Vorlage „Technische Ebene“ für die Änderungen aus PRJ-123 und die Diagramme des Pakets Bestellungen.</div>
+<ul>
+  <li>Der Assistent listet zuerst Ihre Wünsche zum Dokument aus der ganzen Unterhaltung auf (Abschnitte, jede genannte Anforderung, Quellen, Bilder, Format) und liest alle genannten Quellen, auch an Jira-Vorgänge angehängte Bilder.</li>
+  <li>Er hält die Überschriften der Vorlage in ihrer Reihenfolge ein; jede Anforderung bekommt einen eigenen Eintrag mit Nummer und Text aus der Quelle; was er nicht weiß, markiert er als „zu ergänzen“.</li>
+  <li>Compass erstellt kein Dokument, in dem ein Abschnitt der Vorlage fehlt oder ein Wunsch keinen Platz hat - der Assistent muss es zuerst ergänzen. In der Antwort zeigt er die Liste: Wunsch → Abschnitt.</li>
+</ul>
+<h3>Eine Vorlage aus einem Musterdokument</h3>
+<p>Der Assistent bittet vor dem Speichern einer Vorlage immer um Ihre Zustimmung, auch im Modus <b>auto</b>, und zeigt den ganzen Text.</p>
+<div class="prompt">Erstelle eine Vorlage aus dem angehängten Dokument: Behalte die Gliederung bei und ergänze, was jeder Abschnitt enthalten soll.</div>
 <h2 id="s15">15. Gedächtnis des Assistenten</h2>
 <p>Der Assistent merkt sich Festlegungen über Unterhaltungen hinweg: Modellierungskonventionen, Ihre Präferenzen, Korrekturen und Fakten zu Projekten. Er kennt sie in jeder neuen Unterhaltung. Eine Festlegung zum selben Thema wird aktualisiert statt verdoppelt, veraltete werden entfernt.</p>
 <p>Der Assistent speichert Festlegungen selbst, wenn er etwas Dauerhaftes erfährt (und sagt das in einem Satz), oder auf Ihre Bitte, zum Beispiel mit „merk dir…“:</p>
@@ -1353,7 +1374,7 @@ compass-hub --service-uninstall</pre>
 <p><b>Marken.</b> Sparx Systems und Enterprise Architect sind eingetragene Marken der Sparx Systems Pty Ltd. Claude und Anthropic sind Marken der Anthropic, PBC. OpenAI und GPT sind Marken von OpenAI. Atlassian, Confluence und Jira sind Marken von Atlassian. Microsoft, Windows, Word, Excel, PowerPoint, Visio, SharePoint, SQL Server, Entra ID, Power BI, Azure, Azure DevOps und GitHub sind Marken der Microsoft-Unternehmensgruppe. Oracle und MySQL sind eingetragene Marken der Oracle Corporation und/oder ihrer verbundenen Unternehmen; MariaDB ist eine Marke der MariaDB plc; Okta ist eine Marke der Okta, Inc. GitLab ist eine Marke der GitLab Inc., ServiceNow der ServiceNow, Inc. und Docker der Docker, Inc. PostgreSQL ist eine eingetragene Marke der PostgreSQL Community Association. Loonar Compass ist ein unabhängiges Produkt, steht in keiner Verbindung zu diesen Unternehmen und wird von ihnen weder unterstützt noch gesponsert.</p>
 <p><b>Eigentümer und Kontakt.</b> Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard.<br>E-Mail: mariusz@loonar.eu, Website: <code>https://loonar.eu</code> (mit Fragen und Antworten). Fehler melden Sie am bequemsten über die Ansicht <b>Fehler melden</b> (Kapitel 20). Sicherheitsprobleme melden Sie bitte vertraulich per E-Mail an mariusz@loonar.eu mit dem Betreff „Security: Loonar Compass“, nicht in einem öffentlichen Issue auf GitHub.</p>
 <p><b>Projekt unterstützen.</b> Die Weiterentwicklung der Anwendung können Sie freiwillig unter <code>https://suppi.pl/loonar</code> unterstützen (Ansicht <b>Projekt unterstützen</b>, Kapitel 4).</p>
-<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.9.1 &middot; © 2026 Loonar Mariusz Głowacki. Alle Rechte vorbehalten.</p>
+<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.9.2 &middot; © 2026 Loonar Mariusz Głowacki. Alle Rechte vorbehalten.</p>
 
 </body>
 </html>

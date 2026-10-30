@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Loonar Compass 0.9.1 - User guide</title>
+<title>Loonar Compass 0.9.2 - User guide</title>
 <style>
   @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
   body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1f1e1b; }
@@ -39,7 +39,7 @@
   <img src="img/logo.png" alt="Loonar Compass logo">
   <h1 style="margin-top: 10mm;">Loonar Compass</h1>
   <div class="sub">User guide</div>
-  <div class="sub" style="font-size: 11pt;">version 0.9.1 &middot; October 2026</div>
+  <div class="sub" style="font-size: 11pt;">version 0.9.2 &middot; October 2026</div>
   <div class="owner">
     Loonar Mariusz Głowacki<br>
     ul. Gombrowicza 12, 73-110 Stargard<br>
@@ -128,7 +128,7 @@
 <div class="note"><b>Windows SmartScreen.</b> The installer is not digitally signed yet, so when you run it for the first time, Windows SmartScreen may show the warning “Windows protected your PC”. Click <b>More info</b> and then <b>Run anyway</b>. If Smart App Control is turned on, Windows blocks unsigned applications altogether; in that case, wait for the signed version.</div>
 <figure class="small"><img src="img/en/installer-language.png" alt="Setup wizard: the language selection page with Polish, English, German and French"><figcaption>The first page of the wizard: choosing the language</figcaption></figure>
 <ol>
-  <li><b>Language.</b> Polish, English, German or French. For a new installation, English is selected; for an update, the language saved in your settings. The chosen language applies to the wizard, the application, the assistant's answers and the default document templates; you can change it later in the settings (chapter 5).</li>
+  <li><b>Language.</b> Polish, English, German or French. For a new installation, English is selected; for an update, the language saved in your settings. The chosen language applies to the wizard, the application and the assistant's answers; you can change it later in the settings (chapter 5).</li>
   <li><b>Welcome.</b> The prerequisites and a list of things worth preparing before installation.</li>
   <li><b>What's new.</b> When updating: the changes since the installed version. For a new installation: the changes in the current version.</li>
   <li><b>License agreement.</b> Select “I accept the terms of the license agreement”.</li>
@@ -226,7 +226,7 @@
 <ol>
   <li>Choose a language from the <b>Language</b> list.</li>
   <li>Click <b>Save</b>. The interface switches to the new language, and the assistant answers in it from the next message.</li>
-  <li>The application carries your content over to the new language: it replaces untouched default templates with the versions in the new language, and <b>the assistant's memory and your own and modified templates are translated by the AI model</b>.</li>
+  <li>The application carries your content over to the new language: <b>the assistant's memory and your templates are translated by the AI model</b>.</li>
 </ol>
 <p>Only the memory and the templates are translated. <b>Conversation history is never translated</b>: conversations stay in the language in which you held them.</p>
 <div class="note"><b>No connection to the AI model.</b> Translation requires a working API key. If there is no connection, an orange <b>“!”</b> appears on the <b>Settings</b>, <b>Assistant memory</b> and <b>Document templates</b> icons, and the tooltip explains that the content has not been translated yet. The translation resumes the next time the application starts, or immediately when you click the <b>Translate now</b> button on the “Language and change approval” card. Saving other cards does not start it.</div>
@@ -761,6 +761,7 @@
   <li>On the <b>Start</b> ribbon, in the <b>Add-Ins</b> group, click <b>Loonar Compass</b> (you also find the button under <b>Specialize</b>). The button works only with a project open.</li>
   <li>Compass opens as a docked window in EA, in the same place as the Properties window. You can drag it elsewhere, float it or add it to a tab group; EA remembers where you put it.</li>
 </ol>
+<div class="note"><b>“LoonarCompass – Error” in Manage Add-Ins.</b> Installed for one user (the default), the add-in is registered for that user only, and Windows does not use such registrations in programs run as administrator. Start Enterprise Architect normally, not with “Run as administrator”; if EA must run as administrator, install Compass for all users of the computer.</div>
 <h3>Project and conversations</h3>
 <ul>
   <li>In EA, Compass always works with the project open in that EA window: a file or any database. It reads the model through Enterprise Architect itself, so it needs no model settings, no passwords and no choice of a conversation model. Opening another project in EA switches Compass to it; without an open project, Compass does not work.</li>
@@ -921,25 +922,46 @@
 <div class="prompt">Prepare a Confluence page describing the “Complaint handling” process with the diagram and publish it in the space.</div>
 
 <h2 id="s14" class="break">14. Document templates</h2>
-<p>A template tells the assistant how to build a document: which sections it should have and what to put in them. The assistant fills it with content from the model and prepares a Confluence page or a Word document.</p>
-<p>After installation, the following default templates are available:</p>
+<p>A template tells the assistant how a document should look: its sections, what to put in them, hints and examples. The assistant fills it with content from the model, the conversation, Jira, Confluence and the code, and prepares a Confluence page, a Word document or the description of a Jira issue. You can have any number of templates - one, a few or a hundred - and every user has their own. Compass ships no ready-made templates: you add the ones your team uses.</p>
+<h3>Adding templates</h3>
 <ul>
-  <li><b>Preliminary feasibility analysis</b>,</li>
-  <li><b>BRD - Business requirements</b>,</li>
-  <li><b>System change description</b>,</li>
-  <li><b>Process description</b>.</li>
+  <li><b>➕ Add from files…</b> - choose one or more files: Markdown (.md), text, Word (.docx), HTML, PDF, PowerPoint or Excel. Headings, lists and tables are kept from Word and HTML; PDF, PowerPoint and Excel give their text. With one file the template form opens; several files are saved at once, and you set their tool and group later with <b>Properties</b>.</li>
+  <li><b>➕ Add from Confluence</b> - paste the address of a page (with <code>/pages/ID</code> or <code>pageId=ID</code>) or its id. The sample page becomes a template for Confluence.</li>
+  <li><b>➕ New template</b> - an empty form; you write the content in Markdown.</li>
+  <li>You can also ask the assistant to make a template from a sample document (see below).</li>
 </ul>
+<h3>Template properties</h3>
+<table>
+  <tr><th>Field</th><th>Meaning</th></tr>
+  <tr><td><b>Name</b></td><td>You name the template in the conversation by it.</td></tr>
+  <tr><td><b>Description</b></td><td>What the document is and when to use it - the assistant chooses the template by it.</td></tr>
+  <tr><td><b>Tool</b></td><td>Confluence, Jira, Word or any tool.</td></tr>
+  <tr><td><b>Group</b></td><td>Any name, e.g. a level of documentation (overview, business, technical), a project or a team. The list of templates is ordered by tool, then by group.</td></tr>
+  <tr><td><b>Model</b></td><td><b>Model of the settings</b> or <b>Stronger model (asks first)</b>: when you ask for a document from this template, Compass offers a stronger model of the same provider (e.g. Claude Sonnet instead of Haiku) for this answer only, saying how many times it costs more; the next answer uses the model of the settings again.</td></tr>
+  <tr><td><b>Content</b></td><td>Markdown: <code>#</code> headings, lists, tables. Lines starting with <code>&gt; </code> are hints and examples for the assistant - they do not go into the document.</td></tr>
+</table>
+<p>A template is a Markdown file in the <code>templates</code> folder. Its properties are in its first lines, so you can also prepare files yourself and put them in the folder:</p>
+<div class="prompt">&gt; Template: Technical document - architecture, interfaces, data, non-functional requirements<br>&gt; Target: Confluence<br>&gt; Group: Documentation levels<br>&gt; Model: stronger<br><br># 1. Architectural context<br>&gt; Systems around the solution. Example: …</div>
 <h3>The “Document templates” view</h3>
 <ul>
-  <li>A list of templates with a short description.</li>
-  <li><b>Use</b> inserts into the chat a request to prepare a document based on the template. Complete it (for example with the name of a package or process) and send it.</li>
+  <li><b>Use</b> inserts into the chat a request for a document from the template (a Confluence page, a Word document or a Jira issue - depending on the template's tool). Complete it and send it.</li>
+  <li><b>Properties</b> opens the form with the name, description, tool, group, model and content.</li>
   <li><b>Edit</b> opens the template file in Notepad.</li>
-  <li><b>Open templates folder</b> opens the <code>templates</code> folder in Explorer (older installations may still use the <code>szablony</code> folder).</li>
+  <li><b>Remove</b> (two clicks) moves the template to the <code>bin</code> folder in the templates folder - you can put it back from there.</li>
+  <li><b>Open templates folder</b> opens the <code>templates</code> folder in Explorer.</li>
 </ul>
-<h3>Your own templates</h3>
-<p>Templates are Markdown files with instructions for the assistant. The first line has the form <code>&gt; Template: description</code>; the description is shown in the list. You can modify the existing templates, add your own files to the templates folder or ask the assistant to create a template from a sample document. The assistant always asks for your approval before it saves a template, also in <b>auto</b> mode, and shows its whole text.</p>
+<p>Templates shipped by earlier versions (BRD, process description and others) that you did not change go to the <code>bin</code> folder after the update; the ones you changed stay.</p>
+<h3>How the assistant writes a document</h3>
+<p>In the conversation, name the template or its group:</p>
+<div class="prompt">Prepare a Confluence page from the template “Technical level” for the changes in PRJ-123 and the diagrams of the Orders package.</div>
+<ul>
+  <li>The assistant first lists your requests about the document from the whole conversation (sections, every requirement you named, sources, images, format) and reads every source you pointed to, including images attached to Jira issues.</li>
+  <li>It keeps the template's headings in their order; every requirement gets its own entry with its number and the text from the source; what it does not know it marks “to be completed”.</li>
+  <li>Compass does not create a document with a template section missing or a request without its place - the assistant has to complete it first. In the answer it shows the list: request → section.</li>
+</ul>
+<h3>A template from a sample document</h3>
+<p>The assistant always asks for your approval before it saves a template, also in <b>auto</b> mode, and shows its whole text.</p>
 <div class="prompt">Create a template from the attached document: keep the layout of the sections and add what each of them should contain.</div>
-
 <h2 id="s15">15. Assistant memory</h2>
 <p>The assistant keeps notes between conversations: modeling conventions, your preferences, corrections and facts about projects. It knows them in every new conversation. A note on the same topic is updated instead of duplicated, and outdated ones are removed.</p>
 <p>The assistant saves a note by itself when it learns something worth remembering, and tells you so in one sentence. You can also ask it explicitly, starting with “remember…”:</p>

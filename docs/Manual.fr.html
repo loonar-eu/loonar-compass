@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<title>Loonar Compass 0.9.1 - Guide de l'utilisateur</title>
+<title>Loonar Compass 0.9.2 - Guide de l'utilisateur</title>
 <style>
   @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
   body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1f1e1b; }
@@ -39,7 +39,7 @@
   <img src="img/logo.png" alt="Logo de Loonar Compass">
   <h1 style="margin-top: 10mm;">Loonar Compass</h1>
   <div class="sub">Guide de l'utilisateur</div>
-  <div class="sub" style="font-size: 11pt;">version 0.9.1 &middot; octobre 2026</div>
+  <div class="sub" style="font-size: 11pt;">version 0.9.2 &middot; octobre 2026</div>
   <div class="owner">
     Loonar Mariusz Głowacki<br>
     ul. Gombrowicza 12, 73-110 Stargard<br>
@@ -128,7 +128,7 @@
 <div class="note"><b>Avertissement Windows SmartScreen.</b> Le programme d'installation n'est pas encore signé numériquement. Si Windows affiche « Windows a protégé votre ordinateur », cliquez sur <b>Informations complémentaires</b>, puis sur <b>Exécuter quand même</b>. Lorsque le contrôle intelligent des applications (Smart App Control) est activé, Windows bloque les applications non signées : attendez alors la version signée.</div>
 <figure class="small"><img src="img/en/installer-language.png" alt="Assistant d'installation : page de choix de la langue avec le polonais, l'anglais, l'allemand et le français"><figcaption>La première page de l'assistant d'installation : le choix de la langue</figcaption></figure>
 <ol>
-  <li><b>Langue.</b> La première page demande la langue : polonais, anglais, allemand ou français. Lors d'une nouvelle installation, l'anglais est présélectionné ; lors d'une mise à jour, la langue enregistrée dans vos paramètres. La langue choisie s'applique à l'assistant d'installation, à l'application, aux réponses de l'assistant et aux modèles de documents par défaut ; vous pourrez la modifier plus tard dans les paramètres (chapitre 5).</li>
+  <li><b>Langue.</b> La première page demande la langue : polonais, anglais, allemand ou français. Lors d'une nouvelle installation, l'anglais est présélectionné ; lors d'une mise à jour, la langue enregistrée dans vos paramètres. La langue choisie s'applique à l'assistant d'installation, à l'application et aux réponses de l'assistant ; vous pourrez la modifier plus tard dans les paramètres (chapitre 5).</li>
   <li><b>Accueil.</b> Les prérequis et la liste des éléments à préparer avant l'installation.</li>
   <li><b>Nouveautés.</b> Lors d'une mise à jour : les modifications depuis la version installée. Lors d'une nouvelle installation : les principales modifications de la version actuelle.</li>
   <li><b>Contrat de licence.</b> Cochez « J'accepte les conditions du contrat de licence ».</li>
@@ -227,7 +227,7 @@
 <ol>
   <li>Choisissez une langue dans la liste <b>Langue</b>.</li>
   <li>Cliquez sur <b>Enregistrer</b>. L'interface passe à la nouvelle langue, et l'assistant y répond à partir du message suivant.</li>
-  <li>L'application transpose vos contenus dans la nouvelle langue : elle remplace les modèles par défaut non modifiés par leurs versions dans la nouvelle langue, et <b>la mémoire de l'assistant ainsi que vos modèles personnels et modifiés sont traduits par le modèle d'IA</b>.</li>
+  <li>L'application transpose vos contenus dans la nouvelle langue : <b>la mémoire de l'assistant et vos modèles sont traduits par le modèle d'IA</b>.</li>
 </ol>
 <p>Seules la mémoire et les modèles de documents sont traduits. <b>L'historique des conversations n'est jamais traduit</b> : les conversations restent dans la langue dans laquelle vous les avez menées.</p>
 <div class="note"><b>Pas de connexion au modèle d'IA.</b> La traduction nécessite une clé API fonctionnelle. En l'absence de connexion, un <b>« ! »</b> orange apparaît sur les icônes <b>Paramètres</b>, <b>Mémoire de l'assistant</b> et <b>Modèles de documents</b>, et l'info-bulle explique que les contenus ne sont pas encore traduits. La traduction reprend au prochain démarrage de l'application, ou immédiatement après un clic sur <b>Traduire maintenant</b> dans la carte « Langue et validation des modifications » ; l'enregistrement des autres cartes ne la relance pas.</div>
@@ -761,6 +761,7 @@
   <li>Dans le ruban <b>Start</b>, groupe <b>Add-Ins</b>, cliquez sur <b>Loonar Compass</b> (le bouton se trouve aussi sous <b>Specialize</b>). Le bouton n'est actif que lorsqu'un projet est ouvert.</li>
   <li>Compass s'ouvre comme une fenêtre ancrée dans EA, au même endroit que la fenêtre Properties. Vous pouvez la faire glisser ailleurs, la détacher ou l'ajouter à un groupe d'onglets ; EA retient l'endroit où vous l'avez placée.</li>
 </ol>
+<div class="note"><b>« LoonarCompass – Error » dans la gestion des compléments.</b> Installé pour un seul utilisateur (par défaut), le complément n’est enregistré que pour cet utilisateur, et Windows n’utilise pas ces enregistrements dans les programmes lancés en tant qu’administrateur. Lancez Enterprise Architect normalement, pas avec « Exécuter en tant qu’administrateur » ; si EA doit s’exécuter en tant qu’administrateur, installez Compass pour tous les utilisateurs de l’ordinateur.</div>
 <h3>Projet et conversations</h3>
 <ul>
   <li>Dans EA, Compass travaille toujours sur le projet ouvert dans cette fenêtre EA : un fichier ou n'importe quelle base de données. Il lit le modèle par l'intermédiaire d'Enterprise Architect lui-même ; il n'a donc besoin ni des paramètres du modèle, ni de mots de passe, ni du choix d'un modèle de conversation. Ouvrir un autre projet dans EA fait passer Compass à ce projet ; sans projet ouvert, Compass ne fonctionne pas.</li>
@@ -921,26 +922,46 @@
 <div class="prompt">Prépare une page Confluence décrivant le processus « Traitement des réclamations » avec son diagramme et publie-la dans l'espace.</div>
 
 <h2 id="s14" class="break">14. Modèles de documents</h2>
-<p>Un modèle indique à l'assistant comment construire un document : quelles sections il doit contenir et ce qu'il faut y mettre. L'assistant le remplit avec le contenu du modèle EA et de la conversation, puis prépare une page Confluence ou un document Word.</p>
-<p>Après l'installation, les modèles par défaut suivants sont disponibles :</p>
+<p>Un modèle indique à l’assistant à quoi doit ressembler un document : ses sections, leur contenu, des indications et des exemples. L’assistant le remplit avec le contenu du modèle EA, de la conversation, de Jira, de Confluence et du code, puis prépare une page Confluence, un document Word ou la description d’un ticket Jira. Vous pouvez avoir autant de modèles que vous voulez - un, quelques-uns ou cent - et chaque utilisateur a les siens. Compass ne fournit pas de modèles prêts à l’emploi : vous ajoutez ceux qu’utilise votre équipe.</p>
+<h3>Ajouter des modèles</h3>
 <ul>
-  <li><b>Analyse de faisabilité préliminaire</b>,</li>
-  <li><b>BRD - Exigences métier</b>,</li>
-  <li><b>Description des modifications du système</b>,</li>
-  <li><b>Description du processus</b>.</li>
+  <li><b>➕ Ajouter depuis des fichiers…</b> - choisissez un ou plusieurs fichiers : Markdown (.md), texte, Word (.docx), HTML, PDF, PowerPoint ou Excel. Les titres, listes et tableaux de Word et HTML sont conservés ; PDF, PowerPoint et Excel donnent leur texte. Avec un seul fichier, le formulaire du modèle s’ouvre ; plusieurs fichiers sont enregistrés directement, et vous définissez ensuite leur outil et leur groupe avec <b>Propriétés</b>.</li>
+  <li><b>➕ Ajouter depuis Confluence</b> - collez l’adresse d’une page (avec <code>/pages/ID</code> ou <code>pageId=ID</code>) ou son id. La page exemple devient un modèle pour Confluence.</li>
+  <li><b>➕ Nouveau modèle</b> - un formulaire vide ; vous écrivez le contenu en Markdown.</li>
+  <li>Vous pouvez aussi demander à l’assistant de faire un modèle à partir d’un document exemple (voir plus bas).</li>
 </ul>
-<h3>La vue « Modèles de documents »</h3>
+<h3>Propriétés d’un modèle</h3>
+<table>
+  <tr><th>Champ</th><th>Signification</th></tr>
+  <tr><td><b>Nom</b></td><td>C’est par lui que vous désignez le modèle dans la conversation.</td></tr>
+  <tr><td><b>Description</b></td><td>Ce qu’est le document et quand l’utiliser - l’assistant choisit le modèle d’après elle.</td></tr>
+  <tr><td><b>Outil</b></td><td>Confluence, Jira, Word ou tout outil.</td></tr>
+  <tr><td><b>Groupe</b></td><td>Un nom libre, p. ex. un niveau de documentation (général, métier, technique), un projet ou une équipe. La liste est classée par outil, puis par groupe.</td></tr>
+  <tr><td><b>Modèle IA</b></td><td><b>Modèle des paramètres</b> ou <b>Modèle plus puissant (demande d’abord)</b> : quand vous demandez un document selon ce modèle, Compass propose un modèle IA plus puissant du même fournisseur (p. ex. Claude Sonnet au lieu de Haiku) pour cette réponse seulement, en indiquant combien de fois il coûte plus ; la réponse suivante utilise de nouveau le modèle des paramètres.</td></tr>
+  <tr><td><b>Contenu</b></td><td>Markdown : titres <code>#</code>, listes, tableaux. Les lignes commençant par <code>&gt; </code> sont des indications et des exemples pour l’assistant - elles ne vont pas dans le document.</td></tr>
+</table>
+<p>Un modèle est un fichier Markdown dans le dossier <code>templates</code>. Ses propriétés sont dans ses premières lignes ; vous pouvez donc aussi préparer des fichiers vous-même et les déposer dans le dossier :</p>
+<div class="prompt">&gt; Modèle: Document technique - architecture, interfaces, données, exigences non fonctionnelles<br>&gt; Cible: Confluence<br>&gt; Groupe: Niveaux de documentation<br>&gt; Modèle IA: plus fort<br><br># 1. Contexte architectural<br>&gt; Systèmes autour de la solution. Exemple : …</div>
+<h3>La vue « Modèles de documents »</h3>
 <ul>
-  <li>La liste des modèles avec une courte description.</li>
-  <li><b>Utiliser</b> insère dans le chat une demande de préparation d'une page Confluence selon le modèle. Complétez-la (par exemple avec le nom d'un paquetage ou d'un processus, ou en demandant plutôt un document Word) et envoyez-la.</li>
+  <li><b>Utiliser</b> insère dans la conversation une demande de document selon le modèle (page Confluence, document Word ou ticket Jira - selon l’outil du modèle). Complétez-la et envoyez-la.</li>
+  <li><b>Propriétés</b> ouvre le formulaire avec le nom, la description, l’outil, le groupe, le modèle IA et le contenu.</li>
   <li><b>Modifier</b> ouvre le fichier du modèle dans le Bloc-notes.</li>
-  <li><b>Ouvrir le dossier des modèles</b> ouvre le dossier <code>templates</code> dans l'Explorateur (les installations plus anciennes peuvent encore utiliser le dossier <code>szablony</code>).</li>
+  <li><b>Supprimer</b> (deux clics) déplace le modèle dans le dossier <code>bin</code> du dossier des modèles - vous pouvez l’y récupérer.</li>
+  <li><b>Ouvrir le dossier des modèles</b> ouvre le dossier <code>templates</code> dans l’Explorateur.</li>
 </ul>
-<h3>Vos propres modèles</h3>
-<p>Les modèles sont des fichiers Markdown contenant des instructions pour l'assistant. La première ligne a la forme <code>&gt; Modèle: description</code> : cette description apparaît dans la liste. Les autres lignes commençant par <code>&gt;</code> sont des indications pour l'assistant. Vous pouvez modifier les modèles existants, ajouter vos propres fichiers dans le dossier des modèles ou demander à l'assistant de créer un modèle à partir d'un document exemple :</p>
-<div class="prompt">Crée un modèle à partir du document joint : conserve l'organisation des sections et indique ce que chacune doit contenir.</div>
-<p>Lorsque l'assistant enregistre un modèle de document, il demande toujours d'abord votre validation, y compris en mode <b>auto</b>, et affiche le texte complet du modèle (chapitre 16).</p>
-
+<p>Les modèles fournis par les versions précédentes (BRD, description de processus et autres) que vous n’avez pas modifiés vont dans le dossier <code>bin</code> après la mise à jour ; ceux que vous avez modifiés restent.</p>
+<h3>Comment l’assistant écrit un document</h3>
+<p>Dans la conversation, nommez le modèle ou son groupe :</p>
+<div class="prompt">Prépare une page Confluence selon le modèle « Niveau technique » pour les changements de PRJ-123 et les diagrammes du paquet Commandes.</div>
+<ul>
+  <li>L’assistant liste d’abord vos demandes sur le document dans toute la conversation (sections, chaque exigence citée, sources, images, format) et lit toutes les sources indiquées, y compris les images jointes aux tickets Jira.</li>
+  <li>Il suit les titres du modèle dans leur ordre ; chaque exigence a sa propre entrée avec son numéro et le texte de la source ; ce qu’il ne sait pas, il le marque « à compléter ».</li>
+  <li>Compass ne crée pas un document auquel manque une section du modèle ou dans lequel une demande n’a pas sa place - l’assistant doit d’abord le compléter. Dans sa réponse, il montre la liste : demande → section.</li>
+</ul>
+<h3>Un modèle à partir d’un document exemple</h3>
+<p>L’assistant demande toujours votre accord avant d’enregistrer un modèle, aussi en mode <b>auto</b>, et affiche tout le texte.</p>
+<div class="prompt">Crée un modèle à partir du document joint : garde la structure des sections et ajoute ce que chacune doit contenir.</div>
 <h2 id="s15">15. Mémoire de l'assistant</h2>
 <p>L'assistant retient les points convenus d'une conversation à l'autre : conventions de modélisation, vos préférences, corrections et faits concernant les projets. Il les connaît dans chaque nouvelle conversation. Un point sur le même sujet est mis à jour au lieu d'être dupliqué, et les points obsolètes sont supprimés.</p>
 <p>L'assistant enregistre lui-même les points importants et le signale en une phrase dans sa réponse. Vous pouvez aussi le lui demander explicitement en commençant par « retiens… » :</p>

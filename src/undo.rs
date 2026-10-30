@@ -123,7 +123,7 @@ pub fn before(cfg: &AppConfig, ops: &[Value]) -> (Vec<Value>, Vec<String>) {
                     reverse.push(json!({ "op": "remove_from_diagram", "diagram": d, "element": e }));
                 }
             }
-            "delete" | "remove_from_diagram" | "delete_attribute" | "delete_operation" | "delete_scenario" | "import_xmi" | "set_color" | "set_line_style" | "route_connector" | "hide_connectors" | "layout_diagram" | "set_swimlanes" | "diagram_style" => {
+            "delete" | "remove_from_diagram" | "delete_attribute" | "delete_operation" | "delete_scenario" | "import_xmi" | "set_color" | "set_line_style" | "route_connector" | "hide_connectors" | "repair_diagram_links" | "layout_diagram" | "set_swimlanes" | "diagram_style" => {
                 not_undoable.push(kind.to_string());
             }
             _ => {}
