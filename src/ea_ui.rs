@@ -361,7 +361,8 @@ fn close_error_box(ea_pid: u32, skip: Option<&std::collections::HashSet<isize>>)
     for window in search.found.into_iter().filter(|w| !skip.contains(w)) {
         let mut text = String::new();
         unsafe { EnumChildWindows(window, child, &mut text as *mut String as isize) };
-        if text.contains("SQL") || text.contains("Database API") || text.contains("XML") || text.contains("Error processing") {
+        // EA's error box has one button (OK); a box with OK/Cancel is a question for the user and stays (LC-359).
+        if (text.contains("SQL") || text.contains("Database API") || text.contains("XML") || text.contains("Error processing")) && button_count(window) == 1 {
             // IDOK on the box's own OK button (EA's error box has only this button).
             unsafe { PostMessageW(window, 0x0111, 1, 0) };
             return vec![(window, text)];
@@ -427,13 +428,72 @@ pub fn background_message_box(since: chrono::DateTime<chrono::Local>) -> Option<
         unsafe { CloseHandle(process) };
         let exe = String::from_utf16_lossy(&name[..size as usize]).to_lowercase();
         let started = ((created.high as u64) << 32) | created.low as u64;
-        if ok && exe.ends_with("\\ea.exe") && started >= since_ticks {
+        // Only an EA without a visible main window is the background one Compass started (LC-359: an EA the user
+        // opened after it had its OK/Cancel boxes answered too).
+        if ok && exe.ends_with("\\ea.exe") && started >= since_ticks && !has_visible_main_window(pid) {
             let text = box_text(window);
             close_box(window);
             return Some(text.trim().to_string());
         }
     }
     None
+}
+
+/// Whether the process has a visible top-level window that is not a message box (the user's EA window).
+fn has_visible_main_window(pid: u32) -> bool {
+    #[link(name = "user32")]
+    extern "system" {
+        fn EnumWindows(callback: extern "system" fn(isize, isize) -> i32, param: isize) -> i32;
+        fn GetWindowThreadProcessId(window: isize, process: *mut u32) -> u32;
+        fn GetClassNameW(window: isize, name: *mut u16, max: i32) -> i32;
+        fn IsWindowVisible(window: isize) -> i32;
+    }
+    struct Search {
+        pid: u32,
+        found: bool,
+    }
+    extern "system" fn top(window: isize, param: isize) -> i32 {
+        // SAFETY: param points to the Search below for the duration of EnumWindows.
+        let search = unsafe { &mut *(param as *mut Search) };
+        let mut pid = 0u32;
+        unsafe { GetWindowThreadProcessId(window, &mut pid) };
+        if pid == search.pid && unsafe { IsWindowVisible(window) } != 0 {
+            let mut class = [0u16; 64];
+            let n = unsafe { GetClassNameW(window, class.as_mut_ptr(), 64) };
+            if String::from_utf16_lossy(&class[..n.max(0) as usize]) != "#32770" {
+                search.found = true;
+                return 0;
+            }
+        }
+        1
+    }
+    let mut search = Search { pid, found: false };
+    // SAFETY: the callback only uses the Search passed in, which outlives the call.
+    unsafe { EnumWindows(top, &mut search as *mut Search as isize) };
+    search.found
+}
+
+/// The number of buttons of a dialog.
+fn button_count(window: isize) -> usize {
+    #[link(name = "user32")]
+    extern "system" {
+        fn EnumChildWindows(parent: isize, callback: extern "system" fn(isize, isize) -> i32, param: isize) -> i32;
+        fn GetClassNameW(window: isize, name: *mut u16, max: i32) -> i32;
+    }
+    extern "system" fn child(window: isize, param: isize) -> i32 {
+        // SAFETY: param points to the counter below for the duration of EnumChildWindows.
+        let count = unsafe { &mut *(param as *mut usize) };
+        let mut class = [0u16; 16];
+        let n = unsafe { GetClassNameW(window, class.as_mut_ptr(), 16) };
+        if String::from_utf16_lossy(&class[..n.max(0) as usize]) == "Button" {
+            *count += 1;
+        }
+        1
+    }
+    let mut count = 0usize;
+    // SAFETY: the callback only uses the counter passed in, which outlives the call.
+    unsafe { EnumChildWindows(window, child, &mut count as *mut usize as isize) };
+    count
 }
 
 /// The texts of a message box (its Static controls).
@@ -674,6 +734,14 @@ fn same_file(a: &Path, b: &Path) -> bool {
 
 /// Checks whether the open EA window shows the same model the assistant works with
 /// (the database name in the connection, or the same EA file).
+/// Whether `word` is in `text` as a whole name (any letter case): the characters around it are not letters, digits
+/// or "_" (LC-359: "ea" matched the connection of "ea_prod").
+pub(crate) fn contains_word(text: &str, word: &str) -> bool {
+    let (text, word) = (text.to_lowercase(), word.to_lowercase());
+    let inside = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
+    text.match_indices(&word).any(|(at, _)| !inside(text[..at].chars().next_back()) && !inside(text[at + word.len()..].chars().next()))
+}
+
 fn same_model(repo: &Disp, target: &Target) -> Result<()> {
     let connection = repo.text("ConnectionString").unwrap_or_default();
     match &target.file {
@@ -684,7 +752,7 @@ fn same_model(repo: &Disp, target: &Target) -> Result<()> {
         }
         None => {
             let db_name = &target.db_name;
-            if !db_name.is_empty() && !connection.to_lowercase().contains(&db_name.to_lowercase()) {
+            if !db_name.is_empty() && !contains_word(&connection, db_name) {
                 bail!("{}", crate::i18n::fmt("the open EA window shows a different model (connection: {0}), but the assistant works with the database \"{1}\"", &[safe_connection(&connection), db_name.to_string()]));
             }
         }
@@ -851,6 +919,16 @@ pub fn refresh_after_write(target: &Target, diagrams: Vec<i32>, packages: Vec<i3
 
 #[cfg(test)]
 mod tests {
+    /// LC-359: the model's database name is a whole word of the connection.
+    #[test]
+    fn database_name_as_a_whole_word() {
+        assert!(super::contains_word("ea_lab --- DBType=4;Connect=Provider=MSDASQL.1;Data Source=ea_lab;", "ea_lab"));
+        assert!(super::contains_word("Initial Catalog=EA;Data Source=srv", "ea"));
+        assert!(!super::contains_word("Initial Catalog=ea_prod;Data Source=srv", "ea"));
+        assert!(!super::contains_word("Data Source=lab_ea", "ea"));
+        assert!(super::contains_word("Data Source=sklep-ea.db", "sklep-ea"));
+    }
+
     /// LC-345: EA's repository types map to the engines of portable_sql.
     #[test]
     fn repository_types() {

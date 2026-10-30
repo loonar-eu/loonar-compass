@@ -192,6 +192,15 @@ fn run_attached(cfg: &AppConfig, script: &Script) -> Result<String> {
     };
     // The code was resolved (includes) before the approval.
     let code = script.code.clone();
+    let id = uuid::Uuid::new_v4();
+    // Session.Output goes to a Unicode file (the console output of cscript cannot carry every character).
+    let out_file = std::env::temp_dir().join(format!("loonar-script-{id}.out"));
+    let out = out_file.to_string_lossy().replace('"', "");
+    // The model the script must run on (the file name or the database name), as a whole word of EA's connection.
+    let model = if cfg.uses_file() { cfg.model_file.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default() } else { cfg.db_name.clone() };
+    let pattern: String = model.replace('"', "").chars().map(|c| if "\\^$.|?*+()[]{}".contains(c) { format!("\\{c}") } else { c.to_string() }).collect();
+    let code = xml_text(&code);
+    // {out}, {pattern} and the code are put in by format!, so the approved code itself is never changed (LC-359).
     let job = format!(
         r#"<?xml version="1.0"?>
 <job>
@@ -201,7 +210,7 @@ Class CompassSession
   Public Sub Output(text)
     Dim fso, f
     Set fso = CreateObject("Scripting.FileSystemObject")
-    Set f = fso.OpenTextFile("{{out}}", 8, True, -1)
+    Set f = fso.OpenTextFile("{out}", 8, True, -1)
     f.WriteLine CStr(text)
     f.Close
   End Sub
@@ -219,28 +228,21 @@ If Err.Number <> 0 Then
 End If
 On Error GoTo 0
 Set Repository = EAApp.Repository
-If InStr(1, Repository.ConnectionString, "{{model}}", vbTextCompare) = 0 Then
+Dim ModelCheck
+Set ModelCheck = New RegExp
+ModelCheck.Pattern = "(^|[^A-Za-z0-9_])" & "{pattern}" & "($|[^A-Za-z0-9_])"
+ModelCheck.IgnoreCase = True
+If Not ModelCheck.Test(Repository.ConnectionString) Then
   WScript.StdErr.WriteLine "OTHER_MODEL " & Repository.ConnectionString
   WScript.Quit 4
 End If
 ]]></script>
 <script language="{language}"><![CDATA[
-{}
+{code}
 ]]></script>
-</job>"#,
-        xml_text(&code)
+</job>"#
     );
-    let id = uuid::Uuid::new_v4();
     let file = std::env::temp_dir().join(format!("loonar-script-{id}.wsf"));
-    // Session.Output goes to a Unicode file (the console output of cscript cannot carry every character).
-    let out_file = std::env::temp_dir().join(format!("loonar-script-{id}.out"));
-    // The model the script must run on: the file name or the database name of the settings.
-    let model = if cfg.uses_file() {
-        cfg.model_file.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
-    } else {
-        cfg.db_name.clone()
-    };
-    let job = job.replace("{out}", &out_file.to_string_lossy()).replace("{model}", &model.replace('"', ""));
     std::fs::write(&file, job).context("script file")?;
     let mut cmd = std::process::Command::new(crate::config::system_program("cscript.exe"));
     cmd.arg("//nologo").arg(&file).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
@@ -310,6 +312,24 @@ Write scripts that change the model only when the user asks for a script; for or
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LC-359: the job's VBScript header is valid (with no EA window cscript reaches the window check, not a syntax
+    /// error) and the script's own "{out}" and "{model}" stay. Run with no EA open:
+    /// `cargo test script_job_without_ea -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires Windows Script Host and no running EA"]
+    fn script_job_without_ea() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        let props = std::env::temp_dir().join(format!("loonar-script-{}.properties", std::process::id()));
+        std::fs::write(&props, "model.source=file
+model.file=C:/m/sklep(1).qea
+").unwrap();
+        let cfg = AppConfig::load(&props).unwrap();
+        let script = Script { guid: "{x}".into(), name: "t".into(), language: "JScript".into(), group: "g".into(), code: "Session.Output(\"{out} {model}\");".into() };
+        let err = run_attached(&cfg, &script).unwrap_err().to_string();
+        println!("{err}");
+        assert!(err.contains("open this model in Enterprise Architect"), "{err}");
+    }
 
     #[test]
     fn notes_and_cdata() {
