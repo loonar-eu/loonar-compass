@@ -1,6 +1,6 @@
 //! Anonymous usage statistics: at the start a ping with the random installation id, then every hour the summary of the
 //! day so far (and of ended days not sent yet) goes to the Loonar feedback service (Cloudflare D1, no IP addresses);
-//! only summaries over all installations together are published (GET /v1/summary).
+//! only the author reads them.
 //!
 //! What is counted: how often each tool of the assistant was used and how often it failed, answers of the assistant,
 //! errors of the AI service, approvals asked / accepted / rejected, views opened, tokens, and the setup of the day

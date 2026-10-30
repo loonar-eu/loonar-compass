@@ -2433,10 +2433,7 @@ impl Setup {
         ui.label(bold(crate::i18n::tr("What is never sent"), 14.5));
         ui.add(egui::Label::new(crate::i18n::tr("The content of conversations, names from your model, file paths, server addresses, error messages or user names.")).wrap());
         ui.add_space(6.0);
-        ui.horizontal_wrapped(|ui| {
-            ui.label(crate::i18n::tr("Only the author sees the data; summaries over all installations together are published:"));
-            ui.hyperlink_to(crate::i18n::tr("Published statistics"), crate::i18n::current().stats_url());
-        });
+        ui.label(crate::i18n::tr("Only the author sees the data."));
         ui.add_space(12.0);
         ui.checkbox(&mut self.config.statistics, egui::RichText::new(crate::i18n::tr("Send anonymous usage statistics (recommended)")).strong());
     }
