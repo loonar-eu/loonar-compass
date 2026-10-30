@@ -826,7 +826,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         let (ask, server, tool) = crate::mcp_client::needs_consent(&ctx.cfg.base_dir, name)?;
         if ask {
             let args = serde_json::to_string_pretty(input).unwrap_or_default();
-            ctx.approver.confirm_kind("mcp", &crate::i18n::fmt(MCP_QUESTION, &[tool, server, args.chars().take(1500).collect()]))?;
+            ctx.approver.confirm_kind("mcp", &crate::i18n::fmt(MCP_QUESTION, &[tool, server, args.chars().take(20_000).collect()]))?;
         }
         return crate::mcp_client::call(&ctx.cfg.base_dir, name, input).map(Into::into);
     }
@@ -1505,8 +1505,11 @@ fn jira_comment(input: &Value, ctx: &ToolContext) -> Result<String> {
     Ok(crate::i18n::fmt("Updated the Jira issue {0}: {1}", &[key.clone(), connection.browse(&key)]))
 }
 
+/// The text in an approval card: whole up to 20 000 characters (the card scrolls). LC-355: 600 characters let
+/// instructions hidden further in a description go unseen.
 fn shorten_for_approval(text: &str) -> String {
-    if text.chars().count() > 600 { format!("{}…", text.chars().take(600).collect::<String>()) } else { text.to_string() }
+    const MAX: usize = 20_000;
+    if text.chars().count() > MAX { format!("{}…", text.chars().take(MAX).collect::<String>()) } else { text.to_string() }
 }
 
 fn create_confluence_page(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
@@ -1609,7 +1612,10 @@ fn publish_confluence(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         Some(page) => crate::i18n::fmt(CONFLUENCE_REPLACE_QUESTION, &[page.title.clone(), page.id.clone(), page.version.to_string(), space.clone()]),
         None => crate::i18n::fmt(CONFLUENCE_NEW_QUESTION, &[title.clone(), space.clone()]),
     };
-    ctx.approver.confirm_kind("confluence", &question)?;
+    // The card shows what will be published, not only where (LC-355).
+    ctx.approver.confirm_kind("confluence", &format!("{question}
+
+{}", shorten_for_approval(markdown)))?;
     let (storage, attachments) = crate::confluence::to_storage(markdown, |source| picture(ctx, source))?;
     let target_id = existing.as_ref().map(|page| page.id.clone());
     let (id, link, created) = connection.publish(&space, &title, Some(&parent), target_id.as_deref(), &storage, &attachments)?;
