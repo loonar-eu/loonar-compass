@@ -1134,6 +1134,15 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
             if *name == user {
                 return Err(deny(400, crate::i18n::tr("you cannot remove yourself")));
             }
+            // A company account (OIDC): its remembered role and sessions end now, not after 12 hours (LC-353); the next
+            // sign-in takes the role from the groups again.
+            let local = hub.users.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|u| u.name == *name);
+            if !local && hub.external.lock().unwrap_or_else(|p| p.into_inner()).remove(*name).is_some() {
+                hub.sessions.lock().unwrap_or_else(|p| p.into_inner()).retain(|_, (n, _)| n != *name);
+                hub.save_sessions();
+                let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": "", "summary": format!("company account {name}: role and sessions removed"), "ok": true }));
+                return Ok((200, json!({ "ok": true })));
+            }
             {
                 let mut users = hub.users.lock().unwrap_or_else(|p| p.into_inner());
                 let admins = users.iter().filter(|u| u.role == Role::Admin).count();

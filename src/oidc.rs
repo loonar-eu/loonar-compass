@@ -36,6 +36,8 @@ pub struct Config {
     pub roles: Vec<(String, Vec<String>)>,
     pub password_login: bool,
     pub button: String,
+    /// "group_domain" in hub.json: a group "DOMAIN\\name" from the token counts only with this domain (LC-353).
+    pub group_domain: String,
 }
 
 impl Config {
@@ -47,6 +49,7 @@ impl Config {
         let text = |k: &str| v[k].as_str().map(str::trim).unwrap_or("").to_string();
         let issuer = text("issuer").trim_end_matches('/').to_string();
         let adfs = issuer.to_lowercase().ends_with("/adfs");
+        let group_domain = text("group_domain");
         let client_id = text("client_id");
         let redirect_uri = text("redirect_uri");
         if issuer.is_empty() || client_id.is_empty() || redirect_uri.is_empty() {
@@ -86,6 +89,7 @@ impl Config {
             roles,
             password_login: v["password_login"] != false,
             button: v["button"].as_str().map(str::trim).filter(|s| !s.is_empty()).unwrap_or("Sign in with your company account").to_string(),
+            group_domain,
         }))
     }
 }
@@ -193,7 +197,13 @@ impl Provider {
         if keys.is_empty() {
             bail!("no RSA signing keys at {jwks_uri}");
         }
-        let m = Metadata { issuer: field("issuer")?, authorization_endpoint: field("authorization_endpoint")?, token_endpoint: field("token_endpoint")?, jwks_uri, keys, read: Instant::now() };
+        let issuer = field("issuer")?;
+        // The discovery document must name the configured issuer (LC-353: tokens were checked against whatever the
+        // document said).
+        if !issuer.trim_end_matches('/').eq_ignore_ascii_case(self.config.issuer.trim_end_matches('/')) {
+            bail!("the provider's issuer {issuer} is not the issuer in hub.json ({})", self.config.issuer);
+        }
+        let m = Metadata { issuer, authorization_endpoint: field("authorization_endpoint")?, token_endpoint: field("token_endpoint")?, jwks_uri, keys, read: Instant::now() };
         *self.metadata.lock().unwrap_or_else(|p| p.into_inner()) = Some(m.clone());
         Ok(m)
     }
@@ -294,6 +304,11 @@ pub fn check_claims(claims: &Value, issuer: &str, client_id: &str, nonce: &str, 
     if !audience_ok {
         bail!("the ID token is meant for another application");
     }
+    // Several audiences: the authorized party must be the hub (LC-353).
+    let several = claims["aud"].as_array().is_some_and(|a| a.len() > 1);
+    if (several || claims["azp"].is_string()) && claims["azp"].as_str() != Some(client_id) {
+        bail!("the ID token was issued to another application (azp)");
+    }
     let exp = claims["exp"].as_i64().context("the ID token has no expiry")?;
     if exp + SKEW_SECS < now {
         bail!("the ID token has expired");
@@ -322,6 +337,25 @@ impl std::fmt::Display for NoGroup {
 
 impl std::error::Error for NoGroup {}
 
+/// Whether a group from the token is the group the hub gives a role to (LC-353: the last segment alone matched, so
+/// "OTHER\\Compass-Admins" or Keycloak's "/contractors/Compass-Admins" made an admin). A configured name with a
+/// domain or a path must match it whole. A plain name matches the same name, Keycloak's top-level "/name" and AD's
+/// "DOMAIN\\name" – with "group_domain" set, only from that domain. Letter case does not matter.
+fn group_matches(wanted: &str, have: &str, domain: &str) -> bool {
+    let wanted = wanted.trim().trim_start_matches('/').to_lowercase();
+    let have = have.trim().trim_start_matches('/').to_lowercase();
+    if wanted.contains(['/', '\\']) {
+        return wanted == have;
+    }
+    if have == wanted {
+        return true;
+    }
+    match have.split_once('\\') {
+        Some((d, name)) => name == wanted && (domain.is_empty() || d.eq_ignore_ascii_case(domain.trim())),
+        None => false,
+    }
+}
+
 /// Name, e-mail and role from the claims. Groups: a list or one string; "/Compass-Admins" (Keycloak's full path)
 /// and "LAB\\Compass-Admins" count as "Compass-Admins". No group of the hub = no access.
 pub fn identity_of(config: &Config, claims: &Value) -> Result<Identity> {
@@ -332,10 +366,8 @@ pub fn identity_of(config: &Config, claims: &Value) -> Result<Identity> {
         Value::String(one) => vec![one.clone()],
         _ => Vec::new(),
     };
-    let short = |g: &str| g.trim().trim_start_matches('/').rsplit(['/', '\\']).next().unwrap_or("").to_lowercase();
-    let mine: Vec<String> = groups.iter().map(|g| short(g)).collect();
     for (role, wanted) in &config.roles {
-        if wanted.iter().any(|w| mine.contains(&short(w))) {
+        if wanted.iter().any(|w| groups.iter().any(|g| group_matches(w, g, &config.group_domain))) {
             return Ok(Identity { name, email, role: role.clone(), groups, return_to: None });
         }
     }
@@ -345,6 +377,37 @@ pub fn identity_of(config: &Config, claims: &Value) -> Result<Identity> {
 
 #[cfg(test)]
 mod tests {
+    /// LC-353: groups match whole; a domain is checked when configured.
+    #[test]
+    fn groups_match_whole() {
+        assert!(super::group_matches("Compass-Admins", "Compass-Admins", ""));
+        assert!(super::group_matches("Compass-Admins", "/compass-admins", ""));
+        assert!(super::group_matches("Compass-Admins", "LAB\\Compass-Admins", ""));
+        assert!(!super::group_matches("Compass-Admins", "/contractors/Compass-Admins", ""), "a Keycloak subgroup");
+        assert!(super::group_matches("Compass-Admins", "LAB\\Compass-Admins", "lab"));
+        assert!(!super::group_matches("Compass-Admins", "OTHER\\Compass-Admins", "LAB"), "another domain");
+        assert!(super::group_matches("LAB\\Compass-Admins", "lab\\compass-admins", ""));
+        assert!(!super::group_matches("LAB\\Compass-Admins", "Compass-Admins", ""));
+        assert!(!super::group_matches("/team/Compass-Admins", "/other/Compass-Admins", ""));
+    }
+
+    /// LC-353: several audiences need azp = the hub.
+    #[test]
+    fn authorized_party() {
+        let base = |aud: serde_json::Value, azp: Option<&str>| {
+            let mut c = json!({ "iss": "https://idp", "aud": aud, "exp": 2_000_000_000i64, "nonce": "n" });
+            if let Some(a) = azp {
+                c["azp"] = json!(a);
+            }
+            super::check_claims(&c, "https://idp", "hub", "n", 1_900_000_000)
+        };
+        assert!(base(json!("hub"), None).is_ok());
+        assert!(base(json!(["hub", "other"]), Some("hub")).is_ok());
+        assert!(base(json!(["hub", "other"]), None).is_err());
+        assert!(base(json!(["hub", "other"]), Some("other")).is_err());
+        assert!(base(json!("hub"), Some("other")).is_err());
+    }
+
     use super::*;
     use serde_json::json;
 
@@ -373,7 +436,7 @@ mod tests {
     #[test]
     fn claims_are_checked() {
         let now = 1_800_000_000;
-        let ok = json!({ "iss": "https://i", "aud": ["c1", "x"], "exp": now + 300, "iat": now, "nonce": "n" });
+        let ok = json!({ "iss": "https://i", "aud": ["c1", "x"], "azp": "c1", "exp": now + 300, "iat": now, "nonce": "n" });
         assert!(check_claims(&ok, "https://i", "c1", "n", now).is_ok());
         assert!(check_claims(&ok, "https://other", "c1", "n", now).is_err());
         assert!(check_claims(&ok, "https://i", "c2", "n", now).is_err());
