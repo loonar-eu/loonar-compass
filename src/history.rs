@@ -530,7 +530,9 @@ pub fn import(source: &Path, attachments_dir: &Path, model: ModelChoice) -> Resu
     session.title = exported.title.chars().take(200).collect();
     session.messages = exported.messages;
     for m in &mut session.messages {
-        m.attachments = m.attachments.iter().map(|a| renamed.get(a).cloned().unwrap_or_else(|| a.clone())).collect();
+        // Only attachments that came in this file (LC-347): a name without its file (e.g. a path such as
+        // C:\Users\x\secret.docx) would point at a file of this computer – sent to the AI, opened, exported again.
+        m.attachments = m.attachments.iter().filter_map(|a| renamed.get(a).cloned()).collect();
     }
     let count = session.messages.len();
     session.moves = exported.moves.into_iter().filter(|m| m.at <= count).collect();
@@ -685,12 +687,13 @@ mod tests {
         let mut zip = zip::ZipWriter::new(std::fs::File::create(&evil).unwrap());
         let o = zip::write::SimpleFileOptions::default();
         zip.start_file("conversation.json", o).unwrap();
-        zip.write_all(br#"{"format":"loonar-compass-conversation","version":1,"app":"0.9.1","exported":"","title":"t","model":"m","messages":[{"role":"user","text":"x","attachments":["../../evil.txt"],"created":""}]}"#).unwrap();
+        zip.write_all(br#"{"format":"loonar-compass-conversation","version":1,"app":"0.9.1","exported":"","title":"t","model":"m","messages":[{"role":"user","text":"x","attachments":["../../evil.txt","C:\\Users\\x\\secret.docx"],"created":""}]}"#).unwrap();
         zip.start_file("attachments/../../evil.txt", o).unwrap();
         zip.write_all(b"boom").unwrap();
         zip.finish().unwrap();
         let back = import(&evil, &dir.join("att"), db()).unwrap();
         assert_eq!(back.messages.len(), 1);
+        assert!(back.messages[0].attachments.is_empty(), "an attachment without its file in the export is dropped");
         assert!(!dir.join("evil.txt").exists() && !std::env::temp_dir().join("evil.txt").exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
