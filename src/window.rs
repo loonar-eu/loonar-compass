@@ -50,10 +50,11 @@ fn chrono_free_stamp() -> String {
     format!("time (unix): {secs}")
 }
 
-/// Shows a message instead of disappearing silently when the program panics (release builds abort on panic,
-/// which would close the window without a trace): writes the details to `%TEMP%\<log_name>` and shows them
-/// in a system message box. Call once, at the start of `main`.
+/// Shows a message instead of disappearing silently when the program panics: writes the details to
+/// `%TEMP%\<log_name>` and, for a panic in the main thread (the window closes), shows them in a system message box.
+/// A panic in another thread is only logged: that thread ends, the program goes on. Call once, at the start of `main`.
 pub fn install_panic_hook(title: &'static str, log_name: &'static str, dialog: bool) {
+    let main_thread = std::thread::current().id();
     std::panic::set_hook(Box::new(move |info| {
         let location = info.location().map(|l| format!("{}:{}", l.file(), l.line())).unwrap_or_default();
         let message = info
@@ -65,7 +66,8 @@ pub fn install_panic_hook(title: &'static str, log_name: &'static str, dialog: b
         let details = format!("{} {}\n{message}\n{location}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
         let log = std::env::temp_dir().join(log_name);
         let _ = std::fs::write(&log, format!("{}\n{details}\n", chrono_free_stamp()));
-        if !dialog {
+        // A worker thread: the program goes on (panic = "unwind"), the thread's owner reports the error.
+        if !dialog || std::thread::current().id() != main_thread {
             eprintln!("{details}");
             return;
         }

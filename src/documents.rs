@@ -194,7 +194,7 @@ fn xlsx(bytes: &[u8]) -> Result<String> {
 }
 
 fn pdf(bytes: &[u8]) -> Result<String> {
-    // The PDF library can panic on damaged files: the reading is isolated.
+    // The PDF library can panic on damaged files: the reading is isolated (works with panic = "unwind", LC-340).
     let owned = bytes.to_vec();
     let result = std::panic::catch_unwind(move || pdf_extract::extract_text_from_mem(&owned));
     match result {

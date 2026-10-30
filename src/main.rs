@@ -3092,7 +3092,8 @@ impl App {
                 }
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    failure = Some(crate::i18n::tr("the worker thread ended without a result").to_string());
+                    let log = std::env::temp_dir().join("loonar-compass-crash.log");
+                    failure = Some(crate::i18n::fmt("the worker thread stopped on an unexpected error; the conversation is kept (details: {0})", &[log.display().to_string()]));
                     finished = true;
                     break;
                 }
@@ -3604,7 +3605,8 @@ impl App {
                 let answer = response["content"].as_array().and_then(|c| c.iter().find_map(|b| b["text"].as_str())).unwrap_or("").to_string();
                 let start = answer.find('{').context(crate::i18n::tr("Claude did not return the forms"))?;
                 let end = answer.rfind('}').context(crate::i18n::tr("Claude did not return the forms"))?;
-                let value: Value = serde_json::from_str(&answer[start..=end])?;
+                // "}" before the first "{" is no JSON (LC-340: the slice would panic).
+                let value: Value = serde_json::from_str(answer.get(start..=end).context(crate::i18n::tr("Claude did not return the forms"))?)?;
                 let mut forms: Vec<String> = value["forms"].as_array().into_iter().flatten().filter_map(|f| f.as_str()).map(str::to_string).collect();
                 forms.push(text.clone());
                 Ok(forms)

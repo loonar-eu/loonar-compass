@@ -188,7 +188,7 @@ pub fn alias_expressions(sql: &str) -> String {
                     i += 1;
                 }
             }
-            _ if depth == 0 && lower[i..].starts_with("select") && (i == 0 || !bytes[i - 1].is_ascii_alphanumeric()) => {
+            _ if depth == 0 && bytes[i..].starts_with(b"select") && (i == 0 || !bytes[i - 1].is_ascii_alphanumeric()) => {
                 start = Some(i + 6);
                 break;
             }
@@ -833,6 +833,13 @@ pub fn refresh_after_write(target: &Target, diagrams: Vec<i32>, packages: Vec<i3
 
 #[cfg(test)]
 mod tests {
+    /// LC-340: text outside ASCII before the outer SELECT (a CTE name).
+    #[test]
+    fn alias_expressions_after_a_polish_cte() {
+        let sql = "with dane_źródłowe as (select 1 as a) select count(*) from dane_źródłowe";
+        assert!(super::alias_expressions(sql).contains("dane_źródłowe"));
+    }
+
     #[test]
     fn connection_shown_to_the_model_has_no_credentials() {
         let shown = super::safe_connection("model --- DBType=4;Connect=Provider=SSDB;SRC=host,5432@ea;UID=postgres;PWD=Secret1;");

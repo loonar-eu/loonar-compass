@@ -46,7 +46,7 @@ fn word_xml_text(xml: &str) -> String {
     let bytes = xml.as_bytes();
     while i < bytes.len() {
         if bytes[i] == b'<' {
-            let end = xml[i..].find('>').map(|e| i + e).unwrap_or(bytes.len() - 1);
+            let Some(end) = xml[i..].find('>').map(|e| i + e) else { break };
             let tag = &xml[i + 1..end];
             let name = tag.split_whitespace().next().unwrap_or("");
             match name {
@@ -638,6 +638,13 @@ naming the id or the type) and issue keys (ABC-123 in the requirement and the el
 
 #[cfg(test)]
 mod tests {
+    /// LC-340: a document.xml ending with "<" (no tag end).
+    #[test]
+    fn word_xml_text_ending_with_an_open_tag() {
+        let text = super::word_xml_text("<w:p><w:t>żółć</w:t></w:p><");
+        assert!(text.contains("żółć"));
+    }
+
     use super::*;
 
     #[test]

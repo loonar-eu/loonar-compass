@@ -160,9 +160,9 @@ pub fn check_file_path(file: &str) -> Result<std::path::PathBuf> {
     let bytes = text.as_bytes();
     let drive = bytes.len() > 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'\\';
     // No "." or ".." segments, no streams (":"), no segments ending in a dot or a space, no doubled separators, no wildcards.
-    let segments: Vec<&str> = text[3.min(text.len())..].split('\\').collect();
+    let segments: Vec<&str> = text.get(3..).unwrap_or("").split('\\').collect();
     let odd = segments.iter().any(|s| s.is_empty() || *s == "." || *s == ".." || s.ends_with('.') || s.ends_with(' '))
-        || text[2.min(text.len())..].contains(':') || text.contains('*') || text.contains('?') || text.contains('"') || text.contains('<') || text.contains('>') || text.contains('|');
+        || text.get(2..).unwrap_or("").contains(':') || text.contains('*') || text.contains('?') || text.contains('"') || text.contains('<') || text.contains('>') || text.contains('|');
     if !drive || odd {
         bail!("{}", crate::i18n::fmt("{0}: give a full path on a local drive; network shares and relative paths are not allowed", &[file.to_string()]));
     }
@@ -197,3 +197,14 @@ pub fn check_file_path(file: &str) -> Result<std::path::PathBuf> {
     Ok(std::path::PathBuf::from(shown))
 }
 
+
+#[cfg(test)]
+mod tests {
+    /// LC-340: a file name without a drive whose third or fourth byte is inside a letter is refused, not a panic.
+    #[test]
+    fn check_file_path_refuses_names_with_letters_outside_ascii() {
+        for name in ["Żółw.xmi", "Prüfbericht.docx", "żó", "İ", "ą"] {
+            assert!(super::check_file_path(name).is_err(), "{name}");
+        }
+    }
+}

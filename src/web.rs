@@ -67,7 +67,8 @@ fn check(url: &reqwest::Url, domains: &[String]) -> Result<()> {
 
 /// Text of an HTML page: without scripts, styles and tags, with paragraphs kept as lines.
 pub(crate) fn html_text(html: &str) -> String {
-    let lower = html.to_lowercase();
+    // ASCII only: to_lowercase changes byte lengths ("İ" → "i̇") and the positions would not fit the page (LC-340).
+    let lower = html.to_ascii_lowercase();
     let mut text = String::new();
     let mut i = 0;
     while i < html.len() {
@@ -118,7 +119,7 @@ pub fn fetch(url: &str, domains: &[String]) -> Result<String> {
         response.take(MAX_BYTES).read_to_end(&mut body)?;
         let raw = String::from_utf8_lossy(&body);
         let title = if html {
-            let lower = raw.to_lowercase();
+            let lower = raw.to_ascii_lowercase();
             lower.find("<title").and_then(|s| lower[s..].find('>').map(|g| s + g + 1)).and_then(|s| lower[s..].find("</title").map(|e| raw[s..s + e].trim().to_string())).unwrap_or_default()
         } else {
             String::new()
@@ -134,6 +135,14 @@ pub fn fetch(url: &str, domains: &[String]) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    /// LC-340: "İ" grows when lowercased; the text stays whole and the reading ends.
+    #[test]
+    fn html_text_with_letters_that_grow_when_lowercased() {
+        let text = super::html_text("<P>İstanbul İİİ</P><SCRIPT>var İ = 1;</SCRIPT><div>żółć</div>");
+        assert_eq!(text, "İstanbul İİİ
+żółć");
+    }
+
     use super::*;
 
     #[test]

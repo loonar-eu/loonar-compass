@@ -128,9 +128,10 @@ fn top_level_words(sql: &str, word: &str) -> Vec<usize> {
             match c {
                 b'(' => depth += 1,
                 b')' => depth -= 1,
-                _ if depth == 0 && lower[i..].starts_with(word) => {
-                    let before = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
-                    let after = bytes.get(i + word.len()).is_none_or(|b| !(b.is_ascii_alphanumeric() || *b == b'_'));
+                _ if depth == 0 && bytes[i..].starts_with(word.as_bytes()) => {
+                    // A byte of a letter outside ASCII (≥ 0x80) is part of a word: "żfrom" is not FROM.
+                    let before = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_' || bytes[i - 1] >= 0x80);
+                    let after = bytes.get(i + word.len()).is_none_or(|b| !(b.is_ascii_alphanumeric() || *b == b'_' || *b >= 0x80));
                     if before && after {
                         out.push(i);
                     }
@@ -155,7 +156,7 @@ fn replace_outside_literals(sql: &str, from: &str, to: &str) -> String {
         if c == b'\'' {
             quoted = !quoted;
         }
-        if !quoted && lower[i..].starts_with(&from_lower) {
+        if !quoted && lower.as_bytes()[i..].starts_with(from_lower.as_bytes()) {
             out.push_str(to);
             i += from.len();
             continue;
@@ -181,7 +182,7 @@ fn oracle_coalesce_empty(sql: &str) -> String {
             quoted = !quoted;
         }
         let word_start = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
-        if !quoted && word_start && lower[i..].starts_with("coalesce(") {
+        if !quoted && word_start && lower.as_bytes()[i..].starts_with(b"coalesce(") {
             let open = i + "coalesce".len();
             // The matching parenthesis and the top-level commas inside.
             let (mut depth, mut q2, mut j, mut commas, mut close) = (0i32, false, open, Vec::new(), None);
@@ -944,3 +945,22 @@ mod odbc_tests {
     }
 }
 
+
+/// LC-340: SQL with letters outside ASCII (aliases, CTE names, values) – no panic on any engine.
+#[cfg(test)]
+mod non_ascii_tests {
+    use crate::config::ModelSource;
+
+    #[test]
+    fn portable_sql_with_polish_and_turkish_letters() {
+        let sql = "with dane_źródłowe as (select count(*) as liczba_elementów from t_object where name ilike 'İstanbul%') \
+                   select coalesce(liczba_elementów, '') as łączna_żółć from dane_źródłowe limit 5";
+        for source in [ModelSource::Postgres, ModelSource::File, ModelSource::SqlServer, ModelSource::MySql, ModelSource::Oracle] {
+            let out = super::portable_sql(source, sql);
+            assert!(out.contains("liczba_elementów") && out.contains("łączna_żółć"), "{source:?}: {out}");
+        }
+        let sql = "select ó as żfrom, 1 as fromą from t";
+        assert_eq!(super::top_level_words(sql, "from"), vec![sql.find(" from t").unwrap() + 1]);
+        assert_eq!(super::replace_outside_literals("a żółć ilike 'b'", " ilike ", " like "), "a żółć like 'b'");
+    }
+}

@@ -58,4 +58,6 @@ lto = true
 codegen-units = 1
 strip = true
 debug = false
-panic = "abort"
+# "unwind" (not "abort"): a panic in a worker thread ends that thread only – the conversation reports the error and the
+# window stays (LC-340); catch_unwind around the PDF library works only with it.
+panic = "unwind"

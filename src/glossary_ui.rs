@@ -281,7 +281,7 @@ Bare forms only, no comments.",
 /// The forms from the assistant's JSON answer, each cleaned (a note in brackets or before a colon removed); None when
 /// the answer has no list of the right length.
 fn cells_from(text: &str, part: Kind) -> Option<Vec<Vec<String>>> {
-    let json: Value = serde_json::from_str(&text[text.find('{')?..=text.rfind('}')?]).ok()?;
+    let json: Value = serde_json::from_str(text.get(text.find('{')?..=text.rfind('}')?)?).ok()?;
     let keys: &[&str] = match part {
         Kind::Noun => &["singular", "plural"],
         Kind::Verb => &["forms"],
@@ -352,6 +352,12 @@ fn with_hits(cfg: &AppConfig, part: Kind, cells: Vec<Vec<String>>) -> Forms {
 
 #[cfg(test)]
 mod tests {
+    /// LC-340: "}" before the first "{" is no answer, not a panic.
+    #[test]
+    fn cells_from_brace_order() {
+        assert!(super::cells_from("} żaden {", super::Kind::Noun).is_none());
+    }
+
     use super::{Forms, Kind};
 
     #[test]
