@@ -477,7 +477,7 @@ struct Picker {
 
 /// Elements, packages and diagrams whose name contains the text (empty: the top packages), at most 60.
 fn find_in_model(cfg: &AppConfig, query: &str) -> anyhow::Result<Vec<Found>> {
-    let q = query.trim().replace('\'', "''").to_lowercase();
+    let q = model_db::sql_text(cfg.model_source, &query.trim().to_lowercase());
     let portable = |sql: &str| model_db::portable_sql(cfg.model_source, sql);
     let mut out = Vec::new();
     if q.is_empty() {

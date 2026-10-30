@@ -332,7 +332,7 @@ fn with_hits(cfg: &AppConfig, part: Kind, cells: Vec<Vec<String>>) -> Forms {
             if form.trim().is_empty() {
                 continue;
             }
-            let like = form.trim().replace('\'', "''");
+            let like = crate::model_db::sql_text(cfg.model_source, form.trim());
             let sql = format!(
                 "select coalesce(name,'') || ' ' || coalesce(note,'') from t_object where name like '%{like}%' or note like '%{like}%' \
                  union all select coalesce(name,'') || ' ' || coalesce(notes,'') from t_diagram where name like '%{like}%' or notes like '%{like}%' \

@@ -114,6 +114,19 @@ fn sqlserver_tls(driver: &str, mode: crate::config::SslMode) -> &'static str {
     }
 }
 
+/// The inside of a SQL string literal ('…') for the model's database: an apostrophe doubled and, on MySQL/MariaDB, a
+/// backslash doubled too. MySQL treats a backslash as an escape unless NO_BACKSLASH_ESCAPES is set, so with
+/// apostrophes doubled only, \' would end the literal (LC-343). With NO_BACKSLASH_ESCAPES the doubled backslash only
+/// makes a search miss a name with a backslash – never a way out of the literal.
+pub fn sql_text(source: crate::config::ModelSource, text: &str) -> String {
+    let text = text.replace('\'', "''");
+    if source == crate::config::ModelSource::MySql {
+        text.replace('\\', "\\\\")
+    } else {
+        text
+    }
+}
+
 /// Positions of a word outside string literals and at parenthesis depth 0 (case-insensitive, whole word).
 fn top_level_words(sql: &str, word: &str) -> Vec<usize> {
     let lower = sql.to_ascii_lowercase();
@@ -1046,5 +1059,30 @@ db.user=
         ] {
             assert!(super::check_read_only(sql).is_ok(), "{sql}: {:?}", super::check_read_only(sql));
         }
+    }
+}
+
+/// LC-343: a backslash cannot end a string literal on MySQL/MariaDB.
+#[cfg(test)]
+mod literal_tests {
+    use crate::config::ModelSource;
+
+    #[test]
+    fn sql_text_doubles_backslashes_on_mysql_only() {
+        let attack = r"x\' union select password from t_secuser -- ";
+        let mysql = super::sql_text(ModelSource::MySql, attack);
+        assert_eq!(mysql, r"x\\'' union select password from t_secuser -- ");
+        // Inside '…' on MySQL with backslash escapes: \\ is one backslash, '' one apostrophe – the literal does not end.
+        let (mut i, chars): (usize, Vec<char>) = (0, mysql.chars().collect());
+        while i < chars.len() {
+            match chars[i] {
+                '\\' => i += 2,
+                '\'' if chars.get(i + 1) == Some(&'\'') => i += 2,
+                '\'' => panic!("the literal ends at {i}: {mysql}"),
+                _ => i += 1,
+            }
+        }
+        assert_eq!(super::sql_text(ModelSource::Postgres, attack), r"x\'' union select password from t_secuser -- ");
+        assert_eq!(super::sql_text(ModelSource::SqlServer, r"a\b"), r"a\b");
     }
 }

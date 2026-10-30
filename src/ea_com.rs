@@ -286,6 +286,19 @@ fn is_key(value: &Value) -> Option<&str> {
 }
 
 impl Job<'_> {
+    /// The column Partition of t_xref: a reserved word on MySQL/MariaDB, quoted there (LC-343).
+    fn partition_column(&self) -> &'static str {
+        let kind = self.repo.call("RepositoryType", &[]).map(|v| v.text()).unwrap_or_default();
+        if kind.eq_ignore_ascii_case("MYSQL") { "`Partition`" } else { "Partition" }
+    }
+
+    /// The inside of a SQL string literal for Repository.Execute on the open repository (backslash too on MySQL, LC-343).
+    fn sql_text(&self, text: &str) -> String {
+        let kind = self.repo.call("RepositoryType", &[]).map(|v| v.text()).unwrap_or_default();
+        let source = if kind.eq_ignore_ascii_case("MYSQL") { crate::config::ModelSource::MySql } else { crate::config::ModelSource::File };
+        crate::model_db::sql_text(source, text)
+    }
+
     fn register(&mut self, key: &Value, kind: Kind, object: &Disp, id: i32, guid: String, name: String) {
         if let Some(key) = key.as_str().filter(|k| !k.is_empty()) {
             self.keys.insert(key.trim_start_matches('#').to_string(), (kind, object.clone()));
@@ -370,7 +383,7 @@ impl Job<'_> {
             other => text_field_value(other),
         };
         let id = element.int("ElementID")?;
-        self.repo.call("Execute", &[s(&format!("UPDATE t_object SET PDATA5 = '{}' WHERE Object_ID = {id}", text.replace('\'', "''")))])?;
+        self.repo.call("Execute", &[s(&format!("UPDATE t_object SET PDATA5 = '{}' WHERE Object_ID = {id}", self.sql_text(&text)))])?;
         Ok(())
     }
 
@@ -391,7 +404,7 @@ impl Job<'_> {
         }
         let id = legend.int("ElementID")?;
         let guid = legend.text("ElementGUID")?;
-        self.repo.call("Execute", &[s(&format!("UPDATE t_object SET StyleEx = '{}' WHERE Object_ID = {id}", style.replace('\'', "''")))])?;
+        self.repo.call("Execute", &[s(&format!("UPDATE t_object SET StyleEx = '{}' WHERE Object_ID = {id}", self.sql_text(&style)))])?;
         // Legend entries: filter value, element fill color or connector line color.
         let mut props = String::new();
         let mut position = 0;
@@ -416,9 +429,10 @@ impl Job<'_> {
         }
         props.push_str(&format!("@PROP=@NAME=Legend@ENDNAME;@TYPE=LEGEND_STYLE_SETTINGS@ENDTYPE;@VALU=#TITLE#={title};@ENDVALU;@PRMT=@ENDPRMT;@ENDPROP;"));
         let xref = format!("{{{}}}", uuid::Uuid::new_v4().to_string().to_uppercase());
+        let partition = self.partition_column();
         self.repo.call("Execute", &[s(&format!(
-            "INSERT INTO t_xref (XrefID, Name, Type, Visibility, Partition, Description, Client, Supplier) VALUES ('{xref}', 'CustomProperties', 'element property', 'Public', '0', '{}', '{guid}', '<none>')",
-            props.replace('\'', "''")
+            "INSERT INTO t_xref (XrefID, Name, Type, Visibility, {partition}, Description, Client, Supplier) VALUES ('{xref}', 'CustomProperties', 'element property', 'Public', '0', '{}', '{guid}', '<none>')",
+            self.sql_text(&props)
         ))])?;
         // On the diagram: top right corner or the given position.
         let (left, top) = (int_of(&op["left"]).unwrap_or(20), int_of(&op["top"]).unwrap_or(20));
@@ -1377,7 +1391,7 @@ impl Job<'_> {
                 let bytes = crate::ea_template::document(&title, &rtf)?;
                 let kind = self.repo.call("RepositoryType", &[]).map(|v| v.text()).unwrap_or_default();
                 let literal = crate::ea_template::binary_literal(&kind, &bytes)?;
-                let quoted = title.replace('\'', "''");
+                let quoted = self.sql_text(&title);
                 self.repo.call("Execute", &[s(&format!("DELETE FROM t_document WHERE DocType = 'SSDOCSTYLE' AND DocName = '{quoted}'"))])?;
                 let id = format!("{{{}}}", uuid::Uuid::new_v4().to_string().to_uppercase());
                 self.repo.call("Execute", &[s(&format!(
@@ -1951,12 +1965,13 @@ impl Job<'_> {
             &[s(&format!("update t_object set pdata1='{target_id}', ntype=82, styleex='{style_ex}' where object_id={element_id}"))],
         )?;
         let xref = format!("{{{}}}", uuid::Uuid::new_v4().to_string().to_uppercase());
-        let link_type = target_type.replace('\'', "''");
+        let link_type = self.sql_text(&target_type);
+        let partition = self.partition_column();
         let guid = element.text("ElementGUID")?;
         self.repo.call(
             "Execute",
             &[s(&format!(
-                "insert into t_xref (xrefid, name, type, visibility, partition, client, supplier, description) values \
+                "insert into t_xref (xrefid, name, type, visibility, {partition}, client, supplier, description) values \
                  ('{xref}', 'CustomProperties', 'element property', 'Public', '0', '{guid}', '<none>', \
                  '@PROP=@NAME=DiagLinkType@ENDNAME;@TYPE=string@ENDTYPE;@VALU={link_type}@ENDVALU;@PRMT=@ENDPRMT;@ENDPROP;')"
             ))],

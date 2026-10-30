@@ -39,7 +39,7 @@ fn package_id(cfg: &AppConfig, value: &Value) -> Result<(i64, String)> {
     let rows = if let Some(id) = value.as_i64().or_else(|| value.as_str().and_then(|s| s.trim().parse().ok())) {
         query_rows(cfg, &format!("select package_id, name from t_package where package_id = {id}"))?
     } else {
-        let name = value.as_str().unwrap_or("").trim().replace('\'', "''");
+        let name = crate::model_db::sql_text(cfg.model_source, value.as_str().unwrap_or("").trim());
         query_rows(cfg, &format!("select package_id, name from t_package where name = '{name}' order by package_id"))?
     };
     match rows.as_slice() {
@@ -73,7 +73,7 @@ fn elements(cfg: &AppConfig, packages: &[i64], kinds: &[String]) -> Result<Vec<E
     let filter = if kinds.is_empty() {
         "and o.object_type not in ('Note', 'Text', 'Boundary', 'Package', 'ProvidedInterface', 'RequiredInterface', 'Port')".to_string()
     } else {
-        format!("and o.object_type in ({})", kinds.iter().map(|k| format!("'{}'", k.replace('\'', "''"))).collect::<Vec<_>>().join(","))
+        format!("and o.object_type in ({})", kinds.iter().map(|k| format!("'{}'", crate::model_db::sql_text(cfg.model_source, k))).collect::<Vec<_>>().join(","))
     };
     Ok(query_rows(cfg, &format!("select o.object_id, o.name, o.object_type from t_object o where o.package_id in ({list}) {filter} order by o.name"))?
         .into_iter()

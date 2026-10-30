@@ -1440,7 +1440,7 @@ fn search(cfg: &AppConfig, q: &str) -> Result<String> {
     if q.chars().count() < 2 {
         bail!("{}", crate::i18n::tr("type at least 2 characters"));
     }
-    let like = q.to_lowercase().replace('\'', "''").replace('%', "").replace('_', "");
+    let like = crate::model_db::sql_text(cfg.model_source, &q.to_lowercase().replace('%', "").replace('_', ""));
     let rows = crate::tools::query_rows(cfg, &format!(
         "select o.object_id as c0, o.name as c1, o.object_type as c2, coalesce(o.stereotype,'') as c3, p.name as c4, substr(coalesce(o.note,''), 1, 120) as c5 from t_object o \
          join t_package p on p.package_id = o.package_id where lower(o.name) like '%{like}%' or lower(coalesce(o.alias,'')) like '%{like}%' order by o.name limit 100"

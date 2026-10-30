@@ -36,7 +36,7 @@ fn element_id(cfg: &AppConfig, value: &Value) -> Result<(i64, String, String, St
     let rows = if let Some(id) = value.as_i64().or_else(|| value.as_str().and_then(|s| s.trim().parse().ok())) {
         query_rows(cfg, &format!("select object_id, name, object_type, ea_guid from t_object where object_id = {id}"))?
     } else {
-        let name = value.as_str().unwrap_or("").trim().replace('\'', "''");
+        let name = crate::model_db::sql_text(cfg.model_source, value.as_str().unwrap_or("").trim());
         query_rows(cfg, &format!("select object_id, name, object_type, ea_guid from t_object where name = '{name}' order by object_id"))?
     };
     match rows.as_slice() {
@@ -61,7 +61,7 @@ fn section(out: &mut String, title: &str, rows: Vec<String>) {
 
 pub fn where_used(input: &Value, cfg: &AppConfig) -> Result<String> {
     let (id, name, kind, guid) = element_id(cfg, &input["element"])?;
-    let guid_q = guid.replace('\'', "''");
+    let guid_q = crate::model_db::sql_text(cfg.model_source, &guid);
     let mut out = format!("Uses of element \"{name}\" ({kind}, id {id}):\n");
     let diagrams = query_rows(cfg, &format!(
         "select d.diagram_id, d.name, d.diagram_type, p.name from t_diagramobjects x join t_diagram d on d.diagram_id = x.diagram_id \
@@ -111,7 +111,7 @@ pub fn find_orphans(input: &Value, cfg: &AppConfig) -> Result<String> {
         let rows = if let Some(id) = package.as_i64().or_else(|| package.as_str().and_then(|s| s.trim().parse().ok())) {
             query_rows(cfg, &format!("select package_id, name from t_package where package_id = {id}"))?
         } else {
-            query_rows(cfg, &format!("select package_id, name from t_package where name = '{}'", package.as_str().unwrap_or("").replace('\'', "''")))?
+            query_rows(cfg, &format!("select package_id, name from t_package where name = '{}'", crate::model_db::sql_text(cfg.model_source, package.as_str().unwrap_or(""))))?
         };
         let Some(root) = rows.first() else { bail!("{}", crate::i18n::fmt("there is no package {0}", &[package.to_string()])) };
         let mut all = vec![root[0].clone()];
@@ -124,7 +124,7 @@ pub fn find_orphans(input: &Value, cfg: &AppConfig) -> Result<String> {
         scope = format!("and o.package_id in ({})", all.join(","));
         title = format!("package \"{}\" with its child packages", root[1]);
     }
-    let types: Vec<String> = input["types"].as_array().into_iter().flatten().filter_map(|t| t.as_str()).map(|t| format!("'{}'", t.replace('\'', "''"))).collect();
+    let types: Vec<String> = input["types"].as_array().into_iter().flatten().filter_map(|t| t.as_str()).map(|t| format!("'{}'", crate::model_db::sql_text(cfg.model_source, t))).collect();
     let type_filter = if types.is_empty() { String::new() } else { format!("and o.object_type in ({})", types.join(",")) };
     let rows = query_rows(cfg, &format!(
         "select o.object_id, o.name, o.object_type, p.name from t_object o join t_package p on p.package_id = o.package_id \

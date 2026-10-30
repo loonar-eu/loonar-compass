@@ -619,7 +619,7 @@ pub fn check_object_with(cfg: &AppConfig, kind: &str, id: i64, rules: &Value) ->
             }
             let same = query_rows(cfg, &format!(
                 "select count(*) as c0 from t_connector where start_object_id = {} and end_object_id = {} and connector_type = '{}' and coalesce(stereotype,'') = '{}'",
-                c[2], c[3], c[0].replace('\'', "''"), c[1].replace('\'', "''")
+                c[2], c[3], crate::model_db::sql_text(cfg.model_source, &c[0]), crate::model_db::sql_text(cfg.model_source, &c[1])
             ))?;
             let n: usize = same.first().and_then(|r| r[0].parse().ok()).unwrap_or(1);
             if n > 1 {

@@ -99,7 +99,7 @@ fn model_config(o: &Options, default_props: &Path) -> Result<AppConfig> {
 fn packages(cfg: &AppConfig, given: Option<&str>) -> Result<Vec<(i64, String)>> {
     let rows = match given.map(str::trim).filter(|g| !g.is_empty()) {
         Some(g) if g.chars().all(|c| c.is_ascii_digit()) => crate::tools::query_rows(cfg, &format!("select package_id as c0, name as c1 from t_package where package_id = {g}"))?,
-        Some(g) => crate::tools::query_rows(cfg, &format!("select package_id as c0, name as c1 from t_package where name = '{}' order by package_id", g.replace('\'', "''")))?,
+        Some(g) => crate::tools::query_rows(cfg, &format!("select package_id as c0, name as c1 from t_package where name = '{}' order by package_id", crate::model_db::sql_text(cfg.model_source, g)))?,
         None => crate::tools::query_rows(cfg, "select package_id as c0, name as c1 from t_package where parent_id = 0 order by package_id")?,
     };
     if rows.is_empty() {

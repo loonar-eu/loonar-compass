@@ -14,11 +14,15 @@ const MAX: i32 = 500;
 
 fn rows(ctx: &Ctx, sql: &str) -> FieldResult<Vec<Vec<String>>> {
     let sql = crate::model_db::portable_sql(ctx.cfg.model_source, sql);
-    crate::tools::query_rows(&ctx.cfg, &sql).map_err(|e| juniper::FieldError::new(format!("{e:#}"), juniper::Value::null()))
+    // The database's error text stays in the hub's output: it can show the schema or data (LC-343).
+    crate::tools::query_rows(&ctx.cfg, &sql).map_err(|e| {
+        eprintln!("graphql: {e:#}");
+        juniper::FieldError::new(crate::i18n::tr("the query on the model failed"), juniper::Value::null())
+    })
 }
 
-fn text(value: &str) -> String {
-    value.replace('\'', "''")
+fn text(ctx: &Ctx, value: &str) -> String {
+    crate::model_db::sql_text(ctx.cfg.model_source, value)
 }
 
 fn limit(n: Option<i32>) -> i32 {
@@ -130,7 +134,7 @@ impl Package {
     }
     /// Elements directly in this package, optionally of one type.
     fn elements(&self, ctx: &Ctx, r#type: Option<String>, limit: Option<i32>) -> FieldResult<Vec<Element>> {
-        let filter = r#type.map(|t| format!(" and object_type = '{}'", text(&t))).unwrap_or_default();
+        let filter = r#type.map(|t| format!(" and object_type = '{}'", text(ctx, &t))).unwrap_or_default();
         elements_where(ctx, &format!("package_id = {} and object_type not in ('Package'){filter}", self.id), self::limit(limit))
     }
     fn diagrams(&self, ctx: &Ctx) -> FieldResult<Vec<Diagram>> {
@@ -253,13 +257,13 @@ impl Query {
     fn elements(ctx: &Ctx, name: Option<String>, r#type: Option<String>, stereotype: Option<String>, package: Option<i32>, limit: Option<i32>) -> FieldResult<Vec<Element>> {
         let mut condition = vec!["object_type <> 'Package'".to_string()];
         if let Some(n) = name {
-            condition.push(format!("lower(name) like '%{}%'", text(&n.to_lowercase())));
+            condition.push(format!("lower(name) like '%{}%'", text(ctx, &n.to_lowercase())));
         }
         if let Some(t) = r#type {
-            condition.push(format!("object_type = '{}'", text(&t)));
+            condition.push(format!("object_type = '{}'", text(ctx, &t)));
         }
         if let Some(s) = stereotype {
-            condition.push(format!("stereotype = '{}'", text(&s)));
+            condition.push(format!("stereotype = '{}'", text(ctx, &s)));
         }
         if let Some(p) = package {
             condition.push(format!("package_id = {p}"));
@@ -275,7 +279,7 @@ impl Query {
             condition.push(format!("package_id = {p}"));
         }
         if let Some(n) = name {
-            condition.push(format!("lower(name) like '%{}%'", text(&n.to_lowercase())));
+            condition.push(format!("lower(name) like '%{}%'", text(ctx, &n.to_lowercase())));
         }
         diagrams_where(ctx, &condition.join(" and "))
     }

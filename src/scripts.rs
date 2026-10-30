@@ -85,8 +85,8 @@ pub fn new_guid() -> String {
     format!("{{{}}}", uuid::Uuid::new_v4().to_string().to_uppercase())
 }
 
-fn sql_text(text: &str) -> String {
-    format!("'{}'", text.replace('\'', "''"))
+fn sql_text(cfg: &AppConfig, text: &str) -> String {
+    format!("'{}'", crate::model_db::sql_text(cfg.model_source, text))
 }
 
 /// SQL statements that create the group (when missing) and create or replace the script.
@@ -106,7 +106,7 @@ pub fn save_statements(cfg: &AppConfig, group: &str, name: &str, language: &str,
             let guid = new_guid();
             statements.push(format!(
                 "insert into t_script (scriptcategory, scriptname, scriptauthor, notes, script) values ('{GROUP_CATEGORY}', '{guid}', null, '<Group Type=\"NORMAL\" Notes=\"\"/>', {})",
-                sql_text(group.trim())
+                sql_text(cfg, group.trim())
             ));
             guid
         }
@@ -115,12 +115,12 @@ pub fn save_statements(cfg: &AppConfig, group: &str, name: &str, language: &str,
     let existing = all(cfg)?.into_iter().find(|s| s.name.eq_ignore_ascii_case(name.trim()) && s.group.eq_ignore_ascii_case(group.trim()));
     let updated = existing.is_some();
     match existing {
-        Some(s) => statements.push(format!("update t_script set notes = {}, script = {} where scriptname = '{}'", sql_text(&notes), sql_text(code), s.guid)),
+        Some(s) => statements.push(format!("update t_script set notes = {}, script = {} where scriptname = '{}'", sql_text(cfg, &notes), sql_text(cfg, code), s.guid)),
         None => statements.push(format!(
             "insert into t_script (scriptcategory, scriptname, scriptauthor, notes, script) values ('{SCRIPT_CATEGORY}', '{}', '{group_guid}', {}, {})",
             new_guid(),
-            sql_text(&notes),
-            sql_text(code)
+            sql_text(cfg, &notes),
+            sql_text(cfg, code)
         )),
     }
     Ok((statements, updated))
