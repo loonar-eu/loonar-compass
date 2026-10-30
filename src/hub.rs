@@ -85,6 +85,8 @@ struct Source {
 
 /// State of the running hub.
 pub struct Hub {
+    /// The hub listens only on this computer: requests must name this computer in Host (DNS rebinding, LC-350).
+    local_only: bool,
     file: PathBuf,
     dir: PathBuf,
     sources: Vec<Source>,
@@ -217,13 +219,21 @@ pub fn load(file: &Path) -> Result<(Hub, String)> {
         }
         users.push(User { name, role: Role::parse(u["role"].as_str().unwrap_or("viewer")), token, password, must_change: u["must_change"] == true });
     }
-    // A new hub: the default account (its password must be changed at the first sign-in).
-    let default_account = users.is_empty();
+    // A new hub: the default account (its password must be changed at the first sign-in) – not with a company sign-in
+    // (OIDC), where whoever reached /api/login first would set its password and become admin (LC-350); there the
+    // admins are the members of the OIDC admin group.
+    let oidc_configured = crate::oidc::Config::from_json(&value["oidc"])?.is_some();
+    let default_account = users.is_empty() && !oidc_configured;
+    if users.is_empty() && oidc_configured {
+        eprintln!("Compass Hub: no users in hub.json and a company sign-in (OIDC) is configured – no default account; admins come from the OIDC admin group.");
+    }
     if default_account {
         users.push(User { name: DEFAULT_ADMIN.into(), role: Role::Admin, token: None, password: Some(password_hash(DEFAULT_PASSWORD)), must_change: true });
     }
     let listen = value["listen"].as_str().unwrap_or(DEFAULT_LISTEN).to_string();
+    let local_only = listens_on_loopback(&listen);
     let hub = Hub {
+        local_only,
         file: file.to_path_buf(), dir, sources, users: Mutex::new(users), sessions: Mutex::new(HashMap::new()), policy: Mutex::new(value["policy"].clone()),
         audit_lock: Mutex::new(()), ask_lock: Mutex::new(()), change_lock: Mutex::new(()), failures: Mutex::new(HashMap::new()), asks: Mutex::new(HashMap::new()),
         integrations: value["integrations"].clone(),
@@ -339,6 +349,24 @@ struct Head {
     /// The last address of X-Forwarded-For (the one the proxy in front of the hub added).
     forwarded: Option<IpAddr>,
     content_type: String,
+    /// The Host header ("" when missing).
+    host: String,
+}
+
+/// Whether the listen address is this computer only (127.0.0.1, ::1, localhost).
+fn listens_on_loopback(listen: &str) -> bool {
+    let host = listen.rsplit_once(':').map_or(listen, |(h, _)| h).trim_matches(['[', ']']);
+    host.eq_ignore_ascii_case("localhost") || host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback())
+}
+
+/// Whether a Host header names this computer (any port); an empty one (HTTP/1.0) passes.
+fn host_is_local(host: &str) -> bool {
+    let host = host.trim();
+    if host.is_empty() {
+        return true;
+    }
+    let name = if let Some(rest) = host.strip_prefix('[') { rest.split(']').next().unwrap_or("") } else { host.rsplit_once(':').map_or(host, |(h, _)| h) };
+    name.eq_ignore_ascii_case("localhost") || name.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback())
 }
 
 fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Head, HttpError> {
@@ -374,7 +402,7 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
     let mut parts = first.split_whitespace();
     let method = parts.next().unwrap_or("").to_string();
     let target = parts.next().unwrap_or("/").to_string();
-    let (mut length, mut token, mut forwarded, mut content_type) = (0usize, String::new(), None, String::new());
+    let (mut length, mut token, mut forwarded, mut content_type, mut host) = (0usize, String::new(), None, String::new(), String::new());
     for count in 0.. {
         if count > MAX_HEADERS {
             return Err(deny(431, "too many headers"));
@@ -391,6 +419,7 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
                 // Compass talking to the hub's AI gateway sends the hub token as an Anthropic key.
                 "x-api-key" if token.is_empty() => token = value.trim().to_string(),
                 "content-type" => content_type = value.trim().to_string(),
+                "host" => host = value.trim().to_string(),
                 "x-forwarded-for" => forwarded = value.split(',').next_back().and_then(|a| forwarded_address(a.trim())),
                 _ => {}
             }
@@ -399,7 +428,7 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
     if length > MAX_AI_BODY || (length > MAX_BODY && !target.starts_with("/ai/")) {
         return Err(deny(413, "request body too large"));
     }
-    Ok(Head { method, target, length, token, forwarded, content_type })
+    Ok(Head { method, target, length, token, forwarded, content_type, host })
 }
 
 /// An address of X-Forwarded-For: "10.1.2.3", "2001:db8::1", or with a port as IIS/ARR sends it by default
@@ -549,6 +578,11 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
         (Some(ip), Some(client)) if ip.is_loopback() => Some(client),
         (peer, _) => peer,
     };
+    // A hub on this computer only answers requests addressed to this computer: a web page of another site whose name
+    // resolves to 127.0.0.1 (DNS rebinding) is refused (LC-350).
+    if hub.local_only && !host_is_local(&head.host) {
+        return respond(&stream, 421, "application/json; charset=utf-8", json!({ "error": "this hub answers only requests to localhost" }).to_string().as_bytes());
+    }
     let (path, query) = split_target(&head.target);
     if head.method == "GET" {
         match path.as_str() {
@@ -2145,6 +2179,42 @@ mod tests {
     /// Behind a proxy on this computer the client is the last X-Forwarded-For address (wrong sign-ins of one client do
     /// not lock out the others), and a wrong sign-in is in the audit trail with ✗ and that address. The header from
     /// another computer is not trusted (the test can only connect from loopback, so it checks the trusted case).
+    /// LC-350: a hub on loopback refuses a foreign Host; the address helpers.
+    #[test]
+    fn local_hub_and_host_header() {
+        assert!(listens_on_loopback("127.0.0.1:8730") && listens_on_loopback("[::1]:8730") && listens_on_loopback("localhost:8730"));
+        assert!(!listens_on_loopback("0.0.0.0:8730") && !listens_on_loopback("10.0.0.5:8730"));
+        for ok in ["127.0.0.1:8730", "localhost", "LOCALHOST:1", "[::1]:8730", ""] {
+            assert!(host_is_local(ok), "{ok}");
+        }
+        for bad in ["evil.example:8730", "attacker.test", "10.0.0.5:8730", "[2001:db8::1]:80"] {
+            assert!(!host_is_local(bad), "{bad}");
+        }
+        crate::i18n::set(crate::i18n::Lang::En);
+        let dir = std::env::temp_dir().join(format!("loonar-hub-host-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0", "sources": [] }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let base = format!("http://{}", rx.recv().unwrap());
+        let http = reqwest::blocking::Client::new();
+        assert_eq!(http.get(format!("{base}/api/health")).send().unwrap().status().as_u16(), 200);
+        assert_eq!(http.get(format!("{base}/api/health")).header("Host", "rebind.example:8730").send().unwrap().status().as_u16(), 421);
+    }
+
+    /// LC-350: with a company sign-in (OIDC) and no users there is no default admin/passw0rd account.
+    #[test]
+    fn no_default_account_with_oidc() {
+        let dir = std::env::temp_dir().join(format!("loonar-hub-oidc-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0", "sources": [],
+            "oidc": { "issuer": "https://login.example/realms/x", "client_id": "compass", "redirect_uri": "https://hub.example/auth/callback" } }).to_string()).unwrap();
+        let (hub, _) = load(&dir.join("hub.json")).unwrap();
+        assert!(hub.users.lock().unwrap().is_empty(), "no default account");
+        assert_eq!(hub.login(br#"{"name":"admin","password":"passw0rd"}"#, None).0, 401);
+    }
+
     #[test]
     fn sign_in_failures_behind_proxy() {
         crate::i18n::set(crate::i18n::Lang::En);
