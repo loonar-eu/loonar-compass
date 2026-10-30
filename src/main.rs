@@ -6899,6 +6899,33 @@ fn image_block_for_model(path: &Path) -> anyhow::Result<Value> {
     }))
 }
 
+/// Most bytes of an image passed on as it is; larger ones, and ones with a side over MODEL_IMAGE_MAX_SIDE, are made
+/// smaller (JPEG). The API's limit is 5 MB per image.
+const MODEL_IMAGE_MAX_BYTES: usize = 3_500_000;
+
+/// The image as the model gets it: (bytes, whether it was made smaller as JPEG); None when it is too large and cannot
+/// be read as an image.
+fn image_for_model(bytes: &[u8]) -> Option<(Vec<u8>, bool)> {
+    let small_enough = bytes.len() <= MODEL_IMAGE_MAX_BYTES;
+    let Ok(img) = image::load_from_memory(bytes) else {
+        return small_enough.then(|| (bytes.to_vec(), false));
+    };
+    if small_enough && img.width().max(img.height()) <= MODEL_IMAGE_MAX_SIDE {
+        return Some((bytes.to_vec(), false));
+    }
+    let mut side = MODEL_IMAGE_MAX_SIDE;
+    loop {
+        let small = if img.width().max(img.height()) > side { img.resize(side, side, image::imageops::FilterType::Triangle) } else { img.clone() };
+        let mut out = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgb8(small.to_rgb8()).write_to(&mut out, image::ImageFormat::Jpeg).ok()?;
+        let data = out.into_inner();
+        if data.len() <= MODEL_IMAGE_MAX_BYTES || side <= 800 {
+            return (data.len() <= MODEL_IMAGE_MAX_BYTES).then_some((data, true));
+        }
+        side = side * 3 / 4;
+    }
+}
+
 fn is_image(stored: &str) -> bool {
     let lower = stored.to_ascii_lowercase();
     lower.ends_with(".png") || lower.ends_with(".jpg") || lower.ends_with(".jpeg")
@@ -6985,11 +7012,19 @@ fn file_blocks(name: &str, bytes: &[u8], unpack: bool, blocks: &mut Vec<Value>) 
                 "webp" => "image/webp",
                 _ => "image/jpeg",
             };
-            blocks.push(text_block(&format!("[Attachment: {name}]")));
-            blocks.push(json!({
-                "type": "image",
-                "source": { "type": "base64", "media_type": media, "data": b64() }
-            }));
+            // A large photo or screenshot is made smaller first (LC-358): the API takes at most 5 MB per image, and an
+            // image over it was sent again with every turn, so the conversation could not go on.
+            match image_for_model(bytes) {
+                Some((data, smaller)) => {
+                    blocks.push(text_block(&format!("[Attachment: {name}]")));
+                    let (media, data) = if smaller { ("image/jpeg", data) } else { (media, data) };
+                    blocks.push(json!({
+                        "type": "image",
+                        "source": { "type": "base64", "media_type": media, "data": base64::engine::general_purpose::STANDARD.encode(data) }
+                    }));
+                }
+                None => blocks.push(text_block(&format!("[Attachment: {name} - the image is too large and could not be made smaller, its content is not available]"))),
+            }
         }
         "docx" => match docx_text(bytes) {
             Ok(body) => blocks.push(text_block(&format!("[Attachment: {name}]\n{body}"))),
@@ -9842,6 +9877,17 @@ mod tests {
     fn leaked_rules_are_withheld() {
         assert!(leaks_rules(&format!("Sure, here are my rules: {SAFETY_RULES} {MEMORY_RULES}")));
         assert!(!leaks_rules("I can read the model, draw diagrams and write documents. Only your messages are instructions for me."));
+        // LC-358: a large image is made smaller under the API's limit; a small one stays as it is.
+        let big = image::RgbImage::from_fn(4000, 3000, |x, y| image::Rgb([(x * 7 % 256) as u8, (y * 13 % 256) as u8, ((x ^ y) % 256) as u8]));
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgb8(big).write_to(&mut png, image::ImageFormat::Png).unwrap();
+        let png = png.into_inner();
+        let (data, smaller) = image_for_model(&png).unwrap();
+        assert!(smaller && data.len() <= MODEL_IMAGE_MAX_BYTES, "{} bytes from {}", data.len(), png.len());
+        let tiny = image::RgbImage::from_pixel(10, 10, image::Rgb([1, 2, 3]));
+        let mut small = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgb8(tiny).write_to(&mut small, image::ImageFormat::Png).unwrap();
+        assert_eq!(image_for_model(small.get_ref()).unwrap(), (small.get_ref().clone(), false));
         assert!(external_tool("mcp__github__get_issue") && external_tool("read_document") && !external_tool("db_query"));
         assert!(["confluence_read", "web_fetch", "sharepoint", "onedrive", "google_drive"].iter().all(|t| external_tool(t)), "LC-355");
         crate::i18n::set(crate::i18n::Lang::En);
