@@ -1964,7 +1964,9 @@ fn ea_write(input: &Value, ctx: &ToolContext) -> Result<String> {
     // always ask (also in auto), with what is affected.
     let related = crate::verify::relations_of_deleted(ctx.cfg, ops);
     let package_deleted = ops.iter().any(|op| op["op"] == "delete" && (op["package"].is_i64() || op["child_package"].is_i64()));
-    if !related.is_empty() || package_deleted || !risky_files.is_empty() {
+    // Version control is always asked, also in auto (LC-349): get_latest replaces the whole package.
+    let version_control = ops.iter().any(|op| op["op"] == "version_control");
+    if !related.is_empty() || package_deleted || version_control || !risky_files.is_empty() {
         ctx.approver.confirm_risky(&format!("{summary}\n\n{}\n\n{}", destructive.join("\n"), related.join("\n")))?;
     } else if destructive.is_empty() {
         ctx.approver.confirm(&summary)?;
@@ -1985,7 +1987,7 @@ fn ea_write(input: &Value, ctx: &ToolContext) -> Result<String> {
         }
     }
     let result = ea::run_batch(ctx.cfg, ops, &BatchOptions::default());
-    audit(ctx.cfg, ops, &result);
+    audit_in_mode(ctx.cfg, ctx.approver.mode, ops, &result);
     match &result {
         Ok(done) => crate::undo::record(ctx.cfg, &ea::describe(ops), done, reverse, not_undoable, baselines.clone()),
         // A save that failed part-way: the changes of existing objects before the failed operation stay; journal them.
@@ -2053,12 +2055,18 @@ fn refresh_user_ea(cfg: &AppConfig, ops: &[Value], result: &Value) {
 
 /// Appends the write to the change log (failed ones too): when, who, in which model, what and with what result.
 pub(crate) fn audit(cfg: &AppConfig, ops: &[Value], result: &Result<Value>) {
+    audit_in_mode(cfg, crate::hub::effective_mode(cfg), ops, result);
+}
+
+/// The audit entry with the approval mode really in force (LC-349: a hub policy can raise the local mode, and the
+/// entry showed the local one).
+fn audit_in_mode(cfg: &AppConfig, mode: ApprovalMode, ops: &[Value], result: &Result<Value>) {
     use std::io::Write;
     let entry = json!({
         "time": chrono::Local::now().to_rfc3339(),
         "database": if cfg.uses_file() { cfg.model_file.display().to_string() } else { format!("{}@{}:{}", cfg.db_name, cfg.db_host, cfg.db_port) },
         "ea_user": cfg.ea_user,
-        "approval": cfg.approval_mode.as_str(),
+        "approval": mode.as_str(),
         "summary": ea::describe(ops),
         "ops": ops,
         "ok": result.is_ok(),
