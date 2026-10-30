@@ -140,7 +140,7 @@ pub fn describe(cfg: &crate::config::AppConfig, kind: &str, id: i64) -> Option<(
         },
     };
     match kind {
-        "package" => q(format!("select coalesce(p.name,'') as c0, coalesce(o.stereotype,'') as c1, coalesce(parent.name,'') as c2 from t_package p left join t_object o on o.pdata1 = cast(p.package_id as varchar(20)) and o.object_type = 'Package' left join t_package parent on parent.package_id = p.parent_id where p.package_id = {id}"))
+        "package" => q(format!("select coalesce(p.name,'') as c0, coalesce(o.stereotype,'') as c1, coalesce(parent.name,'') as c2 from t_package p left join t_object o on o.ea_guid = p.ea_guid and o.object_type = 'Package' left join t_package parent on parent.package_id = p.parent_id where p.package_id = {id}"))
             .map(|r| (format!("package \"{}\" (package_id {id}) in package \"{}\"", r[0], r[2]), "Package".to_string(), r[1].clone())),
         "attribute" => q(format!("select coalesce(a.name,'') as c0, coalesce(a.type,'') as c1, coalesce(o.name,'') as c2, o.object_type as c3, coalesce(a.stereotype,'') as c4 from t_attribute a join t_object o on o.object_id = a.object_id where a.id = {id}"))
             .map(|r| (format!("attribute \"{}\" : {} (attribute id {id}) of {} \"{}\"", r[0], r[1], r[3], r[2]), "Attribute".to_string(), r[4].clone())),
@@ -171,6 +171,11 @@ pub fn matching<'a>(agents: &'a [Agent], event: &str, object_type: &str, stereot
 /// Agents that guard this deleting event for an object of this type and stereotype.
 pub fn guards<'a>(agents: &'a [Agent], event: &str, object_type: &str, stereotype: &str) -> Vec<&'a Agent> {
     matching(agents, event, object_type, stereotype).into_iter().filter(|a| a.is_guard()).collect()
+}
+
+/// Whether any guard watches this deleting event (whatever the object's type).
+pub fn guards_event(agents: &[Agent], event: &str) -> bool {
+    agents.iter().any(|a| a.is_guard() && a.event == event)
 }
 
 /// The message a guard gets: a decision, ALLOW or BLOCK on the first line.
@@ -209,9 +214,10 @@ pub fn guard_requests(rot_name: &str) -> Vec<(PathBuf, String, i64)> {
         }
         let path = entry.path();
         let Ok(text) = std::fs::read_to_string(&path) else { continue };
-        let _ = std::fs::remove_file(&path);
+        // A request the add-in is still writing does not parse yet: it stays for the next round (LC-345).
         if let Some((event, id)) = text.trim().split_once(':') {
             if let Ok(id) = id.trim().parse() {
+                let _ = std::fs::remove_file(&path);
                 out.push((path, event.trim().to_string(), id));
             }
         }
@@ -240,7 +246,10 @@ pub fn publish_guarded_events(rot_name: &str, agents: &[Agent]) {
     if events.is_empty() {
         let _ = std::fs::remove_file(file);
     } else {
-        let _ = std::fs::write(file, events.join("\n"));
+        let tmp = file.with_extension("tmp");
+        if std::fs::write(&tmp, events.join("\n")).is_ok() {
+            let _ = std::fs::rename(&tmp, &file);
+        }
     }
 }
 
@@ -259,6 +268,42 @@ Answer in at most 4 short lines, in the language of the task.",
 
 #[cfg(test)]
 mod tests {
+    /// LC-345: a request the add-in is still writing stays until it is complete; then it is taken once.
+    #[test]
+    fn guard_requests_wait_for_a_complete_request() {
+        let rot = format!("test{}", std::process::id());
+        let path = std::env::temp_dir().join(format!("loonar-ea-guard-{rot}-x.req"));
+        std::fs::write(&path, "element_deleting:").unwrap();
+        assert!(super::guard_requests(&rot).is_empty());
+        assert!(path.exists(), "a half-written request must not be dropped");
+        std::fs::write(&path, "element_deleting:42").unwrap();
+        let taken = super::guard_requests(&rot);
+        assert_eq!(taken.len(), 1);
+        assert_eq!((taken[0].1.as_str(), taken[0].2), ("element_deleting", 42));
+        assert!(!path.exists());
+    }
+
+    /// LC-345: the description of a package on a real SQL Server (the query has no varchar cast):
+    /// `LOONAR_TEST_MSSQL_WIN="127.0.0.1;1433;ea_lab" cargo test describe_package_on_sql_server -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a SQL Server with an EA repository"]
+    fn describe_package_on_sql_server() {
+        let spec = std::env::var("LOONAR_TEST_MSSQL_WIN").unwrap();
+        let parts: Vec<&str> = spec.split(';').collect();
+        let props = std::env::temp_dir().join(format!("loonar-mssql-guard-{}.properties", std::process::id()));
+        std::fs::write(&props, format!("model.source=sqlserver
+db.host={}
+db.port={}
+db.name={}
+db.user=
+", parts[0], parts[1], parts[2])).unwrap();
+        let cfg = crate::config::AppConfig::load(&props).unwrap();
+        let id: i64 = crate::tools::query_rows(&cfg, "select max(package_id) from t_package").unwrap()[0][0].parse().unwrap();
+        let described = super::describe(&cfg, "package_deleting", id);
+        println!("{described:?}");
+        assert!(described.is_some_and(|d| d.1 == "Package"));
+    }
+
     use super::*;
 
     #[test]

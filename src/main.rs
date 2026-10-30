@@ -6211,7 +6211,14 @@ fn start_guards(cfg: &AppConfig) {
 fn guard_requests_once(cfg: &AppConfig, rot: &str, agents: &[agents::Agent]) {
                 for (request, event, id) in agents::guard_requests(rot) {
                     let mut block = None;
-                    if let Some((object, object_type, stereotype)) = agents::describe(cfg, &event, id) {
+                    let described = agents::describe(cfg, &event, id);
+                    // Fail closed (LC-345): the object could not be read, so no guard could decide – the deletion stops.
+                    if described.is_none() && agents::guards_event(agents, &event) {
+                        let reason = crate::i18n::fmt("the object to delete could not be read ({0} {1}); the deletion is stopped", &[event.clone(), id.to_string()]);
+                        ea_ui::output(&format!("🛡 {reason}"));
+                        block = Some(reason);
+                    }
+                    if let Some((object, object_type, stereotype)) = described {
                         for guard in agents::guards(agents, &event, &object_type, &stereotype) {
                             ea_ui::output(&crate::i18n::fmt("🛡 {0}: {1}…", &[guard.name.clone(), object.clone()]));
                             match run_agent(cfg, &agents::guard_prompt(guard, &event, &object), std::time::Duration::from_secs(agents::GUARD_TIMEOUT_SECS - 5)) {

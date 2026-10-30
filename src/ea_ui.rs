@@ -274,13 +274,31 @@ pub fn sql_query(sql: &str, limit: usize) -> Result<(Vec<String>, Vec<Vec<Option
             }
         })
     };
-    let xml = with_running_ea(Duration::from_secs(60), move |repo| Ok(repo.call("SQLQuery", &[crate::com::s(&sql)])?.text()));
+    let xml = with_running_ea(Duration::from_secs(60), move |repo| {
+        // The SQL of the repository's engine (LC-345: reads in an EA tab skipped portable_sql, so e.g. a cast to
+        // varchar failed on MySQL and a guard got no description).
+        let kind = repo.call("RepositoryType", &[]).map(|v| v.text()).unwrap_or_default();
+        let sql = crate::model_db::portable_sql(source_of_repository(&kind), &sql);
+        Ok(repo.call("SQLQuery", &[crate::com::s(&sql)])?.text())
+    });
     done.store(true, std::sync::atomic::Ordering::Relaxed);
     let _ = watcher.join();
     if let Some(error) = caught.lock().unwrap_or_else(|p| p.into_inner()).take() {
         bail!("{}", error.lines().filter(|l| !l.trim().is_empty()).collect::<Vec<_>>().join(" "));
     }
     Ok(parse_sql_xml(&xml?, limit))
+}
+
+/// The engine of an EA repository (Repository.RepositoryType) for portable_sql; files and others as SQLite/Jet.
+fn source_of_repository(kind: &str) -> crate::config::ModelSource {
+    use crate::config::ModelSource;
+    match kind.to_ascii_uppercase().as_str() {
+        "SQLSVR" => ModelSource::SqlServer,
+        "MYSQL" => ModelSource::MySql,
+        "ORACLE" => ModelSource::Oracle,
+        "POSTGRES" => ModelSource::Postgres,
+        _ => ModelSource::File,
+    }
 }
 
 /// Message boxes of the given EA process. With `skip` (the boxes open before the query): closes the first new one that
@@ -833,6 +851,18 @@ pub fn refresh_after_write(target: &Target, diagrams: Vec<i32>, packages: Vec<i3
 
 #[cfg(test)]
 mod tests {
+    /// LC-345: EA's repository types map to the engines of portable_sql.
+    #[test]
+    fn repository_types() {
+        use crate::config::ModelSource;
+        assert_eq!(super::source_of_repository("SQLSVR"), ModelSource::SqlServer);
+        assert_eq!(super::source_of_repository("MYSQL"), ModelSource::MySql);
+        assert_eq!(super::source_of_repository("ORACLE"), ModelSource::Oracle);
+        assert_eq!(super::source_of_repository("POSTGRES"), ModelSource::Postgres);
+        assert_eq!(super::source_of_repository("SL3"), ModelSource::File);
+        assert_eq!(super::source_of_repository("JET"), ModelSource::File);
+    }
+
     /// LC-340: text outside ASCII before the outer SELECT (a CTE name).
     #[test]
     fn alias_expressions_after_a_polish_cte() {

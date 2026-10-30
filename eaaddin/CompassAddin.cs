@@ -170,20 +170,29 @@ namespace LoonarCompass
         {
             if (current == null || current.IsDisposed)
                 return true;
+            string line;
             try
             {
                 dynamic properties = info;
-                string line = kind + ":" + properties.Get(property).Value;
-                // The object is gone by the time Compass reads the event: its description goes with the event
-                // ("kind:id<TAB>description<TAB>type<TAB>stereotype"), for the advising agents of deletions.
-                current.Event(line + Describe(repository, kind, Convert.ToInt32(properties.Get(property).Value)));
-                return current.Guard(kind, line);
+                line = kind + ":" + properties.Get(property).Value;
             }
             catch (Exception e)
             {
+                // The deleted object is unknown: a guarded event stops (LC-345), any other goes ahead.
                 Log.Write(kind + " guard: " + e.Message);
-                return true;
+                return !current.Guarded(kind);
             }
+            try
+            {
+                // The object is gone by the time Compass reads the event: its description goes with the event
+                // ("kind:id<TAB>description<TAB>type<TAB>stereotype"), for the advising agents of deletions.
+                current.Event(line + Describe(repository, kind, Convert.ToInt32(line.Substring(line.IndexOf(':') + 1))));
+            }
+            catch (Exception e)
+            {
+                Log.Write(kind + " event: " + e.Message);
+            }
+            return current.Guard(kind, line);
         }
 
         /// <summary>"\tdescription\ttype\tstereotype" of the object about to be deleted (as Compass describes it), or "".</summary>
@@ -683,6 +692,35 @@ namespace LoonarCompass
             }
         }
 
+        /// <summary>Whether a guard of Compass watches this deleting event. Compass writes the list atomically; a list that
+        /// cannot be read (a moment of sharing, an IO error) counts as guarded – a deletion is never let through by an
+        /// error (LC-345). No list = no guards.</summary>
+        public bool Guarded(string kind)
+        {
+            if (rotName == null || process == null)
+                return false;
+            string guarded = Path.Combine(Path.GetTempPath(), "loonar-ea-guards-" + rotName + ".txt");
+            for (int attempt = 0; attempt < 5; attempt++)
+            {
+                try
+                {
+                    if (!File.Exists(guarded))
+                        return false;
+                    return Array.IndexOf(File.ReadAllLines(guarded), kind) >= 0;
+                }
+                catch (IOException)
+                {
+                    System.Threading.Thread.Sleep(30);
+                }
+                catch (Exception e)
+                {
+                    Log.Write("Guarded: " + e.Message);
+                    return true;
+                }
+            }
+            return true;
+        }
+
         /// <summary>Asks Compass whether a deletion may go ahead: only when a guard watches this event (Compass lists them in
         /// a file). Waits at most 40 seconds; no answer = the deletion is stopped, so a protected object is never lost
         /// because Compass did not answer.</summary>
@@ -690,17 +728,9 @@ namespace LoonarCompass
         {
             if (rotName == null || process == null)
                 return true;
-            string temp = Path.GetTempPath();
-            try
-            {
-                string guarded = Path.Combine(temp, "loonar-ea-guards-" + rotName + ".txt");
-                if (!File.Exists(guarded) || Array.IndexOf(File.ReadAllLines(guarded), kind) < 0)
-                    return true;
-            }
-            catch
-            {
+            if (!Guarded(kind))
                 return true;
-            }
+            string temp = Path.GetTempPath();
             string id = Guid.NewGuid().ToString("N");
             string request = Path.Combine(temp, "loonar-ea-guard-" + rotName + "-" + id + ".req");
             string response = Path.Combine(temp, "loonar-ea-guard-" + rotName + "-" + id + ".res");
@@ -716,14 +746,13 @@ namespace LoonarCompass
                     {
                         string[] answer = File.ReadAllLines(response);
                         File.Delete(response);
-                        if (answer.Length > 0 && answer[0] == "block")
-                        {
-                            string reason = answer.Length > 1 ? answer[1] : "";
-                            Cursor.Current = previous;
-                            MessageBox.Show(L10n.Get("Loonar Compass stopped this deletion:") + "\n\n" + reason, "Loonar Compass", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                            return false;
-                        }
-                        return true;
+                        // Only an explicit "allow" lets the deletion go (LC-345): "block" or anything else stops it.
+                        if (answer.Length > 0 && answer[0] == "allow")
+                            return true;
+                        string reason = answer.Length > 1 ? answer[1] : L10n.Get("No decision of the guard in time: the deletion is stopped.");
+                        Cursor.Current = previous;
+                        MessageBox.Show(L10n.Get("Loonar Compass stopped this deletion:") + "\n\n" + reason, "Loonar Compass", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return false;
                     }
                     // A pumping wait, not Sleep: Compass reads the object being deleted from this EA (Repository.SQLQuery)
                     // while EA waits here; the calls of COM are served during the wait, the user's input is not.
@@ -736,8 +765,11 @@ namespace LoonarCompass
             }
             catch (Exception e)
             {
+                // A guarded deletion with an error on the way (writing the request, reading the answer): stopped (LC-345).
                 Log.Write("Guard: " + e.Message);
-                return true;
+                Cursor.Current = previous;
+                MessageBox.Show(L10n.Get("No decision of the guard in time: the deletion is stopped.") + "\n\n" + e.Message, "Loonar Compass", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
             }
             finally
             {
