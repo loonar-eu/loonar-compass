@@ -164,20 +164,19 @@ pub fn run_request(repo: &Disp, user: &str, ops: &[Value], rollback_key: Option<
                 let created: Vec<Value> = job.created.iter().rev().cloned().collect();
                 let mut left = Vec::new();
                 for object in created {
-                    let field = match object["kind"].as_str().unwrap_or("") {
-                        "package" => "package",
-                        "element" => "element",
-                        "diagram" => "diagram",
-                        "connector" => "connector",
+                    let kind = object["kind"].as_str().unwrap_or("");
+                    let id = object["id"].as_i64().unwrap_or(0);
+                    let delete = match kind {
+                        "package" | "element" | "diagram" | "connector" => json!({ "op": "delete", kind: id }),
+                        "attribute" => json!({ "op": "delete_attribute", "attribute": id }),
+                        "operation" => json!({ "op": "delete_operation", "operation": id }),
                         _ => continue,
                     };
-                    let id = object["id"].as_i64().unwrap_or(0);
-                    // An object already deleted together with its owner (an element with its connectors) counts as removed.
-                    if let Err(e) = job.op(&json!({ "op": "delete", field: id })) {
-                        let text = e.to_string().to_lowercase();
-                        if !(text.contains("no ") || text.contains("nie ma") || text.contains("there is")) {
-                            left.push(object.clone());
-                        }
+                    // An object already deleted together with its owner (an element with its connectors) counts as
+                    // removed; EA is asked whether it is still there (LC-348: the error text "no lock…" was taken as
+                    // "already deleted").
+                    if job.op(&delete).is_err() && job.exists(kind, id) {
+                        left.push(object.clone());
                     }
                 }
                 if left.is_empty() {
@@ -286,6 +285,20 @@ fn is_key(value: &Value) -> Option<&str> {
 }
 
 impl Job<'_> {
+    /// Whether an object of this kind and id is still in the model (EA's Get…ByID).
+    fn exists(&self, kind: &str, id: i64) -> bool {
+        let getter = match kind {
+            "package" => "GetPackageByID",
+            "element" => "GetElementByID",
+            "diagram" => "GetDiagramByID",
+            "connector" => "GetConnectorByID",
+            "attribute" => "GetAttributeByID",
+            "operation" => "GetMethodByID",
+            _ => return false,
+        };
+        self.repo.call(getter, &[i(id as i32)]).ok().and_then(|v| v.object()).is_some()
+    }
+
     /// The column Partition of t_xref: a reserved word on MySQL/MariaDB, quoted there (LC-343).
     fn partition_column(&self) -> &'static str {
         let kind = self.repo.call("RepositoryType", &[]).map(|v| v.text()).unwrap_or_default();

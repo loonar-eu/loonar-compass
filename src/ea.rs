@@ -304,6 +304,29 @@ pub fn run_batch(cfg: &AppConfig, ops: &[Value], options: &BatchOptions) -> Resu
     check_result(ops, result)
 }
 
+/// A write that failed at one operation: the message for the user and the index of the failed operation, so the save
+/// can journal the changes of existing objects made before it (LC-348).
+#[derive(Debug)]
+pub struct BatchError {
+    pub message: String,
+    pub failed_at: Option<usize>,
+}
+
+impl std::fmt::Display for BatchError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for BatchError {}
+
+/// Operations that only add objects (removed again by the rollback) or only read (exports): everything else changes
+/// objects that existed before the write, and such a change stays when a later operation fails.
+const ADDING_OPS: &[&str] = &[
+    "create_package", "create_diagram", "create_element", "create_connector", "create_attribute", "create_operation", "ping",
+    "export_diagram", "export_xmi", "generate_report", "create_baseline",
+];
+
 /// Turns an EA reply into the result of a write: an error message that says what failed and what was left in the model.
 fn check_result(ops: &[Value], result: Value) -> Result<Value> {
     if result["ok"] != true {
@@ -314,14 +337,27 @@ fn check_result(ops: &[Value], result: Value) -> Result<Value> {
             Some(i) => crate::i18n::fmt("operation {0} ({1}) failed: {2}", &[(i + 1).to_string(), op_name(ops, i), error.to_string()]),
             None => error.to_string(),
         };
-        if result["rolled_back"] == true {
+        // Changes of existing objects made before the failed operation are not rolled back (LC-348): say so.
+        let changed_before: Vec<String> = at
+            .map(|i| ops.iter().take(i as usize).enumerate().filter(|(_, op)| !ADDING_OPS.contains(&op["op"].as_str().unwrap_or(""))).map(|(n, _)| (n + 1).to_string()).collect())
+            .unwrap_or_default();
+        if result["rolled_back"] == true && changed_before.is_empty() {
             msg.push(' ');
             msg.push_str(crate::i18n::tr("The changes were rolled back; nothing was left in the model."));
-        } else if left > 0 {
-            msg.push(' ');
-            msg.push_str(&crate::i18n::fmt("{0} objects created before the error remain in the model.", &[left.to_string()]));
+        } else {
+            if result["rolled_back"] == true {
+                msg.push(' ');
+                msg.push_str(crate::i18n::tr("The objects created before the error were removed."));
+            } else if left > 0 {
+                msg.push(' ');
+                msg.push_str(&crate::i18n::fmt("{0} objects created before the error remain in the model.", &[left.to_string()]));
+            }
+            if !changed_before.is_empty() {
+                msg.push(' ');
+                msg.push_str(&crate::i18n::fmt("The changes of existing objects made by operations {0} stay in the model (they are in the undo journal).", &[changed_before.join(", ")]));
+            }
         }
-        bail!(msg);
+        return Err(BatchError { message: msg, failed_at: at.map(|i| i as usize) }.into());
     }
     Ok(result)
 }
@@ -826,6 +862,65 @@ model.file=C:/nie-ma/takiego/pliku.qea
         let message = format!("{refused:?}");
         println!("{message}");
         assert!(message.contains("zablokowany przez konto admin"), "no information about the lock owner");
+    }
+
+    /// LC-348: undo restores a changed attribute and deletes a created operation; a save that fails part-way says which
+    /// changes stay and journals them. Run with a file copy:
+    /// `LOONAR_TEST_PROPS=E:/livetest/undo/undo.properties cargo test ea_undo_attributes -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "requires EA, a license and the model database from app.properties"]
+    fn ea_undo_attributes() {
+        let cfg = test_config();
+        let _ea = CloseEa;
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).expect(sql);
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id limit 1")[0][0].parse().unwrap();
+        let ops = vec![
+            json!({"op":"create_package","key":"pkg","parent":root,"name":format!("ZZ_undo_{}", chrono::Local::now().format("%H%M%S"))}),
+            json!({"op":"create_element","key":"c","package":"#pkg","name":"Order","type":"Class"}),
+            json!({"op":"create_attribute","key":"a","element":"#c","name":"amount","type":"int"}),
+        ];
+        let created = run_batch(&cfg, &ops, &BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("creation");
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).expect(key)["id"].as_i64().unwrap();
+        let (pkg, class, attribute) = (id_of("pkg"), id_of("c"), id_of("a"));
+
+        // A change of the attribute and a new operation in one save, journalled as the save does it.
+        let save = vec![
+            json!({"op":"update_attribute","attribute":attribute,"name":"total","type":"decimal"}),
+            json!({"op":"create_operation","key":"o","element":class,"name":"pay","return_type":"void"}),
+        ];
+        let (reverse, not_undoable) = crate::undo::before(&cfg, &save);
+        let done = run_batch(&cfg, &save, &BatchOptions::default()).expect("save");
+        let journal = std::env::temp_dir().join(format!("loonar-undo-{}", std::process::id()));
+        std::fs::create_dir_all(&journal).unwrap();
+        let mut jcfg = cfg.clone();
+        jcfg.base_dir = journal.clone();
+        crate::undo::record(&jcfg, "test", &done, reverse.clone(), not_undoable, Vec::new());
+        let entry = crate::undo::latest(&jcfg, 1).pop().expect("a journal entry");
+        let back: Vec<Value> = entry["reverse"].as_array().unwrap().clone();
+        println!("reverse: {back:?}");
+        assert!(back.iter().any(|r| r["op"] == "delete_operation"), "the created operation is deleted on undo");
+        assert!(back.iter().any(|r| r["op"] == "update_attribute" && r["name"] == "amount" && r["type"] == "int"));
+        assert!(back.iter().all(|r| r.get("_at").is_none()));
+        run_batch(&cfg, &back, &BatchOptions::default()).expect("undo");
+        assert_eq!(q(&format!("select name, type from t_attribute where id = {attribute}"))[0], vec!["amount".to_string(), "int".to_string()]);
+        assert!(q(&format!("select operationid from t_operation where object_id = {class}")).is_empty());
+
+        // A save that fails at its second operation: the first change stays and is named.
+        let failing = vec![
+            json!({"op":"update_attribute","attribute":attribute,"name":"sum"}),
+            json!({"op":"update_element","element":987654321,"name":"x"}),
+        ];
+        let (reverse, _) = crate::undo::before(&cfg, &failing);
+        let err = run_batch(&cfg, &failing, &BatchOptions::default()).expect_err("must fail");
+        let batch = err.downcast_ref::<BatchError>().expect("a BatchError");
+        println!("{}", batch.message);
+        assert_eq!(batch.failed_at, Some(1));
+        crate::undo::record_partial(&jcfg, "failing", 1, reverse, Vec::new());
+        let partial = crate::undo::latest(&jcfg, 1).pop().unwrap();
+        assert_eq!(partial["reverse"][0]["name"], "amount");
+
+        run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &BatchOptions::default()).expect("deleting the test package");
+        let _ = std::fs::remove_dir_all(&journal);
     }
 
     /// Linking a BPMN subprocess to the subprocess diagram (set_composite) on a real EA: on double-click EA

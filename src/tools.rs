@@ -1045,7 +1045,10 @@ fn undo_change(input: &Value, ctx: &ToolContext) -> Result<String> {
         let ops: Vec<Value> = normalize_ops(&e["reverse"].as_array().cloned().unwrap_or_default());
         let label = e["summary"].as_str().unwrap_or("").replace('\n', "; ");
         if !ops.is_empty() {
-            match ea::run_batch(ctx.cfg, &ops, &BatchOptions::default()) {
+            // An undo is a write like any other: it goes to the audit log and the hub's trail (LC-348).
+            let result = ea::run_batch(ctx.cfg, &ops, &BatchOptions::default());
+            audit(ctx.cfg, &ops, &result);
+            match result {
                 Ok(done) => {
                     let check = crate::verify::verify(ctx.cfg, &ops, &done);
                     out.push(if check.problems.is_empty() { format!("Undone and verified: {label}") } else { format!("Undone, but the model differs: {label}: {}", check.problems.join("; ")) });
@@ -1190,7 +1193,10 @@ fn ea_script(input: &Value, ctx: &ToolContext) -> Result<String> {
                 group.clone(), name.clone(), language.clone(), code.lines().count().to_string(),
                 if updated { crate::i18n::tr(" - REPLACES the existing script").to_string() } else { String::new() }, script_for_approval(&code)?,
             ]))?;
-            ea::run_batch(ctx.cfg, &[json!({ "op": "execute_sql", "statements": statements })], &BatchOptions::default())?;
+            let save = [json!({ "op": "execute_sql", "statements": statements })];
+            let result = ea::run_batch(ctx.cfg, &save, &BatchOptions::default());
+            audit(ctx.cfg, &save, &result);
+            result?;
             let saved = crate::scripts::find(ctx.cfg, &format!("{group}.{name}"))?;
             if saved.code.replace("\r\n", "\n").trim() != code.replace("\r\n", "\n").trim() {
                 bail!("{}", crate::i18n::tr("the script was not saved correctly (the model has different code)"));
@@ -1971,15 +1977,23 @@ fn ea_write(input: &Value, ctx: &ToolContext) -> Result<String> {
     let mut baselines = Vec::new();
     for package in crate::undo::packages_to_baseline(ctx.cfg, ops) {
         let version = format!("Compass {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"));
-        let made = ea::run_batch(ctx.cfg, &[json!({ "op": "create_baseline", "package": package, "version": version, "notes": crate::i18n::tr("Made by Compass before a change that cannot be undone by operations") })], &BatchOptions::default());
+        let baseline = [json!({ "op": "create_baseline", "package": package, "version": version, "notes": crate::i18n::tr("Made by Compass before a change that cannot be undone by operations") })];
+        let made = ea::run_batch(ctx.cfg, &baseline, &BatchOptions::default());
+        audit(ctx.cfg, &baseline, &made);
         if made.is_ok() {
             baselines.push(format!("package {package}: {version}"));
         }
     }
     let result = ea::run_batch(ctx.cfg, ops, &BatchOptions::default());
     audit(ctx.cfg, ops, &result);
-    if let Ok(done) = &result {
-        crate::undo::record(ctx.cfg, &ea::describe(ops), done, reverse, not_undoable, baselines.clone());
+    match &result {
+        Ok(done) => crate::undo::record(ctx.cfg, &ea::describe(ops), done, reverse, not_undoable, baselines.clone()),
+        // A save that failed part-way: the changes of existing objects before the failed operation stay; journal them.
+        Err(e) => {
+            if let Some(at) = e.downcast_ref::<ea::BatchError>().and_then(|b| b.failed_at) {
+                crate::undo::record_partial(ctx.cfg, &ea::describe(ops), at, reverse, baselines.clone());
+            }
+        }
     }
     if let Ok(done) = &result {
         refresh_user_ea(ctx.cfg, ops, done);
@@ -2038,7 +2052,7 @@ fn refresh_user_ea(cfg: &AppConfig, ops: &[Value], result: &Value) {
 }
 
 /// Appends the write to the change log (failed ones too): when, who, in which model, what and with what result.
-fn audit(cfg: &AppConfig, ops: &[Value], result: &Result<Value>) {
+pub(crate) fn audit(cfg: &AppConfig, ops: &[Value], result: &Result<Value>) {
     use std::io::Write;
     let entry = json!({
         "time": chrono::Local::now().to_rfc3339(),

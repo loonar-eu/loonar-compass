@@ -109,7 +109,10 @@ impl Dialog {
         self.busy = Some(crate::i18n::tr("Saving in the project glossary…"));
         self.message = None;
         std::thread::spawn(move || {
-            let result = ea::run_batch(&cfg, &[op], &BatchOptions::default())
+            let ops = [op];
+            let written = ea::run_batch(&cfg, &ops, &BatchOptions::default());
+            crate::tools::audit(&cfg, &ops, &written);
+            let result = written
                 .map(|out| out["warnings"].as_array().into_iter().flatten().filter_map(Value::as_str).collect::<Vec<_>>().join("\n"))
                 .map_err(|e| format!("{e:#}"));
             let _ = tx.send(Event::Saved(result));
