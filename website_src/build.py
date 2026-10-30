@@ -37,15 +37,15 @@ OWNER = "Loonar Mariusz Głowacki"
 EMAIL = "mariusz@loonar.eu"
 
 # ---- current release: change these lines for a new version (see website/README.md) ----
-VER = "0.9.1"
+VER = "0.9.2"
 # The only link to the installer: a GitHub release asset. The file name and the repository are taken from it.
-SETUP_URL = "https://github.com/loonar-eu/loonar-compass/releases/download/v0.9.1/LoonarCompass-Setup-0.9.1.exe"
-RELEASE = "2026-10-28"
-DATE = {"en": "28 October 2026", "pl": "28 października 2026", "de": "28. Oktober 2026", "fr": "28 octobre 2026"}
+SETUP_URL = "https://github.com/loonar-eu/loonar-compass/releases/download/v0.9.2/LoonarCompass-Setup-0.9.2.exe"
+RELEASE = "2026-10-30"
+DATE = {"en": "30 October 2026", "pl": "30 października 2026", "de": "30. Oktober 2026", "fr": "30 octobre 2026"}
 # SHA-256 of the installer, shown next to the download button (PowerShell: Get-FileHash <installer>).
 # When the installer is in DIST, the build checks this value against the file and takes the size from it;
 # without the file it uses SHA256 and SIZE_MB as written here and prints a warning.
-SHA256 = "8feefe8cb1934523f81f00f37ec0e9ae7e4f649b6b49184b46d5a52542652074"
+SHA256 = "9cdff6de837e929abf033cdb7004590726ff8fcccac7181fc5615d1ac243f7e7"
 SIZE_MB = 34
 DIST = os.path.join(ROOT, "dist")
 # ---- services used by the website --------------------------------------------------------

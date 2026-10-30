@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="fr" data-goatcounter="https://loonar.goatcounter.com/count">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https://loonar.goatcounter.com/count; connect-src https://loonar.goatcounter.com/count; style-src 'self'; script-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Guide de l'utilisateur 0.3 – Loonar Compass</title>
+<meta name="description" content="Guide de l'utilisateur de Loonar Compass 0.3, un assistant IA pour Sparx Enterprise Architect.">
+<meta name="robots" content="noindex">
+<link rel="canonical" href="https://loonar.eu/compass/docs/0.3/fr/">
+<link rel="alternate" hreflang="en" href="https://loonar.eu/compass/docs/0.3/en/">
+<link rel="alternate" hreflang="pl" href="https://loonar.eu/compass/docs/0.3/pl/">
+<link rel="alternate" hreflang="de" href="https://loonar.eu/compass/docs/0.3/de/">
+<link rel="alternate" hreflang="fr" href="https://loonar.eu/compass/docs/0.3/fr/">
+<meta name="theme-color" content="#0E4A6B">
+<meta name="color-scheme" content="light">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Loonar Compass">
+<meta property="og:title" content="Guide de l'utilisateur – Loonar Compass">
+<meta property="og:description" content="Guide de l'utilisateur de Loonar Compass 0.3, un assistant IA pour Sparx Enterprise Architect.">
+<meta property="og:url" content="https://loonar.eu/compass/docs/0.3/fr/">
+<meta property="og:image" content="https://loonar.eu/assets/img/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Loonar Compass – assistant IA pour Sparx Enterprise Architect">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="og:locale:alternate" content="pl_PL">
+<meta property="og:locale:alternate" content="de_DE">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../../../../favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../../../../favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="../../../../apple-touch-icon.png">
+<link rel="stylesheet" href="../../../../assets/style.css?v=9">
+<script src="../../../../assets/site.js?v=9" defer></script>
+</head>
+<body id="top">
+<a class="skip" href="#main">Aller au contenu</a>
+<header class="site-header">
+  <div class="wrap hdr nonav">
+    <a class="brand" href="../../../fr/"><img src="../../../../assets/img/logo.svg" alt="" width="34" height="34"><span>Loonar <b>Compass</b></span></a>
+    <nav class="lang" aria-label="Langue"><ul><li><a href="../en/" hreflang="en" lang="en" data-lang-link="en" title="English">EN</a></li><li><a href="../pl/" hreflang="pl" lang="pl" data-lang-link="pl" title="Polski">PL</a></li><li><a href="../de/" hreflang="de" lang="de" data-lang-link="de" title="Deutsch">DE</a></li><li><a href="../fr/" hreflang="fr" lang="fr" data-lang-link="fr" title="Français" aria-current="page">FR</a></li></ul></nav>
+    <a class="hdr-docs" href="../../../../compass/docs/latest/fr/" aria-label="Documentation"><svg class="mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14zM4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg><span>Documentation</span></a>
+    <a class="hdr-gh" href="https://github.com/loonar-eu/loonar-compass" aria-label="Code source sur GitHub" title="Code source sur GitHub"><svg class="mark" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+    <a class="btn btn-sm" href="../../../fr/#download">Télécharger</a>
+  </div>
+</header>
+
+<main id="main" class="docs-main">
+  <div class="wrap docs-grid">
+    <aside class="docs-side" aria-label="Documentation">
+      <p class="docs-kicker">Documentation · Loonar Compass</p>
+      <nav class="docs-tabs"><a href="index.html" aria-current="page">Guide de l'utilisateur</a><a href="install.html">Installation</a></nav>
+      <details class="docs-ver"><summary>Version: 0.3</summary><ul><li><a href="../../0.9.2/fr/">0.9.2 (la plus récente)</a></li><li><a href="../../0.9.1/fr/">0.9.1</a></li><li><a href="../../0.9/fr/">0.9</a></li><li><a href="../../0.8.2/fr/">0.8.2</a></li><li><a href="../../0.8.1/fr/">0.8.1</a></li><li><a href="../../0.7/fr/">0.7</a></li><li><a href="../../0.6/fr/">0.6</a></li><li><a href="../../0.5/fr/">0.5</a></li><li><a href="../../0.4/fr/">0.4</a></li><li><a href="./" aria-current="page">0.3</a></li></ul></details>
+      <p class="docs-toc-h">Sur cette page</p>
+      <ol class="docs-toc"><li><a href="#s1">1. Présentation de Loonar Compass</a></li><li class="docs-toc-other"><a href="install.html#s2">2. Configuration requise <span aria-hidden="true">↗</span></a></li><li class="docs-toc-other"><a href="install.html#s3">3. Installation <span aria-hidden="true">↗</span></a></li><li><a href="#s4">4. Fenêtre de l&#x27;application et navigation</a></li><li><a href="#s5">5. Paramètres et langue</a></li><li><a href="#s6">6. Conversation avec l&#x27;assistant</a></li><li><a href="#s7">7. Travail avec le modèle Enterprise Architect</a></li><li><a href="#s8">8. Collaboration avec la fenêtre EA ouverte</a></li><li><a href="#s9">9. Documents : Word, Excel, images, Confluence</a></li><li><a href="#s10">10. Modèles de documents</a></li><li><a href="#s11">11. Mémoire de l&#x27;assistant</a></li><li><a href="#s12">12. Validation des modifications et journal des modifications</a></li><li><a href="#s13">13. Conversations : historique, recherche, travail en arrière-plan</a></li><li><a href="#s14">14. Données, sécurité et confidentialité</a></li><li><a href="#s15">15. Résolution des problèmes</a></li><li><a href="#s16">16. Signalement de bugs et nouvelles versions</a></li><li class="docs-toc-other"><a href="install.html#s17">17. Mise à jour et désinstallation <span aria-hidden="true">↗</span></a></li><li><a href="#s18">18. Licence, marques et contact</a></li></ol>
+      
+    </aside>
+    <article class="docs-body">
+      <p class="docs-old">Ceci est la documentation de la version 0.3. La version la plus récente est la 0.9.2 : <a href="../../latest/fr/">voir la documentation la plus récente</a></p>
+      <h1>Guide de l'utilisateur</h1>
+      <h2 id="s1">1. Présentation de Loonar Compass</h2>
+<p>Loonar Compass est une application de bureau autonome pour Windows : un assistant IA pour travailler avec un modèle Enterprise Architect (Sparx Systems). Vous lui écrivez en langage courant, et il :</p>
+<ul>
+  <li><b>lit le modèle</b> (paquetages, éléments, diagrammes, connecteurs, attributs et opérations, valeurs étiquetées et mots-clés) et décrit ce qu'il contient,</li>
+  <li><b>analyse le modèle</b> : impact de la modification d'un élément sur le reste du modèle, endroits où les opérations sont utilisées, éléments sans connecteurs,</li>
+  <li><b>modifie le modèle</b> : crée des paquetages, des diagrammes, des éléments et des connecteurs, ajoute des attributs, des opérations, des valeurs étiquetées et des mots-clés, dispose les éléments sur les diagrammes, les déplace, les retire d'un diagramme ou les supprime du modèle, les colore, ajoute des légendes, copie des paquetages et en crée des baselines,</li>
+  <li><b>dessine</b> des diagrammes à partir d'une description, d'une photo, d'un croquis ou d'un fichier joint,</li>
+  <li><b>affiche les diagrammes</b> sous forme d'images dans le chat, tels qu'Enterprise Architect les dessine,</li>
+  <li><b>prépare des documents</b> à partir du contenu du modèle : Word, Excel, images PNG et pages Confluence, y compris à partir de modèles de documents,</li>
+  <li><b>retient les points convenus</b> d'une conversation à l'autre (conventions de modélisation, préférences, corrections).</li>
+</ul>
+<p>L'application utilise le modèle de langage Claude Haiku 5.5 (Anthropic) via Internet, avec votre propre clé API. Elle se connecte au modèle EA de deux façons : elle le lit directement dans la base PostgreSQL et elle y écrit par l'intermédiaire d'Enterprise Architect lancé en arrière-plan, avec le compte utilisateur du modèle indiqué dans les paramètres.</p>
+<p>L'interface et les réponses de l'assistant sont disponibles en quatre langues : polonais, anglais, allemand et français (chapitre 5). L'application est gratuite, y compris pour un usage commercial (chapitre 18).</p>
+<h2 id="s4">4. Fenêtre de l'application et navigation</h2>
+<p>Sur le côté gauche de la fenêtre se trouve une <b>barre de navigation</b> bleu marine avec des icônes. Lorsque vous survolez une icône avec la souris, son nom apparaît. Un clic change de vue.</p>
+<table>
+  <tr><th>Icône</th><th>Contenu</th></tr>
+  <tr><td><b>Chat</b></td><td>La liste des conversations et la conversation avec l'assistant (chapitres 6 et 13)</td></tr>
+  <tr><td><b>Paramètres</b></td><td>Clé API, base de données du modèle, Enterprise Architect, langue et mode de validation, nouvelles versions, Confluence (chapitre 5)</td></tr>
+  <tr><td><b>Mémoire de l'assistant</b></td><td>Les points que l'assistant a retenus d'une conversation à l'autre (chapitre 11)</td></tr>
+  <tr><td><b>Modèles de documents</b></td><td>Les modèles de documents que l'assistant remplit avec le contenu du modèle EA (chapitre 10)</td></tr>
+  <tr><td><b>Journal des modifications du modèle</b></td><td>Les enregistrements de l'assistant dans le modèle, avec export vers Excel (chapitre 12)</td></tr>
+  <tr><td><b>Nouveautés</b></td><td>La liste des fonctionnalités et des limitations connues de chaque version</td></tr>
+  <tr><td><b>Signaler un bug</b></td><td>Formulaire de signalement de bug avec images (chapitre 16)</td></tr>
+  <tr><td><b>Soutenir le projet</b> (icône de cœur, en bas de la barre, au-dessus de « À propos »)</td><td>Soutien volontaire au développement de l'application, liens vers GitHub et loonar.eu</td></tr>
+  <tr><td><b>À propos</b> (en bas de la barre)</td><td>Version, propriétaire de l'application, liens (politique de confidentialité, code source sur GitHub, loonar.eu), marques, licence et composants open source (chapitre 18)</td></tr>
+</table>
+<p>Un <b>« ! »</b> orange sur les icônes Paramètres, Mémoire de l'assistant et Modèles de documents signifie qu'après un changement de langue, la traduction n'est pas encore terminée (chapitre 5).</p>
+<p><b>Soutenir le projet.</b> Loonar Compass est gratuit, y compris pour un usage commercial, et le restera. S'il vous fait gagner du temps, vous pouvez soutenir son développement par une contribution volontaire : le bouton <b>Soutenir sur suppi.pl</b> ouvre <a href="https://suppi.pl/loonar">https://suppi.pl/loonar</a>. La contribution finance notamment un certificat de signature de code. Vous pouvez aussi aider en signalant des bugs et des idées, en recommandant l'application ou en donnant une étoile au projet sur GitHub ; la vue contient les liens vers le code source sur GitHub et vers loonar.eu.</p>
+<h3>Vue du chat</h3>
+<ul>
+  <li><b>La liste des conversations</b> à gauche est regroupée en « Aujourd'hui », « Hier », « 7 derniers jours » et « Plus ancien ». Vous commencez une nouvelle conversation avec le bouton <b>+</b>. La conversation sélectionnée est mise en surbrillance.</li>
+  <li><b>L'en-tête de la conversation</b> affiche son titre et, pendant que l'assistant travaille, l'indicateur « Claude travaille ».</li>
+  <li><b>Messages :</b> les vôtres sont dans une bulle beige, les réponses de l'assistant portent l'icône de l'application. Chaque message indique l'heure (les plus anciens aussi la date).</li>
+  <li><b>L'écran d'une nouvelle conversation</b> affiche le logo et une indication de ce que vous pouvez faire.</li>
+  <li><b>La carte de message</b> en bas : le champ de texte, le bouton de collage, le modèle et le mode de validation, ainsi que les boutons ronds d'envoi et d'arrêt (chapitre 6). Sous la carte, un rappel : « Les réponses et les modifications sont préparées par un modèle d'IA (Claude d'Anthropic) et peuvent contenir des erreurs. Vérifiez-les avant de les valider. »</li>
+</ul>
+<h2 id="s5">5. Paramètres et langue</h2>
+<p>La vue <b>Paramètres</b> comporte six cartes. Vous enregistrez chacune séparément avec le bouton situé sous la carte, et l'application teste aussitôt les données saisies. Le résultat apparaît sous le bouton : en vert avec une description ou en rouge avec la cause de l'erreur.</p>
+<figure><img src="../img/settings.png" alt="Vue Paramètres avec les cartes Claude, base de données du modèle, Enterprise Architect, langue et validation des modifications"><figcaption>Paramètres : chaque carte avec son propre enregistrement et son test</figcaption></figure>
+<table>
+  <tr><th>Carte</th><th>Champs</th><th>Ce que vérifie le test</th></tr>
+  <tr><td>1. Claude</td><td>Jetons max. (limite de longueur d'une réponse du modèle) et clé API Claude ; le modèle utilisé est affiché en lecture seule. Sous les champs, une note indique ce qui est envoyé à Anthropic (chapitre 14).</td><td>Envoie une courte requête au modèle</td></tr>
+  <tr><td>2. Base de données du modèle (PostgreSQL)</td><td>Serveur, port, nom de la base, compte de la base, mot de passe de la base (conservé dans le Gestionnaire d'identification Windows), chiffrement de la connexion</td><td>Se connecte à la base et compte les paquetages, éléments et diagrammes ; indique si la connexion est chiffrée et avertit si le compte de la base est un superutilisateur</td></tr>
+  <tr><td>3. Enterprise Architect</td><td>Chemin d'EA.exe (le bouton <b>…</b> ouvre la sélection de fichier), compte utilisateur EA, mot de passe du compte EA</td><td>Lance EA en arrière-plan, ouvre le modèle et connecte le compte indiqué ; indique si la sécurité du modèle est activée. Le démarrage d'EA prend de quelques secondes à plus de dix secondes.</td></tr>
+  <tr><td>4. Langue et validation des modifications</td><td>Langue de l'application ; mode de validation : ask, plan ou auto (chapitre 12)</td><td>Enregistrement uniquement</td></tr>
+  <tr><td>5. Nouvelles versions (newsletter)</td><td>Adresse e-mail et consentement à recevoir des informations sur les nouvelles versions, avec une note sur l'utilisation de l'adresse et un lien vers la politique de confidentialité (chapitre 16)</td><td>Prépare un message dans le logiciel de messagerie</td></tr>
+  <tr><td>6. Confluence</td><td>Adresse (commençant par https://), e-mail (Cloud uniquement), jeton, clé de l'espace, ID de la page parente (chapitre 9)</td><td>Se connecte à Confluence avec le jeton indiqué et vérifie l'accès à l'espace</td></tr>
+</table>
+<p>Un champ de mot de passe ou de clé laissé vide conserve la valeur actuelle. La mention <b>enregistré</b> à côté d'un champ indique que la valeur est déjà mémorisée ; <b>ABSENT</b> signifie qu'elle manque encore.</p>
+<p><b>Valeurs par défaut.</b> Lorsqu'il n'existe encore aucun paramètre, les champs Serveur, Nom de la base et Compte utilisateur EA ainsi que les mots de passe sont vides (le champ Serveur affiche l'indication grise « p. ex. 127.0.0.1 ») ; le port est 5432, le compte de la base <code>postgres</code>, le chemin d'EA <code>C:\Program Files\Sparx Systems\EA\EA.exe</code>, le mode de validation ask et Jetons max. 10000. Les paramètres existants ne sont pas modifiés.</p>
+<p><b>Jetons max.</b> Si l'assistant interrompt son travail avec un message de réponse tronquée, augmentez cette valeur (par exemple à 20000). La limite ne coûte rien en soi : vous payez le texte réellement généré.</p>
+<p>Le mot de passe de la base ne doit pas contenir de point-virgule (;), car Enterprise Architect ne peut pas le transmettre dans sa chaîne de connexion. L'adresse Confluence doit commencer par <code>https://</code> ; <code>http://</code> n'est accepté que pour un serveur installé sur le même ordinateur.</p>
+<p><b>Le verrouillage des paquetages</b> lors de l'enregistrement est toujours activé ; c'est pourquoi il ne figure pas dans les paramètres.</p>
+<h3>Changement de langue</h3>
+<p>L'application fonctionne en quatre langues : <b>polonais, anglais, allemand et français</b>. Vous choisissez la langue dans le programme d'installation (anglais par défaut) et la modifiez dans la carte <b>« 4. Langue et validation des modifications »</b> :</p>
+<ol>
+  <li>Choisissez une langue dans la liste <b>Langue</b>.</li>
+  <li>Cliquez sur <b>Enregistrer</b>. L'interface passe à la nouvelle langue, et l'assistant y répond à partir du message suivant.</li>
+  <li>L'application transpose vos contenus dans la nouvelle langue : elle remplace les modèles par défaut non modifiés par leurs versions dans la nouvelle langue, et <b>la mémoire de l'assistant ainsi que vos modèles personnels et modifiés sont traduits par Claude</b>.</li>
+</ol>
+<p>Seules la mémoire et les modèles de documents sont traduits. <b>L'historique des conversations n'est jamais traduit</b> : les conversations restent dans la langue dans laquelle vous les avez menées.</p>
+<div class="note"><b>Pas de connexion à Claude.</b> La traduction nécessite une clé API fonctionnelle. En l'absence de connexion, un <b>« ! »</b> orange apparaît sur les icônes <b>Paramètres</b>, <b>Mémoire de l'assistant</b> et <b>Modèles de documents</b>, et l'info-bulle explique que les contenus ne sont pas encore traduits. La traduction reprend au prochain démarrage de l'application, ou immédiatement après un clic sur <b>Traduire maintenant</b> dans la carte 4 ; l'enregistrement des autres cartes ne la relance pas.</div>
+
+<h3>Chiffrement de la connexion à la base</h3>
+<p>Le champ <b>Chiffrement de la connexion</b> de la carte « 2. Base de données du modèle (PostgreSQL) » détermine si la lecture du modèle par l'assistant passe par TLS :</p>
+<table>
+  <tr><th>Réglage</th><th>Effet</th></tr>
+  <tr><td><b>Préféré</b> (par défaut)</td><td>TLS si le serveur le propose, sinon une connexion non chiffrée. Fonctionne avec tous les serveurs.</td></tr>
+  <tr><td><b>Obligatoire</b></td><td>TLS est obligatoire : sans TLS, l'application ne se connecte pas. Le certificat du serveur n'est pas vérifié.</td></tr>
+  <tr><td><b>Obligatoire, certificat vérifié</b></td><td>TLS est obligatoire, et le certificat du serveur est vérifié, avec le nom du serveur, dans le magasin de certificats Windows (y compris les certificats d'entreprise).</td></tr>
+</table>
+<ul>
+  <li>Le test de connexion indique si la connexion est chiffrée : « La connexion est chiffrée (TLS). » ou « La connexion n'est PAS chiffrée : le serveur ne propose pas TLS. ».</li>
+  <li>Avec la vérification du certificat, le nom saisi dans le champ <b>Serveur</b> doit correspondre au nom figurant dans le certificat du serveur.</li>
+  <li>L'administrateur de la base peut imposer TLS à tous les clients avec des entrées <code>hostssl</code> dans le fichier <code>pg_hba.conf</code>.</li>
+  <li>Le test avertit aussi lorsque le compte de la base est un superutilisateur. Ces droits ne sont pas nécessaires : utilisez un compte ordinaire disposant des droits de lecture et d'écriture sur les tables du modèle (l'assistant ne fait que lire la base, mais Enterprise Architect enregistre les modifications avec ce même compte).</li>
+  <li>Le réglage concerne la lecture du modèle par l'assistant. La connexion d'Enterprise Architect lui-même à la base (lors des enregistrements) suit les paramètres d'EA.</li>
+</ul>
+<h2 id="s6">6. Conversation avec l'assistant</h2>
+<figure><img src="../img/chat.png" alt="Fenêtre de conversation avec l'image d'un diagramme EA dans le chat"><figcaption>Une conversation avec l'image d'un diagramme : la liste des conversations à gauche, le chat à droite, la carte de message en bas</figcaption></figure>
+<h3>Écrire</h3>
+<p>Vous saisissez votre message dans la <b>carte de message</b> en bas de la fenêtre. La carte contient le champ de texte, le bouton de collage, le nom du modèle et le mode de validation actuel, ainsi que des boutons ronds : <b>Envoyer</b> et, pendant que l'assistant travaille, <b>Arrêter</b>.</p>
+<table>
+  <tr><th>Touche</th><th>Action</th></tr>
+  <tr><td><span class="key">Entrée</span></td><td>Envoie le message</td></tr>
+  <tr><td><span class="key">Maj</span> + <span class="key">Entrée</span></td><td>Nouvelle ligne dans le message</td></tr>
+  <tr><td><span class="key">↑</span> dans un champ vide</td><td>Rappelle votre dernier message de cette conversation ; les appuis suivants remontent aux précédents, <span class="key">↓</span> revient</td></tr>
+  <tr><td><span class="key">Ctrl</span> + <span class="key">V</span></td><td>Colle du texte et, lorsque le presse-papiers contient une image ou des fichiers, les ajoute en pièces jointes</td></tr>
+</table>
+<p>Le champ de message s'agrandit avec le texte. Les fautes d'orthographe sont soulignées en rouge à l'aide du dictionnaire du système Windows, dans la langue définie dans les paramètres du système.</p>
+<h3>Pièces jointes</h3>
+<p>Vous pouvez joindre jusqu'à 5 fichiers à un message, chacun de 10 Mo au maximum. Méthodes : faites glisser les fichiers dans la fenêtre (depuis l'Explorateur ou depuis un navigateur), collez-les depuis le presse-papiers (<span class="key">Ctrl</span> + <span class="key">V</span>) ou utilisez le bouton de collage de la carte de message.</p>
+<table>
+  <tr><th>Type de fichier</th><th>Ce que voit l'assistant</th></tr>
+  <tr><td>Images (PNG, JPG, GIF, WebP)</td><td>L'image : photo d'un tableau blanc, croquis, capture d'écran. Dans le chat, les fichiers GIF et WebP apparaissent sous forme de carte de fichier, et non d'image.</td></tr>
+  <tr><td>PDF</td><td>Le document entier</td></tr>
+  <tr><td>DOCX</td><td>Le texte du document</td></tr>
+  <tr><td>Fichiers texte (BPMN, XML, CSV, JSON, code…)</td><td>Le contenu du fichier ; le fichier doit être encodé en UTF-8</td></tr>
+  <tr><td>ZIP</td><td>Les fichiers qu'il contient, chacun selon son type : au plus 20 fichiers et 30 Mo au total ; un ZIP contenu dans un ZIP n'est pas décompressé</td></tr>
+  <tr><td>Autres fichiers (XLSX, PPTX, DOC…)</td><td>Ils ne sont pas lus : l'assistant voit seulement le nom du fichier et une mention indiquant que son contenu ne peut pas être transmis</td></tr>
+</table>
+<h3>Pendant que l'assistant travaille</h3>
+<ul>
+  <li>Sous les messages apparaît la <b>carte des étapes</b> : ce que l'assistant fait en ce moment, combien de temps cela prend et le résultat de chaque étape. Pendant le travail, la carte est développée ; une fois le travail terminé, elle se réduit à une ligne ; un clic sur l'en-tête de la carte la développe à nouveau. En français, la carte affiche un court résultat traduit (par exemple « lignes : 12 », « enregistré dans le modèle EA », « image prête ») ; le résultat détaillé, rédigé en anglais, ne s'affiche que dans l'interface anglaise.</li>
+  <li>Vous pouvez <b>continuer à écrire</b> : le message suivant est mis en file d'attente et l'assistant en tiendra compte à l'étape suivante, sans interrompre son travail.</li>
+  <li>Le bouton <b>Arrêter</b> interrompt le travail après l'étape en cours. Une étape déjà commencée (par exemple un enregistrement dans EA) va jusqu'à son terme.</li>
+  <li>Une réponse compte <b>au plus 24 étapes</b>. Si l'assistant n'a pas terminé, il s'arrête pour éviter une boucle sans fin ; poursuivez dans un nouveau message.</li>
+</ul>
+<figure><img src="../img/steps.png" alt="Carte des étapes de l'assistant pendant son travail, avec la durée et le résultat de chaque étape"><figcaption>Les étapes de l'assistant pendant son travail</figcaption></figure>
+<p><b>Que sait faire l'assistant ?</b> L'assistant connaît les fonctionnalités de l'application grâce à la liste des nouveautés. Demandez-lui : « Que sais-tu faire dans cette application ? ».</p>
+<h2 id="s7">7. Travail avec le modèle Enterprise Architect</h2>
+<p>Écrivez comme à un collègue qui connaît EA. Désignez les paquetages et les diagrammes par leur nom. L'assistant désigne les objets du modèle par leur nom, leur paquetage et leur GUID. Voici quelques exemples de demandes.</p>
+<h3>Lecture</h3>
+<div class="prompt">Quels paquetages y a-t-il dans le modèle et combien de diagrammes contient chacun d'eux ?</div>
+<div class="prompt">Décris ce que représente le diagramme « Processus de commande » et indique les éléments sans connecteurs.</div>
+<div class="prompt">Affiche le diagramme « Cas d'utilisation de la boutique ».</div>
+<div class="prompt">Liste les attributs et les opérations de la classe « Commande » avec leurs paramètres.</div>
+<p>Le diagramme affiché apparaît dans le chat sous forme d'image. En dessous se trouvent les boutons <b>Enregistrer sous…</b> et <b>Ouvrir en taille réelle</b>.</p>
+<h3>Analyse d'impact d'une modification</h3>
+<p>L'assistant part de l'élément indiqué et suit les relations en profondeur dans le modèle (jusqu'à 6 niveaux, dans un sens ou dans les deux, éventuellement uniquement selon certains types de relations). Pour chaque élément concerné, il indique la relation par laquelle l'impact arrive, le chemin depuis l'élément de départ et les diagrammes sur lesquels figure l'élément. Vous pouvez obtenir le résultat sous forme de description, d'image, de document Word ou de classeur Excel.</p>
+<div class="prompt">Qu'est-ce qui changera si nous modifions le composant « Gestion des paiements » ? Vérifie 3 niveaux dans les deux sens et donne le résultat dans Excel.</div>
+<h3>Où les opérations sont utilisées</h3>
+<p>Pour une classe, un composant ou une interface, l'assistant trouve où ses opérations (services) sont appelées : sur les diagrammes de séquence (messages vers l'élément ou sa ligne de vie) et d'activité (actions appelant l'opération), avec le paquetage et l'appelant. Il indique aussi les opérations qui ne sont utilisées sur aucun diagramme.</p>
+<div class="prompt">Où sont utilisées les opérations de l'interface « API des commandes » ? Lesquelles ne sont utilisées nulle part ?</div>
+<h3>Dessin</h3>
+<div class="prompt">Crée le paquetage « Boutique » sous le paquetage « Model » et dessines-y un diagramme de cas d'utilisation : le client parcourt le catalogue, ajoute un produit au panier, passe une commande et paie. Ajoute les acteurs et de courtes descriptions des cas.</div>
+<div class="prompt">Redessine le processus de la photo jointe sous forme de diagramme BPMN dans le paquetage « Processus ».</div>
+<div class="prompt">Extrais les exigences du document joint, crée-les dans le paquetage « Exigences » et affiche-les sur un diagramme d'exigences.</div>
+<h3>Sous-processus BPMN</h3>
+<ul>
+  <li><b>Intégré (embedded) :</b> les étapes du sous-processus sont ses éléments enfants et sont dessinées dans son rectangle sur le même diagramme.</li>
+  <li><b>Réduit (collapsed) :</b> les étapes se trouvent sur un diagramme séparé, et un double-clic sur le sous-processus ouvre ce diagramme. L'assistant peut aussi lier un sous-processus (ou un autre élément) à un diagramme existant en tant que diagramme composite.</li>
+  <li>L'assistant ajoute de nouvelles étapes à un sous-processus existant.</li>
+</ul>
+<div class="prompt">Dans le processus « Traitement des réclamations », remplace la tâche « Vérification » par un sous-processus intégré à trois étapes : vérifier les documents, vérifier la garantie, prendre une décision.</div>
+<h3>Modifications d'un modèle existant</h3>
+<div class="prompt">Déplace les exigences FR01–FR05 dans le paquetage « Catalogue et panier ».</div>
+<div class="prompt">Sur le diagramme « Processus de commande », colore en vert les tâches exécutées par le système et en jaune les tâches manuelles.</div>
+<div class="prompt">Supprime du diagramme « Accueil » la cellule menant au diagramme « Archives ».</div>
+<div class="prompt">Ajoute un diagramme « Accueil » avec des tuiles-liens (navigation cells) vers tous les diagrammes de cas d'utilisation, quatre par ligne.</div>
+<div class="prompt">Renomme le diagramme « Brouillon » en « Processus de retour » et ajoute-lui une courte description.</div>
+<div class="prompt">Agrandis le pool « Entrepôt » sur le diagramme « Processus d'expédition » pour que toutes les tâches y tiennent.</div>
+<p>L'assistant modifie aussi la position et la taille d'un élément sur un diagramme sans l'en retirer (les connecteurs sont conservés), retire un élément d'un diagramme en le laissant dans le modèle, et change le nom, la description et le stéréotype d'un diagramme existant.</p>
+<h3>Mots-clés et légendes</h3>
+<p>L'assistant définit les <b>mots-clés</b> des éléments (champ Keywords dans EA) et crée une <b>légende de diagramme avec coloration automatique</b>, comme dans EA : les éléments (selon le mot-clé, le stéréotype, le statut ou le type) et les connecteurs (par exemple selon le stéréotype) reçoivent une couleur de la légende, et la légende affiche la valeur, la couleur et le libellé.</p>
+<div class="prompt">Marque les exigences avec le mot-clé « MVP » ou « plus tard » et ajoute sur le diagramme une légende qui les colore selon ce mot-clé.</div>
+<h3>Lignes des connecteurs</h3>
+<ul>
+  <li><b>Style de ligne</b> (comme Line Style dans EA) : direct, automatique, ligne libre, orthogonal carré, orthogonal arrondi, arbre et latéral ; pour les connecteurs sélectionnés ou pour tous ceux du diagramme.</li>
+  <li><b>Tracé d'un connecteur :</b> l'assistant fait passer la ligne par les points de passage indiqués et les points de contact avec les côtés des éléments, par exemple d'après un croquis sur une capture d'écran.</li>
+  <li><b>Masquage de connecteurs</b> sur un seul diagramme (et réaffichage) : la relation reste dans le modèle et sur les autres diagrammes, ce qui permet d'alléger un diagramme chargé sans supprimer de relations.</li>
+</ul>
+<div class="prompt">Sur le diagramme « Architecture », passe tous les connecteurs en orthogonal et masque les dépendances vers le composant « Connexion ».</div>
+<h3>Copie de paquetage et baseline</h3>
+<ul>
+  <li><b>La copie de paquetage</b> crée un duplicata du paquetage avec tout son contenu.</li>
+  <li><b>Une baseline</b> est une version enregistrée d'un paquetage dans EA. Avant une suppression ou une restructuration importante d'un paquetage existant, l'assistant a pour consigne de créer une baseline. Ce n'est pas une garantie : pour les paquetages importants, demandez-lui explicitement une baseline et travaillez en mode <b>ask</b>.</li>
+  <li><b>La restauration</b> se fait dans Enterprise Architect : cliquez avec le bouton droit sur le paquetage, choisissez <b>Manage Baselines</b>, sélectionnez la baseline et utilisez <b>Compare/Restore</b>. L'assistant ne restaure pas lui-même les baselines, car la restauration par automatisation fige EA.</li>
+</ul>
+<h3>Bon à savoir</h3>
+<ul>
+  <li><b>Le premier appel à EA prend de quelques secondes à plus de dix secondes</b>, car l'application lance Enterprise Architect en arrière-plan et ouvre le modèle. Les enregistrements et récupérations de diagrammes suivants prennent moins d'une seconde. Après 10 minutes sans appel, EA en arrière-plan se ferme et libère la licence. La fermeture de l'application ferme aussi sa session EA.</li>
+  <li><b>Verrous.</b> Dans un modèle dont la sécurité est activée, l'assistant verrouille un objet à son nom pendant l'enregistrement, puis lève le verrou. Il ne modifie pas un objet verrouillé par un autre utilisateur ; le message indique qui verrouille l'élément (compte ou groupe, depuis quand), son paquetage et son diagramme.</li>
+  <li><b>La suppression est définitive.</b> La suppression d'un paquetage supprime tout son contenu. Pour les modèles importants, utilisez le mode <b>ask</b> (chapitre 12), servez-vous des baselines et faites des sauvegardes de la base.</li>
+  <li><b>Enregistrement partiel.</b> Si l'une des opérations d'un enregistrement échoue, les opérations précédentes de ce même enregistrement restent dans le modèle ; le message indique ce qui a été enregistré.</li>
+  <li><b>Vérifiez le résultat.</b> L'assistant peut se tromper : mal lire une photo, choisir un autre type d'élément ou disposer un diagramme de façon peu lisible. Demandez-lui d'afficher le diagramme après les modifications et d'apporter des corrections.</li>
+  <li><b>Les grands diagrammes</b> sont enregistrés par l'assistant en plusieurs étapes. C'est normal.</li>
+</ul>
+<h2 id="s8">8. Collaboration avec la fenêtre EA ouverte</h2>
+<p>Si vous avez <b>le même modèle</b> ouvert dans Enterprise Architect, l'assistant collabore avec votre fenêtre EA :</p>
+<ul>
+  <li><b>il sait ce que vous avez ouvert et sélectionné</b> : quel diagramme est ouvert et quels éléments sont sélectionnés sur le diagramme ou dans le navigateur de projet. Vous pouvez donc écrire « cet élément » ou « les tâches sélectionnées »,</li>
+  <li><b>il ouvre des diagrammes</b> dans votre fenêtre EA et <b>indique des éléments</b> dans le navigateur de projet,</li>
+  <li><b>après un enregistrement, il actualise lui-même</b> les diagrammes et paquetages modifiés dans votre fenêtre, sans appuyer sur <span class="key">F5</span>.</li>
+</ul>
+<div class="prompt">Décris l'élément que j'ai sélectionné et montre sur quels autres diagrammes il apparaît.</div>
+<div class="prompt">Ouvre dans mon EA le diagramme « Processus de commande » et indique dans le navigateur le paquetage « Exigences ».</div>
+<p>Lorsque la fenêtre EA n'est pas ouverte ou affiche un autre modèle, l'assistant fonctionne normalement, et vous verrez les modifications après avoir actualisé le paquetage dans EA (<span class="key">F5</span>).</p>
+<h2 id="s9">9. Documents : Word, Excel, images, Confluence</h2>
+<p>L'assistant prépare des documents à partir du contenu du modèle et de la conversation. Le fichier terminé apparaît dans le chat sous forme de carte avec des boutons ; il est enregistré dans le dossier <code>attachments</code> des données utilisateur (chapitre 14).</p>
+<table>
+  <tr><th>Type</th><th>Contenu</th><th>Boutons dans le chat</th></tr>
+  <tr><td>Word (DOCX)</td><td>Titres, paragraphes, listes, tableaux, diagrammes d'EA et images dessinées auparavant dans la conversation</td><td><b>Ouvrir</b>, <b>Enregistrer sous…</b></td></tr>
+  <tr><td>Excel (XLSX)</td><td>Plusieurs feuilles, en-têtes avec filtre et première ligne figée, nombres enregistrés comme nombres ; par exemple une liste d'éléments, une matrice, le résultat d'une analyse d'impact</td><td><b>Ouvrir</b>, <b>Enregistrer sous…</b></td></tr>
+  <tr><td>Image (PNG)</td><td>Une matrice (par exemple des cas d'utilisation et des exigences), un tableau, un graphique, un schéma. L'assistant voit le résultat et peut le corriger.</td><td><b>Enregistrer sous…</b>, <b>Ouvrir en taille réelle</b></td></tr>
+  <tr><td>Page Confluence</td><td>Le code de la page pour l'éditeur de source, ainsi que les diagrammes et images dans un dossier <code>&lt;page&gt;_images</code></td><td><b>Copier le code de la page</b>, <b>Ouvrir le dossier des images</b>, <b>Enregistrer sous…</b></td></tr>
+</table>
+<div class="prompt">Prépare un document Word décrivant le paquetage « Boutique » : liste des cas d'utilisation avec leurs descriptions et le diagramme de cas d'utilisation.</div>
+<div class="prompt">Dessine sous forme d'image la matrice des cas d'utilisation et des exigences du paquetage « Boutique ».</div>
+<h3>Pages Confluence</h3>
+<p>L'assistant prépare une page au format de l'éditeur de source Confluence (storage XHTML) : titres, tableaux, listes, table des matières, panneaux (info, remarque, avertissement, astuce, section dépliable), statuts, tickets Jira, mentions de personnes et blocs de code. Les diagrammes d'EA et les images sont ajoutés en pièces jointes.</p>
+<p><b>Collage manuel</b> (sans paramètres Confluence) :</p>
+<ol>
+  <li>Cliquez sur <b>Copier le code de la page</b> sur la carte de la page.</li>
+  <li>Dans Confluence, ouvrez la page en modification et l'éditeur de source (Insérer → Éditeur de source), collez le code et validez.</li>
+  <li>Cliquez sur <b>Ouvrir le dossier des images</b> et ajoutez les images à la page en pièces jointes.</li>
+</ol>
+<p><b>Publication par l'assistant.</b> Une fois la carte <b>« 6. Confluence »</b> remplie, l'assistant publie la page à votre demande via l'API REST : il crée une nouvelle page sous la page parente ou met à jour une page existante (désignée par son ID ou son titre). Les images sont envoyées en pièces jointes ; celles qui existent déjà reçoivent une nouvelle version. Les diagrammes sont exportés à nouveau depuis EA à chaque publication, si bien qu'une nouvelle publication actualise la page après des modifications du modèle. L'assistant se souvient des pages qu'il a publiées.</p>
+<div class="note"><b>La publication nécessite toujours une validation</b>, y compris en mode <b>auto</b>. Avant l'envoi de la page à Confluence, un panneau avec les boutons <b>Valider</b> et <b>Refuser</b> apparaît. Il indique s'il s'agit d'une nouvelle page ou si la publication <b>REMPLACERA</b> le contenu d'une page existante (même titre ou même ID) ; dans ce cas, la version précédente reste dans l'historique de la page.</div>
+<table>
+  <tr><th>Champ de la carte « 6. Confluence »</th><th>Que saisir</th></tr>
+  <tr><td>Adresse Confluence</td><td>Sur les serveurs de l'entreprise (Data Center), par exemple <code>https://confluence.societe.fr</code> ; dans le cloud (Cloud) <code>https://societe.atlassian.net/wiki</code>. L'adresse doit commencer par <code>https://</code> ; <code>http://</code> n'est accepté que pour un serveur installé sur le même ordinateur.</td></tr>
+  <tr><td>E-mail (Cloud uniquement)</td><td>Pour Confluence Cloud : l'e-mail du compte. Pour Data Center, laissez vide.</td></tr>
+  <tr><td>Jeton</td><td>Data Center : jeton d'accès personnel (Profil → Personal Access Tokens). Cloud : jeton API du compte. Le jeton est conservé dans le Gestionnaire d'identification Windows.</td></tr>
+  <tr><td>Espace (clé)</td><td>La clé de l'espace, par exemple <code>ARCH</code></td></tr>
+  <tr><td>Page parente (ID)</td><td>Facultatif : l'ID de la page sous laquelle les nouvelles pages sont créées</td></tr>
+</table>
+<p>Enregistrez la carte avec le bouton <b>Enregistrer et tester la connexion à Confluence</b>.</p>
+<div class="prompt">Prépare une page Confluence décrivant le processus « Traitement des réclamations » avec son diagramme et publie-la dans l'espace.</div>
+<h2 id="s10">10. Modèles de documents</h2>
+<p>Un modèle indique à l'assistant comment construire un document : quelles sections il doit contenir et ce qu'il faut y mettre. L'assistant le remplit avec le contenu du modèle EA et de la conversation, puis prépare une page Confluence ou un document Word.</p>
+<p>Après l'installation, les modèles par défaut suivants sont disponibles :</p>
+<ul>
+  <li><b>Analyse de faisabilité préliminaire</b>,</li>
+  <li><b>BRD - Exigences métier</b>,</li>
+  <li><b>Description des modifications du système</b>,</li>
+  <li><b>Description du processus</b>.</li>
+</ul>
+<h3>La vue « Modèles de documents »</h3>
+<ul>
+  <li>La liste des modèles avec une courte description.</li>
+  <li><b>Utiliser</b> insère dans le chat une demande de préparation d'une page Confluence selon le modèle. Complétez-la (par exemple avec le nom d'un paquetage ou d'un processus, ou en demandant plutôt un document Word) et envoyez-la.</li>
+  <li><b>Modifier</b> ouvre le fichier du modèle dans le Bloc-notes.</li>
+  <li><b>Ouvrir le dossier des modèles</b> ouvre le dossier <code>templates</code> dans l'Explorateur (les installations plus anciennes peuvent encore utiliser le dossier <code>szablony</code>).</li>
+</ul>
+<h3>Vos propres modèles</h3>
+<p>Les modèles sont des fichiers Markdown contenant des instructions pour l'assistant. La première ligne a la forme <code>&gt; Modèle: description</code> : cette description apparaît dans la liste. Les autres lignes commençant par <code>&gt;</code> sont des indications pour l'assistant. Vous pouvez modifier les modèles existants, ajouter vos propres fichiers dans le dossier des modèles ou demander à l'assistant de créer un modèle à partir d'un document exemple :</p>
+<div class="prompt">Crée un modèle à partir du document joint : conserve l'organisation des sections et indique ce que chacune doit contenir.</div>
+<p>Lorsque l'assistant remplace un modèle existant, il demande d'abord votre validation (modes ask et plan, chapitre 12).</p>
+<h2 id="s11">11. Mémoire de l'assistant</h2>
+<p>L'assistant retient les points convenus d'une conversation à l'autre : conventions de modélisation, vos préférences, corrections et faits concernant les projets. Il les connaît dans chaque nouvelle conversation. Un point sur le même sujet est mis à jour au lieu d'être dupliqué, et les points obsolètes sont supprimés.</p>
+<p>L'assistant enregistre lui-même les points importants et le signale en une phrase dans sa réponse. Vous pouvez aussi le lui demander explicitement en commençant par « retiens… » :</p>
+<div class="prompt">Retiens : nous numérotons les exigences FR01, FR02… et les gardons dans le paquetage « Exigences ».</div>
+<div class="prompt">Retiens que, sur les diagrammes BPMN, nous colorons les tâches système en vert.</div>
+<p>En mode ask ou plan, l'enregistrement d'un point passe par la validation, comme une modification du modèle (chapitre 12). L'enregistrement n'interrompt pas le travail de l'assistant sur la tâche en cours. Le contenu complet de la mémoire est envoyé à Claude avec chaque requête (chapitre 14).</p>
+<h3>La vue « Mémoire de l'assistant »</h3>
+<ul>
+  <li>La liste des points avec leur date.</li>
+  <li><b>Supprimer</b> efface le point sélectionné.</li>
+  <li><b>Ouvrir le dossier de la mémoire</b> ouvre le dossier <code>memory</code> dans l'Explorateur. Les points y sont des fichiers Markdown, et l'index se trouve dans le fichier <code>MEMORY.md</code>.</li>
+</ul>
+<h2 id="s12">12. Validation des modifications et journal des modifications</h2>
+<p>Vous définissez le mode dans la vue <b>Paramètres</b>, carte 4. Il détermine si et quand l'application demande votre accord avant un enregistrement dans EA, avant l'enregistrement d'une note dans la mémoire de l'assistant et avant le remplacement d'un modèle de document existant. La lecture du modèle et l'affichage des diagrammes ne nécessitent jamais d'accord. Le mode actuel est aussi visible dans la carte de message.</p>
+<table>
+  <tr><th>Mode</th><th>Quand il demande l'accord</th><th>Pour qui</th></tr>
+  <tr><td><b>ask</b></td><td>Avant chaque enregistrement</td><td>Travail sur un modèle important ; contrôle total</td></tr>
+  <tr><td><b>plan</b></td><td>Une fois, avant le premier enregistrement d'une réponse de l'assistant. Les enregistrements suivants de cette réponse se font sans nouvelle demande, sauf la suppression et le déplacement d'objets ainsi que la copie de paquetages, qui demandent toujours une nouvelle validation.</td><td>Tâches plus importantes, lorsque le premier enregistrement montre la direction</td></tr>
+  <tr><td><b>auto</b></td><td>Jamais (exception : publication dans Confluence)</td><td>Modèle de test ou travail facile à annuler</td></tr>
+</table>
+<p>Lorsqu'un accord est nécessaire, le panneau <b>« Claude veut enregistrer des modifications dans le modèle »</b> apparaît au-dessus du champ de message, avec une description des modifications (combien de paquetages, diagrammes, éléments, connecteurs, ce qui est supprimé) et les boutons <b>Valider</b> et <b>Refuser</b>. Pour une suppression, un déplacement ou une copie de paquetage, le panneau donne le nom de chaque objet concerné (lignes SUPPRESSION, DÉPLACEMENT et COPIE). Un enregistrement refusé ne modifie pas le modèle ; l'assistant est informé du refus et peut proposer autre chose.</p>
+<figure><img src="../img/approval.png" alt="Panneau de validation d'une modification du modèle avec la description des modifications et les boutons Valider et Refuser"><figcaption>Le panneau de validation : vérifiez la description des modifications avant de cliquer sur Valider</figcaption></figure>
+<h3>Journal des modifications</h3>
+<p>Chaque enregistrement de l'assistant dans le modèle, y compris en cas d'échec, est consigné dans le journal des modifications (fichier <code>audit_log.jsonl</code>). Les enregistrements que vous refusez, ainsi que ceux rejetés avant l'envoi à EA (par exemple en cas de conflit de version), n'y figurent pas. La vue <b>Journal des modifications du modèle</b> affiche les 200 dernières entrées, de la plus récente à la plus ancienne : résultat, heure, compte EA, base et description des modifications. Le bouton <b>Exporter vers Excel</b> enregistre l'ensemble du journal sous forme de classeur XLSX, par exemple pour une revue des modifications en équipe ; <b>Ouvrir le fichier journal</b> ouvre le fichier dans le Bloc-notes.</p>
+<h2 id="s13">13. Conversations : historique, recherche, travail en arrière-plan</h2>
+<ul>
+  <li><b>Nouvelle conversation :</b> le bouton <b>+</b> au-dessus de la liste des conversations. Chaque conversation est enregistrée et réapparaît après le redémarrage de l'application.</li>
+  <li><b>Groupes :</b> les conversations sont regroupées en « Aujourd'hui », « Hier », « 7 derniers jours » et « Plus ancien ».</li>
+  <li><b>Recherche :</b> le champ « Rechercher dans les conversations… » filtre la liste par titre et par contenu des messages.</li>
+  <li><b>Renommer :</b> cliquez sur le crayon à côté de la conversation sélectionnée, saisissez un nom ; <span class="key">Entrée</span> enregistre, <span class="key">Échap</span> annule.</li>
+  <li><b>Supprimer :</b> les conversations ne peuvent pas être supprimées dans l'application. Si nécessaire, supprimez le fichier de la conversation dans le dossier <code>history</code> (chapitre 14).</li>
+  <li><b>Plusieurs conversations à la fois :</b> pendant que l'assistant travaille, vous pouvez commencer une nouvelle conversation ou passer à une autre. Le travail commencé se poursuit en arrière-plan.</li>
+</ul>
+<table>
+  <tr><th>Point à côté d'une conversation</th><th>Signification</th></tr>
+  <tr><td class="c-orange"><b>● orange</b></td><td>L'assistant travaille dans cette conversation (ou attend votre accord pour enregistrer)</td></tr>
+  <tr><td class="c-green"><b>● vert</b></td><td>L'assistant a terminé son travail en arrière-plan, et vous n'avez pas encore consulté le résultat</td></tr>
+</table>
+<p>Les enregistrements dans EA provenant de différentes conversations s'exécutent les uns après les autres, pas simultanément. Lorsque le chat a défilé vers le haut, le cercle avec une flèche au-dessus du champ de message vous ramène à la fin de la conversation.</p>
+<h2 id="s14">14. Données, sécurité et confidentialité</h2>
+<h3>Où se trouvent vos données</h3>
+<table>
+  <tr><th>Données</th><th>Emplacement</th></tr>
+  <tr><td>Programme</td><td>Le dossier d'installation : <code>%LOCALAPPDATA%\Programs\Loonar Compass</code> (pour vous uniquement) ou <code>%ProgramFiles%\Loonar Compass</code> (pour tous les utilisateurs)</td></tr>
+  <tr><td>Paramètres (<code>app.properties</code>, sans aucun secret), historique des conversations (<code>history</code>), pièces jointes et documents créés : Word, Excel, PNG, pages Confluence et leurs dossiers d'images <code>&lt;page&gt;_images</code> (<code>attachments</code>), mémoire de l'assistant (<code>memory</code>, index <code>MEMORY.md</code>), modèles de documents (<code>templates</code>), journal des modifications (<code>audit_log.jsonl</code>), pages Confluence publiées (<code>confluence_pages.json</code>)</td><td>Le dossier des données utilisateur : <code>%APPDATA%\Loonar Compass</code>. Chaque utilisateur Windows de l'ordinateur a le sien.</td></tr>
+  <tr><td>Clé API Claude, mot de passe du compte EA, mot de passe de la base, jeton Confluence</td><td>Gestionnaire d'identification Windows, entrées « loonar-compass » (protégées par le système)</td></tr>
+</table>
+<p>L'historique des conversations est enregistré sous forme de fichiers ordinaires dans votre profil Windows : il est protégé par votre compte Windows, mais l'application ne le chiffre pas.</p>
+<h3>Ce qui est envoyé à Anthropic</h3>
+<p>Pour que l'assistant puisse répondre, chaque requête envoie au service Claude (Anthropic), avec votre clé API : la conversation, les fichiers joints, le contenu complet de la mémoire de l'assistant, la liste des modèles de documents avec leurs descriptions, les résultats des requêtes de l'assistant sur le modèle (noms et descriptions des paquetages, éléments, diagrammes) et les images des diagrammes. La base entière n'est pas envoyée, seulement ce que l'assistant a demandé. La chaîne de connexion de la fenêtre EA ouverte n'est jamais transmise au modèle. Après un changement de langue, le contenu de la mémoire et des modèles à traduire est également envoyé à Claude. Loonar ne reçoit pas ces données.</p>
+<div class="note"><b>Avant d'utiliser l'application sur un modèle d'entreprise</b>, vérifiez si les règles de votre organisation et vos contrats avec vos clients autorisent la transmission du contenu du modèle à un service d'IA externe, et quelles conditions de traitement des données s'appliquent à votre compte Anthropic.</div>
+<h3>Droits de l'assistant</h3>
+<ul>
+  <li>L'assistant lit la base dans une session en lecture seule, avec une limite de durée des requêtes ; les fonctions du serveur qui lisent des fichiers ou agissent sur d'autres sessions sont bloquées. Toutes les modifications passent par Enterprise Architect, avec le compte indiqué dans les paramètres ; les droits et verrous de ce compte s'y appliquent donc.</li>
+  <li>Dans Confluence, l'assistant agit avec les droits du jeton de la carte 6 et ne publie qu'après votre validation.</li>
+  <li>L'assistant n'a accès à aucun fichier sur le disque en dehors de ceux que vous lui joignez vous-même et de ses propres dossiers de mémoire et de modèles. Les images qu'il dessine ne peuvent lire aucun fichier sur le disque ni sur le réseau.</li>
+  <li>L'assistant traite le contenu des pièces jointes, des documents et du modèle comme des données, et non comme des instructions. Vérifiez néanmoins chaque modification avant de la valider.</li>
+</ul>
+<h3>Connexions et chiffrement</h3>
+<ul>
+  <li><b>API Claude et Confluence</b> : uniquement via HTTPS (pour Confluence, <code>http://</code> n'est accepté que pour un serveur installé sur le même ordinateur).</li>
+  <li><b>Base du modèle</b> : la connexion peut être chiffrée avec TLS, selon le réglage de la carte 2 (chapitre 5). Les administrateurs peuvent imposer TLS à tous les clients avec des entrées <code>hostssl</code> dans <code>pg_hba.conf</code>. La connexion d'Enterprise Architect lui-même à la base suit les paramètres d'EA.</li>
+  <li><b>Proxy</b> : l'application utilise le proxy défini dans les paramètres Internet de Windows ainsi que les variables d'environnement <code>HTTPS_PROXY</code> et <code>ALL_PROXY</code>. Les scripts PAC et l'authentification NTLM/Kerberos sur le proxy ne sont pas pris en charge.</li>
+  <li><b>Erreurs temporaires de l'API Claude</b> (surcharge 529 et autres erreurs 5xx, limite de requêtes 429) : l'application réessaie automatiquement.</li>
+</ul>
+<h2 id="s15">15. Résolution des problèmes</h2>
+<table>
+  <tr><th>Symptôme</th><th>Que faire</th></tr>
+  <tr><td>L'application s'ouvre sur la vue « Paramètres »</td><td>Des paramètres ou des secrets manquent. Remplissez les cartes et enregistrez chacune avec son bouton « Enregistrer et tester… ».</td></tr>
+  <tr><td>« Le fichier de paramètres … contient une erreur »</td><td>Une valeur du fichier <code>app.properties</code> est incorrecte ; le message indique laquelle. Corrigez la valeur dans la carte concernée et enregistrez de nouveau la carte.</td></tr>
+  <tr><td>Test de la clé : « L'API Claude a refusé la clé API (401) »</td><td>La clé est erronée ou révoquée. Collez la clé actuelle depuis la console Anthropic.</td></tr>
+  <tr><td>« … une réponse qui ne provient pas de l'API (un proxy ou un pare-feu bloque peut-être api.anthropic.com) »</td><td>Un proxy ou un pare-feu bloque la connexion. Demandez à votre service informatique d'autoriser api.anthropic.com en HTTPS. Les scripts PAC et l'authentification NTLM/Kerberos sur le proxy ne sont pas pris en charge (chapitre 14).</td></tr>
+  <tr><td>« L'API Claude est surchargée ou temporairement indisponible » ou « La limite de requêtes de l'API Claude est atteinte (429) »</td><td>L'application a déjà réessayé automatiquement. Patientez un instant et renvoyez votre message.</td></tr>
+  <tr><td>Test de la base : pas de connexion</td><td>Vérifiez le serveur, le port, le nom de la base, le compte et le mot de passe, et assurez-vous que le serveur PostgreSQL accepte les connexions depuis cet ordinateur.</td></tr>
+  <tr><td>« La connexion n'est PAS chiffrée : le serveur ne propose pas TLS » ou échec de la vérification du certificat</td><td>Demandez à l'administrateur de la base d'activer TLS. En mode « Obligatoire, certificat vérifié », le certificat du serveur doit être approuvé dans le magasin de certificats Windows et correspondre au nom saisi dans le champ Serveur ; sinon, choisissez « Obligatoire » ou « Préféré ».</td></tr>
+  <tr><td>Le test de la base avertit que le compte est un superutilisateur</td><td>Les droits de superutilisateur ne sont pas nécessaires. Demandez à l'administrateur un compte ordinaire disposant des droits de lecture et d'écriture sur les tables du modèle : l'assistant ne fait que lire la base, mais Enterprise Architect enregistre les modifications avec ce même compte.</td></tr>
+  <tr><td>« EA n'a pas répondu dans les 300 s »</td><td>Le plus souvent, un compte ou un mot de passe d'utilisateur du modèle erroné (EA attend alors sur une fenêtre de connexion invisible) ou aucune licence disponible. Corrigez les données dans la carte 3 et utilisez « Enregistrer et tester la connexion à EA ».</td></tr>
+  <tr><td>Le premier enregistrement ou le premier diagramme prend du temps</td><td>C'est le démarrage d'Enterprise Architect en arrière-plan (de quelques secondes à plus de dix secondes). Les appels suivants sont rapides.</td></tr>
+  <tr><td>« La réponse du modèle a été tronquée à la limite de … jetons »</td><td>Augmentez « Jetons max. » dans la carte 1 ou demandez que la tâche soit effectuée en plusieurs parties plus petites.</td></tr>
+  <tr><td>« L'assistant a effectué 24 étapes sans terminer »</td><td>L'assistant s'est arrêté pour éviter une boucle sans fin. Poursuivez dans un nouveau message ou divisez la tâche en parties plus petites.</td></tr>
+  <tr><td>Les modifications ne sont pas visibles dans Enterprise Architect</td><td>Si le même modèle est ouvert dans EA, l'assistant l'actualise lui-même. Sinon, actualisez le paquetage dans le navigateur de projet (<span class="key">F5</span>) ou rouvrez le diagramme.</td></tr>
+  <tr><td>« Impossible de verrouiller l'objet »</td><td>L'objet est verrouillé par un autre utilisateur du modèle ; le message indique lequel. Levez le verrou dans EA ou demandez à son propriétaire de le faire.</td></tr>
+  <tr><td>« ! » orange sur les icônes Paramètres, Mémoire de l'assistant, Modèles de documents</td><td>Après un changement de langue, la traduction attend une connexion à Claude. Vérifiez la clé API dans la carte 1 et cliquez sur « Traduire maintenant » dans la carte 4.</td></tr>
+  <tr><td>La publication dans Confluence échoue</td><td>Vérifiez la carte 6 avec le bouton « Enregistrer et tester la connexion à Confluence » : adresse (https://), jeton, clé de l'espace et, pour Cloud, également l'e-mail. Vous pouvez aussi coller la page manuellement avec le bouton « Copier le code de la page ».</td></tr>
+  <tr><td>Après une baseline, il faut revenir à une version antérieure du paquetage</td><td>Dans EA : clic droit sur le paquetage → Manage Baselines → Compare/Restore.</td></tr>
+  <tr><td>L'assistant affirme ne pas savoir faire quelque chose</td><td>Demandez : « Que sais-tu faire dans cette application ? ». Si la fonctionnalité figure dans la liste de la vue « Nouveautés », dites-le-lui explicitement et demandez-lui de réessayer.</td></tr>
+  <tr><td>Impossible de faire glisser des fichiers dans la fenêtre</td><td>L'application a été lancée en tant qu'administrateur. Fermez-la et lancez-la avec le raccourci habituel.</td></tr>
+  <tr><td>Windows SmartScreen avertit au lancement du programme d'installation</td><td>Le programme d'installation n'est pas encore signé. Cliquez sur « Informations complémentaires », puis sur « Exécuter quand même ». Si le contrôle intelligent des applications (Smart App Control) est activé, les applications non signées sont bloquées : attendez la version signée.</td></tr>
+  <tr><td>Message d'erreur inattendue, l'application se ferme</td><td>Les détails sont enregistrés dans le fichier <code>%TEMP%\loonar-compass-crash.log</code>. Signalez le problème (chapitre 16) en joignant ce fichier.</td></tr>
+</table>
+<h2 id="s16">16. Signalement de bugs et nouvelles versions</h2>
+<h3>Signaler un bug</h3>
+<ol>
+  <li>Cliquez sur l'icône <b>Signaler un bug</b> dans la barre de navigation.</li>
+  <li>Saisissez un objet et une description : ce que vous faisiez, ce que vous attendiez, ce qui s'est passé. La description est obligatoire.</li>
+  <li>Ajoutez des images, par exemple des captures d'écran : faites-les glisser dans la fenêtre, collez-les depuis le presse-papiers (<span class="key">Ctrl</span> + <span class="key">V</span>) ou choisissez-les sur le disque. Les images ajoutées s'affichent sous forme de miniatures ; leur taille totale est limitée à 15 Mo.</li>
+  <li>Indiquez éventuellement l'adresse e-mail à laquelle je dois répondre. L'option « Joindre les informations techniques » (version de l'application, système, modèle, mode de validation, dernier message ; sans mots de passe ni clés) est cochée par défaut ; vous pouvez la décocher.</li>
+  <li>Cliquez sur <b>Envoyer le signalement</b>. Un message prêt à l'envoi, adressé à l'auteur avec les images en pièces jointes, s'ouvre dans le logiciel de messagerie de Windows. Vérifiez-le et envoyez-le.</li>
+</ol>
+<p>Les copies temporaires des images sont supprimées dès que le logiciel de messagerie les a prises en charge. Si le logiciel de messagerie n'accepte pas les pièces jointes provenant d'autres applications, un message sans images s'ouvre, ainsi que le dossier contenant les images : faites-les glisser dans le message. Dans ce cas seulement, les copies restent dans ce dossier.</p>
+<p><b>Confidentialité.</b> Le signalement (description, captures d'écran, informations techniques facultatives et votre adresse e-mail) est envoyé à Loonar Mariusz Głowacki et sert uniquement à vous répondre et à améliorer l'application ; il est conservé jusqu'à 2 ans après la clôture du dossier. Retirez les données personnelles et confidentielles des captures avant l'envoi. La vue contient un lien vers la politique de confidentialité.</p>
+<h3>Nouvelles versions (newsletter)</h3>
+<p>Dans la carte <b>« 5. Nouvelles versions (newsletter) »</b> des paramètres, saisissez votre adresse e-mail et cochez la case « je souhaite recevoir des informations sur les nouvelles versions » : un court e-mail à la sortie d'une nouvelle version, avec une description des modifications et l'endroit où la télécharger, sans publicité. Votre choix est mémorisé dans les paramètres, et l'inscription comme la désinscription sont envoyées à l'auteur par un message du logiciel de messagerie.</p>
+<p>Votre adresse n'est utilisée que pour les informations sur les nouvelles versions, sur la base de votre consentement, jusqu'à son retrait : décochez la case et enregistrez, ou écrivez un e-mail. Responsable du traitement : Loonar Mariusz Głowacki, mariusz@loonar.eu. La carte contient un lien vers la politique de confidentialité.</p>
+<h2 id="s18">18. Licence, marques et contact</h2>
+<p><b>Licence.</b> Loonar Compass est un logiciel gratuit (freeware) : l'utilisation est gratuite, y compris à titre professionnel et commercial, sans limite de durée ni de territoire ; la modification de l'application est interdite. La licence contient aussi des règles concernant les résultats de l'IA, les données et les composants open source. Le texte intégral se trouve dans la vue <b>À propos</b> et dans le fichier <code>LICENSE.txt</code> du dossier d'installation ; seule la version polonaise de la licence fait foi. La liste des fonctionnalités et des limitations connues de cette version se trouve dans la vue <b>Nouveautés</b>.</p>
+<p><b>Confidentialité et mentions légales.</b> Politique de confidentialité : <a href="https://loonar.eu/fr/privacy/">https://loonar.eu/fr/privacy/</a>. Mentions légales : <a href="https://loonar.eu/fr/legal/">https://loonar.eu/fr/legal/</a>.</p>
+<p><b>Composants open source.</b> L'application contient des bibliothèques et des polices open source ; chacune conserve sa propre licence. Leur liste se trouve dans le fichier <code>THIRD-PARTY-NOTICES.txt</code> du dossier d'installation ; dans la vue <b>À propos</b>, le bouton <b>Afficher les licences des composants</b> ouvre ce fichier.</p>
+<p><b>Soutien.</b> Si l'application vous est utile, vous pouvez soutenir son développement par une contribution volontaire : vue <b>Soutenir le projet</b> ou <a href="https://suppi.pl/loonar">https://suppi.pl/loonar</a>.</p>
+<p><b>Contact.</b> Propriétaire de l'application : Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard. E-mail : mariusz@loonar.eu, site : <a href="https://loonar.eu">https://loonar.eu</a>, code source : <a href="https://github.com/loonar-eu/loonar-compass">https://github.com/loonar-eu/loonar-compass</a>. Le plus simple pour signaler un bug est d'utiliser la vue <b>Signaler un bug</b>.</p>
+<p>Loonar Compass 0.3. Sparx Systems et Enterprise Architect sont des marques déposées de Sparx Systems Pty Ltd. Claude et Anthropic sont des marques d'Anthropic, PBC. Atlassian, Confluence et Jira sont des marques d'Atlassian. Microsoft, Windows, Word et Excel sont des marques du groupe Microsoft. PostgreSQL est une marque de la PostgreSQL Community Association of Canada. Loonar Compass est un produit indépendant, sans lien avec ces sociétés, qui ne l'approuvent ni ne le parrainent.</p>
+    </article>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap ftr">
+    <div class="ftr-brand"><img src="../../../../assets/img/logo.svg" alt="" width="40" height="40"><div><strong>Loonar Compass</strong><br>© 2026 Loonar Mariusz Głowacki<br>ul. Gombrowicza 12, 73-110 Stargard, Pologne<br><a href="mailto:mariusz@loonar.eu">mariusz@loonar.eu</a></div></div>
+    <div class="ftr-txt"><p>Sparx Systems et Enterprise Architect sont des marques déposées de Sparx Systems Pty Ltd. Claude et Anthropic sont des marques d’Anthropic, PBC. OpenAI est une marque d’OpenAI. Atlassian et Confluence sont des marques d’Atlassian. Microsoft, Windows, Word, Excel, GitHub et LinkedIn sont des marques du groupe Microsoft. PostgreSQL est une marque déposée de la PostgreSQL Community Association. Loonar Compass est un produit indépendant, sans lien avec ces sociétés, qui ne l’approuvent ni ne le parrainent.</p><p>Pas de cookies. Statistiques de visite anonymes (GoatCounter), qui ne conservent aucune donnée personnelle. Votre choix de langue est mémorisé par votre navigateur.</p></div>
+    <nav class="lang ftr-lang" aria-label="Langue"><ul><li><a href="../en/" hreflang="en" lang="en" data-lang-link="en" title="English">EN</a></li><li><a href="../pl/" hreflang="pl" lang="pl" data-lang-link="pl" title="Polski">PL</a></li><li><a href="../de/" hreflang="de" lang="de" data-lang-link="de" title="Deutsch">DE</a></li><li><a href="../fr/" hreflang="fr" lang="fr" data-lang-link="fr" title="Français" aria-current="page">FR</a></li></ul></nav>
+  </div>
+  <div class="wrap ftr-bottom">
+    <nav aria-label="Informations légales"><ul class="ftr-links">
+      <li><a href="../../../../compass/docs/latest/fr/">Documentation</a></li>
+      <li><a href="../../../../fr/privacy/" data-gc="privacy">Confidentialité</a></li>
+      <li><a href="../../../../fr/legal/" data-gc="legal">Mentions légales</a></li>
+      <li><a class="ftr-gh" href="https://github.com/loonar-eu/loonar-compass"><svg class="mark" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>Code source sur GitHub</a></li>
+    </ul></nav>
+    <a class="ftr-top" href="#top">Haut de page ↑</a>
+  </div>
+</footer>
+</body>
+</html>
