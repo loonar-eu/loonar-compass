@@ -159,21 +159,44 @@ fn approved_scripts() -> &'static std::sync::Mutex<std::collections::HashSet<Str
     SET.get_or_init(Default::default)
 }
 
+/// Words that make a string literal code rather than data: SQL statements (Repository.Execute, SQLQuery) and what runs
+/// text as code or a program. A literal with one of them keeps its content in the build (LC-346).
+const CODE_WORDS: &[&str] = &[
+    "insert", "update", "delete", "merge", "upsert", "truncate", "alter", "create", "drop", "grant", "revoke", "exec", "execute",
+    "replace", "select", "into", "commit", "rollback", "declare", "waitfor", "shutdown", "eval", "wscript", "cscript", "shell",
+    "activexobject", "createobject", "powershell", "cmd", "run",
+];
+
+/// Whether a string literal's content holds one of CODE_WORDS as a whole word (any letter case).
+fn code_like(content: &str) -> bool {
+    content.split(|c: char| !(c.is_alphanumeric() || c == '_')).any(|w| CODE_WORDS.iter().any(|k| w.eq_ignore_ascii_case(k)))
+}
+
 /// The build of a script: its code without the content of string literals and without numbers, whitespace collapsed.
-/// Two scripts with the same build differ only in their data.
+/// Two scripts with the same build differ only in their data. A literal that looks like code (SQL, eval, a shell) keeps
+/// its content: Repository.Execute("UPDATE …") and Repository.Execute("DELETE …") are two builds, not one (LC-346).
 pub fn script_shape(code: &str) -> String {
     let mut out = String::new();
     let mut chars = code.chars().peekable();
     while let Some(c) = chars.next() {
         match c {
             '"' | '\'' => {
-                out.push(c);
+                let mut content = String::new();
                 while let Some(d) = chars.next() {
                     if d == '\\' {
-                        chars.next();
+                        if let Some(e) = chars.next() {
+                            content.push(d);
+                            content.push(e);
+                        }
                     } else if d == c {
                         break;
+                    } else {
+                        content.push(d);
                     }
+                }
+                out.push(c);
+                if code_like(&content) {
+                    out.push_str(&content.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase());
                 }
                 out.push(c);
             }
@@ -2440,6 +2463,19 @@ for (var id in map) { var m = Repository.GetMethodByID(id); m.Style = map[id]; m
         let b = "var map = {1:\"/a\",2:\"/b\",3:\"/c\"}; for (var id in map) { var m = Repository.GetMethodByID(id); m.Delete(); }";
         assert_ne!(script_shape(a), script_shape(b));
         assert_ne!(script_shape("Session.Output(\"x\");"), script_shape("eval(\"x\");"));
+    }
+
+    /// LC-346: an approved UPDATE through Repository.Execute does not approve a DELETE (the SQL is in a string).
+    #[test]
+    fn sql_in_strings_is_part_of_the_build() {
+        let update = "Repository.Execute(\"UPDATE t_object SET Status = 'Approved' WHERE Object_ID = 5\");";
+        let delete = "Repository.Execute(\"DELETE FROM t_object\");";
+        assert_ne!(script_shape(update), script_shape(delete));
+        let other_id = "Repository.Execute(\"UPDATE t_object SET Status = 'Approved' WHERE Object_ID = 7\");";
+        assert_ne!(script_shape(update), script_shape(other_id), "the SQL text is compared as it is");
+        // Plain data in strings is still data.
+        assert_eq!(script_shape("e.Notes = \"Zamówienie klienta\"; e.Update();"), script_shape("e.Notes = \"Faktura\"; e.Update();"));
+        assert_ne!(script_shape("var s = 'Session'; WScript.Run('a')"), script_shape("var s = 'Session'; WScript.Run('cmd /c del x')"));
     }
 }
 
