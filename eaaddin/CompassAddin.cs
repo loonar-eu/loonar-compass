@@ -32,7 +32,36 @@ namespace LoonarCompass
 
         public string EA_Connect(object repository)
         {
+            PolishSpelling();
             return "";
+        }
+
+        /// <summary>EA writes its own spell checker settings back when it closes (CharSet 1, Latin-1). With Compass in
+        /// Polish and its Polish dictionary in EA's dictionary folder, the Central European set and the dictionary are
+        /// set again here, before EA's spell checker reads them.</summary>
+        static void PolishSpelling()
+        {
+            try
+            {
+                if (L10n.Code() != "pl")
+                    return;
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Sparx Systems\EA64\SSCE", true))
+                {
+                    if (key == null)
+                        return;
+                    string path = key.GetValue("UserLexPath") as string ?? "";
+                    if (!File.Exists(Path.Combine(path, "loonar-pl.tlx")))
+                        return;
+                    string files = key.GetValue("UserLexFiles") as string ?? "";
+                    if (Array.IndexOf(files.Split(','), "loonar-pl.tlx") < 0)
+                        key.SetValue("UserLexFiles", files.Length == 0 ? "loonar-pl.tlx" : files + ",loonar-pl.tlx");
+                    key.SetValue("CharSet", 2, Microsoft.Win32.RegistryValueKind.DWord);
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Write("PolishSpelling: " + e.Message);
+            }
         }
 
         /// <summary>EA has started: the Compass window is there from the start, with a note until a project is open
@@ -1142,6 +1171,12 @@ namespace LoonarCompass
                 case "Loonar Compass did not open its window.": return lang == "de" ? "Loonar Compass hat sein Fenster nicht geöffnet." : lang == "fr" ? "Loonar Compass n'a pas ouvert sa fenêtre." : "Loonar Compass nie otworzył okna.";
             }
             return english;
+        }
+
+        /// <summary>The language of Compass (pl, en, de, fr).</summary>
+        public static string Code()
+        {
+            return Language();
         }
 
         static string Language()

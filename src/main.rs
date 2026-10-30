@@ -40,6 +40,7 @@ mod miro;
 mod matrix;
 mod ea_template;
 mod commands;
+mod ea_lexicon;
 mod model_usage;
 mod glossary_ui;
 mod relang;
@@ -1698,6 +1699,9 @@ struct App {
     relang_pending: bool,
     relang_rx: Option<mpsc::Receiver<Result<String, String>>>,
     relang_message: String,
+    /// Building the Polish dictionary for EA's spell checker (Settings → Language).
+    ea_lexicon_rx: Option<mpsc::Receiver<Result<String, String>>>,
+    ea_lexicon_message: String,
     relang_checked: bool,
     props_path: PathBuf,
     cfg: Option<AppConfig>,
@@ -1942,6 +1946,8 @@ impl App {
             relang_pending: false,
             relang_rx: None,
             relang_message: String::new(),
+            ea_lexicon_rx: None,
+            ea_lexicon_message: String::new(),
             relang_checked: false,
             props_path,
             cfg,
@@ -3519,7 +3525,12 @@ impl App {
         let Some(cfg) = self.cfg.clone() else { return };
         if group == GROUP_APPROVAL {
             // EA's spell checker follows the language of Compass (when EA has a dictionary for it).
-            let spelling = model_spell::set_ea_spelling(i18n::current().code());
+            let mut spelling = model_spell::set_ea_spelling(i18n::current().code());
+            match ea_lexicon::apply(i18n::current().code()) {
+                Ok(text) if !text.is_empty() => spelling = text,
+                Ok(_) => {}
+                Err(e) => spelling = format!("{spelling} {e:#}"),
+            }
             self.group_status[group] = GroupStatus::Passed(format!("{} {spelling}", crate::i18n::fmt("Saved. {0}", &[(approval_label(cfg.approval_mode.as_str())).to_string()])));
             return;
         }
@@ -4114,6 +4125,46 @@ impl App {
                         if self.relang_pending && self.relang_rx.is_none() && ui.button(crate::i18n::tr("Translate now")).clicked() {
                             self.relang_checked = false;
                         }
+                    }
+                    // Polish in EA's own spell checker (Notes): the SJP.pl dictionary, built here once with the user's consent.
+                    if self.form.ui_language == "pl" {
+                        if let Some(rx) = &self.ea_lexicon_rx {
+                            if let Ok(result) = rx.try_recv() {
+                                self.ea_lexicon_message = match result {
+                                    Ok(text) | Err(text) => text,
+                                };
+                                self.ea_lexicon_rx = None;
+                            }
+                        }
+                        ui.add_space(6.0);
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(egui::RichText::new(crate::i18n::tr("Spelling in EA's notes")).strong());
+                            if self.ea_lexicon_rx.is_some() {
+                                ui.spinner();
+                                ui.label(crate::i18n::tr("Downloading and building the dictionary…"));
+                            } else {
+                                let label = if ea_lexicon::status().is_some() { crate::i18n::tr("Build the Polish dictionary again") } else { crate::i18n::tr("Download the Polish dictionary for EA (SJP.pl, about 13 MB)") };
+                                if ui.button(label).clicked() {
+                                    let (tx, rx) = mpsc::channel();
+                                    let wake = ctx.clone();
+                                    std::thread::spawn(move || {
+                                        let result = ea_lexicon::build()
+                                            .and_then(|n| ea_lexicon::apply("pl").map(|text| format!("{} {text}", crate::i18n::fmt("Dictionary built: {0} words.", &[n.to_string()]))))
+                                            .map_err(|e| format!("{e:#}"));
+                                        let _ = tx.send(result);
+                                        wake.request_repaint();
+                                    });
+                                    self.ea_lexicon_rx = Some(rx);
+                                    self.ea_lexicon_message.clear();
+                                }
+                            }
+                        });
+                        let note = if self.ea_lexicon_message.is_empty() {
+                            crate::i18n::tr("EA checks notes in English only. The Polish dictionary (every inflected form, from SJP.pl, licence CC BY 4.0) is added to EA's dictionaries; EA uses it after a restart. Words with \"ż\" may still be underlined.").to_string()
+                        } else {
+                            self.ea_lexicon_message.clone()
+                        };
+                        ui.add(egui::Label::new(egui::RichText::new(note).small().color(theme::MUTED)).wrap());
                     }
                     self.group_footer(ui, &ctx, GROUP_APPROVAL, crate::i18n::tr("Save"));
                 });
