@@ -4610,13 +4610,13 @@ impl App {
             ui.hyperlink_to(egui::RichText::new(crate::i18n::tr("Issues and ideas")).small(), ISSUES_URL);
         });
         ui.add_space(14.0);
-        let install = telemetry::install_id();
         let ai_model = self.cfg.as_ref().map(|c| c.ai_model().to_string()).unwrap_or_default();
         let approval = self.cfg.as_ref().map(|c| c.approval_mode.as_str()).unwrap_or("-").to_string();
         let failed_steps = self.steps.iter().filter(|s| matches!(&s.result, Some((false, _, _)))).count();
-        // Public technical information: no names from the model, no paths, no addresses.
-        let technical_public = crate::i18n::fmt("Loonar Compass {0}\nSystem: {1}\nAI model: {2}\nApproval mode: {3}\nSteps in the last answer: {4} (failed: {5})\nInstallation: {6}", &[
-            app_version().to_string(), windows_version_cached().to_string(), ai_model.clone(), approval.clone(), self.steps.len().to_string(), failed_steps.to_string(), install.clone(),
+        // Public technical information: no names from the model, no paths, no addresses – and no installation id
+        // (LC-361: in a public issue it joined the reporter with their daily statistics).
+        let technical_public = crate::i18n::fmt("Loonar Compass {0}\nSystem: {1}\nAI model: {2}\nApproval mode: {3}\nSteps in the last answer: {4} (failed: {5})", &[
+            app_version().to_string(), windows_version_cached().to_string(), ai_model.clone(), approval.clone(), self.steps.len().to_string(), failed_steps.to_string(),
         ]);
         let technical_email = crate::i18n::fmt("Loonar Compass {0}\nSystem: {1}\nModel: {2}\nApproval mode: {3}\nLast message: {4}", &[app_version().to_string(), (windows_version_cached()).to_string(), ai_model, approval, (self.status).to_string()]);
         let sending = self.contact.sending.is_some();
@@ -4912,8 +4912,9 @@ impl App {
                         }
                     });
                 });
+            // "Show details" opens the statistics view and leaves the question open (LC-361: it counted as "Keep on").
+            // Nothing is sent before the question is answered.
             if details {
-                answer = Some(true);
                 self.view = View::Stats;
             }
             if let Some(on) = answer {
