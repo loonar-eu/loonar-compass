@@ -2078,7 +2078,9 @@ fn check_unchanged(cfg: &AppConfig, expect: &Value) -> Result<()> {
             Some("diagram") => ("t_diagram", "diagram_id", crate::i18n::tr("diagram")),
             other => bail!("{}", crate::i18n::fmt("expect_unchanged: unknown kind {0}", &[format!("{other:?}")])),
         };
-        let rows = query_rows(cfg, &format!("select cast(modifieddate as text) from {table} where {key} = {id}"))?;
+        // No cast in SQL: "as text" exists only in PostgreSQL and SQLite (LC-344); every engine returns the date as text
+        // through query_rows, and normalize_stamp compares the first 19 characters.
+        let rows = query_rows(cfg, &format!("select modifieddate from {table} where {key} = {id}"))?;
         let now = rows.first().and_then(|r| r.first()).with_context(|| crate::i18n::fmt("{0} with id {1} no longer exists", &[what.to_string(), id.to_string()]))?;
         if normalize_stamp(now) != normalize_stamp(seen) {
             bail!("{}", crate::i18n::fmt("version conflict: {0} with id {1} was changed after you read it (was {2}, now {3}). Read the model again and plan the change once more. Nothing was saved.", &[what.to_string(), id.to_string(), seen.to_string(), now.to_string()]));
@@ -2094,6 +2096,29 @@ fn normalize_stamp(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    /// LC-344: optimistic locking on a real SQL Server (Windows sign-in):
+    /// `LOONAR_TEST_MSSQL_WIN="127.0.0.1;1433;ea_lab" cargo test check_unchanged_on_sql_server -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a SQL Server with an EA repository"]
+    fn check_unchanged_on_sql_server() {
+        let spec = std::env::var("LOONAR_TEST_MSSQL_WIN").unwrap();
+        let parts: Vec<&str> = spec.split(';').collect();
+        let props = std::env::temp_dir().join(format!("loonar-mssql-lock-{}.properties", std::process::id()));
+        std::fs::write(&props, format!("model.source=sqlserver
+db.host={}
+db.port={}
+db.name={}
+db.user=
+", parts[0], parts[1], parts[2])).unwrap();
+        let cfg = crate::config::AppConfig::load(&props).unwrap();
+        let row = &super::query_rows(&cfg, "select object_id, modifieddate from t_object order by object_id").unwrap()[0];
+        println!("element {} modified {}", row[0], row[1]);
+        let same = serde_json::json!([{ "kind": "element", "id": row[0].parse::<i64>().unwrap(), "modified": row[1] }]);
+        super::check_unchanged(&cfg, &same).unwrap();
+        let older = serde_json::json!([{ "kind": "element", "id": row[0].parse::<i64>().unwrap(), "modified": "2001-01-01 00:00:00" }]);
+        assert!(super::check_unchanged(&cfg, &older).is_err());
+    }
+
     use super::*;
     use std::path::Path;
 
