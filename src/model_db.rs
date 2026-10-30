@@ -338,7 +338,15 @@ fn odbc_select(cfg: &AppConfig, sql: &str, limit: usize) -> Result<Selected> {
     let sql = sql.as_str();
     let mut out = Selected { columns: Vec::new(), rows: Vec::new(), truncated: false };
     let result = (|| -> Result<()> {
-        if let Some(mut cursor) = conn.execute(sql, ()).context(crate::i18n::tr("running the query"))? {
+        // A time limit, as for EA files (LC-342): a query must not hold the assistant (e.g. a waitfor or a huge join).
+        let mut statement = conn.preallocate().context(crate::i18n::tr("running the query"))?;
+        {
+            use odbc_api::handles::{AsStatementRef, Statement};
+            let handle = statement.as_stmt_ref().as_sys();
+            // SAFETY: a valid statement handle of this connection; QueryTimeout takes the seconds as the pointer value.
+            unsafe { odbc_api::sys::SQLSetStmtAttr(handle, odbc_api::sys::StatementAttribute::QueryTimeout, FILE_QUERY_LIMIT.as_secs() as usize as odbc_api::sys::Pointer, 0) };
+        }
+        if let Some(mut cursor) = statement.execute(sql, ()).context(crate::i18n::tr("running the query"))? {
             out.columns = cursor.column_names()?.collect::<std::result::Result<Vec<_>, _>>()?;
             let mut buffers = TextRowSet::for_cursor(500, &mut cursor, Some(65_536))?;
             let mut rows = cursor.bind_buffer(&mut buffers)?;
@@ -422,6 +430,14 @@ const FORBIDDEN_FUNCTIONS: &[&str] = &[
     // Dynamic SQL inside a SELECT (a blocked function called by name in a string).
     "query_to_xml", "cursor_to_xml", "table_to_xml", "schema_to_xml", "database_to_xml", "query_to_json", "pg_execute_server_program", "pg_signal_backend",
     "lo_from_bytea", "lo_put", "lo_create", "lo_unlink", "readfile", "writefile", "edit(", "fts3_tokenizer",
+    // SQL Server (LC-342): other servers, files, the shell, the registry and dynamic SQL.
+    "openrowset", "opendatasource", "openquery", "openxml", "xp_cmdshell", "xp_dirtree", "xp_fileexist", "xp_subdirs", "xp_regread",
+    "xp_regwrite", "xp_instance_reg", "sp_oa", "sp_execute", "sp_configure", "sp_addlogin", "sp_password", "fn_xe_file", "fn_get_audit_file",
+    "sys.fn_dblog",
+    // MySQL/MariaDB: files, waiting, locks and plugins.
+    "load_file", "sleep(", "benchmark(", "get_lock", "release_lock", "is_free_lock", "master_pos_wait", "source_pos_wait", "sys_exec", "sys_eval",
+    // Oracle: network, files, jobs and every DBMS_ package.
+    "utl_http", "utl_file", "utl_inaddr", "utl_smtp", "utl_tcp", "utl_mail", "httpuritype", "dbms_", "ctxsys.", "ordsys.",
 ];
 
 /// Words of statements that change data or the session: a query may not contain them outside strings and quoted names
@@ -431,6 +447,10 @@ const WRITE_WORDS: &[&str] = &[
     "prepare", "deallocate", "pragma", "attach", "detach", "vacuum", "reindex", "analyze", "cluster", "refresh", "lock", "listen", "notify",
     "unlisten", "load", "reset", "set", "begin", "commit", "rollback", "savepoint", "release", "into", "comment", "security", "import",
     "discard", "checkpoint", "returning",
+    // T-SQL needs no semicolons between statements, so "select 1 exec('…')" is two statements (LC-342); MySQL and
+    // Oracle statements of the same kind (REPLACE INTO is caught by INTO; replace() stays a function).
+    "exec", "waitfor", "declare", "dbcc", "kill", "shutdown", "backup", "restore", "bulk", "reconfigure", "use", "goto", "openrowset",
+    "rename", "flush", "purge", "handler", "install", "uninstall", "optimize", "repair",
 ];
 
 /// The first word of WRITE_WORDS in the query outside string literals, quoted names and comments; or a Unicode-escaped
@@ -571,8 +591,9 @@ pub fn query_rows(cfg: &AppConfig, sql: &str) -> Result<Vec<Vec<String>>> {
     Ok(selected.rows.into_iter().map(|row| row.into_iter().map(Option::unwrap_or_default).collect()).collect())
 }
 
-pub fn db_query(sql: &str, cfg: &AppConfig) -> Result<String> {
-    let s = sql.trim().trim_end_matches(';').trim();
+/// Refuses a query that is not a plain read of the model: only SELECT/WITH, one statement, no server functions,
+/// no quoting the checks could read differently from the database, no statement words outside strings.
+fn check_read_only(s: &str) -> Result<()> {
     let lower = s.to_ascii_lowercase();
     if !(lower.starts_with("select") || lower.starts_with("with")) {
         bail!("{}", crate::i18n::tr("only SELECT or WITH queries are allowed"));
@@ -591,7 +612,12 @@ pub fn db_query(sql: &str, cfg: &AppConfig) -> Result<String> {
     if let Some(word) = write_word(s) {
         bail!("{}", crate::i18n::fmt("the query contains {0}: only reading the model is allowed (a SELECT without INSERT, UPDATE, DELETE, INTO…)", &[word.to_uppercase()]));
     }
+    Ok(())
+}
 
+pub fn db_query(sql: &str, cfg: &AppConfig) -> Result<String> {
+    let s = sql.trim().trim_end_matches(';').trim();
+    check_read_only(s)?;
     let selected = select(cfg, s, MAX_ROWS)?;
     if selected.rows.is_empty() {
         return Ok("(no rows)".into());
@@ -962,5 +988,63 @@ mod non_ascii_tests {
         let sql = "select ó as żfrom, 1 as fromą from t";
         assert_eq!(super::top_level_words(sql, "from"), vec![sql.find(" from t").unwrap() + 1]);
         assert_eq!(super::replace_outside_literals("a żółć ilike 'b'", " ilike ", " like "), "a żółć like 'b'");
+    }
+}
+
+/// LC-342: statements and server functions of SQL Server, MySQL/MariaDB and Oracle are refused like PostgreSQL ones.
+#[cfg(test)]
+mod read_only_tests {
+    #[test]
+    fn statements_and_functions_of_every_engine_are_refused() {
+        for sql in [
+            "select 1 exec('delete from t_object commit')",
+            "select 1 EXEC sp_executesql N'x'",
+            "select name from t_object waitfor delay '0:0:30'",
+            "select 1 declare @x int",
+            "select * from openrowset('SQLNCLI', 'x', 'select 1')",
+            "select load_file('c:/windows/win.ini')",
+            "select sleep(30)",
+            "select benchmark(100000000, md5('x'))",
+            "select utl_http.request('http://x') from dual",
+            "select dbms_pipe.receive_message('x', 10) from dual",
+            "select 1 from t_object where 1=1 shutdown",
+        ] {
+            assert!(super::check_read_only(sql).is_err(), "{sql}");
+        }
+    }
+
+    /// The time limit of ODBC queries on a real SQL Server (Windows sign-in):
+    /// `LOONAR_TEST_MSSQL_WIN="127.0.0.1;1433;ea_lab" cargo test odbc_query_time_limit -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a SQL Server with an EA repository"]
+    fn odbc_query_time_limit() {
+        let spec = std::env::var("LOONAR_TEST_MSSQL_WIN").unwrap();
+        let parts: Vec<&str> = spec.split(';').collect();
+        let props = std::env::temp_dir().join(format!("loonar-mssql-win-{}.properties", std::process::id()));
+        std::fs::write(&props, format!("model.source=sqlserver
+db.host={}
+db.port={}
+db.name={}
+db.user=
+", parts[0], parts[1], parts[2])).unwrap();
+        let cfg = crate::config::AppConfig::load(&props).unwrap();
+        println!("objects: {:?}", super::query_rows(&cfg, "select count(*) from t_object").unwrap());
+        let started = std::time::Instant::now();
+        let result = super::query_rows(&cfg, "waitfor delay '00:01:30'");
+        let took = started.elapsed().as_secs();
+        println!("waitfor: {took} s, {:?}", result.as_ref().err().map(|e| format!("{e:#}")));
+        assert!(result.is_err() && (55..85).contains(&took), "{took} s");
+    }
+
+    #[test]
+    fn ordinary_reads_pass() {
+        for sql in [
+            "select o.name, o.stereotype from t_object o where o.note like '%exec%' and o.name <> 'waitfor'",
+            "with d as (select object_id from t_object) select count(*) from d",
+            "select o.name from t_object o where o.object_type = 'Class' order by o.name",
+            "select count(*) as liczba_elementów from t_object",
+        ] {
+            assert!(super::check_read_only(sql).is_ok(), "{sql}: {:?}", super::check_read_only(sql));
+        }
     }
 }
