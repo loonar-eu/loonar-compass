@@ -1011,6 +1011,17 @@ impl Job<'_> {
                     tags.insert(tag.text("Name")?, json!(tag.text("Value").unwrap_or_default()));
                 }
                 self.set_tags(&new, &Value::Object(tags))?;
+                // EA drops a stereotype that does not apply to the type (e.g. ArchiMate Serving on a Dependency): said, not hidden.
+                if !stereotype.trim().is_empty() && new.text("StereotypeEx").unwrap_or_default().trim().is_empty() {
+                    self.warnings.push(crate::i18n::fmt("EA did not accept the stereotype «{0}» on a {1} (the profile allows it on another type)", &[stereotype.clone(), text_field(op, "type")]));
+                }
+                // A stereotype of a profile: its tagged values completed as EA's "Synchronize Stereotype" does (LC-416).
+                if let Some((profile, short)) = stereotype.split(',').next().unwrap_or("").trim().split_once("::") {
+                    let done = self.repo.call("CustomCommand", &[s("Repository"), s("SynchProfile"), s(&format!("Profile={profile};Stereotype={short};"))]);
+                    if done.is_err() {
+                        self.warnings.push(crate::i18n::fmt("the tagged values of «{0}» were not synchronized with its profile", &[stereotype.clone()]));
+                    }
+                }
                 let new_id = new.int("ConnectorID")?;
                 for diagram_id in op["diagrams"].as_array().into_iter().flatten().filter_map(|v| v.as_i64()) {
                     let Some(diagram) = self.repo.call("GetDiagramByID", &[i(diagram_id as i32)]).ok().and_then(|v| v.object()) else { continue };

@@ -1036,6 +1036,10 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             if ops.is_empty() { Ok(text.into()) } else { ea_write(&json!({ "ops": ops }), ctx).map(Into::into) }
         }
         // Merge and replace: preview reads; apply is one save, always asked, with a baseline first.
+        "merge_elements" if input["action"].as_str() == Some("replace_on_diagrams") => {
+            let (ops, text) = crate::merge::replace_on_diagrams(input, ctx.cfg)?;
+            if ops.is_empty() { Ok(text.into()) } else { ea_write(&json!({ "ops": ops }), ctx).map(|saved| format!("{text}\n\n{saved}")).map(Into::into) }
+        }
         "merge_elements" => {
             let (op, text) = crate::merge::plan(input, ctx.cfg)?;
             if input["action"].as_str() == Some("apply") { ea_write(&json!({ "ops": [op] }), ctx).map(Into::into) } else { Ok(format!("{text}\n\nNothing was changed yet: show this to the user; action apply does it after approval.").into()) }

@@ -17,15 +17,43 @@ diagram (same position; where both are on a diagram, the duplicate's place goes)
 parameters and operations typed by it and tagged values pointing at it are re-pointed, its tagged values the kept one lacks and (notes: \"append\") its \
 notes are added, then it is deleted. action preview: what would change (reads only; show it). action apply: do it – the user approves it always, a \
 baseline of the package is made first. Both must be of the same type unless the user says otherwise. Use find_duplicates to find candidates and \
-/merge-elements.",
+/merge-elements. action replace_on_diagrams (LC-414): only on the given diagrams, remove is replaced by keep in the same place (where keep is \
+already there, remove just goes) – no merge, no deletion, relationships stay; one save, undoable.",
         "input_schema": { "type": "object", "properties": {
-            "action": { "type": "string", "enum": ["preview", "apply"] },
+            "action": { "type": "string", "enum": ["preview", "apply", "replace_on_diagrams"] },
+            "diagrams": { "type": "array", "items": { "type": "integer" }, "description": "replace_on_diagrams: the diagrams where remove is replaced by keep (nothing else changes)" },
             "keep": { "type": "integer", "description": "object_id of the element that stays" },
             "remove": { "type": "integer", "description": "object_id of the duplicate" },
             "notes": { "type": "string", "enum": ["append", "keep"], "description": "append (default): the duplicate's notes are added to the kept one's" },
             "allow_other_type": { "type": "boolean" }
         }, "required": ["action", "keep", "remove"] }
     })
+}
+
+/// Replace one element by another only on the given diagrams (LC-414): same place, nothing else changes.
+pub fn replace_on_diagrams(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)> {
+    let (Some(keep), Some(remove)) = (input["keep"].as_i64(), input["remove"].as_i64()) else { bail!("give keep and remove (object_ids)") };
+    let diagrams: Vec<i64> = input["diagrams"].as_array().into_iter().flatten().filter_map(Value::as_i64).collect();
+    if diagrams.is_empty() {
+        bail!("diagrams: the diagram ids where the element is replaced");
+    }
+    let mut ops = Vec::new();
+    let mut lines = Vec::new();
+    for d in diagrams {
+        let place = query_rows(cfg, &format!("select rectleft, recttop, rectright, rectbottom from t_diagramobjects where diagram_id = {d} and object_id = {remove}"))?;
+        let Some(r) = place.first() else {
+            lines.push(format!("- diagram {d}: the element to replace is not on it"));
+            continue;
+        };
+        let n = |i: usize| r[i].parse::<i64>().unwrap_or(0);
+        let has_keep = !query_rows(cfg, &format!("select 1 from t_diagramobjects where diagram_id = {d} and object_id = {keep}"))?.is_empty();
+        ops.push(json!({ "op": "remove_from_diagram", "diagram": d, "element": remove }));
+        if !has_keep {
+            ops.push(json!({ "op": "place", "diagram": d, "element": keep, "left": n(0), "top": -n(1), "width": (n(2) - n(0)).max(20), "height": (n(1) - n(3)).max(20) }));
+        }
+        lines.push(format!("- diagram {d}: {}", if has_keep { "the replaced element goes (the kept one is already there)" } else { "replaced in the same place" }));
+    }
+    Ok((ops, format!("Replace {remove} by {keep} on the chosen diagrams only:\n{}", lines.join("\n"))))
 }
 
 fn ids(cfg: &AppConfig, sql: String) -> Result<Vec<i64>> {
@@ -122,5 +150,34 @@ mod tests {
         crate::ea::run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &crate::ea::BatchOptions::default()).expect("cleanup");
         crate::ea::shutdown();
         assert!(problems.is_empty(), "{problems:?}");
+    }
+
+    /// LC-414: replaced only on the chosen diagram, in the same place; the other diagram and the element stay.
+    #[test]
+    #[ignore = "requires EA and a copy of a test model"]
+    fn replace_on_diagrams_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("app.properties");
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).unwrap();
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id")[0][0].parse().unwrap();
+        let created = crate::ea::run_batch(&cfg, &[
+            json!({"op":"create_package","key":"pkg","parent":root,"name":format!("ZZ_repl_{}", chrono::Local::now().format("%H%M%S"))}),
+            json!({"op":"create_element","key":"old","package":"#pkg","name":"CRM v1","type":"Component"}),
+            json!({"op":"create_element","key":"new","package":"#pkg","name":"CRM v2","type":"Component"}),
+            json!({"op":"create_diagram","key":"d1","package":"#pkg","name":"Target","type":"Component"}),
+            json!({"op":"create_diagram","key":"d2","package":"#pkg","name":"Current","type":"Component"}),
+            json!({"op":"place","diagram":"#d1","element":"#old","left":100,"top":80,"width":140,"height":70}),
+            json!({"op":"place","diagram":"#d2","element":"#old","left":40,"top":40,"width":140,"height":70}),
+        ], &crate::ea::BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("creation");
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).expect(key)["id"].as_i64().unwrap();
+        let (pkg, old, new, d1, d2) = (id_of("pkg"), id_of("old"), id_of("new"), id_of("d1"), id_of("d2"));
+        let before = q(&format!("select rectleft, recttop from t_diagramobjects where diagram_id = {d1} and object_id = {old}"));
+        let (ops, _) = super::replace_on_diagrams(&json!({ "keep": new, "remove": old, "diagrams": [d1] }), &cfg).unwrap();
+        crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions::default()).expect("replace");
+        let on_d1 = q(&format!("select object_id, rectleft, recttop from t_diagramobjects where diagram_id = {d1}"));
+        let on_d2 = q(&format!("select object_id from t_diagramobjects where diagram_id = {d2}"));
+        crate::ea::run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &crate::ea::BatchOptions::default()).expect("cleanup");
+        crate::ea::shutdown();
+        assert_eq!(on_d1, vec![vec![new.to_string(), before[0][0].clone(), before[0][1].clone()]]);
+        assert_eq!(on_d2, vec![vec![old.to_string()]]);
     }
 }
