@@ -345,6 +345,7 @@ pub fn definitions() -> Value {
         items.push(crate::ea_help::definition());
         items.push(crate::bulk::definition());
         items.push(crate::recycle::definition());
+        items.push(crate::merge::definition());
         items.push(crate::scripts::definition());
         items.push(crate::traceability::definition());
         items.push(crate::code_drift::definition());
@@ -857,6 +858,11 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             ea_write(&json!({ "ops": ops }), ctx).map(Into::into)
         }
         "bulk_set" => crate::bulk::preview(input, ctx.cfg).map(Into::into),
+        // Merge and replace: preview reads; apply is one save, always asked, with a baseline first.
+        "merge_elements" => {
+            let (op, text) = crate::merge::plan(input, ctx.cfg)?;
+            if input["action"].as_str() == Some("apply") { ea_write(&json!({ "ops": [op] }), ctx).map(Into::into) } else { Ok(format!("{text}\n\nNothing was changed yet: show this to the user; action apply does it after approval.").into()) }
+        }
         // The recycle bin: list reads; move and restore are ordinary saves.
         "recycle_bin" => {
             let (ops, text) = crate::recycle::plan(input, ctx.cfg)?;
@@ -1905,6 +1911,11 @@ fn destructive_details(cfg: &AppConfig, ops: &[Value]) -> Vec<String> {
                 lines.push(crate::i18n::fmt("VERSION CONTROL: {0} of package {1}", &[op["action"].as_str().unwrap_or("?").replace('_', " ").to_uppercase(), package]));
                 continue;
             }
+            "merge_elements" => {
+                let name = |field: &str| op[field].as_i64().map(|id| name_of("t_object", "object_id", id)).unwrap_or_default();
+                lines.push(crate::i18n::fmt("MERGE {0} into {1} and DELETE {0}", &[name("remove"), name("keep")]));
+                continue;
+            }
             "set_swimlanes" | "set_linked_document" | "update_scenario" => {
                 lines.push(crate::i18n::fmt("REPLACE {0}", &[crate::ea::describe(std::slice::from_ref(op)).trim().to_string()]));
                 continue;
@@ -2019,7 +2030,7 @@ fn ea_write(input: &Value, ctx: &ToolContext) -> Result<String> {
     let related = crate::verify::relations_of_deleted(ctx.cfg, ops);
     let package_deleted = ops.iter().any(|op| op["op"] == "delete" && (op["package"].is_i64() || op["child_package"].is_i64()));
     // Version control is always asked, also in auto (LC-349): get_latest replaces the whole package.
-    let version_control = ops.iter().any(|op| op["op"] == "version_control");
+    let version_control = ops.iter().any(|op| op["op"] == "version_control" || op["op"] == "merge_elements");
     if !related.is_empty() || package_deleted || version_control || !risky_files.is_empty() {
         ctx.approver.confirm_risky(&format!("{summary}\n\n{}\n\n{}", destructive.join("\n"), related.join("\n")))?;
     } else if destructive.is_empty() {

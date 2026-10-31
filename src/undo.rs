@@ -208,8 +208,8 @@ fn before_one(cfg: &AppConfig, op: &Value, reverse: &mut Vec<Value>, not_undoabl
 /// Packages to baseline before a save that deletes: the packages of the deleted objects (or the deleted package's parent).
 pub fn packages_to_baseline(cfg: &AppConfig, ops: &[Value]) -> Vec<i64> {
     let mut out = Vec::new();
-    for op in ops.iter().filter(|o| matches!(o["op"].as_str(), Some("delete" | "delete_attribute" | "delete_operation" | "delete_scenario" | "import_xmi" | "layout_diagram"))) {
-        let package = if let Some(e) = op["element"].as_i64() {
+    for op in ops.iter().filter(|o| matches!(o["op"].as_str(), Some("delete" | "delete_attribute" | "delete_operation" | "delete_scenario" | "import_xmi" | "layout_diagram" | "merge_elements"))) {
+        let package = if let Some(e) = op["element"].as_i64().or_else(|| op["remove"].as_i64()) {
             one(cfg, format!("select package_id as c0 from t_object where object_id = {e}"))
         } else if let Some(d) = op["diagram"].as_i64() {
             one(cfg, format!("select package_id as c0 from t_diagram where diagram_id = {d}"))

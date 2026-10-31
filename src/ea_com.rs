@@ -929,6 +929,95 @@ impl Job<'_> {
                     self.repo.call("Execute", &[s(statement.as_str().unwrap_or(""))])?;
                 }
             }
+            "merge_elements" => {
+                // Merge and replace (LC-370): the lists of what to re-point come from merge::plan (read with SQL).
+                let (keep, remove) = (int_field(op, "keep")?, int_field(op, "remove")?);
+                let kept = self.element(&json!(keep))?;
+                let gone = self.element(&json!(remove))?;
+                let (kept_guid, gone_guid) = (kept.text("ElementGUID")?, gone.text("ElementGUID")?);
+                let list = |field: &str| -> Vec<i32> { op[field].as_array().into_iter().flatten().filter_map(|v| v.as_i64()).map(|v| v as i32).collect() };
+                // Relationships: their end moves to the kept element.
+                for id in list("connectors") {
+                    let Some(connector) = self.repo.call("GetConnectorByID", &[i(id)]).ok().and_then(|v| v.object()) else { continue };
+                    for end in ["ClientID", "SupplierID"] {
+                        if connector.int(end)? == remove {
+                            connector.set(end, i(keep))?;
+                        }
+                    }
+                    connector.update(&crate::i18n::fmt("connector id={0}", &[id.to_string()]))?;
+                }
+                // Diagrams: the duplicate's place is taken by the kept element (same position); where both are, it goes.
+                let both = list("diagrams_with_both");
+                for id in list("diagrams") {
+                    let Some(diagram) = self.repo.call("GetDiagramByID", &[i(id)]).ok().and_then(|v| v.object()) else { continue };
+                    let objects = diagram.obj("DiagramObjects")?;
+                    let items = objects.items()?;
+                    if let Some(index) = items.iter().position(|o| o.int("ElementID").ok() == Some(remove)) {
+                        if both.contains(&id) {
+                            objects.call("DeleteAt", &[i(index as i32), b(false)])?;
+                            objects.call("Refresh", &[])?;
+                        } else {
+                            items[index].set("ElementID", i(keep))?;
+                            items[index].update(&crate::i18n::fmt("diagram id={0}", &[id.to_string()]))?;
+                        }
+                    }
+                }
+                // Instances, lifelines and actions classified by it; attributes, return types and parameters typed by it.
+                for id in list("instances") {
+                    let instance = self.element(&json!(id))?;
+                    instance.set("ClassifierID", i(keep))?;
+                    instance.update(&crate::i18n::fmt("element id={0}", &[id.to_string()]))?;
+                }
+                for id in list("attributes") {
+                    if let Some(attribute) = self.repo.call("GetAttributeByID", &[i(id)]).ok().and_then(|v| v.object()) {
+                        attribute.set("ClassifierID", i(keep))?;
+                        attribute.update(&crate::i18n::fmt("attribute id={0}", &[id.to_string()]))?;
+                    }
+                }
+                for id in list("operations") {
+                    if let Some(method) = self.repo.call("GetMethodByID", &[i(id)]).ok().and_then(|v| v.object()) {
+                        method.set("ClassifierID", s(&keep.to_string()))?;
+                        method.update(&crate::i18n::fmt("operation id={0}", &[id.to_string()]))?;
+                    }
+                }
+                for id in list("parameter_operations") {
+                    if let Some(method) = self.repo.call("GetMethodByID", &[i(id)]).ok().and_then(|v| v.object()) {
+                        for parameter in method.obj("Parameters")?.items()? {
+                            if parameter.text("ClassifierID").ok().as_deref() == Some(remove.to_string().as_str()) {
+                                parameter.set("ClassifierID", s(&keep.to_string()))?;
+                                parameter.update(&crate::i18n::fmt("parameter of operation id={0}", &[id.to_string()]))?;
+                            }
+                        }
+                    }
+                }
+                // Tagged values pointing at the duplicate (RefGUID).
+                for id in list("tag_owners") {
+                    let owner = self.element(&json!(id))?;
+                    for tag in owner.obj("TaggedValues")?.items()? {
+                        if tag.text("Value").ok().as_deref() == Some(gone_guid.as_str()) {
+                            tag.set("Value", s(&kept_guid))?;
+                            tag.update(crate::i18n::tr("tagged value"))?;
+                        }
+                    }
+                }
+                // Its tagged values the kept element lacks, and its notes.
+                let have: Vec<String> = kept.obj("TaggedValues")?.items()?.iter().filter_map(|t| t.text("Name").ok()).collect();
+                let mut missing = serde_json::Map::new();
+                for tag in gone.obj("TaggedValues")?.items()? {
+                    let name = tag.text("Name")?;
+                    if !have.iter().any(|h| h.eq_ignore_ascii_case(&name)) {
+                        missing.insert(name, json!(tag.text("Value").unwrap_or_default()));
+                    }
+                }
+                self.set_tags(&kept, &Value::Object(missing))?;
+                let (kept_notes, gone_notes) = (kept.text("Notes").unwrap_or_default(), gone.text("Notes").unwrap_or_default());
+                if op["notes"].as_str() != Some("keep") && !gone_notes.trim().is_empty() && gone_notes.trim() != kept_notes.trim() {
+                    let notes = if kept_notes.trim().is_empty() { gone_notes } else { format!("{kept_notes}\r\n\r\n{gone_notes}") };
+                    kept.set("Notes", s(&notes))?;
+                    kept.update(&crate::i18n::fmt("element id={0}", &[keep.to_string()]))?;
+                }
+                self.op(&json!({ "op": "delete", "element": remove }))?;
+            }
             "reverse_connector" => {
                 let id = int_field(op, "connector")?;
                 let connector = self.repo.call("GetConnectorByID", &[i(id)]).ok().and_then(|v| v.object())

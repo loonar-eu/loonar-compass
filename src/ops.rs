@@ -6,6 +6,7 @@ use serde_json::{json, Value};
 
 /// Operations the model may request. `delete_package`, `export_diagram` and `ping` are for internal use only.
 pub const MODEL_OPS: &[&str] = &[
+    "merge_elements",
     "create_package",
     "create_diagram",
     "create_element",
@@ -78,6 +79,7 @@ pub fn describe(ops: &[Value]) -> String {
         "hide_connectors" => crate::i18n::tr("connectors hidden or shown on diagrams"),
         "repair_diagram_links" => crate::i18n::tr("diagram links repaired (duplicates removed, hidden connectors shown)"),
         "create_attribute" => crate::i18n::tr("new attributes"),
+        "merge_elements" => crate::i18n::tr("duplicates merged into the kept elements"),
         "create_legend" => crate::i18n::tr("diagram legends"),
         "create_operation" => crate::i18n::tr("new operations"),
         "update_attribute" => crate::i18n::tr("changed attributes"),
