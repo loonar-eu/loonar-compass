@@ -39,7 +39,15 @@ pub fn emf_to_png(emf: &Path, png: &Path, width: u32, height: u32) -> Result<(u3
         info.bmiHeader.biBitCount = 32;
         info.bmiHeader.biCompression = BI_RGB.0;
         let mut bits: *mut std::ffi::c_void = std::ptr::null_mut();
-        let bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &mut bits, None, 0).context("CreateDIBSection")?;
+        let bitmap = match CreateDIBSection(dc, &info, DIB_RGB_COLORS, &mut bits, None, 0) {
+            Ok(bitmap) => bitmap,
+            Err(e) => {
+                // The device context and the metafile are let go on this path too (E10).
+                let _ = DeleteDC(dc);
+                let _ = DeleteEnhMetaFile(meta);
+                return Err(anyhow::Error::from(e).context("CreateDIBSection"));
+            }
+        };
         let old = SelectObject(dc, bitmap);
         let _ = PatBlt(dc, 0, 0, w, h, WHITENESS);
         SetStretchBltMode(dc, HALFTONE);

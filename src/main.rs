@@ -2431,11 +2431,14 @@ impl App {
         self.queued = 0;
         self.consumed = 0;
         let (events_tx, events_rx) = mpsc::channel::<WorkerEvent>();
-        let (outbox_tx, _inbox) = mpsc::channel::<Message>();
+        // The queue's receiver lives as long as the thread (E2): a message typed meanwhile waits and starts the next turn
+        // when this work is done, instead of a second worker in the same conversation.
+        let (outbox_tx, inbox) = mpsc::channel::<Message>();
         let cancel = Arc::new(AtomicBool::new(false));
         let wake = ctx.clone();
         let diagram = model["diagram"]["name"].as_str().unwrap_or("").to_string();
         std::thread::spawn(move || {
+            let _queue = inbox;
             let emit = |event: WorkerEvent| {
                 let _ = events_tx.send(event);
                 wake.request_repaint();
@@ -4007,9 +4010,12 @@ impl App {
         // A command answered without the AI (LC-389): the tool runs in the background, its result is the answer.
         if let Some((tool, input)) = self.direct.take() {
             let (events_tx, events_rx) = mpsc::channel::<WorkerEvent>();
-            let (outbox_tx, _inbox) = mpsc::channel::<Message>();
+            // The queue's receiver lives as long as the thread (E2): a message typed meanwhile waits and starts the next turn
+            // when this work is done, instead of a second worker in the same conversation.
+            let (outbox_tx, inbox) = mpsc::channel::<Message>();
             let wake = ctx.clone();
             std::thread::spawn(move || {
+                let _queue = inbox;
                 let emit = |event: WorkerEvent| {
                     let _ = events_tx.send(event);
                     wake.request_repaint();

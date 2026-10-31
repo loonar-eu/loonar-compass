@@ -358,11 +358,27 @@ impl Job<'_> {
         if self.locked.contains_key(&key) {
             return Ok(());
         }
-        let _ = object.call("ReleaseUserLock", &[]);
-        if !object.call("ApplyUserLock", &[])?.bool() {
+        // A lock the object already had (E7): when it is the user's own, it is used and kept after the job instead of
+        // being released and taken again – the user does not lose their locks.
+        let guid_property = match kind {
+            Kind::Package => "PackageGUID",
+            Kind::Element => "ElementGUID",
+            Kind::Diagram => "DiagramGUID",
+            Kind::Connector => "ConnectorGUID",
+        };
+        let guid = object.text(guid_property).unwrap_or_default().replace('\'', "");
+        let locked_before = !guid.is_empty()
+            && self.repo.call("SQLQuery", &[s(&format!("SELECT EntityID FROM t_seclocks WHERE EntityID = '{guid}'"))]).map(|xml| !xml_rows(&xml.text()).is_empty()).unwrap_or(false);
+        let applied = object.call("ApplyUserLock", &[])?.bool() || {
+            let _ = object.call("ReleaseUserLock", &[]);
+            object.call("ApplyUserLock", &[])?.bool()
+        };
+        if !applied {
             bail!("{}", crate::i18n::fmt("Cannot lock the object ({0} id={1}). It is probably locked by another user.", &[kind.name().to_string(), id.to_string()]));
         }
-        self.locked.insert(key, object.clone());
+        if !locked_before {
+            self.locked.insert(key, object.clone());
+        }
         Ok(())
     }
 

@@ -652,6 +652,17 @@ fn parse_event(line: &str) -> Option<Event> {
 
 #[cfg(test)]
 mod event_tests {
+    /// E1: a save that fails at once (no EA window, or another model there) does not leave the "still running" mark,
+    /// so the next save is not refused.
+    #[test]
+    fn failed_window_save_clears_the_mark() {
+        let target = super::Target { db_name: "no_such_model_e1".into(), file: None };
+        for _ in 0..2 {
+            let error = super::run_in_window(&target, String::new(), vec![], None, false, false, std::time::Duration::from_secs(20)).unwrap_err().to_string();
+            assert!(!error.contains("still running"), "{error}");
+        }
+    }
+
     #[test]
     fn miro_requests_with_and_without_selection() {
         assert_eq!(super::parse_miro("42"), Some((42, vec![])));
@@ -812,19 +823,52 @@ impl HiddenCommand for std::process::Command {
 }
 
 pub fn has_model_open(target: &Target) -> bool {
+    matches!(model_in_window(target), Some(true))
+}
+
+/// Whether the user's EA window has this model open: `None` when an EA window is there but does not answer (a dialog
+/// box may be open) – then nobody knows, and an EA file must not be opened by a second EA meanwhile (E3).
+pub fn model_in_window(target: &Target) -> Option<bool> {
     let target = target.clone();
-    with_running_ea(Duration::from_secs(5), move |repo| same_model(repo, &target)).is_ok()
+    match with_running_ea(Duration::from_secs(5), move |repo| Ok(same_model(repo, &target).is_ok())) {
+        Ok(open) => Some(open),
+        Err(e) if e.to_string() == crate::i18n::tr("the EA window is not responding (a dialog box may be open)") => None,
+        Err(_) => Some(false),
+    }
 }
 
 /// Runs a write job in the user's EA window (an EA file the user has open: a second EA instance must not
 /// open the same `.qea` file). The reply has the same form as from the background session.
 pub fn run_in_window(target: &Target, user: String, ops: Vec<Value>, rollback_key: Option<String>, keep_locks: bool, locks: bool, timeout: Duration) -> Result<Value> {
+    use std::sync::atomic::Ordering;
+    // A save that ran out of time may still be finishing in the EA window (E1): a new save waits for it instead of
+    // writing the same objects a second time.
+    if WINDOW_SAVE_RUNNING.swap(true, Ordering::SeqCst) {
+        bail!("{}", crate::i18n::tr("The previous save is still running in the EA window (it did not answer in time). Wait until EA is free, check the model, then try again."));
+    }
+    // Cleared when the save's thread lets go of the job: done, failed, or never started (no EA window).
+    struct Running;
+    impl Drop for Running {
+        fn drop(&mut self) {
+            WINDOW_SAVE_RUNNING.store(false, Ordering::SeqCst);
+        }
+    }
+    let running = Running;
     let target = target.clone();
-    with_running_ea(timeout, move |repo| {
+    let result = with_running_ea(timeout, move |repo| {
+        let _running = running;
         same_model(repo, &target)?;
         Ok(crate::ea_com::run_request(repo, &user, &ops, rollback_key.as_deref(), keep_locks, locks))
-    })
+    });
+    if result.is_err() && WINDOW_SAVE_RUNNING.load(Ordering::SeqCst) {
+        // Still running: the error says that EA may yet finish the save.
+        return Err(anyhow!("{}", crate::i18n::tr("The EA window did not answer in time (a dialog box may be open). EA may still finish this save: check the model before trying again – a repeated save could create everything twice.")));
+    }
+    result
 }
+
+/// A save through the user's EA window is running (also one abandoned after its time limit, until EA finishes it).
+static WINDOW_SAVE_RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// What the user has open and selected in EA.
 pub fn context(target: &Target) -> Result<Value> {

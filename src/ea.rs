@@ -157,7 +157,9 @@ impl Worker {
         let (requests, inbox) = mpsc::channel::<Request>();
         let thread_login = login.clone();
         let thread = std::thread::spawn(move || worker_loop(thread_login, inbox));
-        Self { requests, login, started_wall: chrono::Local::now(), thread }
+        let started_wall = chrono::Local::now();
+        *BRIDGE_STARTED.lock().unwrap_or_else(|p| p.into_inner()) = Some(started_wall);
+        Self { requests, login, started_wall, thread }
     }
 }
 
@@ -237,7 +239,12 @@ pub fn run_batch(cfg: &AppConfig, ops: &[Value], options: &BatchOptions) -> Resu
     // the same file (a .qea file is meant for one user). The background session for it, if any, is closed.
     if cfg.uses_file() || IN_EA_TAB.load(std::sync::atomic::Ordering::Relaxed) {
         let target = crate::ea_ui::Target::of(cfg);
-        if crate::ea_ui::has_model_open(&target) {
+        let in_window = crate::ea_ui::model_in_window(&target);
+        // An EA window that does not answer may have this very file open: a second EA must not write it (E3).
+        if in_window.is_none() && cfg.uses_file() {
+            bail!("{}", crate::i18n::tr("Your EA window does not answer (a dialog box may be open), and it may have this file open. Close the dialog in EA and try again; nothing was written."));
+        }
+        if in_window == Some(true) {
             WORKER.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).take();
             let result = crate::ea_ui::run_in_window(&target, cfg.ea_user.clone(), ops.to_vec(), options.rollback_key.clone(), options.keep_locks, locks, timeout())?;
             return check_result(ops, result);
@@ -366,7 +373,24 @@ fn check_result(ops: &[Value], result: Value) -> Result<Value> {
 /// and holds a license (the EA thread dies together with the application process before it closes EA). Waits up to 8 s for
 /// EA to close, then kills the EA processes started by this session.
 pub fn shutdown() {
-    let worker = WORKER.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).take();
+    // A save in progress holds the session for up to its time limit (E8): closing does not wait for it, the EA started
+    // by this session is closed instead.
+    let deadline = std::time::Instant::now() + Duration::from_secs(8);
+    let mut guard = loop {
+        match WORKER.try_lock() {
+            Ok(guard) => break guard,
+            Err(std::sync::TryLockError::Poisoned(p)) => break p.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) if std::time::Instant::now() < deadline => std::thread::sleep(Duration::from_millis(100)),
+            Err(std::sync::TryLockError::WouldBlock) => {
+                if let Some(started) = *BRIDGE_STARTED.lock().unwrap_or_else(|p| p.into_inner()) {
+                    kill_orphan_ea(started);
+                }
+                return;
+            }
+        }
+    };
+    let worker = guard.take();
+    drop(guard);
     let Some(worker) = worker else { return };
     let Worker { requests, started_wall, thread, .. } = worker;
     drop(requests); // end of the channel: the EA thread closes the session (Exit) and finishes
@@ -378,6 +402,9 @@ pub fn shutdown() {
         kill_orphan_ea(started_wall);
     }
 }
+
+/// When the current background EA session was started (for closing it without its lock, E8).
+static BRIDGE_STARTED: std::sync::Mutex<Option<chrono::DateTime<chrono::Local>>> = std::sync::Mutex::new(None);
 
 fn op_name(ops: &[Value], index: i64) -> String {
     ops.get(index as usize).and_then(|o| o["op"].as_str()).unwrap_or("?").to_string()
