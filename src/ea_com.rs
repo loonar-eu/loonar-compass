@@ -431,6 +431,31 @@ impl Job<'_> {
         self.package(&op["package"])
     }
 
+    /// Files linked to an element (its Files tab; LC-424): paths or web addresses, the ones already there skipped.
+    fn add_files(&self, element: &Disp, files: &Value) -> Result<()> {
+        let wanted: Vec<String> = match files {
+            Value::String(f) => vec![f.clone()],
+            Value::Array(list) => list.iter().filter_map(|f| f.as_str().map(str::to_string)).collect(),
+            _ => return Ok(()),
+        };
+        let collection = element.obj("Files")?;
+        let count = collection.int("Count")?;
+        let mut have = Vec::new();
+        for n in 0..count {
+            have.push(collection.call("GetAt", &[i(n)])?.object().map(|f| f.text("Name").unwrap_or_default().to_lowercase()).unwrap_or_default());
+        }
+        for f in wanted.iter().map(|f| f.trim()).filter(|f| !f.is_empty()) {
+            if have.contains(&f.to_lowercase()) {
+                continue;
+            }
+            let kind = if f.starts_with("http://") || f.starts_with("https://") { "Web Address" } else { "Local File" };
+            let file = collection.call("AddNew", &[s(f), s(kind)])?.object().ok_or_else(|| anyhow!("EA did not link the file {f}"))?;
+            file.update(&crate::i18n::fmt("file '{0}'", &[f.to_string()]))?;
+        }
+        collection.call("Refresh", &[])?;
+        Ok(())
+    }
+
     /// Element keywords (the Keywords field in EA, t_object.pdata5 in the database), e.g. for coloring by a legend.
     fn set_keywords(&self, element: &Disp, keywords: &Value) -> Result<()> {
         if keywords.is_null() {
@@ -903,6 +928,7 @@ impl Job<'_> {
                     element.update(crate::i18n::tr("element color"))?;
                 }
                 self.set_tags(&element, &op["tags"])?;
+                self.add_files(&element, &op["files"])?;
                 self.set_keywords(&element, &op["keywords"])?;
                 let (id, guid, real) = (element.int("ElementID")?, element.text("ElementGUID")?, element.text("Name")?);
                 self.register(&op["key"], Kind::Element, &element, id, guid, real);
@@ -1366,6 +1392,7 @@ impl Job<'_> {
                     element.update(crate::i18n::tr("element color"))?;
                 }
                 self.set_tags(&element, &op["tags"])?;
+                self.add_files(&element, &op["files"])?;
             }
             "update_connector" => {
                 // Properties of an existing relationship: name, stereotype, direction, notes, the multiplicities and roles

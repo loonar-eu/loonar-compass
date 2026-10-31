@@ -209,6 +209,12 @@ fn used(cfg: &crate::config::AppConfig) -> BTreeMap<String, BTreeMap<String, usi
     out
 }
 
+/// A stereotype by its full name "Profile::Stereotype" from the technology that has the profile (LC-424).
+pub(crate) fn stereotype(cfg: &crate::config::AppConfig, full: &str) -> Option<Stereotype> {
+    let (profile, name) = full.split_once("::")?;
+    find(cfg, profile).ok()?.stereotypes.into_iter().find(|s| s.name.eq_ignore_ascii_case(name))
+}
+
 fn find(cfg: &crate::config::AppConfig, wanted: &str) -> Result<Technology> {
     find_raw(cfg, wanted).map(|(t, _)| t)
 }
