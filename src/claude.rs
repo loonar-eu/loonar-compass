@@ -137,7 +137,9 @@ impl ClaudeClient {
                 return Ok(client);
             }
             // A local endpoint (Ollama, LM Studio) works without a key.
-            let local = !cfg.openai_url.trim().is_empty() && crate::jira::check_base_url(cfg.openai_url.trim()).is_ok() && !cfg.openai_url.trim().to_ascii_lowercase().starts_with("https://");
+            // Only a model on this computer works without a key; in the organization's network (http:// allowed there,
+            // LC-277) and anywhere else the key is required.
+            let local = !cfg.openai_url.trim().is_empty() && crate::net::check_service_url(cfg.openai_url.trim()).is_ok() && !cfg.openai_url.trim().to_ascii_lowercase().starts_with("https://");
             let key = if !cfg.ai_oauth_token_url.trim().is_empty() {
                 // A company gateway with OAuth2: the token takes the place of the key (fresh for every answer).
                 crate::auth::client_credentials(cfg.ai_oauth_token_url.trim(), cfg.ai_oauth_client_id.trim(), &secrets::get(secrets::AI_OAUTH_SECRET)?, cfg.ai_oauth_scope.trim())?

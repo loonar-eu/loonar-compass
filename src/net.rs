@@ -11,6 +11,41 @@ pub fn same_origin_redirects() -> reqwest::redirect::Policy {
     })
 }
 
+/// An address in a private network: this computer, 10.x, 172.16–31.x, 192.168.x, 100.64–127.x (VPNs such as Tailscale),
+/// 169.254.x, IPv6 fc00::/7 and fe80::/10.
+pub fn is_private_ip(ip: std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            let o = v4.octets();
+            v4.is_loopback() || v4.is_private() || v4.is_link_local() || (o[0] == 100 && (64..128).contains(&o[1]))
+        }
+        std::net::IpAddr::V6(v6) => {
+            let first = v6.segments()[0];
+            v6.is_loopback() || (first & 0xfe00) == 0xfc00 || (first & 0xffc0) == 0xfe80
+        }
+    }
+}
+
+/// The address of an AI model (an OpenAI-compatible server such as Ollama, vLLM or LM Studio): https://…, or http://
+/// to this computer or to a server in a private network – an address of a private range, or a name that resolves only to
+/// such addresses (a model of the organization in its network or behind its VPN). A public address needs https://.
+pub fn check_model_url(url: &str) -> Result<(), ()> {
+    if check_service_url(url).is_ok() {
+        return Ok(());
+    }
+    let parsed = reqwest::Url::parse(url.trim()).map_err(|_| ())?;
+    if parsed.scheme() != "http" || !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err(());
+    }
+    let host = parsed.host_str().ok_or(())?.trim_matches(['[', ']']);
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return if is_private_ip(ip) { Ok(()) } else { Err(()) };
+    }
+    use std::net::ToSocketAddrs;
+    let addresses: Vec<std::net::IpAddr> = (host, parsed.port_or_known_default().unwrap_or(80)).to_socket_addrs().map_err(|_| ())?.map(|a| a.ip()).collect();
+    if !addresses.is_empty() && addresses.iter().all(|ip| is_private_ip(*ip)) { Ok(()) } else { Err(()) }
+}
+
 /// An address of a service: https://…, or http:// only for this computer (localhost, 127.0.0.1, [::1]); no user name
 /// or password in the address.
 pub fn check_service_url(url: &str) -> Result<(), ()> {
@@ -120,5 +155,20 @@ mod site_base_tests {
         assert!(super::asks_for_client_certificate(403, "<html><h3>The page requires a client certificate</h3></html>"));
         assert!(super::asks_for_client_certificate(400, "<html><center>No required SSL certificate was sent</center></html>"));
         assert!(!super::asks_for_client_certificate(403, "{\"errorMessages\":[\"no permission\"]}") && !super::asks_for_client_certificate(200, "<html>client certificate</html>"));
+    }
+}
+
+#[cfg(test)]
+mod model_url_tests {
+    /// LC-277: a model in the organization's network may be reached with http://, a public address only with https://.
+    #[test]
+    fn model_addresses() {
+        for ok in ["https://api.example.com/v1", "http://127.0.0.1:11434/v1", "http://localhost:11434/v1", "http://10.1.2.3:11434/v1", "http://192.168.1.20:11434/v1",
+            "http://172.20.0.5:8000/v1", "http://100.101.102.103:11434/v1", "http://[fd00::5]:11434/v1"] {
+            assert!(super::check_model_url(ok).is_ok(), "{ok}");
+        }
+        for bad in ["http://8.8.8.8:11434/v1", "http://172.32.0.1/v1", "http://user:pw@10.0.0.1/v1", "ftp://10.0.0.1/", "http://[2001:4860::1]/v1"] {
+            assert!(super::check_model_url(bad).is_err(), "{bad}");
+        }
     }
 }

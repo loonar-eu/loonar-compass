@@ -3314,7 +3314,7 @@ impl App {
                 updates.push(("openai.model", f.openai_model.trim().to_string()));
                 let endpoint = f.openai_url.trim().trim_end_matches('/').to_string();
                 if !endpoint.is_empty() {
-                    jira::check_base_url(&endpoint).map_err(|_| anyhow::anyhow!("{}", crate::i18n::tr("The model endpoint must start with https:// (http:// only on this computer)")))?;
+                    crate::net::check_model_url(&endpoint).map_err(|_| anyhow::anyhow!("{}", crate::i18n::tr("The model endpoint must start with https:// (http:// only on this computer or in a private network)")))?;
                 }
                 updates.push(("openai.url", endpoint));
                 if !f.openai_api_key.is_empty() {
