@@ -124,6 +124,31 @@ pub(crate) fn matching(question: &str) -> Vec<&'static str> {
     scored.into_iter().take(3).map(|(_, i)| KNOWN[i].problem).collect()
 }
 
+/// What Compass can do itself for a "how do I…" question (LC-417): words of the question → the tool or command.
+const DO_IT: &[(&[&str], &str)] = &[
+    (&["layout", "arrange", "tidy", "układ", "uporządk", "rozmieść"], "layout_diagram (the whole diagram), place_new_elements (only new ones), align_elements"),
+    (&["align", "wyrówn", "distribute", "same size"], "align_elements"),
+    (&["colour", "color", "kolor", "style", "styl"], "apply_style (/apply-style) or set_color"),
+    (&["hide", "show connector", "ukryj", "pokaż relac", "visibility", "widoczn"], "connector_visibility (/visibility, /show-hidden-links) or hide_connectors"),
+    (&["baseline", "compare", "porówn"], "create_baseline, compare_baselines (/compare-baselines), what_changed"),
+    (&["rename", "zmień nazw", "status", "stereotype", "stereotyp", "tagged value", "wartość tag", "bulk", "masow"], "bulk_set (/bulk-set) or update_element"),
+    (&["delete", "usuń", "remove"], "what_if (/what-if) first, then recycle_bin (/to-bin) or a delete the user approves"),
+    (&["merge", "duplicate", "scal", "duplikat"], "find_duplicates and merge_elements (/merge-elements)"),
+    (&["relationship type", "connector type", "typ relacj", "change type"], "change_connector_type"),
+    (&["document", "report", "rtf", "dokument", "raport"], "create_document, template_doctor (/template-doctor)"),
+    (&["lock", "greyed", "grayed", "wyszarz", "blokad"], "why_locked (/why-locked)"),
+    (&["import", "excel", "csv", "openapi", "swagger"], "import_sheet (/import-sheet), import_api (/import-api)"),
+    (&["export", "mermaid", "plantuml", "xmi"], "diagram_as_text (/diagram-as-text), export_text (/export-text) or export_xmi"),
+    (&["sequence", "sekwenc"], "sequence_from_text (/sequence-from-text), sequence_check (/check-sequence)"),
+    (&["translate", "tłumacz", "language"], "translate_model (/translate-model)"),
+];
+
+/// The tools of Compass that do what the question asks (empty when nothing fits).
+pub(crate) fn can_do(question: &str) -> Vec<&'static str> {
+    let q = question.to_lowercase();
+    DO_IT.iter().filter(|(words, _)| words.iter().any(|w| q.contains(w))).map(|(_, tools)| *tools).collect()
+}
+
 pub fn run(input: &Value, cfg: &AppConfig) -> Result<String> {
     let question = input["question"].as_str().unwrap_or("");
     let version = ea_version(cfg);
@@ -142,11 +167,24 @@ pub fn run(input: &Value, cfg: &AppConfig) -> Result<String> {
             out.push_str(&format!("- {}\n  What helps: {}\n", k.problem, k.help));
         }
     }
+    // "Do it for me" (LC-417): the steps in EA first, then the offer to do it with Compass's own tools (the user approves the save).
+    let tools = can_do(question);
+    if !tools.is_empty() {
+        out.push_str(&format!("\nCompass can do this itself: {}. After the steps in EA, offer it (\"I can do it for you\") – a change is one save the user approves.\n", tools.join("; ")));
+    }
     Ok(out)
 }
 
 #[cfg(test)]
 mod tests {
+    /// LC-417: questions that Compass can do itself are matched to its tools.
+    #[test]
+    fn do_it_for_me() {
+        assert!(super::can_do("How do I align these classes and change their colour?").iter().any(|t| t.contains("align_elements")));
+        assert!(super::can_do("jak zmienić status wielu elementów").iter().any(|t| t.contains("bulk_set")));
+        assert!(super::can_do("how do I add a hyperlink to a website").is_empty());
+    }
+
     /// LC-375: the version of the EA installed in the lab: `cargo test ea_version_live -- --ignored --nocapture`
     #[test]
     #[ignore = "requires Enterprise Architect"]
