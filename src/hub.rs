@@ -20,7 +20,7 @@ use crate::config::AppConfig;
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{IpAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -81,6 +81,85 @@ struct Source {
     id: String,
     name: String,
     cfg: AppConfig,
+    /// Who may read the source at all ("readers": ["anna", "role:architect", …]; empty = everybody) (LC-385).
+    readers: Vec<String>,
+    /// Package scopes ("scopes": [{"for": "<user>" | "role:<role>" | "*", "packages": [package_id or GUID, …]}]):
+    /// the first entry for the person, their role or everybody limits them to these packages and their subpackages.
+    scopes: Vec<(String, Vec<String>)>,
+}
+
+/// The packages a person may see in a source (with all their subpackages); None = the whole model (LC-385).
+type Scope = Option<HashSet<i64>>;
+
+/// Who an entry "for" of hub.json means for this person, most specific first.
+fn wanted(user: &str, role: Role) -> [String; 3] {
+    [user.to_lowercase(), format!("role:{}", role.name()), "*".to_string()]
+}
+
+/// `col in (…)` for the packages of a scope, in chunks (Oracle allows at most 1000 values in one list).
+fn in_list(col: &str, ids: &HashSet<i64>) -> String {
+    if ids.is_empty() {
+        return "1 = 0".into();
+    }
+    let mut ids: Vec<i64> = ids.iter().copied().collect();
+    ids.sort_unstable();
+    let parts: Vec<String> = ids.chunks(900).map(|c| format!("{col} in ({})", c.iter().map(i64::to_string).collect::<Vec<_>>().join(","))).collect();
+    format!("({})", parts.join(" or "))
+}
+
+/// " and <col> in (…)" when the person has a scope, otherwise nothing.
+fn within(scope: &Scope, col: &str) -> String {
+    scope.as_ref().map(|s| format!(" and {}", in_list(col, s))).unwrap_or_default()
+}
+
+/// The given packages (package_id or GUID) and all their subpackages.
+fn scope_packages(cfg: &AppConfig, roots: &[String]) -> Result<HashSet<i64>> {
+    let rows = crate::tools::query_rows(cfg, "select package_id as c0, parent_id as c1, ea_guid as c2 from t_package")?;
+    let wanted: HashSet<String> = roots.iter().map(|r| r.trim().trim_matches(['{', '}']).to_lowercase()).collect();
+    let mut found: HashSet<i64> = rows
+        .iter()
+        .filter(|r| wanted.contains(&r[0]) || wanted.contains(&r[2].trim_matches(['{', '}']).to_lowercase()))
+        .filter_map(|r| r[0].parse().ok())
+        .collect();
+    loop {
+        let more: Vec<i64> = rows
+            .iter()
+            .filter_map(|r| Some((r[0].parse::<i64>().ok()?, r[1].parse::<i64>().ok()?)))
+            .filter(|(id, parent)| found.contains(parent) && !found.contains(id))
+            .map(|(id, _)| id)
+            .collect();
+        if more.is_empty() {
+            return Ok(found);
+        }
+        found.extend(more);
+    }
+}
+
+/// What a person with a package scope cannot use: questions over the whole model (GraphQL, the assistant, impact and
+/// gaps across packages) cannot be limited reliably, so they are refused (LC-385).
+fn scoped_out(what: &str) -> HttpError {
+    deny(403, crate::i18n::fmt("your access to this model is limited to some packages: {0} is not available to you", &[what.to_string()]))
+}
+
+/// The package is within the person's scope.
+fn package_in(scope: &Scope, package: i64) -> Result<(), HttpError> {
+    match scope {
+        Some(s) if !s.contains(&package) => Err(deny(404, crate::i18n::fmt("there is no package with id {0}", &[package.to_string()]))),
+        _ => Ok(()),
+    }
+}
+
+/// The element lies in a package within the person's scope (outside it looks like no element at all).
+fn element_in(cfg: &AppConfig, scope: &Scope, element: i64) -> Result<(), HttpError> {
+    let Some(s) = scope else { return Ok(()) };
+    let package = crate::tools::query_rows(cfg, &format!("select package_id as c0 from t_object where object_id = {element}"))?
+        .into_iter()
+        .next()
+        .and_then(|r| r[0].parse::<i64>().ok());
+    match package {
+        Some(p) if s.contains(&p) => Ok(()),
+        _ => Err(deny(404, crate::i18n::fmt("there is no element with id {0}", &[element.to_string()]))),
+    }
 }
 
 /// State of the running hub.
@@ -195,7 +274,17 @@ pub fn load(file: &Path) -> Result<(Hub, String)> {
         }
         let props = dir.join(s["properties"].as_str().unwrap_or(""));
         let cfg = AppConfig::load(&props).with_context(|| crate::i18n::fmt("hub source {0}", &[id.clone()]))?;
-        sources.push(Source { name: s["name"].as_str().unwrap_or(&id).to_string(), id, cfg });
+        let readers = s["readers"].as_array().into_iter().flatten().filter_map(|r| r.as_str()).map(|r| r.trim().to_lowercase()).filter(|r| !r.is_empty()).collect();
+        let mut scopes = Vec::new();
+        for scope in s["scopes"].as_array().into_iter().flatten() {
+            let who = scope["for"].as_str().unwrap_or("").trim().to_lowercase();
+            if who.is_empty() {
+                bail!("{}", crate::i18n::fmt("hub source {0}: every scope needs \"for\" (a user, role:<role> or *)", &[id.clone()]));
+            }
+            let packages = scope["packages"].as_array().into_iter().flatten().filter_map(|p| p.as_i64().map(|n| n.to_string()).or_else(|| p.as_str().map(str::to_string))).collect();
+            scopes.push((who, packages));
+        }
+        sources.push(Source { name: s["name"].as_str().unwrap_or(&id).to_string(), id, cfg, readers, scopes });
     }
     let mut users: Vec<User> = Vec::new();
     for u in value["users"].as_array().into_iter().flatten() {
@@ -810,8 +899,9 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
         let parts: Vec<&str> = request.path.trim_matches('/').split('/').collect();
         if let ["api", "sources", id, "report"] = parts.as_slice() {
             let result = (|| -> Result<(Vec<u8>, &'static str, String), HttpError> {
-                let source = hub.source(id)?;
+                let (source, scope) = hub.source_for(id, &user, role)?;
                 let package: i64 = request.query.get("package").and_then(|p| p.parse().ok()).ok_or_else(|| deny(400, crate::i18n::tr("give the package (package_id)")))?;
+                package_in(&scope, package)?;
                 let format = request.query.get("format").map(String::as_str).unwrap_or("docx");
                 package_report(&source.cfg, &source.name, package, format)
             })();
@@ -946,6 +1036,28 @@ impl Hub {
 
     fn source(&self, id: &str) -> Result<&Source, HttpError> {
         self.sources.iter().find(|s| s.id == id).ok_or_else(|| deny(404, crate::i18n::fmt("there is no source {0}", &[id.to_string()])))
+    }
+
+    /// The person may read the source ("readers"; admins always) (LC-385).
+    fn can_read(source: &Source, user: &str, role: Role) -> bool {
+        role == Role::Admin || source.readers.is_empty() || wanted(user, role).iter().any(|w| source.readers.contains(w))
+    }
+
+    /// The source as this person may read it: a source they may not read looks like no source; with a package scope,
+    /// the packages they see (LC-385).
+    fn source_for(&self, id: &str, user: &str, role: Role) -> Result<(&Source, Scope), HttpError> {
+        let source = self.source(id)?;
+        if !Self::can_read(source, user, role) {
+            return Err(deny(404, crate::i18n::fmt("there is no source {0}", &[id.to_string()])));
+        }
+        if role == Role::Admin {
+            return Ok((source, None));
+        }
+        let roots = wanted(user, role).iter().find_map(|w| source.scopes.iter().find(|(who, _)| who == w).map(|(_, p)| p.clone()));
+        match roots {
+            None => Ok((source, None)),
+            Some(roots) => Ok((source, Some(scope_packages(&source.cfg, &roots)?))),
+        }
     }
 
     fn rules(&self) -> Value {
@@ -1224,12 +1336,13 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
         // Jira and Confluence of the team, as actions of an architect (never of the assistant): the hub's service account.
         ("POST", ["api", "sources", id, "jira"]) => {
             require(role, Role::Architect)?;
-            let source = hub.source(id)?;
+            let (source, scope) = hub.source_for(id, &user, role)?;
             let b = body()?;
             let (summary, description) = issue_text(&b)?;
             let mut text = description;
             if let Some(element) = b["element"].as_i64() {
-                text.push_str(&format!("\n\n{}\n{}", crate::i18n::fmt("Element of the model {0} (id {1}):", &[source.name.clone(), element.to_string()]), element_details(&source.cfg, element).map_err(|e| deny(400, e.to_string()))?.chars().take(4000).collect::<String>()));
+                element_in(&source.cfg, &scope, element)?;
+                text.push_str(&format!("\n\n{}\n{}", crate::i18n::fmt("Element of the model {0} (id {1}):", &[source.name.clone(), element.to_string()]), element_details(&source.cfg, element, &scope).map_err(|e| deny(400, e.to_string()))?.chars().take(4000).collect::<String>()));
             }
             let (key, url) = hub.create_issue(&summary, &text)?;
             let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": id, "summary": format!("Jira {key}: {summary}"), "ok": true }));
@@ -1254,9 +1367,10 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
         }
         ("POST", ["api", "sources", id, "confluence"]) => {
             require(role, Role::Architect)?;
-            let source = hub.source(id)?;
+            let (source, scope) = hub.source_for(id, &user, role)?;
             let b = body()?;
             let package = b["package"].as_i64().ok_or_else(|| deny(400, crate::i18n::fmt("missing number '{0}'", &["package".to_string()])))?;
+            package_in(&scope, package)?;
             let (title, storage) = package_page(&source.cfg, &source.name, package)?;
             let title = b["title"].as_str().map(str::trim).filter(|t| !t.is_empty()).map(|t| t.chars().take(200).collect::<String>()).unwrap_or(title);
             let (connection, space, parent) = hub.confluence()?;
@@ -1289,24 +1403,31 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
             let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": "", "summary": crate::i18n::tr("team policy changed"), "ok": true }));
             Ok((200, json!({ "ok": true })))
         }
-        ("GET", ["api", "sources"]) => Ok((200, json!(hub.sources.iter().map(|s| json!({ "id": s.id, "name": s.name, "kind": if s.cfg.uses_file() { "file" } else { "database" } })).collect::<Vec<_>>()))),
+        ("GET", ["api", "sources"]) => Ok((200, json!(hub.sources.iter().filter(|s| Hub::can_read(s, &user, role)).map(|s| json!({ "id": s.id, "name": s.name, "kind": if s.cfg.uses_file() { "file" } else { "database" } })).collect::<Vec<_>>()))),
         // Questions of people without EA: the assistant reads the source and answers (it cannot change the model).
         // Read-only GraphQL over a model (any role).
         ("POST", ["api", "sources", id, "graphql"]) => {
-            let source = hub.source(id)?;
+            let (source, scope) = hub.source_for(id, &user, role)?;
+            if scope.is_some() {
+                return Err(scoped_out("GraphQL"));
+            }
             Ok((200, crate::graphql::execute(&source.cfg, &body()?)))
         }
         ("GET", ["api", "graphql", "schema"]) => Ok((200, json!({ "sdl": crate::graphql::sdl() }))),
         // Flat tables of a model for Power BI, Excel and other tools (Get Data → Web, with the Authorization header).
         ("GET", ["api", "sources", id, "table", table]) => {
-            let source = hub.source(id)?;
+            let (source, scope) = hub.source_for(id, &user, role)?;
+            // With a package scope only the rows of those packages (a relationship: both ends inside) (LC-385).
+            let only = |cols: &[&str]| -> String {
+                scope.as_ref().map(|s| format!(" where {}", cols.iter().map(|c| in_list(c, s)).collect::<Vec<_>>().join(" and "))).unwrap_or_default()
+            };
             let sql = match *table {
-                "elements" => "select o.object_id, o.name, o.object_type, o.stereotype, o.status, o.package_id, p.name as package, o.author, o.version, o.phase, o.createddate, o.modifieddate from t_object o left join t_package p on p.package_id = o.package_id where o.object_type <> 'Package'",
-                "connectors" => "select c.connector_id, c.connector_type, c.stereotype, c.name, c.start_object_id, s.name as source, c.end_object_id, t.name as target from t_connector c left join t_object s on s.object_id = c.start_object_id left join t_object t on t.object_id = c.end_object_id",
-                "packages" => "select package_id, name, parent_id, version, createddate, modifieddate from t_package",
-                "diagrams" => "select diagram_id, name, diagram_type, package_id, author, createddate, modifieddate from t_diagram",
-                "attributes" => "select a.id, a.object_id, o.name as element, a.name, a.type from t_attribute a left join t_object o on o.object_id = a.object_id",
-                "tagged_values" => "select v.propertyid, v.object_id, o.name as element, v.property, v.value from t_objectproperties v left join t_object o on o.object_id = v.object_id",
+                "elements" => format!("select o.object_id, o.name, o.object_type, o.stereotype, o.status, o.package_id, p.name as package, o.author, o.version, o.phase, o.createddate, o.modifieddate from t_object o left join t_package p on p.package_id = o.package_id where o.object_type <> 'Package'{}", within(&scope, "o.package_id")),
+                "connectors" => format!("select c.connector_id, c.connector_type, c.stereotype, c.name, c.start_object_id, s.name as source, c.end_object_id, t.name as target from t_connector c left join t_object s on s.object_id = c.start_object_id left join t_object t on t.object_id = c.end_object_id{}", only(&["s.package_id", "t.package_id"])),
+                "packages" => format!("select package_id, name, parent_id, version, createddate, modifieddate from t_package{}", only(&["package_id"])),
+                "diagrams" => format!("select diagram_id, name, diagram_type, package_id, author, createddate, modifieddate from t_diagram{}", only(&["package_id"])),
+                "attributes" => format!("select a.id, a.object_id, o.name as element, a.name, a.type from t_attribute a left join t_object o on o.object_id = a.object_id{}", only(&["o.package_id"])),
+                "tagged_values" => format!("select v.propertyid, v.object_id, o.name as element, v.property, v.value from t_objectproperties v left join t_object o on o.object_id = v.object_id{}", only(&["o.package_id"])),
                 _ => return Err(deny(404, crate::i18n::tr("tables: elements, connectors, packages, diagrams, attributes, tagged_values"))),
             };
             let sql = crate::model_db::portable_sql(source.cfg.model_source, &format!("{sql} limit 100000"));
@@ -1323,7 +1444,10 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
             Ok((200, Value::Array(rows.into_iter().map(|r| Value::Object(names.iter().cloned().zip(r.into_iter().map(Value::String)).collect())).collect())))
         }
         ("POST", ["api", "sources", id, "ask"]) => {
-            let source = hub.source(id)?;
+            let (source, scope) = hub.source_for(id, &user, role)?;
+            if scope.is_some() {
+                return Err(scoped_out(&crate::i18n::tr("the assistant")));
+            }
             let question = body()?["question"].as_str().unwrap_or("").trim().to_string();
             if question.chars().count() < 3 {
                 return Err(deny(400, crate::i18n::tr("type a question")));
@@ -1362,16 +1486,25 @@ in the language of the question, short. You can only read the model (db_query an
             Ok((200, json!({ "answer": answer, "seconds": started.elapsed().as_secs() })))
         }
         ("GET", ["api", "sources", id, rest @ ..]) => {
-            let source = hub.source(id)?;
+            let (source, scope) = hub.source_for(id, &user, role)?;
             if rest == ["search"] && request.query.get("q").map(|q| q.trim().chars().count()).unwrap_or(0) < 2 {
                 return Err(deny(400, crate::i18n::tr("type at least 2 characters")));
             }
             let text = match rest {
-                ["packages"] => packages(&source.cfg)?,
-                ["search"] => search(&source.cfg, request.query.get("q").map(String::as_str).unwrap_or(""))?,
-                ["elements", element] => element_details(&source.cfg, element.parse().map_err(|_| deny(400, "element id"))?)?,
+                ["packages"] => packages(&source.cfg, &scope)?,
+                ["search"] => search(&source.cfg, request.query.get("q").map(String::as_str).unwrap_or(""), &scope)?,
+                ["elements", element] => {
+                    let element = element.parse().map_err(|_| deny(400, "element id"))?;
+                    element_in(&source.cfg, &scope, element)?;
+                    element_details(&source.cfg, element, &scope)?
+                }
+                ["impact", _] | ["gap"] if scope.is_some() => return Err(scoped_out(&crate::i18n::tr("an analysis across packages"))),
                 ["impact", element] => crate::tools::impact_analysis(&json!({ "element": element.parse::<i64>().map_err(|_| deny(400, "element id"))?, "depth": request.query.get("depth").and_then(|d| d.parse::<i64>().ok()).unwrap_or(3), "direction": request.query.get("direction").map(String::as_str).unwrap_or("both") }), &source.cfg)?,
-                ["lint", package] => crate::governance::lint(&json!({ "package": package.parse::<i64>().map_err(|_| deny(400, "package id"))?, "rules": hub.rules() }), &source.cfg)?,
+                ["lint", package] => {
+                    let package = package.parse::<i64>().map_err(|_| deny(400, "package id"))?;
+                    package_in(&scope, package)?;
+                    crate::governance::lint(&json!({ "package": package, "rules": hub.rules() }), &source.cfg)?
+                }
                 ["gap"] => crate::governance::gap(&json!({ "as_is": int_param(request, "as_is")?, "to_be": int_param(request, "to_be")? }), &source.cfg)?,
                 _ => return Err(deny(404, "not found")),
             };
@@ -1462,7 +1595,10 @@ in the language of the question, short. You can only read the model (db_query an
             }
             let normalized = crate::tools::normalize_ops(given);
             let ops = &normalized;
-            let source = hub.source(b["source"].as_str().unwrap_or(""))?;
+            let (source, scope) = hub.source_for(b["source"].as_str().unwrap_or(""), &user, role)?;
+            if scope.is_some() {
+                return Err(scoped_out(&crate::i18n::tr("a change set")));
+            }
             // What the reviewers see is computed here from the operations, not taken from the author.
             let summary = crate::ea::describe(ops);
             let preview = crate::governance::preview(&source.cfg, ops);
@@ -1565,7 +1701,7 @@ in the language of the question, short. You can only read the model (db_query an
             let _ = hub.append_audit(&json!({ "time": now, "user": user, "source": change["source"], "summary": format!("{} {}: {}", action, id, change["title"].as_str().unwrap_or("")), "ok": true }));
             Ok((200, change))
         }
-        ("POST", ["mcp"]) => mcp(hub, &body()?).map(|reply| match reply {
+        ("POST", ["mcp"]) => mcp(hub, &body()?, &user, role).map(|reply| match reply {
             Some(reply) => (200, reply),
             None => (202, Value::Null),
         }),
@@ -1573,14 +1709,15 @@ in the language of the question, short. You can only read the model (db_query an
     }
 }
 
-fn packages(cfg: &AppConfig) -> Result<String> {
-    let rows = crate::tools::query_rows(cfg, "select package_id as c0, parent_id as c1, name as c2 from t_package order by parent_id, tpos, name")?;
+fn packages(cfg: &AppConfig, scope: &Scope) -> Result<String> {
+    let only = scope.as_ref().map(|s| format!(" where {}", in_list("package_id", s))).unwrap_or_default();
+    let rows = crate::tools::query_rows(cfg, &format!("select package_id as c0, parent_id as c1, name as c2 from t_package{only} order by parent_id, tpos, name"))?;
     let mut out = vec!["package_id | parent_id | name".to_string()];
     out.extend(rows.into_iter().take(2000).map(|r| r.join(" | ")));
     Ok(out.join("\n"))
 }
 
-fn search(cfg: &AppConfig, q: &str) -> Result<String> {
+fn search(cfg: &AppConfig, q: &str, scope: &Scope) -> Result<String> {
     let q = q.trim();
     if q.chars().count() < 2 {
         bail!("{}", crate::i18n::tr("type at least 2 characters"));
@@ -1588,7 +1725,8 @@ fn search(cfg: &AppConfig, q: &str) -> Result<String> {
     let like = crate::model_db::sql_text(cfg.model_source, &q.to_lowercase().replace('%', "").replace('_', ""));
     let rows = crate::tools::query_rows(cfg, &format!(
         "select o.object_id as c0, o.name as c1, o.object_type as c2, coalesce(o.stereotype,'') as c3, p.name as c4, substr(coalesce(o.note,''), 1, 120) as c5 from t_object o \
-         join t_package p on p.package_id = o.package_id where lower(o.name) like '%{like}%' or lower(coalesce(o.alias,'')) like '%{like}%' order by o.name limit 100"
+         join t_package p on p.package_id = o.package_id where (lower(o.name) like '%{like}%' or lower(coalesce(o.alias,'')) like '%{like}%'){} order by o.name limit 100",
+        within(scope, "o.package_id")
     ))?;
     let mut out = vec![crate::i18n::tr("object_id | name | type | stereotype | package | description").to_string()];
     out.extend(rows.into_iter().map(|r| r.iter().map(|c| c.replace(['\r', '\n'], " ")).collect::<Vec<_>>().join(" | ")));
@@ -1754,7 +1892,7 @@ impl Hub {
     /// ai_usage.jsonl. The request is passed to Anthropic as it is.
     fn ai_gateway(&self, user: &str, role: Role, body: &[u8]) -> Result<(u16, String, Vec<u8>), HttpError> {
         let keys = self.ai["keys"].as_array().cloned().unwrap_or_default();
-        let wanted = [user.to_lowercase(), format!("role:{}", role.name()), "*".to_string()];
+        let wanted = wanted(user, role);
         let secret = wanted.iter().find_map(|w| keys.iter().find(|k| k["for"].as_str().is_some_and(|f| f.trim().to_lowercase() == *w)).and_then(|k| k["secret"].as_str()))
             .ok_or_else(|| deny(403, crate::i18n::tr("the hub has no AI key for you: ask the administrator of the hub")))?;
         let key = crate::config::secrets::get(secret).map_err(|e| HttpError(500, format!("{e:#}")))?;
@@ -1919,7 +2057,8 @@ impl Hub {
     }
 }
 
-fn element_details(cfg: &AppConfig, id: i64) -> Result<String> {
+/// Details of an element; with a scope, relationships and diagrams outside it are left out (LC-385).
+fn element_details(cfg: &AppConfig, id: i64, scope: &Scope) -> Result<String> {
     let q = |sql: String| crate::tools::query_rows(cfg, &sql);
     let row = q(format!(
         "select o.object_id as c0, o.name as c1, o.object_type as c2, coalesce(o.stereotype,'') as c3, coalesce(o.alias,'') as c4, coalesce(o.status,'') as c5, coalesce(o.author,'') as c6, p.name as c7, coalesce(o.note,'') as c8, o.ea_guid as c9 \
@@ -1942,13 +2081,14 @@ fn element_details(cfg: &AppConfig, id: i64) -> Result<String> {
     let links = q(format!(
         "select c.connector_type as c0, case when c.start_object_id = {id} then '→' else '←' end as c1, o.object_id as c2, o.name as c3 from t_connector c \
          join t_object o on o.object_id = case when c.start_object_id = {id} then c.end_object_id else c.start_object_id end \
-         where c.start_object_id = {id} or c.end_object_id = {id} order by 1, 4"
+         where (c.start_object_id = {id} or c.end_object_id = {id}){} order by 1, 4",
+        within(scope, "o.package_id")
     ))?;
     if !links.is_empty() {
         out.push(format!("\n{}:", crate::i18n::tr("Relationships")));
         out.extend(links.into_iter().map(|l| format!("- {} {} {} (id {})", l[0], l[1], l[3], l[2])));
     }
-    let diagrams = q(format!("select d.diagram_id as c0, d.name as c1 from t_diagramobjects x join t_diagram d on d.diagram_id = x.diagram_id where x.object_id = {id} order by d.name"))?;
+    let diagrams = q(format!("select d.diagram_id as c0, d.name as c1 from t_diagramobjects x join t_diagram d on d.diagram_id = x.diagram_id where x.object_id = {id}{} order by d.name", within(scope, "d.package_id")))?;
     if !diagrams.is_empty() {
         out.push(format!("\n{}:", crate::i18n::tr("Diagrams")));
         out.extend(diagrams.into_iter().map(|d| format!("- {} (id {})", d[1], d[0])));
@@ -1971,7 +2111,7 @@ fn mcp_tools() -> Value {
 }
 
 /// MCP (JSON-RPC 2.0 over HTTP POST): initialize, tools/list, tools/call, ping. A notification gets no reply.
-fn mcp(hub: &Hub, message: &Value) -> Result<Option<Value>, HttpError> {
+fn mcp(hub: &Hub, message: &Value, user: &str, role: Role) -> Result<Option<Value>, HttpError> {
     let id = message.get("id").cloned();
     let Some(id) = id else { return Ok(None) };
     let method = message["method"].as_str().unwrap_or("");
@@ -1991,16 +2131,23 @@ fn mcp(hub: &Hub, message: &Value) -> Result<Option<Value>, HttpError> {
             let name = params["name"].as_str().unwrap_or("");
             let result: Result<String> = (|| {
                 if name == "list_sources" {
-                    return Ok(hub.sources.iter().map(|s| format!("{} | {} | {}", s.id, s.name, if s.cfg.uses_file() { "file" } else { "database" })).collect::<Vec<_>>().join("\n"));
+                    return Ok(hub.sources.iter().filter(|s| Hub::can_read(s, user, role)).map(|s| format!("{} | {} | {}", s.id, s.name, if s.cfg.uses_file() { "file" } else { "database" })).collect::<Vec<_>>().join("\n"));
                 }
-                let source = hub.source(args["source"].as_str().unwrap_or("")).map_err(|e| anyhow!(e.1))?;
+                let (source, scope) = hub.source_for(args["source"].as_str().unwrap_or(""), user, role).map_err(|e| anyhow!(e.1))?;
                 let int = |field: &str| args[field].as_i64().with_context(|| crate::i18n::fmt("missing number '{0}'", &[field.to_string()]));
                 match name {
-                    "list_packages" => packages(&source.cfg),
-                    "search_elements" => search(&source.cfg, args["query"].as_str().unwrap_or("")),
-                    "element_details" => element_details(&source.cfg, int("element")?),
+                    "list_packages" => packages(&source.cfg, &scope),
+                    "search_elements" => search(&source.cfg, args["query"].as_str().unwrap_or(""), &scope),
+                    "element_details" => {
+                        element_in(&source.cfg, &scope, int("element")?).map_err(|e| anyhow!(e.1))?;
+                        element_details(&source.cfg, int("element")?, &scope)
+                    }
+                    "impact_analysis" | "gap_analysis" if scope.is_some() => Err(anyhow!(scoped_out(&crate::i18n::tr("an analysis across packages")).1)),
                     "impact_analysis" => crate::tools::impact_analysis(args, &source.cfg),
-                    "model_lint" => crate::governance::lint(&json!({ "package": int("package")?, "rules": hub.rules() }), &source.cfg),
+                    "model_lint" => {
+                        package_in(&scope, int("package")?).map_err(|e| anyhow!(e.1))?;
+                        crate::governance::lint(&json!({ "package": int("package")?, "rules": hub.rules() }), &source.cfg)
+                    }
                     "gap_analysis" => crate::governance::gap(args, &source.cfg),
                     other => bail!("unknown tool {other}"),
                 }
@@ -2729,6 +2876,67 @@ mod tests {
         let missing = http.get("http://127.0.0.1:18733/api/sources/shop/report?package=999999").bearer_auth("viewer-token-reports-0123").send().unwrap();
         assert_eq!(missing.status(), 404);
         assert_eq!(http.get(format!("http://127.0.0.1:18733/api/sources/shop/report?package={package}")).send().unwrap().status(), 401, "only signed-in users");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// LC-385: readers of a source and package scopes: `LOONAR_HUB_FILE_PROPS=… cargo test hub_scopes -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a test model"]
+    fn hub_scopes() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        let dir = std::env::temp_dir().join(format!("loonar-hub-scopes-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let props = std::env::var("LOONAR_HUB_FILE_PROPS").unwrap();
+        let cfg = AppConfig::load(Path::new(&props)).unwrap();
+        // A package with elements below the root, and an element outside it.
+        let rows = crate::tools::query_rows(&cfg, "select o.package_id as c0, count(*) as c1 from t_object o join t_package p on p.package_id = o.package_id where p.parent_id <> 0 and o.object_type <> 'Package' group by o.package_id order by 2 desc").unwrap();
+        let package: i64 = rows[0][0].parse().unwrap();
+        let inside = scope_packages(&cfg, &[package.to_string()]).unwrap();
+        let outside = crate::tools::query_rows(&cfg, &format!("select object_id as c0, name as c1 from t_object where object_type <> 'Package' and not {}", in_list("package_id", &inside))).unwrap();
+        let (outside_id, outside_name) = (outside[0][0].clone(), outside[0][1].clone());
+        let guid = crate::tools::query_rows(&cfg, &format!("select ea_guid as c0 from t_package where package_id = {package}")).unwrap()[0][0].clone();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:18736",
+            "sources": [
+                { "id": "shop", "name": "Shop", "properties": props, "scopes": [{ "for": "olek", "packages": [guid] }] },
+                { "id": "secret", "name": "Secret", "properties": props, "readers": ["role:architect"] }
+            ],
+            "users": [
+                { "name": "olek", "token": "viewer-token-scopes-0123", "role": "viewer" },
+                { "name": "ewa", "token": "viewer2-token-scopes-0123", "role": "viewer" },
+                { "name": "ada", "token": "admin-token-scopes-01234", "role": "admin" }
+            ] }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        std::thread::spawn(move || serve(hub, &listen, |_| {}));
+        std::thread::sleep(Duration::from_millis(300));
+        let http = reqwest::blocking::Client::new();
+        let get = |path: &str, token: &str| -> (u16, Value) {
+            let r = http.get(format!("http://127.0.0.1:18736{path}")).bearer_auth(token).send().unwrap();
+            (r.status().as_u16(), r.json().unwrap_or(Value::Null))
+        };
+        let (olek, ewa, ada) = ("viewer-token-scopes-0123", "viewer2-token-scopes-0123", "admin-token-scopes-01234");
+        // "readers": a viewer does not see the secret source at all, an admin does.
+        assert_eq!(get("/api/sources", olek).1.as_array().unwrap().len(), 1);
+        assert_eq!(get("/api/sources", ada).1.as_array().unwrap().len(), 2);
+        assert_eq!(get("/api/sources/secret/packages", ewa).0, 404);
+        // The scope: only the package's elements, the rest looks like nothing.
+        let table = get("/api/sources/shop/table/elements", olek).1;
+        assert!(!table.as_array().unwrap().is_empty());
+        assert!(table.as_array().unwrap().iter().all(|r| inside.contains(&r["package_id"].as_str().unwrap().parse::<i64>().unwrap())), "{table}");
+        assert_eq!(get(&format!("/api/sources/shop/elements/{outside_id}"), olek).0, 404);
+        assert_eq!(get(&format!("/api/sources/shop/elements/{outside_id}"), ewa).0, 200, "without a scope the whole model");
+        let q: String = outside_name.chars().take(20).collect();
+        let found = get(&format!("/api/sources/shop/search?q={}", encode(&q)), olek).1;
+        assert!(!found["text"].as_str().unwrap().lines().skip(1).any(|l| l.starts_with(&format!("{outside_id} |"))), "{found}");
+        let packages = get("/api/sources/shop/packages", olek).1;
+        assert_eq!(packages["text"].as_str().unwrap().lines().count() - 1, inside.len());
+        // What cannot be limited by packages is refused.
+        let graphql = http.post("http://127.0.0.1:18736/api/sources/shop/graphql").bearer_auth(olek).json(&json!({ "query": "{ packages { name } }" })).send().unwrap();
+        assert_eq!(graphql.status(), 403);
+        assert_eq!(get(&format!("/api/sources/shop/impact/{outside_id}"), olek).0, 403);
+        let mcp: Value = http.post("http://127.0.0.1:18736/mcp").bearer_auth(olek)
+            .json(&json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": { "name": "element_details", "arguments": { "source": "shop", "element": outside_id.parse::<i64>().unwrap() } } }))
+            .send().unwrap().json().unwrap();
+        assert_eq!(mcp["result"]["isError"], true, "{mcp}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
