@@ -49,6 +49,7 @@ mod bulk;
 mod recycle;
 mod merge;
 mod visibility;
+mod style;
 mod model_usage;
 mod glossary_ui;
 mod relang;
