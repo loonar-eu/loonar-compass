@@ -328,7 +328,7 @@ pub fn to_markdown(file_name: &str, bytes: &[u8]) -> Result<String> {
 }
 
 /// A heading level from a Word paragraph style (Heading1, Nagwek1, berschrift1, Titre1, Title…).
-fn heading_level(style: &str) -> Option<usize> {
+pub(crate) fn heading_level(style: &str) -> Option<usize> {
     let s = style.to_lowercase();
     if s == "title" || s.starts_with("tytu") || s == "titel" {
         return Some(1);
