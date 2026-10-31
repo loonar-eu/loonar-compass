@@ -929,6 +929,51 @@ impl Job<'_> {
                     self.repo.call("Execute", &[s(statement.as_str().unwrap_or(""))])?;
                 }
             }
+            "change_connector_type" => {
+                // A relationship of another type in place of the old one (LC-374): EA does not change the type of an
+                // existing connector reliably, so a new one is made between the same ends with the old name, direction,
+                // notes, stereotype and tagged values, it gets the old geometry, style and visibility on every diagram,
+                // and the old one is deleted.
+                let id = int_field(op, "connector")?;
+                let old = self.repo.call("GetConnectorByID", &[i(id)]).ok().and_then(|v| v.object())
+                    .ok_or_else(|| anyhow!("{}", crate::i18n::fmt("There is no connector with id {0}.", &[id.to_string()])))?;
+                let (client, supplier) = (old.int("ClientID")?, old.int("SupplierID")?);
+                let source = self.element(&json!(client))?;
+                self.element(&json!(supplier))?;
+                let name = old.text("Name").unwrap_or_default();
+                let stereotype = if op["stereotype"].is_null() { old.text("StereotypeEx").unwrap_or_default() } else { text_field(op, "stereotype") };
+                let new = self.new_typed(&source.obj("Connectors")?, &name, &text_field(op, "type"), &stereotype)?;
+                new.set("SupplierID", i(supplier))?;
+                for property in ["Notes", "Direction"] {
+                    if let Ok(value) = old.text(property) {
+                        new.set(property, s(&value))?;
+                    }
+                }
+                new.update(&crate::i18n::fmt("connector '{0}'", &[name.clone()]))?;
+                let mut tags = serde_json::Map::new();
+                for tag in old.obj("TaggedValues")?.items()? {
+                    tags.insert(tag.text("Name")?, json!(tag.text("Value").unwrap_or_default()));
+                }
+                self.set_tags(&new, &Value::Object(tags))?;
+                let new_id = new.int("ConnectorID")?;
+                for diagram_id in op["diagrams"].as_array().into_iter().flatten().filter_map(|v| v.as_i64()) {
+                    let Some(diagram) = self.repo.call("GetDiagramByID", &[i(diagram_id as i32)]).ok().and_then(|v| v.object()) else { continue };
+                    let links = diagram.obj("DiagramLinks")?;
+                    let Some(link) = links.items()?.into_iter().find(|l| l.int("ConnectorID").ok() == Some(id)) else { continue };
+                    let added = links.call_obj("AddNew", &[s(""), s("")])?;
+                    added.set("ConnectorID", i(new_id))?;
+                    for property in ["Geometry", "Style", "Path"] {
+                        if let Ok(value) = link.text(property) {
+                            added.set(property, s(&value))?;
+                        }
+                    }
+                    added.set("IsHidden", b(link.get("IsHidden").map(|v| v.bool()).unwrap_or(false)))?;
+                    added.update(&crate::i18n::fmt("diagram id={0}", &[diagram_id.to_string()]))?;
+                }
+                self.op(&json!({ "op": "delete", "connector": id }))?;
+                // Not a plain new object: undo must not delete it without bringing the old one back.
+                self.created.push(json!({ "key": op["key"], "kind": "replaced_connector", "id": new_id, "replaces": id }));
+            }
             "merge_elements" => {
                 // Merge and replace (LC-370): the lists of what to re-point come from merge::plan (read with SQL).
                 let (keep, remove) = (int_field(op, "keep")?, int_field(op, "remove")?);

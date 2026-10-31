@@ -208,7 +208,7 @@ fn before_one(cfg: &AppConfig, op: &Value, reverse: &mut Vec<Value>, not_undoabl
 /// Packages to baseline before a save that deletes: the packages of the deleted objects (or the deleted package's parent).
 pub fn packages_to_baseline(cfg: &AppConfig, ops: &[Value]) -> Vec<i64> {
     let mut out = Vec::new();
-    for op in ops.iter().filter(|o| matches!(o["op"].as_str(), Some("delete" | "delete_attribute" | "delete_operation" | "delete_scenario" | "import_xmi" | "layout_diagram" | "merge_elements"))) {
+    for op in ops.iter().filter(|o| matches!(o["op"].as_str(), Some("delete" | "delete_attribute" | "delete_operation" | "delete_scenario" | "import_xmi" | "layout_diagram" | "merge_elements" | "change_connector_type"))) {
         let package = if let Some(e) = op["element"].as_i64().or_else(|| op["remove"].as_i64()) {
             one(cfg, format!("select package_id as c0 from t_object where object_id = {e}"))
         } else if let Some(d) = op["diagram"].as_i64() {
@@ -216,6 +216,7 @@ pub fn packages_to_baseline(cfg: &AppConfig, ops: &[Value]) -> Vec<i64> {
         } else if let Some(p) = op["package"].as_i64() {
             if op["op"] == "import_xmi" { Some(vec![p.to_string()]) } else { one(cfg, format!("select parent_id as c0 from t_package where package_id = {p}")) }
         } else if let Some(c) = op["connector"].as_i64() {
+            // (a change of type: the package of the relationship's source)
             one(cfg, format!("select o.package_id as c0 from t_connector c join t_object o on o.object_id = c.start_object_id where c.connector_id = {c}"))
         } else {
             None

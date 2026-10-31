@@ -923,6 +923,54 @@ model.file=C:/nie-ma/takiego/pliku.qea
         let _ = std::fs::remove_dir_all(&journal);
     }
 
+    /// LC-374: a relationship of another type keeps its name, notes, tag, its route on one diagram and its hiding on
+    /// another. `LOONAR_TEST_PROPS=E:/livetest/undo/undo.properties cargo test ea_change_connector_type -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA, a license and the model database from app.properties"]
+    fn ea_change_connector_type() {
+        let cfg = test_config();
+        let _ea = CloseEa;
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).expect(sql);
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id")[0][0].parse().unwrap();
+        let ops = vec![
+            json!({"op":"create_package","key":"pkg","parent":root,"name":format!("ZZ_type_{}", chrono::Local::now().format("%H%M%S"))}),
+            json!({"op":"create_diagram","key":"d1","package":"#pkg","name":"Routed","type":"Logical"}),
+            json!({"op":"create_diagram","key":"d2","package":"#pkg","name":"Hidden","type":"Logical"}),
+            json!({"op":"create_element","key":"a","package":"#pkg","name":"A","type":"Class"}),
+            json!({"op":"create_element","key":"b","package":"#pkg","name":"B","type":"Class"}),
+            json!({"op":"create_connector","key":"c","source":"#b","target":"#a","type":"Association","name":"uses","tags":{"Owner":"Team"}}),
+            json!({"op":"update_connector","connector":"#c","notes":"Old notes."}),
+            json!({"op":"place","diagram":"#d1","element":"#a","left":60,"top":40,"width":110,"height":60}),
+            json!({"op":"place","diagram":"#d1","element":"#b","left":300,"top":200,"width":110,"height":60}),
+            json!({"op":"place","diagram":"#d2","element":"#a","left":60,"top":40,"width":110,"height":60}),
+            json!({"op":"place","diagram":"#d2","element":"#b","left":300,"top":40,"width":110,"height":60}),
+        ];
+        let created = run_batch(&cfg, &ops, &BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("creation");
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).expect(key)["id"].as_i64().unwrap();
+        let (pkg, d1, d2, c) = (id_of("pkg"), id_of("d1"), id_of("d2"), id_of("c"));
+        run_batch(&cfg, &[
+            json!({"op":"route_connector","diagram":d1,"connector":c,"start":[300,230],"points":[[115,230]],"end":[115,100]}),
+            json!({"op":"hide_connectors","diagram":d2,"connectors":[c]}),
+        ], &BatchOptions::default()).expect("route and hide");
+        let route_before = q(&format!("select path from t_diagramlinks where diagramid = {d1} and connectorid = {c}"));
+        let diagrams: Vec<i64> = q(&format!("select distinct diagramid from t_diagramlinks where connectorid = {c}")).iter().map(|r| r[0].parse().unwrap()).collect();
+        let done = run_batch(&cfg, &[json!({"op":"change_connector_type","connector":c,"type":"Dependency","diagrams":diagrams})], &BatchOptions::default()).expect("change type");
+        let new = done["created"][0]["id"].as_i64().expect("the new connector");
+        let problems = {
+            let mut p = Vec::new();
+            if !q(&format!("select connector_id from t_connector where connector_id = {c}")).is_empty() { p.push("the old one is still there".to_string()); }
+            let row = q(&format!("select connector_type, coalesce(name,''), coalesce(notes,'') from t_connector where connector_id = {new}"));
+            if row[0] != vec!["Dependency".to_string(), "uses".to_string(), "Old notes.".to_string()] { p.push(format!("new: {:?}", row[0])); }
+            if q(&format!("select value from t_connectortag where elementid = {new} and property = 'Owner'")).first().map(|r| r[0].as_str()) != Some("Team") { p.push("tag".into()); }
+            if q(&format!("select path from t_diagramlinks where diagramid = {d1} and connectorid = {new}")) != route_before { p.push("route".into()); }
+            let hidden = q(&format!("select hidden from t_diagramlinks where diagramid = {d2} and connectorid = {new}"));
+            if !hidden.first().is_some_and(|r| r[0] == "1" || r[0].eq_ignore_ascii_case("true")) { p.push(format!("hidden: {hidden:?}")); }
+            p
+        };
+        run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &BatchOptions::default()).expect("cleanup");
+        assert!(problems.is_empty(), "{problems:?}");
+    }
+
     /// Linking a BPMN subprocess to the subprocess diagram (set_composite) on a real EA: on double-click EA
     /// opens the diagram, and in the database the element has ntype 8 and the diagram id in pdata1.
     /// Run with: `cargo test ea_set_composite -- --ignored --nocapture`.

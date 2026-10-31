@@ -346,6 +346,19 @@ pub fn definitions() -> Value {
         items.push(crate::bulk::definition());
         items.push(crate::recycle::definition());
         items.push(crate::merge::definition());
+        items.push(json!({
+            "name": "change_connector_type",
+            "description": "Give relationships another type (e.g. ArchiMate Composition → Serving, Association → Dependency), also many at once: a new \
+relationship between the same ends with the old name, direction, notes, tagged values and stereotype (or the given one) gets the old route, style and \
+visibility on every diagram, and the old one is deleted. One save the user approves (a baseline first: not undoable by operations); the new relationship \
+is checked by the ArchiMate 3.2 and team rules. Use connector ids from the model.",
+            "input_schema": { "type": "object", "properties": {
+                "connector": { "type": "integer" },
+                "connectors": { "type": "array", "items": { "type": "integer" } },
+                "type": { "type": "string", "description": "EA connector type, e.g. Dependency, Realisation, Association, Aggregation, InformationFlow" },
+                "stereotype": { "type": "string", "description": "e.g. ArchiMate3::ArchiMate_Serving (empty keeps the old one)" }
+            }, "required": ["type"] }
+        }));
         items.push(crate::scripts::definition());
         items.push(crate::traceability::definition());
         items.push(crate::code_drift::definition());
@@ -858,6 +871,37 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             ea_write(&json!({ "ops": ops }), ctx).map(Into::into)
         }
         "bulk_set" => crate::bulk::preview(input, ctx.cfg).map(Into::into),
+        // Another type for relationships (LC-374): one save; the ArchiMate/team rules are checked on the new ones.
+        "change_connector_type" => {
+            let ids: Vec<i64> = input["connectors"].as_array().into_iter().flatten().filter_map(Value::as_i64).chain(input["connector"].as_i64()).collect();
+            let kind = input["type"].as_str().filter(|t| !t.trim().is_empty()).context("give the new type")?;
+            let mut ops = Vec::new();
+            let mut ends = Vec::new();
+            for id in &ids {
+                if let Some(r) = query_rows(ctx.cfg, &format!("select start_object_id, end_object_id from t_connector where connector_id = {id}"))?.into_iter().next() {
+                    ends.push((r[0].clone(), r[1].clone()));
+                }
+                let diagrams: Vec<i64> = query_rows(ctx.cfg, &format!("select distinct diagramid from t_diagramlinks where connectorid = {id}"))?.iter().filter_map(|r| r[0].parse().ok()).collect();
+                let mut op = json!({ "op": "change_connector_type", "connector": id, "type": kind, "diagrams": diagrams });
+                if let Some(st) = input["stereotype"].as_str() {
+                    op["stereotype"] = json!(st);
+                }
+                ops.push(op);
+            }
+            if ops.is_empty() {
+                bail!("give connector or connectors");
+            }
+            let saved = ea_write(&json!({ "ops": ops }), ctx)?;
+            // The new relationships: between the same ends, of the new type.
+            let kind_sql = crate::model_db::sql_text(ctx.cfg.model_source, kind);
+            let new_ids: Vec<i64> = ends
+                .iter()
+                .flat_map(|(a, b)| query_rows(ctx.cfg, &format!("select connector_id from t_connector where start_object_id = {a} and end_object_id = {b} and lower(connector_type) = lower('{kind_sql}')")).unwrap_or_default())
+                .filter_map(|r| r[0].parse().ok())
+                .collect();
+            let findings: Vec<String> = new_ids.iter().flat_map(|id| crate::governance::check_object(ctx.cfg, "connector", *id).unwrap_or_default()).collect();
+            Ok(if findings.is_empty() { saved } else { format!("{saved}\nModel check of the new relationship: {}", findings.join("; ")) }.into())
+        }
         // Merge and replace: preview reads; apply is one save, always asked, with a baseline first.
         "merge_elements" => {
             let (op, text) = crate::merge::plan(input, ctx.cfg)?;

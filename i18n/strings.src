@@ -1964,3 +1964,4 @@ MERGE {0} into {1} and DELETE {0} ‖ SCAL {0} z {1} i USUŃ {0} ‖ {0} mit {1}
 attribute id={0} ‖ atrybut id={0} ‖ Attribut id={0} ‖ attribut id={0}
 operation id={0} ‖ operacja id={0} ‖ Operation id={0} ‖ opération id={0}
 parameter of operation id={0} ‖ parametr operacji id={0} ‖ Parameter der Operation id={0} ‖ paramètre de l'opération id={0}
+relationships of another type in place of the old ones ‖ relacje innego typu w miejsce dawnych ‖ Beziehungen eines anderen Typs anstelle der alten ‖ relations d'un autre type à la place des anciennes
