@@ -1961,3 +1961,6 @@ it has {0} relationships and is on {1} diagrams{2} ‖ ma {0} relacji i jest na 
 Merge a duplicate into another element: relationships, diagrams and types move over ‖ Scal duplikat z innym elementem: relacje, diagramy i typy przechodzą na niego ‖ Ein Duplikat mit einem anderen Element zusammenführen: Beziehungen, Diagramme und Typen gehen über ‖ Fusionner un doublon avec un autre élément : relations, diagrammes et types sont repris
 duplicates merged into the kept elements ‖ duplikaty scalone z zachowanymi elementami ‖ Duplikate mit den behaltenen Elementen zusammengeführt ‖ doublons fusionnés avec les éléments conservés
 MERGE {0} into {1} and DELETE {0} ‖ SCAL {0} z {1} i USUŃ {0} ‖ {0} mit {1} ZUSAMMENFÜHREN und {0} LÖSCHEN ‖ FUSIONNER {0} dans {1} et SUPPRIMER {0}
+attribute id={0} ‖ atrybut id={0} ‖ Attribut id={0} ‖ attribut id={0}
+operation id={0} ‖ operacja id={0} ‖ Operation id={0} ‖ opération id={0}
+parameter of operation id={0} ‖ parametr operacji id={0} ‖ Parameter der Operation id={0} ‖ paramètre de l'opération id={0}
