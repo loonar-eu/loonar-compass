@@ -357,7 +357,7 @@ fn odbc_select(cfg: &AppConfig, sql: &str, limit: usize) -> Result<Selected> {
             use odbc_api::handles::{AsStatementRef, Statement};
             let handle = statement.as_stmt_ref().as_sys();
             // SAFETY: a valid statement handle of this connection; QueryTimeout takes the seconds as the pointer value.
-            unsafe { odbc_api::sys::SQLSetStmtAttr(handle, odbc_api::sys::StatementAttribute::QueryTimeout, FILE_QUERY_LIMIT.as_secs() as usize as odbc_api::sys::Pointer, 0) };
+            unsafe { let _ = odbc_api::sys::SQLSetStmtAttr(handle, odbc_api::sys::StatementAttribute::QueryTimeout, FILE_QUERY_LIMIT.as_secs() as usize as odbc_api::sys::Pointer, 0); };
         }
         if let Some(mut cursor) = statement.execute(sql, ()).context(crate::i18n::tr("running the query"))? {
             out.columns = cursor.column_names()?.collect::<std::result::Result<Vec<_>, _>>()?;

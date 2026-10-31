@@ -3128,7 +3128,7 @@ impl App {
             self.outbox = None;
             self.pending_approval = None;
             self.status = match &self.cfg {
-                Some(cfg) => crate::i18n::fmt("Model: {0}", &[(cfg.claude_model).to_string()]),
+                Some(cfg) => crate::i18n::fmt("Model: {0}", &[cfg.ai_model().to_string()]),
                 None => String::new(),
             };
         }

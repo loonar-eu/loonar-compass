@@ -85,6 +85,8 @@ struct Source {
 
 /// State of the running hub.
 pub struct Hub {
+    /// Reverse proxies on other computers whose X-Forwarded-For is trusted ("trusted_proxies" in hub.json).
+    trusted_proxies: Vec<IpAddr>,
     /// The hub listens only on this computer: requests must name this computer in Host (DNS rebinding, LC-350).
     local_only: bool,
     file: PathBuf,
@@ -232,7 +234,9 @@ pub fn load(file: &Path) -> Result<(Hub, String)> {
     }
     let listen = value["listen"].as_str().unwrap_or(DEFAULT_LISTEN).to_string();
     let local_only = listens_on_loopback(&listen);
+    let trusted_proxies: Vec<IpAddr> = value["trusted_proxies"].as_array().into_iter().flatten().filter_map(|v| v.as_str()?.trim().parse().ok()).collect();
     let hub = Hub {
+        trusted_proxies,
         local_only,
         file: file.to_path_buf(), dir, sources, users: Mutex::new(users), sessions: Mutex::new(HashMap::new()), policy: Mutex::new(value["policy"].clone()),
         audit_lock: Mutex::new(()), ask_lock: Mutex::new(()), change_lock: Mutex::new(()), failures: Mutex::new(HashMap::new()), asks: Mutex::new(HashMap::new()),
@@ -290,12 +294,35 @@ pub fn serve(hub: Hub, listen: &str, ready: impl FnOnce(String)) -> Result<()> {
     Ok(())
 }
 
+/// A trailing " (address)" of a failed sign-in left out (for people who are not admins).
+fn hide_address(text: &str) -> String {
+    match text.rfind(" (") {
+        Some(at) if text.ends_with(')') && text[at + 2..text.len() - 1].parse::<IpAddr>().is_ok() => text[..at].to_string(),
+        _ => text.to_string(),
+    }
+}
+
 /// Renames a file with the date when it gets too big (audit.jsonl, hub.log).
 fn rotate(path: &Path) {
     if std::fs::metadata(path).map(|m| m.len() > ROTATE_BYTES).unwrap_or(false) {
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
         let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("txt");
         let _ = std::fs::rename(path, path.with_file_name(format!("{stem}-{}.{ext}", chrono::Local::now().format("%Y%m%d-%H%M%S"))));
+        // Only the newest 20 rotated files are kept (LC-354: the disk filled up without end).
+        if let Some(dir) = path.parent() {
+            let mut old: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with(&format!("{stem}-")) && n.ends_with(&format!(".{ext}"))))
+                .collect();
+            old.sort();
+            let extra = old.len().saturating_sub(20);
+            for p in old.into_iter().take(extra) {
+                let _ = std::fs::remove_file(p);
+            }
+        }
     }
 }
 
@@ -622,8 +649,10 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
     };
     // Behind a proxy on this computer (IIS/ARR, nginx) every request comes from the loopback address: the client is
     // the address the proxy added to X-Forwarded-For. From any other address the header is not trusted.
+    // A proxy on another computer is trusted when hub.json lists it ("trusted_proxies"): otherwise every client
+    // behind it shares its address and 20 wrong passwords lock everybody out (LC-354).
     let peer = match (peer, head.forwarded) {
-        (Some(ip), Some(client)) if ip.is_loopback() => Some(client),
+        (Some(ip), Some(client)) if ip.is_loopback() || hub.trusted_proxies.contains(&ip) => Some(client),
         (peer, _) => peer,
     };
     // A hub on this computer only answers requests addressed to this computer: a web page of another site whose name
@@ -664,7 +693,10 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
             "/auth/callback" => {
                 let Some(provider) = &hub.oidc else { return respond(&stream, 404, "text/plain", b"not found") };
                 if let Some(error) = query.get("error") {
-                    let detail = query.get("error_description").cloned().unwrap_or_default();
+                    // Anybody can call this address: what it says goes to the log and the audit trail short and printable (LC-354).
+                    let printable = |t: &str| t.chars().filter(|c| !c.is_control()).take(120).collect::<String>();
+                    let error = &printable(error);
+                    let detail = printable(&query.get("error_description").cloned().unwrap_or_default());
                     log(&hub.dir, &format!("company sign-in refused by the provider: {error} {detail}"));
                     hub.audit_sign_in("", &crate::i18n::fmt("company sign-in refused by the provider: {0}", &[format!("{error} {detail}").trim().to_string()]), peer);
                     return sign_in_problem(&stream, &crate::i18n::fmt("The sign-in was refused: {0}", &[if detail.is_empty() { error.clone() } else { detail }]));
@@ -1356,14 +1388,21 @@ in the language of the question, short. You can only read the model (db_query an
         ("GET", ["api", "audit"]) => {
             let limit = request.query.get("limit").and_then(|l| l.parse().ok()).unwrap_or(100usize).min(1000);
             let mut entries = hub.read_audit(request.query.get("source").map(String::as_str), limit);
-            // Connection details of the workstations are for the admin only.
+            // Connection details of the workstations are for the admin only; below an architect, the questions other
+            // people asked (Ask) and the addresses of failed sign-ins are left out (LC-354).
             if role < Role::Admin {
                 for e in entries.iter_mut() {
                     if let Some(o) = e.as_object_mut() {
                         o.remove("database");
                         o.remove("ea_user");
+                        if let Some(error) = o.get("error").and_then(|v| v.as_str()).map(hide_address) {
+                            o.insert("error".into(), json!(error));
+                        }
                     }
                 }
+            }
+            if role < Role::Architect {
+                entries.retain(|e| e["user"] == user.as_str() || !e["summary"].as_str().is_some_and(|s| s.starts_with("question: ")));
             }
             Ok((200, json!(entries)))
         }
@@ -2246,6 +2285,14 @@ mod tests {
     /// Behind a proxy on this computer the client is the last X-Forwarded-For address (wrong sign-ins of one client do
     /// not lock out the others), and a wrong sign-in is in the audit trail with ✗ and that address. The header from
     /// another computer is not trusted (the test can only connect from loopback, so it checks the trusted case).
+    /// LC-354: addresses of failed sign-ins are hidden from people who are not admins.
+    #[test]
+    fn addresses_hidden() {
+        assert_eq!(hide_address("wrong user name or password (10.0.0.7)"), "wrong user name or password");
+        assert_eq!(hide_address("wrong (password)"), "wrong (password)");
+        assert_eq!(hide_address("refused (2001:db8::1)"), "refused");
+    }
+
     /// LC-351: the proxy lets through only Compass's calls, in the team's project and space.
     #[test]
     fn proxy_only_compass_calls() {
