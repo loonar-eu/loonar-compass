@@ -21,6 +21,17 @@ before deleting or renaming, and for /where-used. Element = t_object.object_id o
             } }
         }),
         json!({
+            "name": "find_duplicates",
+            "description": "Likely duplicates in a package (with child packages) or the whole model: elements of the same type whose names are \
+the same or nearly the same (letter case, spaces, _ and -, a plural s), each with its package and how much uses it (relationships and diagrams) – \
+to choose which one to keep; and relationships of the same type and stereotype between the same two elements. Reads only. Use it for \
+/find-duplicates and before merging (merge_elements).",
+            "input_schema": { "type": "object", "properties": {
+                "package": { "description": "package_id or exact name; empty: the whole model" },
+                "types": { "type": "array", "items": { "type": "string" }, "description": "Only these element types (optional)" }
+            } }
+        }),
+        json!({
             "name": "find_orphans",
             "description": "Elements of a package (with child packages) that nothing uses: on no diagram, without relationships, not a classifier \
 or type of anything, not pointed at by a tagged value, without child elements. EA's own \"orphans\" search only checks diagrams. \
@@ -142,9 +153,15 @@ fn connector_used(cfg: &AppConfig, id: i64) -> Result<String> {
 }
 
 pub fn find_orphans(input: &Value, cfg: &AppConfig) -> Result<String> {
+    let (scope, title) = package_scope(cfg, &input["package"])?;
+    find_orphans_rest(input, cfg, scope, title)
+}
+
+/// " and o.package_id in (…)" for a package (id or exact name) with its child packages, and its title; empty = the
+/// whole model.
+fn package_scope(cfg: &AppConfig, package: &Value) -> Result<(String, String)> {
     let mut scope = String::new();
     let mut title = "the whole model".to_string();
-    let package = &input["package"];
     if !package.is_null() && package.as_str() != Some("") {
         let rows = if let Some(id) = package.as_i64().or_else(|| package.as_str().and_then(|s| s.trim().parse().ok())) {
             query_rows(cfg, &format!("select package_id, name from t_package where package_id = {id}"))?
@@ -162,6 +179,62 @@ pub fn find_orphans(input: &Value, cfg: &AppConfig) -> Result<String> {
         scope = format!("and o.package_id in ({})", all.join(","));
         title = format!("package \"{}\" with its child packages", root[1]);
     }
+    Ok((scope, title))
+}
+
+
+/// A name for comparing (LC-369): lower case, without spaces, "_", "-" and ".", and without one plural "s" at the end.
+pub(crate) fn name_key(name: &str) -> String {
+    let key: String = name.to_lowercase().chars().filter(|c| !matches!(c, ' ' | '_' | '-' | '.' | '\t')).collect();
+    match key.strip_suffix('s') {
+        Some(stem) if stem.chars().count() >= 3 => stem.to_string(),
+        _ => key,
+    }
+}
+
+/// Likely duplicate elements and relationships (LC-369). Reads only.
+pub fn find_duplicates(input: &Value, cfg: &AppConfig) -> Result<String> {
+    let (scope, title) = package_scope(cfg, &input["package"])?;
+    let types: Vec<String> = input["types"].as_array().into_iter().flatten().filter_map(|t| t.as_str()).map(|t| format!("'{}'", crate::model_db::sql_text(cfg.model_source, t))).collect();
+    let type_filter = if types.is_empty() { String::new() } else { format!("and o.object_type in ({})", types.join(",")) };
+    let rows = query_rows(cfg, &format!(
+        "select o.object_id, o.name, o.object_type, p.name, \
+         (select count(*) from t_connector c where c.start_object_id = o.object_id or c.end_object_id = o.object_id), \
+         (select count(*) from t_diagramobjects x where x.object_id = o.object_id) \
+         from t_object o join t_package p on p.package_id = o.package_id \
+         where o.object_type not in ('Note', 'Text', 'Boundary', 'Package', 'ProvidedInterface', 'RequiredInterface', 'Port', 'Constraint', 'ActionPin', 'ActivityParameter') \
+         and coalesce(o.name, '') <> '' {type_filter} {scope}"
+    ))?;
+    let mut groups: std::collections::BTreeMap<(String, String), Vec<&Vec<String>>> = std::collections::BTreeMap::new();
+    for r in &rows {
+        groups.entry((r[2].clone(), name_key(&r[1]))).or_default().push(r);
+    }
+    let groups: Vec<_> = groups.into_iter().filter(|(_, g)| g.len() > 1).collect();
+    let mut out = format!("Likely duplicates in {title}: {} groups of elements.\n", groups.len());
+    for ((kind, _), members) in groups.iter().take(100) {
+        out.push_str(&format!("\n{kind}:\n"));
+        for m in members {
+            out.push_str(&format!("  - \"{}\" (object_id {}, package \"{}\") – {} relationships, on {} diagrams\n", m[1], m[0], m[3], m[4], m[5]));
+        }
+    }
+    if groups.len() > 100 {
+        out.push_str(&format!("\n… and {} more groups\n", groups.len() - 100));
+    }
+    let connectors = query_rows(cfg, &format!(
+        "select c.connector_type, coalesce(c.stereotype,''), s.name, t.name, count(*), min(c.connector_id), max(c.connector_id) from t_connector c \
+         join t_object s on s.object_id = c.start_object_id join t_object t on t.object_id = c.end_object_id join t_object o on o.object_id = c.start_object_id \
+         where c.connector_type not in ('Sequence', 'Collaboration', 'NoteLink') {scope} \
+         group by c.connector_type, c.stereotype, s.name, t.name, c.start_object_id, c.end_object_id having count(*) > 1 order by 5 desc"
+    ))?;
+    section(&mut out, "Repeated relationships (type, stereotype, from → to, how many, connector ids from–to)", connectors.iter().map(|r| {
+        format!("{}{} \"{}\" → \"{}\": {} times (connector_id {}…{})", r[0], if r[1].is_empty() { String::new() } else { format!(" «{}»", r[1]) }, r[2], r[3], r[4], r[5], r[6])
+    }).collect());
+    out.push_str("\nNothing was changed. Keep the element with the most uses; the others can be merged into it (merge_elements, with the user's approval).\n");
+    Ok(out)
+}
+
+/// The rest of find_orphans: the elements nothing uses in the scope.
+fn find_orphans_rest(input: &Value, cfg: &AppConfig, scope: String, title: String) -> Result<String> {
     let types: Vec<String> = input["types"].as_array().into_iter().flatten().filter_map(|t| t.as_str()).map(|t| format!("'{}'", crate::model_db::sql_text(cfg.model_source, t))).collect();
     let type_filter = if types.is_empty() { String::new() } else { format!("and o.object_type in ({})", types.join(",")) };
     let rows = query_rows(cfg, &format!(
@@ -201,6 +274,28 @@ mod tests {
         let orphans = super::find_orphans(&serde_json::json!({ "package": 385 }), &cfg).expect("find_orphans");
         println!("{orphans}");
         assert!(orphans.starts_with("Elements in package \"Stakeholders\""));
+    }
+
+    /// LC-369: names that differ only in case, spaces, _ - . or a plural s are one key.
+    #[test]
+    fn duplicate_name_keys() {
+        assert_eq!(super::name_key("Customer"), super::name_key("customers"));
+        assert_eq!(super::name_key("Order Line"), super::name_key("order_line"));
+        assert_eq!(super::name_key("e-mail"), super::name_key("Email"));
+        assert_ne!(super::name_key("Customer"), super::name_key("Custom"));
+        assert_eq!(super::name_key("Bus"), "bus", "a stem shorter than 3 letters keeps its s");
+        assert_eq!(super::name_key("as"), "as");
+    }
+
+    /// LC-369: duplicates on a test model (reads only):
+    /// `LOONAR_TEST_PROPS=E:/livetest/undo/undo.properties cargo test find_duplicates_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires the model from LOONAR_TEST_PROPS"]
+    fn find_duplicates_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("app.properties");
+        let found = super::find_duplicates(&serde_json::json!({}), &cfg).expect("find_duplicates");
+        println!("{found}");
+        assert!(found.starts_with("Likely duplicates in the whole model"));
     }
 
     /// LC-365: a relationship's diagrams on any test model:
