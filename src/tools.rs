@@ -350,6 +350,17 @@ pub fn definitions() -> Value {
         items.push(crate::style::definition());
         items.push(crate::context_diagram::definition());
         items.push(json!({
+            "name": "exec_view",
+            "description": "A presentation copy of a diagram for management or business (the original stays as it is): a new diagram next to it with \
+the same elements in the same places, attributes, operations and stereotypes hidden, relationship labels hidden, elements coloured by type, \
+optionally a title. One save the user approves (the copy can be deleted or undone). Use it for /exec-view; offer a short explanation (/explain) or \
+speaker notes with it.",
+            "input_schema": { "type": "object", "properties": {
+                "diagram": { "type": "integer" },
+                "name": { "type": "string", "description": "Name of the copy (default: <name> – presentation)" }
+            }, "required": ["diagram"] }
+        }));
+        items.push(json!({
             "name": "align_elements",
             "description": "Line up elements of a diagram without moving the others: align left / right / top / bottom / center (horizontal centres) / \
 middle (vertical centres) to the first element given, distribute_horizontally / distribute_vertically (equal gaps between the outermost ones), \
@@ -917,6 +928,10 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             let findings: Vec<String> = new_ids.iter().flat_map(|id| crate::governance::check_object(ctx.cfg, "connector", *id).unwrap_or_default()).collect();
             Ok(if findings.is_empty() { saved } else { format!("{saved}\nModel check of the new relationship: {}", findings.join("; ")) }.into())
         }
+        "exec_view" => {
+            let ops = exec_view_ops(ctx.cfg, input)?;
+            ea_write(&json!({ "ops": ops }), ctx).map(Into::into)
+        }
         "context_diagram" => {
             let ops = crate::context_diagram::plan(input, ctx.cfg)?;
             ea_write(&json!({ "ops": ops }), ctx).map(Into::into)
@@ -1122,6 +1137,34 @@ pub fn page_images_dir(attachments_dir: &std::path::Path, stored_page: &str) -> 
 }
 
 /// Confluence page: source (.confluence.md), page code for the source editor (.confluence.xml) and images in a folder next to them.
+/// A presentation copy of a diagram (LC-377): same elements and places, details hidden, coloured by type.
+fn exec_view_ops(cfg: &AppConfig, input: &Value) -> Result<Vec<Value>> {
+    let diagram = input["diagram"].as_i64().context("diagram")?;
+    let d = query_rows(cfg, &format!("select name, package_id, diagram_type from t_diagram where diagram_id = {diagram}"))?;
+    let d = d.first().with_context(|| format!("there is no diagram with id {diagram}"))?;
+    let name = input["name"].as_str().map(str::to_string).unwrap_or_else(|| format!("{} – presentation", d[0]));
+    let mut ops = vec![json!({ "op": "create_diagram", "key": "view", "package": d[1].parse::<i64>().unwrap_or(0), "name": name, "type": d[2] })];
+    let objects = query_rows(cfg, &format!(
+        "select x.object_id, x.rectleft, x.recttop, x.rectright, x.rectbottom, o.object_type from t_diagramobjects x join t_object o on o.object_id = x.object_id \
+         where x.diagram_id = {diagram} order by x.sequence desc"
+    ))?;
+    let mut types: Vec<String> = objects.iter().map(|r| r[5].clone()).collect();
+    types.sort();
+    types.dedup();
+    let colours = crate::style::colours(&types, &Value::Null);
+    for r in &objects {
+        let n = |i: usize| r[i].parse::<i64>().unwrap_or(0);
+        ops.push(json!({ "op": "place", "diagram": "#view", "element": n(0), "left": n(1), "top": -n(2), "width": n(3) - n(1), "height": n(2) - n(4) }));
+        if !matches!(r[5].as_str(), "Note" | "Text" | "Boundary" | "ActivityPartition" | "Partition" | "Swimlane") {
+            ops.push(json!({ "op": "set_color", "diagram": "#view", "element": n(0), "bgcolor": colours[&r[5]] }));
+        }
+    }
+    ops.push(json!({ "op": "diagram_options", "diagram": "#view",
+        "extended": { "HideAtts": "1", "HideOps": "1", "HideStereo": "1", "HideEStereo": "1", "ShowNotes": "0" },
+        "style": { "SuppConnectorLabels": "1" } }));
+    Ok(ops)
+}
+
 /// Rectangles of elements on a diagram as (id, left, top, width, height) with top downwards (LC-376).
 fn rects(cfg: &AppConfig, diagram: i64, ids: &[i64]) -> Result<Vec<(i64, i64, i64, i64, i64)>> {
     let list = ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
@@ -2348,6 +2391,30 @@ fn normalize_stamp(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    /// LC-377: a presentation copy through EA on a model COPY (removed again):
+    /// `LOONAR_TEST_PROPS=E:/livetest/undo/undo.properties cargo test exec_view_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA and a copy of a test model"]
+    fn exec_view_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("app.properties");
+        let q = |sql: &str| super::query_rows(&cfg, sql).unwrap();
+        let diagram: i64 = q("select d.diagram_id from t_diagram d join t_diagramobjects x on x.diagram_id = d.diagram_id join t_object o on o.object_id = x.object_id \
+                              where d.diagram_type = 'Logical' and o.object_type = 'Class' group by d.diagram_id order by count(*) desc")[0][0].parse().unwrap();
+        let ops = super::exec_view_ops(&cfg, &serde_json::json!({ "diagram": diagram })).unwrap();
+        let done = crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions::default()).expect("presentation copy");
+        let copy = done["created"].as_array().unwrap().iter().find(|c| c["kind"] == "diagram").unwrap()["id"].as_i64().unwrap();
+        let count = |d: i64| q(&format!("select count(*) from t_diagramobjects where diagram_id = {d}"))[0][0].clone();
+        let pdata = q(&format!("select pdata, styleex from t_diagram where diagram_id = {copy}"))[0].clone();
+        let (original, copied) = (count(diagram), count(copy));
+        let image = std::env::temp_dir().join("loonar_exec_view.png");
+        let _ = crate::ea::run_batch(&cfg, &[serde_json::json!({"op":"export_diagram","diagram":copy,"path":image.display().to_string()})], &crate::ea::BatchOptions::default());
+        crate::ea::run_batch(&cfg, &[serde_json::json!({"op":"delete","diagram":copy})], &crate::ea::BatchOptions::default()).expect("cleanup");
+        crate::ea::shutdown();
+        println!("{original} → {copied}; {pdata:?}; image {}", image.display());
+        assert_eq!(original, copied);
+        assert!(pdata[0].contains("HideAtts=1") && pdata[0].contains("HideOps=1") && pdata[1].contains("SuppConnectorLabels=1"));
+    }
+
     /// LC-376: alignment, distribution and size from the first element.
     #[test]
     fn aligning_rectangles() {

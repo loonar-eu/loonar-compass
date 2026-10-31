@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 pub const MODEL_OPS: &[&str] = &[
     "merge_elements",
     "change_connector_type",
+    "diagram_options",
     "create_package",
     "create_diagram",
     "create_element",
@@ -82,6 +83,7 @@ pub fn describe(ops: &[Value]) -> String {
         "create_attribute" => crate::i18n::tr("new attributes"),
         "merge_elements" => crate::i18n::tr("duplicates merged into the kept elements"),
         "change_connector_type" => crate::i18n::tr("relationships of another type in place of the old ones"),
+        "diagram_options" => crate::i18n::tr("diagram display options"),
         "create_legend" => crate::i18n::tr("diagram legends"),
         "create_operation" => crate::i18n::tr("new operations"),
         "update_attribute" => crate::i18n::tr("changed attributes"),

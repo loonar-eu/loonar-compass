@@ -208,6 +208,19 @@ fn lost(mut result: Value, error: &str) -> Value {
     result
 }
 
+/// "Key=value;" pairs with the given keys set (replaced in place, or added at the end).
+pub(crate) fn set_option_keys(current: &str, keys: &serde_json::Map<String, Value>) -> String {
+    let mut parts: Vec<String> = current.split(';').filter(|p| !p.is_empty()).map(str::to_string).collect();
+    for (key, value) in keys {
+        let value = value.as_str().map(str::to_string).unwrap_or_else(|| value.to_string());
+        match parts.iter_mut().find(|p| p.split('=').next() == Some(key.as_str())) {
+            Some(part) => *part = format!("{key}={value}"),
+            None => parts.push(format!("{key}={value}")),
+        }
+    }
+    parts.iter().map(|p| format!("{p};")).collect()
+}
+
 /// Errors of a broken connection to the EA process (e.g. EA was closed): the session has to be reopened.
 pub fn is_session_lost(error: &str) -> bool {
     ["RPC", "0x800706B", "0x80010108", "0x800401FD", "serwer RPC", "RPC server"].iter().any(|code| error.contains(code))
@@ -915,6 +928,17 @@ impl Job<'_> {
                     object.update(crate::i18n::tr("diagram object style"))?;
                 }
                 self.orient_partition(&element, &object, right - left, bottom - top)?;
+            }
+            "diagram_options" => {
+                // Set keys of the diagram's option strings (LC-377): extended = ExtendedStyle (t_diagram.PDATA:
+                // HideAtts, HideOps, HideStereo, HideEStereo, ShowNotes…), style = StyleEx (SuppConnectorLabels…).
+                let diagram = self.diagram(&op["diagram"])?;
+                for (field, property) in [("extended", "ExtendedStyle"), ("style", "StyleEx")] {
+                    let Some(keys) = op[field].as_object() else { continue };
+                    let current = diagram.text(property).unwrap_or_default();
+                    diagram.set(property, s(&set_option_keys(&current, keys)))?;
+                }
+                diagram.update(crate::i18n::tr("diagram style"))?;
             }
             "diagram_style" => {
                 let diagram = self.diagram(&op["diagram"])?;
@@ -2227,5 +2251,16 @@ mod version_tests {
         assert_eq!(super::next_version("v1.9"), "v1.10");
         assert_eq!(super::next_version(""), "2");
         assert_eq!(super::next_version("draft"), "draft.2");
+    }
+}
+
+/// LC-377: diagram option keys replaced in place or added.
+#[cfg(test)]
+mod option_tests {
+    #[test]
+    fn option_keys() {
+        let keys = serde_json::json!({ "HideAtts": "1", "New": "x" });
+        assert_eq!(super::set_option_keys("HideRel=0;HideAtts=0;HideOps=0;", keys.as_object().unwrap()), "HideRel=0;HideAtts=1;HideOps=0;New=x;");
+        assert_eq!(super::set_option_keys("", keys.as_object().unwrap()), "HideAtts=1;New=x;");
     }
 }
