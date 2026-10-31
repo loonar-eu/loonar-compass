@@ -352,6 +352,7 @@ pub fn definitions() -> Value {
         items.push(crate::translate_model::definition());
         items.push(crate::migration::definition());
         items.push(crate::baseline_diff::definition());
+        items.extend(crate::readonly_why::definitions());
         items.push(crate::ea_help::definition());
         items.push(crate::bulk::definition());
         items.push(crate::recycle::definition());
@@ -941,6 +942,8 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "diagram_as_text" => crate::notation::run(input, ctx.cfg).map(Into::into),
         "migration_check" => crate::migration::run(input, ctx.cfg).map(Into::into),
         "compare_baselines" => crate::baseline_diff::run(input, ctx.cfg).map(Into::into),
+        "why_locked" => crate::readonly_why::why_locked(input, ctx.cfg).map(Into::into),
+        "dead_links" => crate::readonly_why::dead_links(input, ctx.cfg).map(Into::into),
         // Translating the model (LC-400): texts reads only; apply is one ordinary save of the translations.
         "translate_model" => {
             let (ops, text) = crate::translate_model::run(input, ctx.cfg)?;
@@ -1427,6 +1430,7 @@ pub fn run_direct(name: &str, input: &Value, cfg: &AppConfig) -> Result<String> 
         "find_orphans" => crate::model_usage::find_orphans(input, cfg),
         "find_duplicates" => crate::model_usage::find_duplicates(input, cfg),
         "trace_gaps" => crate::trace_gaps::run(input, cfg),
+        "dead_links" => crate::readonly_why::dead_links(input, cfg),
         "what_changed" => crate::changes::run(input, cfg),
         "connector_visibility" if input["action"] == "hidden" => crate::visibility::run(input, cfg).map(|(_, text)| text),
         other => bail!("{other} is not run without the assistant"),

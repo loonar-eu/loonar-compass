@@ -34,6 +34,8 @@ pub const ALL: &[Command] = &[
     Command { name: "/migration-check", args: "[compare <other model>]", about: "Before moving the model or a new EA build: what could break, and the counts after the transfer", request: "Migration check {0}: use migration_check (readiness, or compare when I named another model) and give me a short plan with the risks first." },
     Command { name: "/mdg-check", args: "<technology or attached .xml> [against <other version>]", about: "Problems of an MDG technology, or what changed between two versions", request: "Check the MDG technology {0} with mdg_technologies (action lint, or compare when I named another version); say what to fix first and what would break existing models." },
     Command { name: "/compare-baselines", args: "<package> [from version] [to version]", about: "Two baselines of a package compared with each other, without noise", request: "Compare the baselines of {0} with compare_baselines (list them first if I named no versions) and tell me what changed between them in business language, most important first." },
+    Command { name: "/why-locked", args: "<element, diagram or package>", about: "Why something is greyed out in EA: locks, version control, a locked diagram", request: "Why can't I edit {0} in EA? Use why_locked and tell me who can release it and how." },
+    Command { name: "/dead-links", args: "[package]", about: "Links in the model that point at nothing", request: "Find dead links {0} with dead_links and say how to fix each kind." },
     Command { name: "/how-in-ea", args: "<what you want to do>", about: "How to do something in your version of Enterprise Architect", request: "How do I do this in Enterprise Architect: {0}? Use ea_howto for my EA version and the known problems; give the exact steps for that version, and offer to do it for me when you can." },
     Command { name: "/bulk-set", args: "<which elements> <what to set>", about: "Change many elements at once: status, stereotype, author, tags, names", request: "Bulk change: {0}. Use bulk_set: first action preview and show me the numbered table before → after; save (action apply) only after I agree, leaving out the rows I name." },
     Command { name: "/to-bin", args: "<elements>", about: "Put elements into the model's recycle bin instead of deleting them", request: "Put {0} into the model's recycle bin (recycle_bin move) instead of deleting; first show where each is used (where_used)." },
@@ -80,6 +82,7 @@ pub fn direct(input: &str) -> Option<(&'static str, serde_json::Value)> {
         "/find-orphans" => Some(("find_orphans", json!({ "package": package() }))),
         "/find-duplicates" => Some(("find_duplicates", json!({ "package": package() }))),
         "/trace-gaps" => Some(("trace_gaps", json!({ "package": package() }))),
+        "/dead-links" => Some(("dead_links", json!({ "package": package() }))),
         "/what-changed" if args.is_empty() || args.trim_end_matches(['d', 'D']).parse::<u32>().is_ok() || chrono::NaiveDate::parse_from_str(args, "%Y-%m-%d").is_ok() => {
             Some(("what_changed", json!({ "since": args })))
         }
