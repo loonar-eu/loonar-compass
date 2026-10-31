@@ -335,6 +335,39 @@ impl Connection {
         Ok(())
     }
 
+    /// The summary and status of an issue (LC-403); None when Jira does not know it (or it is not visible).
+    pub fn summary_status(&self, key: &str) -> Result<Option<(String, String)>> {
+        check_issue_key(key)?;
+        let request = self.client()?.get(self.url(&format!("/issue/{key}"))).query(&[("fields", "summary,status")]);
+        let request = if self.user.trim().is_empty() { request.bearer_auth(&self.token) } else { request.basic_auth(self.user.trim(), Some(&self.token)) };
+        let response = request.header("Accept", "application/json").send().with_context(|| crate::i18n::fmt("{0}: no connection to Jira", &[crate::i18n::tr("reading the issue").to_string()]))?;
+        if response.status().as_u16() == 404 {
+            return Ok(None);
+        }
+        if !response.status().is_success() {
+            bail!("{}", crate::i18n::fmt("{0}: Jira replied {1}: {2}", &[crate::i18n::tr("reading the issue").to_string(), response.status().to_string(), response.text().unwrap_or_default().chars().take(300).collect()]));
+        }
+        let value: Value = response.json().unwrap_or(Value::Null);
+        let f = &value["fields"];
+        Ok(Some((f["summary"].as_str().unwrap_or("").to_string(), f["status"]["name"].as_str().unwrap_or("").to_string())))
+    }
+
+    /// Moves an issue to a status through its workflow (LC-403): the transition that leads there (by the target status or
+    /// the transition's name); an error when the workflow has none from the current status.
+    pub fn set_status(&self, key: &str, status: &str) -> Result<()> {
+        check_issue_key(key)?;
+        let what = crate::i18n::tr("changing the issue");
+        let list = self.send(self.client()?.get(self.url(&format!("/issue/{key}/transitions"))), what)?;
+        let transition = list["transitions"].as_array().into_iter().flatten().find(|t| {
+            t["to"]["name"].as_str().is_some_and(|n| n.eq_ignore_ascii_case(status)) || t["name"].as_str().is_some_and(|n| n.eq_ignore_ascii_case(status))
+        });
+        let Some(id) = transition.and_then(|t| t["id"].as_str().map(str::to_string)) else {
+            bail!("{}", crate::i18n::fmt("Jira allows no transition from the current status to {0}", &[status.to_string()]));
+        };
+        self.send(self.client()?.post(self.url(&format!("/issue/{key}/transitions"))).json(&json!({ "transition": { "id": id } })), what)?;
+        Ok(())
+    }
+
     /// The description of an issue as stored (wiki text on Server / Data Center; on Cloud the ADF as JSON text).
     pub fn description(&self, key: &str) -> Result<String> {
         check_issue_key(key)?;
@@ -509,6 +542,8 @@ pub mod mock {
                         ("GET", p) if p.starts_with("/project/") => (404, json!({"errorMessages":["No project could be found with key 'X'."]})),
                         ("GET", p) if p.starts_with(if cloud { "/search/jql?" } else { "/search?" }) => (200, json!({"issues":[issue.clone(), {"key":"ARCH-9","fields":{"summary":"Invoice e-mail","issuetype":{"name":"Task"},"status":{"name":"To Do"},"labels":[]}}]})),
                         ("GET", p) if p.starts_with("/issue/ARCH-7/remotelink") => (200, json!([{"object":{"title":"EA: Billing","url":"ea://{GUID}"}}])),
+                        ("GET", p) if p.starts_with("/issue/ARCH-7/transitions") => (200, json!({"transitions":[{"id":"21","name":"Back to do","to":{"name":"To Do"}},{"id":"31","name":"Finish","to":{"name":"Done"}}]})),
+                        ("POST", p) if p.starts_with("/issue/ARCH-7/transitions") => (204, json!(null)),
                         ("GET", p) if p.starts_with("/issue/ARCH-7") => (200, issue.clone()),
                         ("GET", p) if p.starts_with("/issue/") => (404, json!({"errorMessages":["Issue does not exist or you do not have permission to see it."]})),
                         ("POST", "/issue") => {

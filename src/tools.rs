@@ -365,6 +365,7 @@ pub fn definitions() -> Value {
         items.push(crate::diagram_clone::definition());
         items.push(crate::publications::definition());
         items.push(crate::import_sheet::definition());
+        items.push(crate::jira_sync::definition());
         items.push(json!({
             "name": "exec_view",
             "description": "A presentation copy of a diagram for management or business (the original stays as it is): a new diagram next to it with \
@@ -1055,6 +1056,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             }
         }
         "stale_publications" => crate::publications::stale(input, ctx.cfg).map(Into::into),
+        "jira_sync" => jira_sync(input, ctx).map(Into::into),
         "import_sheet" => {
             let (ops, text) = crate::import_sheet::run(input, ctx.cfg)?;
             if ops.is_empty() { Ok(text.into()) } else { ea_write(&json!({ "ops": ops }), ctx).map(Into::into) }
@@ -1817,6 +1819,33 @@ fn jira(cfg: &AppConfig) -> Result<crate::jira::Connection> {
     }
     let token = crate::config::secrets::get(crate::config::secrets::JIRA_TOKEN).context(crate::i18n::tr("no Jira token in the settings"))?;
     Ok(crate::jira::Connection { base_url: cfg.jira_url.clone(), user: cfg.jira_user.clone(), token, identity: crate::client_cert::jira(cfg)? })
+}
+
+/// Model elements and Jira issues in sync (LC-403): check reads only; to_model goes through ea_write (approval card,
+/// undo); to_jira sends after the user approves the list of changes.
+fn jira_sync(input: &Value, ctx: &ToolContext) -> Result<String> {
+    let action = crate::jira_sync::check_action(input)?;
+    let connection = jira(ctx.cfg)?;
+    let links = crate::jira_sync::linked(ctx.cfg, input, &connection)?;
+    match action {
+        "to_model" => {
+            let ops = crate::jira_sync::to_model_ops(&links, input);
+            if ops.is_empty() {
+                return Ok(format!("Nothing to take from Jira.\n{}", crate::jira_sync::report(&links, input)));
+            }
+            ea_write(&json!({ "ops": ops }), ctx)
+        }
+        "to_jira" => {
+            let changes = crate::jira_sync::to_jira_changes(&links, input);
+            if changes.is_empty() {
+                return Ok(format!("Nothing to send to Jira.\n{}", crate::jira_sync::report(&links, input)));
+            }
+            let lines: Vec<String> = changes.iter().map(|c| c.3.clone()).collect();
+            ctx.approver.confirm_kind("jira", &crate::i18n::fmt("Change {0} Jira issue(s) to match the model?\n\n{1}", &[changes.len().to_string(), lines.join("\n")]))?;
+            Ok(crate::jira_sync::apply_to_jira(&connection, &changes))
+        }
+        _ => Ok(crate::jira_sync::report(&links, input)),
+    }
 }
 
 /// New Jira issue: always with the user's consent (the content leaves the application).

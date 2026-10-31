@@ -77,6 +77,7 @@ mod spell;
 mod openai;
 mod governance;
 mod jira;
+mod jira_sync;
 mod hub;
 mod verify;
 mod mcp_client;

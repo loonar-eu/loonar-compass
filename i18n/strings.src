@@ -2045,3 +2045,5 @@ fix the agents marked before saving ‖ popraw zaznaczonych agentów przed zapis
 give the agent a name ‖ nadaj agentowi nazwę ‖ geben Sie dem Agenten einen Namen ‖ donnez un nom à l'agent
 team event agents changed ({0}) ‖ zmienieni agenci zdarzeń zespołu ({0}) ‖ Ereignis-Agenten des Teams geändert ({0}) ‖ agents d'événements de l'équipe modifiés ({0})
 the name {0} is used twice ‖ nazwa {0} jest użyta dwa razy ‖ der Name {0} wird zweimal verwendet ‖ le nom {0} est utilisé deux fois
+Jira allows no transition from the current status to {0} ‖ Jira nie pozwala przejść z obecnego statusu do {0} ‖ Jira erlaubt keinen Übergang vom aktuellen Status zu {0} ‖ Jira n'autorise aucune transition du statut actuel vers {0}
+Change {0} Jira issue(s) to match the model?\n\n{1} ‖ Zmienić {0} zgłoszeń w Jirze zgodnie z modelem?\n\n{1} ‖ {0} Jira-Vorgänge an das Modell anpassen?\n\n{1} ‖ Modifier {0} ticket(s) Jira pour suivre le modèle ?\n\n{1}
