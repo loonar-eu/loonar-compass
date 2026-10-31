@@ -122,6 +122,7 @@
   <li><code>listen</code> stays on <code>127.0.0.1</code>: only IIS on the same server talks to the hub.</li>
   <li><code>sources</code>: one entry per model. <code>id</code> is short and stable, because the users and Power BI use it. <code>properties</code> is relative to hub.json.</li>
   <li><code>readers</code> and <code>scopes</code> (in a source, optional): <code>"readers": ["anna", "role:architect"]</code> – only they (and admins) see the source at all; <code>"scopes": [{"for": "role:viewer", "packages": ["{GUID}", 42]}]</code> – the first entry for the person, their role or <code>*</code> limits them to those packages and their subpackages in the web view, search, element details, reports, Power BI tables and MCP. GraphQL, the assistant (Ask), impact and gap analysis and change sets cannot be limited by packages, so a person with a scope gets a clear refusal there.</li>
+  <li><b>Review and portfolio</b> (web view): under an element's details everybody who may read it comments or records a decision (ADR); an architect or the author resolves or accepts it (comments.json next to hub.json). The Portfolio tab counts the elements of a package by one or two properties (type, status, phase, author, a tagged value such as tag:Owner) as bars or a heat map, with PowerPoint and CSV.</li>
   <li>Leave out <code>users</code>: the hub then creates the account <code>admin</code> (step 4) and writes users back itself, as hashes only.</li>
 </ul>
 <p>The model file, e.g. <code>C:\CompassHub\models\architecture.properties</code>:</p>
