@@ -30,14 +30,15 @@ message inside; lifelines without a classifier. Reads only. Use it for /check-se
             "description": "Creates a sequence diagram from text in a PlantUML-like form, bound to the model: participants are existing \
 elements found by name (the package first), messages are matched to the receiver's operations by name. Lines: `participant Name`, \
 `actor Name`, `participant \"Long name\" as L`; `A -> B : call()` (synchronous), `A ->> B : signal` (asynchronous), `B --> A : result` \
-(reply); `alt condition` / `else condition` / `opt` / `loop` / `par` / `break` … `end` (combined fragments); @startuml, title, \
+(reply), a time constraint in braces after the message (`A -> B : pay() {< 2s}`, kept as the tagged value \"time constraint\"); `alt condition` / `else condition` / `opt` / `loop` / `par` / `break` … `end` (combined fragments); @startuml, title, \
 autonumber, activate and comments are skipped. Missing participants become lifelines; with create_missing_operations the receivers \
 get the operations the messages call. Show the user the report (bound / created / missing) after the save.",
             "input_schema": { "type": "object", "properties": {
                 "text": { "type": "string" },
                 "package": { "description": "package_id or exact name: where the diagram (and new lifelines) go" },
                 "name": { "type": "string", "description": "Name of the new diagram" },
-                "create_missing_operations": { "type": "boolean", "description": "Add operations the messages call to receivers that lack them (default false)" }
+                "create_missing_operations": { "type": "boolean", "description": "Add operations the messages call to receivers that lack them (default false)" },
+                "numbering": { "type": "boolean", "description": "Show sequence numbers (EA numbers hierarchically by activation; default true)" }
             }, "required": ["text", "package", "name"] }
         }),
     ]
@@ -158,7 +159,19 @@ pub fn check(input: &Value, cfg: &AppConfig) -> Result<String> {
                 findings.push(format!("{} fragment \"{}\" has no message inside", fragment_name(&f[4]), f[1]));
             }
         }
+        // Time constraints of the messages (LC-421), and whether EA shows the numbers.
+        let ids: Vec<String> = messages.iter().map(|m| m[0].clone()).collect();
+        let constraints = if ids.is_empty() { Vec::new() } else {
+            query_rows(cfg, &format!("select c.name, t.value from t_connectortag t join t_connector c on c.connector_id = t.elementid where t.property = 'time constraint' and t.elementid in ({})", ids.join(",")))?
+        };
+        let numbers_shown = query_rows(cfg, &format!("select coalesce(pdata,'') from t_diagram where diagram_id = {id}"))?.first().is_some_and(|r| r[0].contains("ShowSN=1"));
+        if !numbers_shown && messages.len() > 1 {
+            findings.push("sequence numbers are not shown (Diagram Properties → Show Sequence Numbers; EA numbers 1, 1.1, 1.2 by activation)".into());
+        }
         out.push(format!("{} (diagram_id {}): {} message(s){}", d[1], d[0], messages.len(), if findings.is_empty() { ", nothing found".to_string() } else { String::new() }));
+        if !constraints.is_empty() {
+            out.push(format!("  time constraints: {}", constraints.iter().map(|c| format!("\"{}\" {{{}}}", c[0], c[1])).collect::<Vec<_>>().join(", ")));
+        }
         out.extend(findings.into_iter().map(|f| format!("  - {f}")));
     }
     if !missing_all.is_empty() {
@@ -293,6 +306,13 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
                 number += 1;
                 let (source, _) = refs[from].clone();
                 let (target, owner) = refs[to].clone();
+                // A time constraint written after the message in braces ("place() {< 2s}") (LC-421): kept as the
+                // message's tagged value "time constraint", not in its name (which binds it to the operation).
+                let (text, constraint) = match text.rfind('{').filter(|_| text.trim_end().ends_with('}')) {
+                    Some(at) => (text[..at].trim().to_string(), Some(text[at + 1..].trim().trim_end_matches('}').trim().to_string())),
+                    None => (text.clone(), None),
+                };
+                let text = &text;
                 if !reply {
                     if let (Some(owner), op) = (owner, called(text)) {
                         if !op.is_empty() {
@@ -307,8 +327,12 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
                         }
                     }
                 }
-                ops.push(json!({ "op": "create_connector", "source": source, "target": target, "type": "Sequence", "name": text, "diagram": "#seq",
-                    "sequence": number, "message_sort": if *asynchronous { "Asynchronous" } else { "Synchronous" }, "is_return": reply }));
+                let mut message = json!({ "op": "create_connector", "source": source, "target": target, "type": "Sequence", "name": text, "diagram": "#seq",
+                    "sequence": number, "message_sort": if *asynchronous { "Asynchronous" } else { "Synchronous" }, "is_return": reply });
+                if let Some(c) = &constraint {
+                    message["tags"] = json!({ "time constraint": c });
+                }
+                ops.push(message);
             }
             Line::Open { kind, guard } => fragments.push((kind.clone(), guard.clone(), number + 1)),
             Line::Else(guard) => {
@@ -339,6 +363,11 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
     }
     if !fragments.is_empty() {
         report.push(format!("{} fragment(s) without \"end\" were left out", fragments.len()));
+    }
+    // EA numbers the messages itself, hierarchically by activation (1, 1.1, 1.2…), when the diagram shows sequence
+    // numbers (LC-421): on unless numbering is false.
+    if input["numbering"] != false {
+        ops.push(json!({ "op": "diagram_options", "diagram": "#seq", "extended": { "ShowSN": "1" } }));
     }
     if !missing.is_empty() {
         report.push(format!("{} the receivers' operation(s) {}: {}", missing.len(), if create_missing { "added" } else { "missing (create_missing_operations adds them)" }, missing.join(", ")));
@@ -376,7 +405,7 @@ mod tests {
         let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id")[0][0].parse().unwrap();
         let created = crate::ea::run_batch(&cfg, &[json!({"op":"create_package","key":"pkg","parent":root,"name":format!("ZZ_seq_{}", chrono::Local::now().format("%H%M%S"))})], &crate::ea::BatchOptions::default()).unwrap();
         let pkg = created["created"][0]["id"].as_i64().unwrap();
-        let text = "actor Klient\nKlient -> Book : Book(string)\nloop each item\nBook -> BookDB : AddBook(x)\nBook -> BookDB : Audit()\nend\nBookDB --> Book : done\nBook --> Klient : ok";
+        let text = "actor Klient\nKlient -> Book : Book(string) {< 2s}\nloop each item\nBook -> BookDB : AddBook(x)\nBook -> BookDB : Audit()\nend\nBookDB --> Book : done\nBook --> Klient : ok";
         let (ops, report) = from_text(&json!({ "text": text, "package": pkg, "name": "From text" }), &cfg).unwrap();
         println!("{report}");
         let done = crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions::default()).expect("create");
@@ -387,6 +416,7 @@ mod tests {
         println!("{:?}", q(&format!("select o.name, x.recttop, x.rectbottom from t_diagramobjects x join t_object o on o.object_id = x.object_id where x.diagram_id = {diagram}")));
         assert!(report.contains("Audit"), "{report}");
         assert!(again.contains("5 message(s)") && again.contains("BookDB.Audit()"), "{again}");
+        assert!(again.contains("time constraints: \"Book(string)\" {< 2s}") && !again.contains("sequence numbers are not shown"), "{again}");
         let image = std::env::temp_dir().join("loonar-seq-test.png");
         crate::ea::run_batch(&cfg, &[json!({"op":"export_diagram","diagram":diagram,"path":image.to_string_lossy()})], &crate::ea::BatchOptions::default()).unwrap();
         println!("image: {}", image.display());
