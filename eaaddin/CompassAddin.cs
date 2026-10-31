@@ -29,10 +29,12 @@ namespace LoonarCompass
         const string SendToMiro = "Send to Miro";
         const string FindUsage = "Find where it is used on diagrams";
         const string NewVersion = "Clone as a new version (with trace)";
+        const string Navigate = "Find in the model… (Ctrl+K)";
 
         public string EA_Connect(object repository)
         {
             PolishSpelling();
+            Navigator.Hook(repository);
             return "";
         }
 
@@ -293,7 +295,7 @@ namespace LoonarCompass
             {
                 if (menuName != "")
                     return "";
-                var items = new System.Collections.Generic.List<string> { L10n.Menu(AddReference) };
+                var items = new System.Collections.Generic.List<string> { L10n.Menu(AddReference), L10n.Menu(Navigate) };
                 int type = ContextType(repository);
                 if (type == 24)
                     items.Add(L10n.Menu(FindUsage));
@@ -301,7 +303,7 @@ namespace LoonarCompass
                     items.Add(L10n.Menu(NewVersion));
                 if (MiroDiagram(repository, location) > 0)
                     items.Add(L10n.Menu(SendToMiro));
-                return items.Count == 1 ? (object)items[0] : items.ToArray();
+                return items.ToArray();
             }
             // Ribbon: one button that opens Compass in EA (the standalone app is started from the Start menu).
             return menuName == "" ? "Loonar Compass" : "";
@@ -318,6 +320,11 @@ namespace LoonarCompass
             try
             {
                 string connection = Connection(repository);
+                if (itemName == L10n.Menu(Navigate))
+                {
+                    Navigator.Open(repository);
+                    return;
+                }
                 if (itemName == L10n.Menu(AddReference))
                 {
                     string reference = Reference(repository);
@@ -401,6 +408,7 @@ namespace LoonarCompass
             // EA closes: Compass closes with it (it saves its conversation).
             if (current != null && !current.IsDisposed)
                 current.Stop("");
+            Navigator.Unhook();
             GC.Collect();
             GC.WaitForPendingFinalizers();
         }
@@ -1156,6 +1164,316 @@ namespace LoonarCompass
         }
     }
 
+    /// <summary>The model navigator (LC-387, Ctrl+K in EA): finds elements, packages and diagrams by name, alias,
+    /// stereotype, GUID or (optionally) notes as you type, without the AI; Enter shows the element in the Browser or opens
+    /// the diagram, and the list on the right shows the diagrams an element is on (a double click opens one with the
+    /// element selected). Recently opened items are shown while the box is empty. Reads only, through
+    /// Repository.SQLQuery, so it works on every kind of repository.</summary>
+    class Navigator : Form
+    {
+        static Navigator open;
+        static object repository;
+        static readonly System.Collections.Generic.List<string[]> recent = new System.Collections.Generic.List<string[]>();
+        static IntPtr hook = IntPtr.Zero;
+        static HookProc proc;
+
+        delegate IntPtr HookProc(int code, IntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll")] static extern IntPtr SetWindowsHookEx(int id, HookProc proc, IntPtr module, uint thread);
+        [DllImport("user32.dll")] static extern bool UnhookWindowsHookEx(IntPtr hook);
+        [DllImport("user32.dll")] static extern IntPtr CallNextHookEx(IntPtr hook, int code, IntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll")] static extern short GetKeyState(int key);
+        [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+
+        /// <summary>Ctrl+K on EA's own thread opens the navigator (EA has no Ctrl+K of its own; Ctrl+Alt+K stays EA's).</summary>
+        public static void Hook(object repo)
+        {
+            repository = repo;
+            if (hook != IntPtr.Zero)
+                return;
+            try
+            {
+                proc = KeyHook;
+                hook = SetWindowsHookEx(2 /* WH_KEYBOARD */, proc, IntPtr.Zero, GetCurrentThreadId());
+            }
+            catch (Exception e)
+            {
+                Log.Write("navigator hook: " + e.Message);
+            }
+        }
+
+        public static void Unhook()
+        {
+            if (hook != IntPtr.Zero)
+                UnhookWindowsHookEx(hook);
+            hook = IntPtr.Zero;
+            if (open != null && !open.IsDisposed)
+                open.Close();
+        }
+
+        static IntPtr KeyHook(int code, IntPtr wParam, IntPtr lParam)
+        {
+            try
+            {
+                bool down = ((long)lParam & 0x80000000L) == 0;
+                bool ctrl = GetKeyState(0x11) < 0, alt = GetKeyState(0x12) < 0, shift = GetKeyState(0x10) < 0;
+                if (code == 0 && down && (int)wParam == 0x4B && ctrl && !alt && !shift && repository != null)
+                {
+                    // Opened after the hook returns (a window is not created inside a keyboard hook).
+                    var timer = new Timer { Interval = 1 };
+                    timer.Tick += (s, e) => { timer.Stop(); timer.Dispose(); Open(repository); };
+                    timer.Start();
+                    return (IntPtr)1;
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Write("navigator key: " + e.Message);
+            }
+            return CallNextHookEx(hook, code, wParam, lParam);
+        }
+
+        public static void Open(object repo)
+        {
+            repository = repo;
+            if (open == null || open.IsDisposed)
+                open = new Navigator();
+            open.Show();
+            open.Activate();
+            open.box.Focus();
+            open.box.SelectAll();
+        }
+
+        readonly TextBox box = new TextBox();
+        readonly CheckBox notes = new CheckBox();
+        readonly ListView found = new ListView();
+        readonly ListView diagrams = new ListView();
+        readonly Label status = new Label();
+        readonly Timer typing = new Timer { Interval = 250 };
+
+        Navigator()
+        {
+            Text = "Loonar Compass – " + L10n.Get("Find in the model");
+            Width = 900;
+            Height = 520;
+            StartPosition = FormStartPosition.CenterScreen;
+            TopMost = true;
+            KeyPreview = true;
+            ShowInTaskbar = false;
+            box.Dock = DockStyle.Top;
+            box.Font = new System.Drawing.Font(box.Font.FontFamily, 12f);
+            notes.Text = L10n.Get("Search the notes too");
+            notes.Dock = DockStyle.Top;
+            notes.CheckedChanged += (s, e) => Search();
+            status.Dock = DockStyle.Bottom;
+            status.Height = 22;
+            foreach (ListView list in new[] { found, diagrams })
+            {
+                list.View = View.Details;
+                list.FullRowSelect = true;
+                list.HideSelection = false;
+                list.MultiSelect = false;
+            }
+            found.Columns.Add(L10n.Get("Name"), 260);
+            found.Columns.Add(L10n.Get("Type"), 150);
+            found.Columns.Add(L10n.Get("Package"), 180);
+            diagrams.Columns.Add(L10n.Get("On diagrams"), 220);
+            var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 620 };
+            found.Dock = DockStyle.Fill;
+            diagrams.Dock = DockStyle.Fill;
+            split.Panel1.Controls.Add(found);
+            split.Panel2.Controls.Add(diagrams);
+            Controls.Add(split);
+            Controls.Add(status);
+            Controls.Add(notes);
+            Controls.Add(box);
+            typing.Tick += (s, e) => { typing.Stop(); Search(); };
+            box.TextChanged += (s, e) => { typing.Stop(); typing.Start(); };
+            found.SelectedIndexChanged += (s, e) => ShowDiagrams();
+            found.DoubleClick += (s, e) => Go(false);
+            diagrams.DoubleClick += (s, e) => OpenOnDiagram();
+            KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Escape) { Hide(); e.Handled = true; }
+                else if (e.KeyCode == Keys.Enter) { if (diagrams.Focused) OpenOnDiagram(); else Go(e.Shift); e.Handled = true; e.SuppressKeyPress = true; }
+                else if (e.KeyCode == Keys.Down && box.Focused && found.Items.Count > 0) { found.Focus(); found.Items[0].Selected = true; e.Handled = true; }
+            };
+            FormClosing += (s, e) => { if (e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); } };
+            ShowRecent();
+        }
+
+        /// <summary>Rows of Repository.SQLQuery: the values of each row in the order of the columns asked for.</summary>
+        static System.Collections.Generic.List<string[]> Query(string sql, string[] columns)
+        {
+            var rows = new System.Collections.Generic.List<string[]>();
+            dynamic repo = repository;
+            var xml = new System.Xml.XmlDocument();
+            xml.LoadXml((string)repo.SQLQuery(sql));
+            foreach (System.Xml.XmlNode row in xml.SelectNodes("//Row"))
+            {
+                var values = new string[columns.Length];
+                for (int i = 0; i < columns.Length; i++)
+                {
+                    System.Xml.XmlNode cell = null;
+                    foreach (System.Xml.XmlNode child in row.ChildNodes)
+                        if (string.Equals(child.Name, columns[i], StringComparison.OrdinalIgnoreCase))
+                            cell = child;
+                    values[i] = cell == null ? "" : cell.InnerText;
+                }
+                rows.Add(values);
+                if (rows.Count >= 300)
+                    break;
+            }
+            return rows;
+        }
+
+        void Search()
+        {
+            string q = box.Text.Trim();
+            if (q.Length < 2)
+            {
+                ShowRecent();
+                return;
+            }
+            // Quotes doubled; the SQL wildcards of the typed text dropped (they would match anything).
+            string text = q.Replace("'", "''").Replace("%", "").Replace("_", "").Replace("[", "").Replace("*", "");
+            // EA's #WC# macro is not expanded by SQLQuery on .qea files: the wildcard of the database itself
+            // (* and UCASE on the old Access/JET .eap files).
+            bool jet = false;
+            try { jet = ((string)((dynamic)repository).RepositoryType()).ToUpperInvariant() == "JET"; } catch { }
+            string wc = jet ? "*" : "%", up = jet ? "ucase" : "upper";
+            string like = up + "('" + wc + text + wc + "')";
+            string guid = q.Trim('{', '}').Replace("'", "");
+            try
+            {
+                found.BeginUpdate();
+                found.Items.Clear();
+                string where = up + "(o.Name) like " + like + " or " + up + "(o.Alias) like " + like + " or " + up + "(o.Stereotype) like " + like + " or o.ea_guid = '{" + guid + "}'";
+                if (notes.Checked)
+                    where += " or o.Note like '" + wc + text + wc + "'";
+                foreach (var r in Query("select o.Object_ID, o.Name, o.Object_Type, o.Stereotype, p.Name as Pkg, o.PDATA1 from t_object o inner join t_package p on p.Package_ID = o.Package_ID where " + where,
+                                        new[] { "Object_ID", "Name", "Object_Type", "Stereotype", "Pkg", "PDATA1" }))
+                {
+                    bool package = r[2] == "Package";
+                    Add(package ? "P" : "E", package ? r[5] : r[0], r[1], r[2] + (r[3].Length > 0 ? " «" + r[3] + "»" : ""), r[4]);
+                }
+                foreach (var r in Query("select d.Diagram_ID, d.Name, d.Diagram_Type, p.Name as Pkg from t_diagram d inner join t_package p on p.Package_ID = d.Package_ID where " + up + "(d.Name) like " + like + " or d.ea_guid = '{" + guid + "}'",
+                                        new[] { "Diagram_ID", "Name", "Diagram_Type", "Pkg" }))
+                    Add("D", r[0], r[1], L10n.Get("Diagram") + " " + r[2], r[3]);
+                status.Text = found.Items.Count >= 300 ? L10n.Get("The first 300 – type more to narrow it down.") : found.Items.Count + "";
+            }
+            catch (Exception e)
+            {
+                status.Text = e.Message;
+                Log.Write("navigator search: " + e.Message);
+            }
+            finally
+            {
+                found.EndUpdate();
+            }
+            if (found.Items.Count > 0)
+                found.Items[0].Selected = true;
+        }
+
+        void Add(string kind, string id, string name, string type, string package)
+        {
+            var item = new ListViewItem(new[] { name, type, package }) { Tag = new[] { kind, id, name, type, package } };
+            found.Items.Add(item);
+        }
+
+        void ShowRecent()
+        {
+            found.Items.Clear();
+            diagrams.Items.Clear();
+            foreach (var r in recent)
+                Add(r[0], r[1], r[2], r[3], r[4]);
+            status.Text = recent.Count > 0 ? L10n.Get("Recently opened") : L10n.Get("Type a name, alias, stereotype or GUID");
+        }
+
+        string[] Picked()
+        {
+            return found.SelectedItems.Count == 0 ? null : (string[])found.SelectedItems[0].Tag;
+        }
+
+        void ShowDiagrams()
+        {
+            diagrams.Items.Clear();
+            var p = Picked();
+            if (p == null || p[0] != "E")
+                return;
+            try
+            {
+                foreach (var r in Query("select d.Diagram_ID, d.Name from t_diagramobjects x inner join t_diagram d on d.Diagram_ID = x.Diagram_ID where x.Object_ID = " + int.Parse(p[1]), new[] { "Diagram_ID", "Name" }))
+                    diagrams.Items.Add(new ListViewItem(r[1]) { Tag = r[0] });
+            }
+            catch (Exception e)
+            {
+                Log.Write("navigator diagrams: " + e.Message);
+            }
+        }
+
+        void Remember(string[] p)
+        {
+            recent.RemoveAll(r => r[0] == p[0] && r[1] == p[1]);
+            recent.Insert(0, p);
+            if (recent.Count > 15)
+                recent.RemoveAt(15);
+        }
+
+        /// <summary>Enter: an element or package shown in the Browser, a diagram opened. Shift+Enter: the element on its first diagram.</summary>
+        void Go(bool onDiagram)
+        {
+            var p = Picked();
+            if (p == null)
+                return;
+            try
+            {
+                dynamic repo = repository;
+                int id = int.Parse(p[1]);
+                if (p[0] == "D")
+                    repo.OpenDiagram(id);
+                else if (p[0] == "P")
+                    repo.ShowInProjectView(repo.GetPackageByID(id));
+                else if (onDiagram && diagrams.Items.Count > 0)
+                {
+                    diagrams.Items[0].Selected = true;
+                    OpenOnDiagram();
+                    return;
+                }
+                else
+                    repo.ShowInProjectView(repo.GetElementByID(id));
+                Remember(p);
+                Hide();
+            }
+            catch (Exception e)
+            {
+                status.Text = e.Message;
+            }
+        }
+
+        /// <summary>The diagram picked on the right opened, with the element selected on it.</summary>
+        void OpenOnDiagram()
+        {
+            var p = Picked();
+            if (p == null || diagrams.SelectedItems.Count == 0)
+                return;
+            try
+            {
+                dynamic repo = repository;
+                int diagram = int.Parse((string)diagrams.SelectedItems[0].Tag);
+                repo.OpenDiagram(diagram);
+                dynamic d = repo.GetDiagramByID(diagram);
+                dynamic e = repo.GetElementByID(int.Parse(p[1]));
+                d.SelectedObjects.AddNew(e.ElementID.ToString(), e.Type);
+                Remember(p);
+                Hide();
+            }
+            catch (Exception e)
+            {
+                status.Text = e.Message;
+            }
+        }
+    }
+
     /// <summary>Menu texts in the language of Compass (ui.language in its settings), Polish by default.</summary>
     static class L10n
     {
@@ -1200,6 +1518,15 @@ namespace LoonarCompass
                 case "Loonar Compass stopped this deletion:": return lang == "de" ? "Loonar Compass hat dieses Löschen gestoppt:" : lang == "fr" ? "Loonar Compass a arrêté cette suppression :" : "Loonar Compass zatrzymał to usunięcie:";
                 case "No decision of the guard in time: the deletion is stopped.": return lang == "de" ? "Keine Entscheidung des Wächters rechtzeitig: das Löschen wird gestoppt." : lang == "fr" ? "Pas de décision du gardien à temps : la suppression est arrêtée." : "Strażnik nie zdecydował na czas: usunięcie zostaje wstrzymane.";
                 case "Try again in a moment. If it happens again, check Loonar Compass (it must be open in EA).": return lang == "de" ? "Versuchen Sie es gleich noch einmal. Passiert es wieder, prüfen Sie Loonar Compass (es muss in EA geöffnet sein)." : lang == "fr" ? "Réessayez dans un instant. Si cela se reproduit, vérifiez Loonar Compass (il doit être ouvert dans EA)." : "Spróbuj za chwilę. Jeśli to się powtórzy, sprawdź Loonar Compass (musi być otwarty w EA).";
+                case "Find in the model… (Ctrl+K)": return lang == "de" ? "Im Modell suchen… (Strg+K)" : lang == "fr" ? "Rechercher dans le modèle… (Ctrl+K)" : "Znajdź w modelu… (Ctrl+K)";
+                case "Find in the model": return lang == "de" ? "Im Modell suchen" : lang == "fr" ? "Rechercher dans le modèle" : "Znajdź w modelu";
+                case "Search the notes too": return lang == "de" ? "Auch in den Notizen suchen" : lang == "fr" ? "Chercher aussi dans les notes" : "Szukaj także w notatkach";
+                case "Name": return lang == "de" ? "Name" : lang == "fr" ? "Nom" : "Nazwa";
+                case "Type": return lang == "de" ? "Typ" : lang == "fr" ? "Type" : "Typ";
+                case "On diagrams": return lang == "de" ? "In Diagrammen" : lang == "fr" ? "Dans les diagrammes" : "Na diagramach";
+                case "The first 300 – type more to narrow it down.": return lang == "de" ? "Die ersten 300 – tippen Sie weiter, um einzugrenzen." : lang == "fr" ? "Les 300 premiers – tapez davantage pour affiner." : "Pierwsze 300 – wpisz więcej, aby zawęzić.";
+                case "Recently opened": return lang == "de" ? "Zuletzt geöffnet" : lang == "fr" ? "Ouverts récemment" : "Ostatnio otwierane";
+                case "Type a name, alias, stereotype or GUID": return lang == "de" ? "Name, Alias, Stereotyp oder GUID eingeben" : lang == "fr" ? "Tapez un nom, un alias, un stéréotype ou un GUID" : "Wpisz nazwę, alias, stereotyp albo GUID";
                 case "Loonar Compass did not open its window.": return lang == "de" ? "Loonar Compass hat sein Fenster nicht geöffnet." : lang == "fr" ? "Loonar Compass n'a pas ouvert sa fenêtre." : "Loonar Compass nie otworzył okna.";
             }
             return english;
