@@ -44,6 +44,7 @@ mod ea_lexicon;
 mod repo_doctor;
 mod changes;
 mod trace_gaps;
+mod template_doctor;
 mod ea_help;
 mod bulk;
 mod recycle;
