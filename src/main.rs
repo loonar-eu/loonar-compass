@@ -46,6 +46,7 @@ mod changes;
 mod trace_gaps;
 mod ea_help;
 mod bulk;
+mod recycle;
 mod model_usage;
 mod glossary_ui;
 mod relang;

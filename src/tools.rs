@@ -344,6 +344,7 @@ pub fn definitions() -> Value {
         items.push(crate::trace_gaps::definition());
         items.push(crate::ea_help::definition());
         items.push(crate::bulk::definition());
+        items.push(crate::recycle::definition());
         items.push(crate::scripts::definition());
         items.push(crate::traceability::definition());
         items.push(crate::code_drift::definition());
@@ -856,6 +857,11 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             ea_write(&json!({ "ops": ops }), ctx).map(Into::into)
         }
         "bulk_set" => crate::bulk::preview(input, ctx.cfg).map(Into::into),
+        // The recycle bin: list reads; move and restore are ordinary saves.
+        "recycle_bin" => {
+            let (ops, text) = crate::recycle::plan(input, ctx.cfg)?;
+            if ops.is_empty() { Ok(text.into()) } else { ea_write(&json!({ "ops": ops }), ctx).map(Into::into) }
+        }
         "memory_save" => {
             let name = input["name"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["name".to_string()]))?;
             let content = input["content"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["content".to_string()]))?;
@@ -1924,8 +1930,13 @@ fn destructive_details(cfg: &AppConfig, ops: &[Value]) -> Vec<String> {
             "package" | "child_package" => crate::i18n::tr("package"),
             _ => crate::i18n::tr("connector"),
         };
+        // Deleting an element: its relationships and diagrams in the card (LC-367).
+        let reach = if kind == "delete" && field == "element" { op["element"].as_i64().and_then(|id| crate::recycle::element_reach(cfg, id)) } else { None };
         lines.push(match kind {
-            "delete" => crate::i18n::fmt("DELETE {0} {1}", &[what.to_string(), name]),
+            "delete" => match reach {
+                Some(reach) => format!("{} – {reach}", crate::i18n::fmt("DELETE {0} {1}", &[what.to_string(), name])),
+                None => crate::i18n::fmt("DELETE {0} {1}", &[what.to_string(), name]),
+            },
             "move" => crate::i18n::fmt("MOVE {0} {1} to package {2}", &[
                 what.to_string(),
                 name,
