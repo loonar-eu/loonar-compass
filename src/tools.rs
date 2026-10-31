@@ -378,6 +378,17 @@ same_size (the size of the first one), snap (to a 10 px grid). One save the user
             }, "required": ["diagram", "elements", "how"] }
         }));
         items.push(json!({
+            "name": "place_new_elements",
+            "description": "Incremental layout: places new elements of a diagram in free space next to an element they are related to (or the \
+nearest one), and moves nothing else – unlike layout_diagram, which rearranges the whole diagram. Default: the elements that lie on top of \
+others (e.g. just added at the same spot); or give their object_ids. One save the user approves; undoable.",
+            "input_schema": { "type": "object", "properties": {
+                "diagram": { "type": "integer" },
+                "elements": { "type": "array", "items": { "type": "integer" } },
+                "spacing": { "type": "integer", "description": "Gap in pixels (default 40)" }
+            }, "required": ["diagram"] }
+        }));
+        items.push(json!({
             "name": "change_connector_type",
             "description": "Give relationships another type (e.g. ArchiMate Composition → Serving, Association → Dependency), also many at once: a new \
 relationship between the same ends with the old name, direction, notes, tagged values and stereotype (or the given one) gets the old route, style and \
@@ -972,6 +983,10 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             let ops = align_ops(ctx.cfg, input)?;
             ea_write(&json!({ "ops": ops }), ctx).map(Into::into)
         }
+        "place_new_elements" => {
+            let (ops, text) = place_new_ops(ctx.cfg, input)?;
+            if ops.is_empty() { Ok(text.into()) } else { ea_write(&json!({ "ops": ops }), ctx).map(|saved| format!("{text}\n\n{saved}")).map(Into::into) }
+        }
         // Visibility policies of diagrams (LC-373): apply is an ordinary save, the rest reads or keeps a local setting.
         "connector_visibility" => {
             let (ops, text) = crate::visibility::run(input, ctx.cfg)?;
@@ -1210,6 +1225,103 @@ fn rects(cfg: &AppConfig, diagram: i64, ids: &[i64]) -> Result<Vec<(i64, i64, i6
         bail!("some of the elements are not on diagram {diagram}");
     }
     Ok(out)
+}
+
+/// A rectangle on a diagram: (left, top, width, height), Y pointing down.
+type Rect = (i64, i64, i64, i64);
+
+fn overlaps(a: Rect, b: Rect, margin: i64) -> bool {
+    a.0 < b.0 + b.2 + margin && b.0 < a.0 + a.2 + margin && a.1 < b.1 + b.3 + margin && b.1 < a.1 + a.3 + margin
+}
+
+fn contains(outer: Rect, inner: Rect) -> bool {
+    outer.0 <= inner.0 && outer.1 <= inner.1 && outer.0 + outer.2 >= inner.0 + inner.2 && outer.1 + outer.3 >= inner.1 + inner.3 && outer != inner
+}
+
+/// A free place for a box of w × h next to `anchor`: right, below, left, above, then further out in rings; never on
+/// top of the `taken` ones (with `gap` between) and never at negative coordinates.
+pub(crate) fn free_spot(taken: &[Rect], anchor: Rect, w: i64, h: i64, gap: i64) -> (i64, i64) {
+    let free = |l: i64, t: i64| l >= 0 && t >= 0 && !taken.iter().any(|r| overlaps((l, t, w, h), *r, gap / 2));
+    for ring in 0..12 {
+        let step_x = (anchor.2.max(w) + gap) * ring;
+        let step_y = (anchor.3.max(h) + gap) * ring;
+        let right = (anchor.0 + anchor.2 + gap + step_x, anchor.1);
+        let below = (anchor.0, anchor.1 + anchor.3 + gap + step_y);
+        let left = (anchor.0 - w - gap - step_x, anchor.1);
+        let above = (anchor.0, anchor.1 - h - gap - step_y);
+        let diagonal = (anchor.0 + anchor.2 + gap + step_x, anchor.1 + anchor.3 + gap + step_y);
+        for (l, t) in [right, below, left, above, diagonal] {
+            if free(l, t) {
+                return (l, t);
+            }
+        }
+    }
+    // Everything around is taken: below all of it.
+    let bottom = taken.iter().map(|r| r.1 + r.3).max().unwrap_or(0);
+    (anchor.0.max(0), bottom + gap)
+}
+
+/// Incremental layout (LC-376): places new elements of a diagram (the given ones, or by default those lying on top of
+/// others) next to an element they are related to, in free space, and leaves everything else where it is.
+pub(crate) fn place_new_ops(cfg: &AppConfig, input: &Value) -> Result<(Vec<Value>, String)> {
+    let diagram = input["diagram"].as_i64().context("diagram")?;
+    let gap = input["spacing"].as_i64().unwrap_or(40).clamp(10, 200);
+    let rows = query_rows(cfg, &format!(
+        "select x.object_id, x.rectleft, x.recttop, x.rectright, x.rectbottom, o.name from t_diagramobjects x join t_object o on o.object_id = x.object_id \
+         where x.diagram_id = {diagram} and o.object_type not in ('Boundary', 'ActivityPartition', 'Partition', 'Swimlane', 'Text', 'InteractionFragment') order by x.object_id"
+    ))?;
+    let all: Vec<(i64, Rect, String)> = rows
+        .iter()
+        .map(|r| {
+            let n = |i: usize| r[i].parse::<i64>().unwrap_or(0);
+            (n(0), (n(1), -n(2), n(3) - n(1), n(2) - n(4)), r[5].clone())
+        })
+        .collect();
+    // Containers (a frame, a package with elements drawn inside) do not count as overlaps.
+    let is_container = |rect: Rect| all.iter().any(|(_, other, _)| contains(rect, *other));
+    let given: Vec<i64> = input["elements"].as_array().into_iter().flatten().filter_map(Value::as_i64).collect();
+    let moving: Vec<i64> = if given.is_empty() {
+        // Lying on top of an older element (a higher object_id is the newer one).
+        all.iter()
+            .filter(|(id, rect, _)| !is_container(*rect) && all.iter().any(|(other, r, _)| other < id && !is_container(*r) && overlaps(*rect, *r, 0)))
+            .map(|(id, _, _)| *id)
+            .collect()
+    } else {
+        given.iter().copied().filter(|g| all.iter().any(|(id, _, _)| id == g)).collect()
+    };
+    if moving.is_empty() {
+        return Ok((Vec::new(), "Nothing to place: no element lies on top of another (give the elements to place).".into()));
+    }
+    let mut taken: Vec<(i64, Rect)> = all.iter().filter(|(id, rect, _)| !moving.contains(id) && !is_container(*rect)).map(|(id, r, _)| (*id, *r)).collect();
+    if taken.is_empty() {
+        return Ok((Vec::new(), "Nothing stays in place on this diagram: use layout_diagram for the whole diagram.".into()));
+    }
+    let mut ops = Vec::new();
+    let mut lines = Vec::new();
+    for id in &moving {
+        let Some((_, rect, name)) = all.iter().find(|(e, _, _)| e == id) else { continue };
+        // The anchor: an element on the diagram it is related to, otherwise the nearest one.
+        let related: Vec<i64> = query_rows(cfg, &format!(
+            "select case when start_object_id = {id} then end_object_id else start_object_id end from t_connector where (start_object_id = {id} or end_object_id = {id})"
+        ))?
+        .into_iter()
+        .filter_map(|r| r[0].parse().ok())
+        .collect();
+        let anchor = taken
+            .iter()
+            .find(|(t, _)| related.contains(t))
+            .or_else(|| taken.iter().min_by_key(|(_, r)| (r.0 - rect.0).abs() + (r.1 - rect.1).abs()))
+            .map(|(_, r)| *r)
+            .unwrap_or((0, 0, 0, 0));
+        let rects: Vec<Rect> = taken.iter().map(|(_, r)| *r).collect();
+        let (left, top) = free_spot(&rects, anchor, rect.2.max(20), rect.3.max(20), gap);
+        if (left, top) != (rect.0, rect.1) {
+            ops.push(json!({ "op": "set_bounds", "diagram": diagram, "element": id, "left": left, "top": top }));
+            lines.push(format!("- {name}: ({}, {}) → ({left}, {top})", rect.0, rect.1));
+        }
+        taken.push((*id, (left, top, rect.2, rect.3)));
+    }
+    Ok((ops, format!("{} element(s) placed in free space, nothing else moved:\n{}", lines.len(), lines.join("\n"))))
 }
 
 /// set_bounds operations that align, distribute or resize the given elements (LC-376).
@@ -2436,6 +2548,52 @@ fn normalize_stamp(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    /// LC-376 in EA: an element added on top of another goes next to the one it is related to; nothing else moves.
+    /// `LOONAR_TEST_PROPS=… cargo test place_new_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA and a copy of a test model"]
+    fn place_new_live() {
+        let cfg = AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
+        let q = |sql: &str| query_rows(&cfg, sql).unwrap();
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id")[0][0].parse().unwrap();
+        let ops = vec![
+            json!({"op":"create_package","key":"pkg","parent":root,"name":format!("ZZ_place_{}", chrono::Local::now().format("%H%M%S"))}),
+            json!({"op":"create_diagram","key":"d","package":"#pkg","name":"Place","type":"Logical"}),
+            json!({"op":"create_element","key":"a","package":"#pkg","name":"Order","type":"Class"}),
+            json!({"op":"create_element","key":"c","package":"#pkg","name":"Invoice","type":"Class"}),
+            json!({"op":"create_element","key":"b","package":"#pkg","name":"Customer","type":"Class"}),
+            json!({"op":"create_connector","source":"#a","target":"#b","type":"Association"}),
+            json!({"op":"place","diagram":"#d","element":"#a","left":40,"top":40,"width":120,"height":70}),
+            json!({"op":"place","diagram":"#d","element":"#c","left":200,"top":40,"width":120,"height":70}),
+            json!({"op":"place","diagram":"#d","element":"#b","left":50,"top":50,"width":120,"height":70}),
+        ];
+        let created = crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).unwrap();
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).unwrap()["id"].as_i64().unwrap();
+        let (pkg, d, a, b, c) = (id_of("pkg"), id_of("d"), id_of("a"), id_of("b"), id_of("c"));
+        let before = rects(&cfg, d, &[a, c]).unwrap();
+        let (ops, text) = super::place_new_ops(&cfg, &json!({ "diagram": d })).unwrap();
+        println!("{text}");
+        crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions::default()).unwrap();
+        let after = rects(&cfg, d, &[a, c, b]).unwrap();
+        crate::ea::run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &crate::ea::BatchOptions::default()).unwrap();
+        crate::ea::shutdown();
+        assert_eq!(&after[..2], &before[..], "the others stay");
+        let r = |x: (i64, i64, i64, i64, i64)| (x.1, x.2, x.3, x.4);
+        assert!(!overlaps(r(after[2]), r(after[0]), 0) && !overlaps(r(after[2]), r(after[1]), 0), "{after:?}");
+    }
+
+    /// LC-376: a free place next to the anchor, never on top of what is there.
+    #[test]
+    fn free_spot_next_to_the_anchor() {
+        let taken = vec![(100, 100, 120, 60), (260, 100, 120, 60)];
+        // Right of the first is taken by the second: below it.
+        assert_eq!(super::free_spot(&taken, taken[0], 120, 60, 40), (100, 200));
+        // The second has the right side free.
+        assert_eq!(super::free_spot(&taken, taken[1], 120, 60, 40), (420, 100));
+        let spot = super::free_spot(&taken, taken[0], 120, 60, 40);
+        assert!(!taken.iter().any(|r| super::overlaps((spot.0, spot.1, 120, 60), *r, 0)));
+    }
+
     /// LC-377: a presentation copy through EA on a model COPY (removed again):
     /// `LOONAR_TEST_PROPS=E:/livetest/undo/undo.properties cargo test exec_view_live -- --ignored --nocapture`
     #[test]
