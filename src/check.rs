@@ -148,7 +148,8 @@ fn junit(items: &[Item], fail_on: u8, suites: &[&str]) -> String {
 pub fn check(o: &Options, default_props: &Path) -> Result<(String, String, bool)> {
     let cfg = model_config(o, default_props)?;
     let rules: Value = match &o.rules {
-        Some(p) => serde_json::from_str(&std::fs::read_to_string(p).with_context(|| format!("cannot read {}", p.display()))?).with_context(|| format!("{} is not valid JSON", p.display()))?,
+        // A BOM (Set-Content -Encoding UTF8 in Windows PowerShell writes one) is not part of the JSON (LC-430).
+        Some(p) => serde_json::from_str(std::fs::read_to_string(p).with_context(|| format!("cannot read {}", p.display()))?.trim_start_matches('\u{feff}')).with_context(|| format!("{} is not valid JSON", p.display()))?,
         None => crate::governance::load_rules(&cfg, &Value::Null),
     };
     let mut items: Vec<Item> = Vec::new();

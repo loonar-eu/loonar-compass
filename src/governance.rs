@@ -235,7 +235,7 @@ pub fn load_rules(cfg: &AppConfig, given: &Value) -> Value {
     // Local rules first; without them the team rules from the hub policy.
     std::fs::read_to_string(cfg.base_dir.join("governance.json"))
         .ok()
-        .and_then(|text| serde_json::from_str(&text).ok())
+        .and_then(|text| serde_json::from_str(text.trim_start_matches('\u{feff}')).ok())
         .or_else(|| crate::hub::team_policy(cfg).map(|p| p["governance"].clone()).filter(Value::is_object))
         .unwrap_or_else(|| json!({}))
 }
@@ -780,6 +780,18 @@ pub fn check_object_with(cfg: &AppConfig, kind: &str, id: i64, rules: &Value) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LC-430: governance.json written by Windows PowerShell (UTF-8 with a BOM) is read, not silently ignored.
+    #[test]
+    fn rules_file_with_a_bom() {
+        let dir = std::env::temp_dir().join(format!("loonar-bom-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("app.properties"), "").unwrap();
+        let cfg = AppConfig::load(&dir.join("app.properties")).unwrap();
+        std::fs::write(cfg.base_dir.join("governance.json"), format!("\u{feff}{}", json!({ "required_tags": ["Owner"] }))).unwrap();
+        assert_eq!(load_rules(&cfg, &Value::Null)["required_tags"][0], "Owner");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     /// LC-391 on a model copy: the nearest package's rule decides what may be created.
     /// `LOONAR_TEST_PROPS=… cargo test creation_rules_live -- --ignored --nocapture`

@@ -381,7 +381,8 @@ pub fn new_token() -> (String, String) {
 /// `properties` is the app.properties of a model (as in Compass), relative to hub.json or absolute.
 pub fn load(file: &Path) -> Result<(Hub, String)> {
     let text = std::fs::read_to_string(file).with_context(|| crate::i18n::fmt("cannot read {0}", &[file.display().to_string()]))?;
-    let value: Value = serde_json::from_str(&text).with_context(|| crate::i18n::fmt("{0} is not valid JSON", &[file.display().to_string()]))?;
+    // hub.json edited in Windows PowerShell may start with a BOM (LC-430).
+    let value: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).with_context(|| crate::i18n::fmt("{0} is not valid JSON", &[file.display().to_string()]))?;
     let dir = file.parent().unwrap_or(Path::new(".")).to_path_buf();
     let mut sources = Vec::new();
     for s in value["sources"].as_array().into_iter().flatten() {
@@ -1193,7 +1194,7 @@ impl Hub {
             }
             v
         }).collect();
-        let mut file: Value = serde_json::from_str(&std::fs::read_to_string(&self.file)?)?;
+        let mut file: Value = serde_json::from_str(std::fs::read_to_string(&self.file)?.trim_start_matches('\u{feff}'))?;
         file["users"] = json!(users);
         let temp = self.file.with_extension("json.tmp");
         std::fs::write(&temp, serde_json::to_string_pretty(&file)?)?;
@@ -1203,7 +1204,7 @@ impl Hub {
 
     /// Writes the team policy into hub.json (atomically) and takes it into use; the change goes to the audit trail.
     fn write_policy(&self, policy: Value, user: &str, summary: String) -> Result<()> {
-        let mut file: Value = serde_json::from_str(&std::fs::read_to_string(&self.file)?)?;
+        let mut file: Value = serde_json::from_str(std::fs::read_to_string(&self.file)?.trim_start_matches('\u{feff}'))?;
         file["policy"] = policy.clone();
         let temp = self.file.with_extension("json.tmp");
         std::fs::write(&temp, serde_json::to_string_pretty(&file).unwrap_or_default())?;
