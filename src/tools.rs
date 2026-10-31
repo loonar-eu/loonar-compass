@@ -1321,6 +1321,25 @@ fn rects(cfg: &AppConfig, diagram: i64, ids: &[i64]) -> Result<Vec<(i64, i64, i6
     Ok(out)
 }
 
+/// Relationships of moved elements whose drawn route (bend points or fixed ends) would now go astray: routed straight
+/// again, the others on the diagram untouched (LC-418).
+pub(crate) fn reroute_ops(cfg: &AppConfig, diagram: i64, moved: &[i64]) -> Vec<Value> {
+    if moved.is_empty() {
+        return Vec::new();
+    }
+    let list = moved.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
+    query_rows(cfg, &format!(
+        "select l.connectorid from t_diagramlinks l join t_connector c on c.connector_id = l.connectorid where l.diagramid = {diagram} \
+         and (c.start_object_id in ({list}) or c.end_object_id in ({list})) \
+         and (coalesce(l.path,'') <> '' or coalesce(l.geometry,'') like '%SX=%' or coalesce(l.geometry,'') like '%EX=%')"
+    ))
+    .unwrap_or_default()
+    .into_iter()
+    .filter_map(|r| r[0].parse::<i64>().ok())
+    .map(|c| json!({ "op": "route_connector", "diagram": diagram, "connector": c }))
+    .collect()
+}
+
 /// A rectangle on a diagram: (left, top, width, height), Y pointing down.
 type Rect = (i64, i64, i64, i64);
 
@@ -1415,7 +1434,11 @@ pub(crate) fn place_new_ops(cfg: &AppConfig, input: &Value) -> Result<(Vec<Value
         }
         taken.push((*id, (left, top, rect.2, rect.3)));
     }
-    Ok((ops, format!("{} element(s) placed in free space, nothing else moved:\n{}", lines.len(), lines.join("\n"))))
+    let moved: Vec<i64> = ops.iter().filter_map(|o| o["element"].as_i64()).collect();
+    let rerouted = reroute_ops(cfg, diagram, &moved);
+    let note = if rerouted.is_empty() { String::new() } else { format!("\n{} relationship route(s) of the moved elements drawn straight again.", rerouted.len()) };
+    ops.extend(rerouted);
+    Ok((ops, format!("{} element(s) placed in free space, nothing else moved:\n{}{note}", lines.len(), lines.join("\n"))))
 }
 
 /// set_bounds operations that align, distribute or resize the given elements (LC-376).
@@ -1427,7 +1450,11 @@ pub(crate) fn align_ops(cfg: &AppConfig, input: &Value) -> Result<Vec<Value>> {
         bail!("give at least two elements (one for snap)");
     }
     let mut r = rects(cfg, diagram, &ids)?;
-    Ok(align(&mut r, how)?.into_iter().map(|(id, left, top, width, height)| json!({ "op": "set_bounds", "diagram": diagram, "element": id, "left": left, "top": top, "width": width, "height": height })).collect())
+    let mut ops: Vec<Value> = align(&mut r, how)?.into_iter().map(|(id, left, top, width, height)| json!({ "op": "set_bounds", "diagram": diagram, "element": id, "left": left, "top": top, "width": width, "height": height })).collect();
+    // Only the routes of what moved are drawn again (LC-418).
+    let moved: Vec<i64> = ops.iter().filter_map(|o| o["element"].as_i64()).collect();
+    ops.extend(reroute_ops(cfg, diagram, &moved));
+    Ok(ops)
 }
 
 /// The new rectangles (only the ones that change).
@@ -2744,7 +2771,7 @@ mod tests {
             json!({"op":"create_element","key":"a","package":"#pkg","name":"Order","type":"Class"}),
             json!({"op":"create_element","key":"c","package":"#pkg","name":"Invoice","type":"Class"}),
             json!({"op":"create_element","key":"b","package":"#pkg","name":"Customer","type":"Class"}),
-            json!({"op":"create_connector","source":"#a","target":"#b","type":"Association"}),
+            json!({"op":"create_connector","key":"ab","source":"#a","target":"#b","type":"Association"}),
             json!({"op":"place","diagram":"#d","element":"#a","left":40,"top":40,"width":120,"height":70}),
             json!({"op":"place","diagram":"#d","element":"#c","left":200,"top":40,"width":120,"height":70}),
             json!({"op":"place","diagram":"#d","element":"#b","left":50,"top":50,"width":120,"height":70}),
@@ -2752,10 +2779,15 @@ mod tests {
         let created = crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).unwrap();
         let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).unwrap()["id"].as_i64().unwrap();
         let (pkg, d, a, b, c) = (id_of("pkg"), id_of("d"), id_of("a"), id_of("b"), id_of("c"));
+        // A bent route of the relationship of the element that will move (LC-418).
+        crate::ea::run_batch(&cfg, &[json!({"op":"route_connector","diagram":d,"connector":id_of("ab"),"points":[[300,300]]})], &crate::ea::BatchOptions::default()).unwrap();
         let before = rects(&cfg, d, &[a, c]).unwrap();
         let (ops, text) = super::place_new_ops(&cfg, &json!({ "diagram": d })).unwrap();
         println!("{text}");
+        assert!(ops.iter().any(|o| o["op"] == "route_connector"), "{ops:?}");
         crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions::default()).unwrap();
+        let path = query_rows(&cfg, &format!("select coalesce(path,'') from t_diagramlinks where diagramid = {d} and connectorid = {}", id_of("ab"))).unwrap();
+        assert_eq!(path[0][0], "", "the bend is gone");
         let after = rects(&cfg, d, &[a, c, b]).unwrap();
         crate::ea::run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &crate::ea::BatchOptions::default()).unwrap();
         crate::ea::shutdown();
