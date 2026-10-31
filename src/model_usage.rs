@@ -159,7 +159,7 @@ pub fn find_orphans(input: &Value, cfg: &AppConfig) -> Result<String> {
 
 /// " and o.package_id in (…)" for a package (id or exact name) with its child packages, and its title; empty = the
 /// whole model.
-fn package_scope(cfg: &AppConfig, package: &Value) -> Result<(String, String)> {
+pub(crate) fn package_scope(cfg: &AppConfig, package: &Value) -> Result<(String, String)> {
     let mut scope = String::new();
     let mut title = "the whole model".to_string();
     if !package.is_null() && package.as_str() != Some("") {

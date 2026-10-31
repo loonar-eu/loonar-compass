@@ -42,6 +42,7 @@ mod ea_template;
 mod commands;
 mod ea_lexicon;
 mod repo_doctor;
+mod changes;
 mod model_usage;
 mod glossary_ui;
 mod relang;
