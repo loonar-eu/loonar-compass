@@ -923,6 +923,50 @@ model.file=C:/nie-ma/takiego/pliku.qea
         let _ = std::fs::remove_dir_all(&journal);
     }
 
+    /// LC-376: a layout undone from the journal puts every element back; aligning to the top lines them up.
+    /// `LOONAR_TEST_PROPS=E:/livetest/undo/undo.properties cargo test ea_layout_undo_and_align -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA, a license and the model database from app.properties"]
+    fn ea_layout_undo_and_align() {
+        let cfg = test_config();
+        let _ea = CloseEa;
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).expect(sql);
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id")[0][0].parse().unwrap();
+        let ops = vec![
+            json!({"op":"create_package","key":"pkg","parent":root,"name":format!("ZZ_layout_{}", chrono::Local::now().format("%H%M%S"))}),
+            json!({"op":"create_diagram","key":"d","package":"#pkg","name":"Layout","type":"Logical"}),
+            json!({"op":"create_element","key":"a","package":"#pkg","name":"A","type":"Class"}),
+            json!({"op":"create_element","key":"b","package":"#pkg","name":"B","type":"Class"}),
+            json!({"op":"create_element","key":"c","package":"#pkg","name":"C","type":"Class"}),
+            json!({"op":"create_connector","source":"#a","target":"#b","type":"Association"}),
+            json!({"op":"create_connector","source":"#b","target":"#c","type":"Association"}),
+            json!({"op":"place","diagram":"#d","element":"#a","left":500,"top":300,"width":110,"height":60}),
+            json!({"op":"place","diagram":"#d","element":"#b","left":40,"top":40,"width":110,"height":60}),
+            json!({"op":"place","diagram":"#d","element":"#c","left":300,"top":420,"width":110,"height":60}),
+        ];
+        let created = run_batch(&cfg, &ops, &BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("creation");
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).expect(key)["id"].as_i64().unwrap();
+        let (pkg, d, a, b) = (id_of("pkg"), id_of("d"), id_of("a"), id_of("b"));
+        let places = || q(&format!("select object_id, rectleft, recttop from t_diagramobjects where diagram_id = {d} order by object_id"));
+        let before = places();
+        let layout = vec![json!({"op":"layout_diagram","diagram":d,"direction":"down"})];
+        let (reverse, not_undoable) = crate::undo::before(&cfg, &layout);
+        assert!(not_undoable.is_empty() && reverse.len() == 3, "{reverse:?} {not_undoable:?}");
+        let done = run_batch(&cfg, &layout, &BatchOptions::default()).expect("layout");
+        println!("warnings: {}", done["warnings"]);
+        let moved = places();
+        let back: Vec<Value> = reverse.into_iter().map(|mut r| { r.as_object_mut().unwrap().remove("_at"); r }).collect();
+        run_batch(&cfg, &back, &BatchOptions::default()).expect("undo the layout");
+        let restored = places();
+        let align = crate::tools::align_ops(&cfg, &json!({ "diagram": d, "elements": [b, a], "how": "top" })).unwrap();
+        run_batch(&cfg, &align, &BatchOptions::default()).expect("align");
+        let tops = q(&format!("select recttop from t_diagramobjects where diagram_id = {d} and object_id in ({a}, {b})"));
+        run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &BatchOptions::default()).expect("cleanup");
+        println!("before {before:?}\nafter layout {moved:?}\nrestored {restored:?}");
+        assert_eq!(restored, before, "the layout undone");
+        assert_eq!(tops[0], tops[1], "aligned to the top");
+    }
+
     /// LC-374: a relationship of another type keeps its name, notes, tag, its route on one diagram and its hiding on
     /// another. `LOONAR_TEST_PROPS=E:/livetest/undo/undo.properties cargo test ea_change_connector_type -- --ignored --nocapture`
     #[test]

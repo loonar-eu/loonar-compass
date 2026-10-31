@@ -1183,11 +1183,22 @@ impl Job<'_> {
                 let spacing = int_of(&op["spacing"]).unwrap_or(40);
                 let project = self.repo.call("GetProjectInterface", &[])?.object().ok_or_else(|| anyhow!("Project interface"))?;
                 let guid = diagram.text("DiagramGUID")?;
+                let places = |d: &Disp| -> Vec<(i32, i32, i32)> {
+                    d.obj("DiagramObjects").and_then(|o| o.items()).unwrap_or_default().iter().filter_map(|o| Some((o.int("ElementID").ok()?, o.int("left").ok()?, o.int("top").ok()?))).collect()
+                };
+                let before = places(&diagram);
                 let done = project.call("LayoutDiagramEx", &[s(&guid), i(style), i(4), i(spacing), i(spacing), b(true)])?.bool();
                 if !done {
                     bail!("{}", crate::i18n::tr("EA could not lay out the diagram"));
                 }
-                self.repo.call("ReloadDiagram", &[i(diagram.int("DiagramID")?)]).ok();
+                let id = diagram.int("DiagramID")?;
+                self.repo.call("ReloadDiagram", &[i(id)]).ok();
+                // EA's layout sometimes does nothing and says nothing (LC-376): compared with the positions before.
+                if let Some(again) = self.repo.call("GetDiagramByID", &[i(id)]).ok().and_then(|v| v.object()) {
+                    if before.len() > 1 && places(&again) == before {
+                        self.warnings.push(crate::i18n::tr("EA's automatic layout did not move anything on this diagram (try another direction, or arrange it with set_bounds).").to_string());
+                    }
+                }
             }
             "export_xmi" => {
                 let package = self.package(&op["package"])?;

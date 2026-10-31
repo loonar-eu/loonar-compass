@@ -115,6 +115,15 @@ fn before_one(cfg: &AppConfig, op: &Value, reverse: &mut Vec<Value>, not_undoabl
                 }
                 reverse.push(back);
             }
+            // LC-376: a layout moves everything; the positions before it are the way back (the connectors without
+            // their own route follow the elements; routed ones are not restored).
+            "layout_diagram" => {
+                let Some(d) = id("diagram") else { return };
+                for r in query_rows(cfg, &format!("select object_id, rectleft, recttop, rectright, rectbottom from t_diagramobjects where diagram_id = {d}")).unwrap_or_default() {
+                    let n = |i: usize| r[i].parse::<i64>().unwrap_or(0);
+                    reverse.push(json!({ "op": "set_bounds", "diagram": d, "element": n(0), "left": n(1), "top": -n(2), "width": n(3) - n(1), "height": n(2) - n(4) }));
+                }
+            }
             "set_bounds" => {
                 let (Some(d), Some(e)) = (id("diagram"), id("element")) else { return };
                 let Some(r) = one(cfg, format!("select rectleft as c0, recttop as c1, rectright as c2, rectbottom as c3 from t_diagramobjects where diagram_id = {d} and object_id = {e}")) else { return };

@@ -348,6 +348,17 @@ pub fn definitions() -> Value {
         items.push(crate::merge::definition());
         items.push(crate::visibility::definition());
         items.push(json!({
+            "name": "align_elements",
+            "description": "Line up elements of a diagram without moving the others: align left / right / top / bottom / center (horizontal centres) / \
+middle (vertical centres) to the first element given, distribute_horizontally / distribute_vertically (equal gaps between the outermost ones), \
+same_size (the size of the first one), snap (to a 10 px grid). One save the user approves; undoable. Elements = object_ids on that diagram.",
+            "input_schema": { "type": "object", "properties": {
+                "diagram": { "type": "integer" },
+                "elements": { "type": "array", "items": { "type": "integer" } },
+                "how": { "type": "string", "enum": ["left", "right", "top", "bottom", "center", "middle", "distribute_horizontally", "distribute_vertically", "same_size", "snap"] }
+            }, "required": ["diagram", "elements", "how"] }
+        }));
+        items.push(json!({
             "name": "change_connector_type",
             "description": "Give relationships another type (e.g. ArchiMate Composition → Serving, Association → Dependency), also many at once: a new \
 relationship between the same ends with the old name, direction, notes, tagged values and stereotype (or the given one) gets the old route, style and \
@@ -904,6 +915,10 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             let findings: Vec<String> = new_ids.iter().flat_map(|id| crate::governance::check_object(ctx.cfg, "connector", *id).unwrap_or_default()).collect();
             Ok(if findings.is_empty() { saved } else { format!("{saved}\nModel check of the new relationship: {}", findings.join("; ")) }.into())
         }
+        "align_elements" => {
+            let ops = align_ops(ctx.cfg, input)?;
+            ea_write(&json!({ "ops": ops }), ctx).map(Into::into)
+        }
         // Visibility policies of diagrams (LC-373): apply is an ordinary save, the rest reads or keeps a local setting.
         "connector_visibility" => {
             let (ops, text) = crate::visibility::run(input, ctx.cfg)?;
@@ -1097,6 +1112,72 @@ pub fn page_images_dir(attachments_dir: &std::path::Path, stored_page: &str) -> 
 }
 
 /// Confluence page: source (.confluence.md), page code for the source editor (.confluence.xml) and images in a folder next to them.
+/// Rectangles of elements on a diagram as (id, left, top, width, height) with top downwards (LC-376).
+fn rects(cfg: &AppConfig, diagram: i64, ids: &[i64]) -> Result<Vec<(i64, i64, i64, i64, i64)>> {
+    let list = ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
+    let rows = query_rows(cfg, &format!("select object_id, rectleft, recttop, rectright, rectbottom from t_diagramobjects where diagram_id = {diagram} and object_id in ({list})"))?;
+    let mut out: Vec<(i64, i64, i64, i64, i64)> = rows
+        .iter()
+        .map(|r| {
+            let n = |i: usize| r[i].parse::<i64>().unwrap_or(0);
+            (n(0), n(1), -n(2), n(3) - n(1), n(2) - n(4))
+        })
+        .collect();
+    // In the order given (the first one is the reference).
+    out.sort_by_key(|r| ids.iter().position(|i| *i == r.0).unwrap_or(usize::MAX));
+    if out.len() != ids.len() {
+        bail!("some of the elements are not on diagram {diagram}");
+    }
+    Ok(out)
+}
+
+/// set_bounds operations that align, distribute or resize the given elements (LC-376).
+pub(crate) fn align_ops(cfg: &AppConfig, input: &Value) -> Result<Vec<Value>> {
+    let diagram = input["diagram"].as_i64().context("diagram")?;
+    let ids: Vec<i64> = input["elements"].as_array().into_iter().flatten().filter_map(Value::as_i64).collect();
+    let how = input["how"].as_str().unwrap_or("");
+    if ids.len() < if how == "snap" { 1 } else { 2 } {
+        bail!("give at least two elements (one for snap)");
+    }
+    let mut r = rects(cfg, diagram, &ids)?;
+    Ok(align(&mut r, how)?.into_iter().map(|(id, left, top, width, height)| json!({ "op": "set_bounds", "diagram": diagram, "element": id, "left": left, "top": top, "width": width, "height": height })).collect())
+}
+
+/// The new rectangles (only the ones that change).
+pub(crate) fn align(r: &mut [(i64, i64, i64, i64, i64)], how: &str) -> Result<Vec<(i64, i64, i64, i64, i64)>> {
+    let before: Vec<_> = r.to_vec();
+    let first = r[0];
+    match how {
+        "left" => r.iter_mut().for_each(|e| e.1 = first.1),
+        "right" => r.iter_mut().for_each(|e| e.1 = first.1 + first.3 - e.3),
+        "top" => r.iter_mut().for_each(|e| e.2 = first.2),
+        "bottom" => r.iter_mut().for_each(|e| e.2 = first.2 + first.4 - e.4),
+        "center" => r.iter_mut().for_each(|e| e.1 = first.1 + first.3 / 2 - e.3 / 2),
+        "middle" => r.iter_mut().for_each(|e| e.2 = first.2 + first.4 / 2 - e.4 / 2),
+        "same_size" => r.iter_mut().for_each(|e| {
+            e.3 = first.3;
+            e.4 = first.4;
+        }),
+        "snap" => r.iter_mut().for_each(|e| {
+            e.1 = (e.1 + 5) / 10 * 10;
+            e.2 = (e.2 + 5) / 10 * 10;
+        }),
+        "distribute_horizontally" | "distribute_vertically" => {
+            let horizontal = how == "distribute_horizontally";
+            r.sort_by_key(|e| if horizontal { e.1 } else { e.2 });
+            let (start, end) = if horizontal { (r[0].1, r[r.len() - 1].1 + r[r.len() - 1].3) } else { (r[0].2, r[r.len() - 1].2 + r[r.len() - 1].4) };
+            let total: i64 = r.iter().map(|e| if horizontal { e.3 } else { e.4 }).sum();
+            let gap = (end - start - total) / (r.len() as i64 - 1).max(1);
+            let mut at = start;
+            for e in r.iter_mut() {
+                if horizontal { e.1 = at; at += e.3 + gap; } else { e.2 = at; at += e.4 + gap; }
+            }
+        }
+        other => bail!("unknown alignment {other}"),
+    }
+    Ok(r.iter().filter(|e| !before.contains(e)).copied().collect())
+}
+
 /// The team's modelling rules (LC-372): shown, or saved to governance.json after the user approves the whole text.
 fn team_rules(input: &Value, ctx: &ToolContext) -> Result<String> {
     let file = ctx.cfg.base_dir.join("governance.json");
@@ -2257,6 +2338,22 @@ fn normalize_stamp(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    /// LC-376: alignment, distribution and size from the first element.
+    #[test]
+    fn aligning_rectangles() {
+        let base = vec![(1, 100, 50, 120, 60), (2, 300, 80, 100, 40), (3, 520, 20, 80, 60)];
+        let mut r = base.clone();
+        assert_eq!(super::align(&mut r, "top").unwrap(), vec![(2, 300, 50, 100, 40), (3, 520, 50, 80, 60)]);
+        let mut r = base.clone();
+        let spread = super::align(&mut r, "distribute_horizontally").unwrap();
+        // From 100 to 600: 300 of boxes, two gaps of 100.
+        assert_eq!(spread, vec![(2, 320, 80, 100, 40)]);
+        let mut r = base.clone();
+        assert_eq!(super::align(&mut r, "same_size").unwrap().len(), 2);
+        let mut r = base;
+        assert!(super::align(&mut r, "sideways").is_err());
+    }
+
     /// LC-344: optimistic locking on a real SQL Server (Windows sign-in):
     /// `LOONAR_TEST_MSSQL_WIN="127.0.0.1;1433;ea_lab" cargo test check_unchanged_on_sql_server -- --ignored --nocapture`
     #[test]
