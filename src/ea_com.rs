@@ -208,6 +208,22 @@ fn lost(mut result: Value, error: &str) -> Value {
     result
 }
 
+/// The GUID of a baseline in EA's list (<Baseline … guid="{…}" version="…" … />): the one with that version, or the
+/// newest when `wanted` is empty.
+pub(crate) fn baseline_guid(list: &str, wanted: &str) -> Option<String> {
+    let attr = |tag: &str, name: &str| -> Option<String> {
+        let at = tag.find(&format!("{name}=\""))? + name.len() + 2;
+        Some(tag[at..].split('"').next()?.to_string())
+    };
+    let tags: Vec<&str> = list.split("<Baseline").skip(1).collect();
+    let pick = if wanted.trim().is_empty() {
+        tags.iter().max_by_key(|t| attr(t, "date").unwrap_or_default())
+    } else {
+        tags.iter().find(|t| attr(t, "version").as_deref() == Some(wanted.trim()) || attr(t, "guid").as_deref() == Some(wanted.trim()))
+    }?;
+    attr(pick, "guid")
+}
+
 /// "Key=value;" pairs with the given keys set (replaced in place, or added at the end).
 pub(crate) fn set_option_keys(current: &str, keys: &serde_json::Map<String, Value>) -> String {
     let mut parts: Vec<String> = current.split(';').filter(|p| !p.is_empty()).map(str::to_string).collect();
@@ -1805,6 +1821,21 @@ impl Job<'_> {
                 if !ok {
                     bail!("{}", crate::i18n::fmt("EA did not create a baseline of package '{0}': {1}", &[package.text("Name")?, project.text("GetLastError").unwrap_or_default()]));
                 }
+            }
+            "baseline_compare" => {
+                // EA's comparison of a package with one of its baselines (LC-371), written to a file for what_changed:
+                // the list of baselines (GetBaselines) and the comparison (DoBaselineCompare) are XML.
+                let package = self.package(&op["package"])?;
+                let guid = package.text("PackageGUID")?;
+                let project = self.repo.call_obj("GetProjectInterface", &[])?;
+                let list = project.call("GetBaselines", &[s(&guid), s("")])?.text();
+                let file = text_field(op, "file");
+                std::fs::write(format!("{file}.baselines.xml"), &list)?;
+                let wanted = text_field(op, "baseline");
+                let package_name = package.text("Name").unwrap_or_default();
+                let baseline = baseline_guid(&list, &wanted).ok_or_else(|| anyhow!("{}", crate::i18n::fmt("package '{0}' has no baseline {1}", &[package_name, wanted.clone()])))?;
+                let diff = project.call("DoBaselineCompare", &[s(&guid), s(&baseline), s("")])?.text();
+                std::fs::write(&file, diff)?;
             }
             "update_diagram" => {
                 // Name, description and stereotype of an existing diagram.

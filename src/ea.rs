@@ -923,6 +923,45 @@ model.file=C:/nie-ma/takiego/pliku.qea
         let _ = std::fs::remove_dir_all(&journal);
     }
 
+    /// LC-371: what EA's baseline comparison returns (an experiment kept as a test): a package copied, a baseline,
+    /// a change, the comparison in %TEMP%\loonar_baseline_compare.xml.
+    /// `LOONAR_TEST_PROPS=E:/livetest/undo/undo.properties cargo test ea_baseline_compare -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA, a license and the model database from app.properties"]
+    fn ea_baseline_compare() {
+        let cfg = test_config();
+        let _ea = CloseEa;
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).expect(sql);
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id")[0][0].parse().unwrap();
+        let ops = vec![
+            json!({"op":"create_package","key":"pkg","parent":root,"name":format!("ZZ_base_{}", chrono::Local::now().format("%H%M%S"))}),
+            json!({"op":"create_element","key":"a","package":"#pkg","name":"Order","type":"Class","notes":"Line one.\r\nLine two."}),
+            json!({"op":"create_element","key":"b","package":"#pkg","name":"Invoice","type":"Class"}),
+        ];
+        let created = run_batch(&cfg, &ops, &BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("creation");
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).expect(key)["id"].as_i64().unwrap();
+        let (pkg, a, b) = (id_of("pkg"), id_of("a"), id_of("b"));
+        run_batch(&cfg, &[json!({"op":"create_baseline","package":pkg,"version":"1.0","notes":"test"})], &BatchOptions::default()).expect("baseline");
+        run_batch(&cfg, &[
+            json!({"op":"update_element","element":a,"name":"Customer Order","status":"Approved"}),
+            json!({"op":"delete","element":b}),
+            json!({"op":"create_element","package":pkg,"name":"Payment","type":"Class"}),
+        ], &BatchOptions::default()).expect("changes");
+        let file = std::env::temp_dir().join("loonar_baseline_compare.xml");
+        let result = run_batch(&cfg, &[json!({"op":"baseline_compare","package":pkg,"baseline":"1.0","file":file.display().to_string()})], &BatchOptions::default());
+        run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &BatchOptions::default()).expect("cleanup");
+        result.expect("compare");
+        let xml = std::fs::read_to_string(&file).unwrap();
+        println!("{} bytes\n{}", xml.len(), xml.chars().take(3000).collect::<String>());
+        let (added, deleted, changed, noise) = crate::changes::baseline_diff(&xml);
+        println!("added {added:?}
+deleted {deleted:?}
+changed {changed:?}
+noise {noise}");
+        assert!(added.iter().any(|a| a.contains("Payment")) && deleted.iter().any(|d| d.contains("Invoice")));
+        assert!(changed.iter().any(|c| c.contains("Name: \"Order\" → \"Customer Order\"") && c.contains("Status") && !c.contains("DateModified")), "{changed:?}");
+    }
+
     /// LC-376: a layout undone from the journal puts every element back; aligning to the top lines them up.
     /// `LOONAR_TEST_PROPS=E:/livetest/undo/undo.properties cargo test ea_layout_undo_and_align -- --ignored --nocapture`
     #[test]

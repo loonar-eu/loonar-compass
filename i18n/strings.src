@@ -1974,3 +1974,5 @@ One colour scheme for many diagrams, by stereotype, type or status ‖ Jeden sch
 A new diagram of an element and what is related to it ‖ Nowy diagram elementu i tego, co jest z nim powiązane ‖ Ein neues Diagramm eines Elements und dessen, was damit verbunden ist ‖ Un nouveau diagramme d'un élément et de ce qui lui est lié
 diagram display options ‖ opcje wyświetlania diagramów ‖ Anzeigeoptionen von Diagrammen ‖ options d'affichage des diagrammes
 A presentation copy of a diagram for management: details hidden, colours by type ‖ Kopia prezentacyjna diagramu dla zarządu: bez szczegółów, kolory według typu ‖ Eine Präsentationskopie eines Diagramms für das Management: ohne Details, Farben nach Typ ‖ Une copie de présentation d'un diagramme pour la direction : sans détails, couleurs par type
+comparisons with baselines ‖ porównania z baseline'ami ‖ Vergleiche mit Baselines ‖ comparaisons avec des baselines
+package '{0}' has no baseline {1} ‖ pakiet „{0}” nie ma baseline'u {1} ‖ Paket „{0}“ hat keine Baseline {1} ‖ le paquetage « {0} » n'a pas de baseline {1}
