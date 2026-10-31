@@ -90,7 +90,7 @@ const KNOWN: &[Known] = &[
 ];
 
 /// The file version of EA.exe ("17.1.1716"), or "" when it cannot be read.
-fn ea_version(cfg: &AppConfig) -> String {
+pub(crate) fn ea_version(cfg: &AppConfig) -> String {
     static CACHE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     CACHE
         .get_or_init(|| {

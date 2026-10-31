@@ -350,6 +350,7 @@ pub fn definitions() -> Value {
         items.push(crate::notation::definition());
         items.push(crate::test_results::definition());
         items.push(crate::translate_model::definition());
+        items.push(crate::migration::definition());
         items.push(crate::ea_help::definition());
         items.push(crate::bulk::definition());
         items.push(crate::recycle::definition());
@@ -922,6 +923,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "sequence_check" => crate::sequence::check(input, ctx.cfg).map(Into::into),
         "export_text" => crate::text_export::run(input, ctx.cfg),
         "diagram_as_text" => crate::notation::run(input, ctx.cfg).map(Into::into),
+        "migration_check" => crate::migration::run(input, ctx.cfg).map(Into::into),
         // Translating the model (LC-400): texts reads only; apply is one ordinary save of the translations.
         "translate_model" => {
             let (ops, text) = crate::translate_model::run(input, ctx.cfg)?;

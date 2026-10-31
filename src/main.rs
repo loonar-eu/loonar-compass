@@ -52,6 +52,7 @@ mod text_export;
 mod notation;
 mod test_results;
 mod translate_model;
+mod migration;
 mod ea_help;
 mod bulk;
 mod recycle;
