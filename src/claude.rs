@@ -128,6 +128,14 @@ impl ClaudeClient {
     pub fn from_config(cfg: &crate::config::AppConfig, max_tokens: u32) -> Result<Self> {
         use crate::config::secrets;
         if cfg.uses_openai() {
+            // The team policy may route OpenAI through the hub too (LC-390): the hub keeps the key, its token is the key.
+            if let Some((hub, token)) = crate::hub::via_hub(cfg, "ai") {
+                let mut client = Self::new(token, cfg.openai_model.clone(), max_tokens, String::new())?.with_effort(&cfg.claude_effort);
+                client.openai = true;
+                client.openai_url = format!("{hub}/ai/openai/v1");
+                client.via_hub = true;
+                return Ok(client);
+            }
             // A local endpoint (Ollama, LM Studio) works without a key.
             let local = !cfg.openai_url.trim().is_empty() && crate::jira::check_base_url(cfg.openai_url.trim()).is_ok() && !cfg.openai_url.trim().to_ascii_lowercase().starts_with("https://");
             let key = if !cfg.ai_oauth_token_url.trim().is_empty() {

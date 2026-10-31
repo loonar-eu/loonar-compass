@@ -934,6 +934,8 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
     // The team's services for Compass: Claude with the team's key, Jira and Confluence with the team's account.
     let gateway = if request.method == "POST" && request.path == "/ai/v1/messages" {
         Some(hub.ai_gateway(&user, role, &request.body))
+    } else if request.method == "POST" && request.path == "/ai/openai/v1/chat/completions" {
+        Some(hub.ai_gateway_openai(&user, role, &request.body))
     } else if let Some(rest) = request.path.strip_prefix("/proxy/jira") {
         Some(hub.service_proxy("jira", &user, role, &request.method, rest, &request.query, &request.body, &content_type))
     } else if let Some(rest) = request.path.strip_prefix("/proxy/confluence") {
@@ -1908,11 +1910,63 @@ impl Hub {
     /// then for everybody gives the key (a hub secret, e.g. LOONAR_SECRET_CLAUDE_KEY_TEAM). Usage per person goes to
     /// ai_usage.jsonl. The request is passed to Anthropic as it is.
     fn ai_gateway(&self, user: &str, role: Role, body: &[u8]) -> Result<(u16, String, Vec<u8>), HttpError> {
-        let keys = self.ai["keys"].as_array().cloned().unwrap_or_default();
-        let wanted = wanted(user, role);
-        let secret = wanted.iter().find_map(|w| keys.iter().find(|k| k["for"].as_str().is_some_and(|f| f.trim().to_lowercase() == *w)).and_then(|k| k["secret"].as_str()))
+        let (secret, key) = self.ai_key(&self.ai["keys"], user, role)?;
+        let request = self.ai_allowed(user, role, body)?;
+        let http = reqwest::blocking::Client::builder().timeout(Duration::from_secs(600)).build().map_err(|e| HttpError(500, e.to_string()))?;
+        let response = http.post(crate::claude::API_URL).header("x-api-key", key).header("anthropic-version", crate::claude::API_VERSION)
+            .header("content-type", "application/json").body(body.to_vec()).send().map_err(|e| deny(502, format!("Anthropic: {e}")))?;
+        let status = response.status().as_u16();
+        let bytes = response.bytes().map_err(|e| deny(502, format!("Anthropic: {e}")))?.to_vec();
+        if let Ok(answer) = serde_json::from_slice::<Value>(&bytes) {
+            self.log_ai_usage(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "key": secret, "model": request["model"], "status": status,
+                "input_tokens": answer["usage"]["input_tokens"], "output_tokens": answer["usage"]["output_tokens"],
+                "cache_creation_input_tokens": answer["usage"]["cache_creation_input_tokens"], "cache_read_input_tokens": answer["usage"]["cache_read_input_tokens"] }));
+        }
+        Ok((status, "application/json".into(), bytes))
+    }
+
+    /// The AI gateway for OpenAI-compatible models (LC-390): "ai": {"openai": {"url": "" (OpenAI) | an Azure OpenAI or
+    /// another OpenAI-compatible base, "keys": [{"for", "secret"}]}}. The same limits, budgets and allowed models as for
+    /// Claude; usage goes to ai_usage.jsonl.
+    fn ai_gateway_openai(&self, user: &str, role: Role, body: &[u8]) -> Result<(u16, String, Vec<u8>), HttpError> {
+        let openai = &self.ai["openai"];
+        if !openai.is_object() {
+            return Err(deny(404, crate::i18n::tr("the hub has no OpenAI gateway: ask the administrator of the hub")));
+        }
+        let (secret, key) = self.ai_key(&openai["keys"], user, role)?;
+        let request = self.ai_allowed(user, role, body)?;
+        let url = crate::openai::chat_url(openai["url"].as_str().unwrap_or(""));
+        let http = reqwest::blocking::Client::builder().timeout(Duration::from_secs(600)).build().map_err(|e| HttpError(500, e.to_string()))?;
+        let call = http.post(&url).header("content-type", "application/json").body(body.to_vec());
+        let call = if crate::openai::uses_api_key_header(&url) { call.header("api-key", key) } else { call.bearer_auth(key) };
+        let response = call.send().map_err(|e| deny(502, format!("OpenAI: {e}")))?;
+        let status = response.status().as_u16();
+        let bytes = response.bytes().map_err(|e| deny(502, format!("OpenAI: {e}")))?.to_vec();
+        if let Ok(answer) = serde_json::from_slice::<Value>(&bytes) {
+            self.log_ai_usage(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "key": secret, "model": request["model"], "status": status,
+                "input_tokens": answer["usage"]["prompt_tokens"], "output_tokens": answer["usage"]["completion_tokens"] }));
+        }
+        Ok((status, "application/json".into(), bytes))
+    }
+
+    /// The key of the person from a list [{"for": "<user>" | "role:<role>" | "*", "secret": "<name>"}]: (secret name, value).
+    fn ai_key(&self, keys: &Value, user: &str, role: Role) -> Result<(String, String), HttpError> {
+        let keys = keys.as_array().cloned().unwrap_or_default();
+        let secret = wanted(user, role).iter().find_map(|w| keys.iter().find(|k| k["for"].as_str().is_some_and(|f| f.trim().to_lowercase() == *w)).and_then(|k| k["secret"].as_str().map(String::from)))
             .ok_or_else(|| deny(403, crate::i18n::tr("the hub has no AI key for you: ask the administrator of the hub")))?;
-        let key = crate::config::secrets::get(secret).map_err(|e| HttpError(500, format!("{e:#}")))?;
+        let key = crate::config::secrets::get(&secret).map_err(|e| HttpError(500, format!("{e:#}")))?;
+        Ok((secret, key))
+    }
+
+    fn log_ai_usage(&self, entry: &Value) {
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(self.dir.join("ai_usage.jsonl")) {
+            let _ = writeln!(f, "{entry}");
+        }
+    }
+
+    /// The person's limits and budgets, and the allowed models: the request as JSON when it may go on.
+    fn ai_allowed(&self, user: &str, role: Role, body: &[u8]) -> Result<Value, HttpError> {
+        let wanted = wanted(user, role);
         // Limits ("ai": {"limits": [{"for": …, "tokens_per_day": N, "tokens_per_month": N, "usd_per_day": X,
         // "usd_per_month": X}]}): the first entry for the person, their role or everybody; tokens and their cost at the
         // model's prices (LC-390) counted from ai_usage.jsonl.
@@ -1939,20 +1993,7 @@ impl Hub {
                 return Err(deny(403, crate::i18n::fmt("the model {0} is not allowed by the hub", &[model.to_string()])));
             }
         }
-        let http = reqwest::blocking::Client::builder().timeout(Duration::from_secs(600)).build().map_err(|e| HttpError(500, e.to_string()))?;
-        let response = http.post(crate::claude::API_URL).header("x-api-key", key).header("anthropic-version", crate::claude::API_VERSION)
-            .header("content-type", "application/json").body(body.to_vec()).send().map_err(|e| deny(502, format!("Anthropic: {e}")))?;
-        let status = response.status().as_u16();
-        let bytes = response.bytes().map_err(|e| deny(502, format!("Anthropic: {e}")))?.to_vec();
-        if let Ok(answer) = serde_json::from_slice::<Value>(&bytes) {
-            let usage = json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "key": secret, "model": request["model"], "status": status,
-                "input_tokens": answer["usage"]["input_tokens"], "output_tokens": answer["usage"]["output_tokens"],
-                "cache_creation_input_tokens": answer["usage"]["cache_creation_input_tokens"], "cache_read_input_tokens": answer["usage"]["cache_read_input_tokens"] });
-            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(self.dir.join("ai_usage.jsonl")) {
-                let _ = writeln!(f, "{usage}");
-            }
-        }
-        Ok((status, "application/json".into(), bytes))
+        Ok(request)
     }
 
     /// Tokens (input + output) the person used today and this month, and what they cost in USD, from ai_usage.jsonl.
@@ -2609,6 +2650,59 @@ mod tests {
         assert_eq!(http.post(format!("{base}/proxy/jira/rest/api/3/issue")).bearer_auth("bartek-token-0123456789").json(&json!({})).send().unwrap().status(), 403);
         assert_eq!(http.get(format!("{base}/proxy/jira/secure/Dashboard.jspa")).bearer_auth("anna-token-0123456789").send().unwrap().status(), 403);
         // Compass reads the team's project from the policy.
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// LC-390: the OpenAI gateway – the team's key goes upstream (never the hub token), usage is logged, limits apply.
+    #[test]
+    fn hub_openai_gateway() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        crate::config::secrets::use_environment();
+        std::env::set_var("LOONAR_SECRET_OPENAI_TEAM_TEST", "sk-team-test-123");
+        // An OpenAI-compatible upstream that records the Authorization header.
+        let upstream = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let up = upstream.local_addr().unwrap();
+        let (seen_tx, seen_rx) = std::sync::mpsc::channel::<String>();
+        std::thread::spawn(move || {
+            for stream in upstream.incoming().flatten() {
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let (mut auth, mut length) = (String::new(), 0usize);
+                loop {
+                    let mut line = String::new();
+                    reader.read_line(&mut line).unwrap();
+                    let line = line.trim_end().to_string();
+                    if line.is_empty() { break; }
+                    let lower = line.to_ascii_lowercase();
+                    if let Some(v) = lower.strip_prefix("authorization:") { auth = v.trim().to_string(); }
+                    if let Some(v) = lower.strip_prefix("content-length:") { length = v.trim().parse().unwrap(); }
+                }
+                let mut body = vec![0u8; length];
+                reader.read_exact(&mut body).unwrap();
+                seen_tx.send(auth).unwrap();
+                let answer = json!({ "model": "gpt-test", "choices": [{ "message": { "role": "assistant", "content": "OK" }, "finish_reason": "stop" }], "usage": { "prompt_tokens": 10, "completion_tokens": 5 } }).to_string();
+                let mut out = stream;
+                let _ = write!(out, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{answer}", answer.len());
+            }
+        });
+        let dir = std::env::temp_dir().join(format!("loonar-hub-openai-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0", "sources": [],
+            "users": [{ "name": "anna", "token": "anna-token-openai-0123", "role": "architect" }, { "name": "bartek", "token": "bartek-token-openai-01", "role": "viewer" }],
+            "ai": { "openai": { "url": format!("http://{up}/v1"), "keys": [{ "for": "role:architect", "secret": "openai_team_test" }] }, "limits": [{ "for": "anna", "tokens_per_day": 1 }] } }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let base = format!("http://{}", rx.recv().unwrap());
+        let http = reqwest::blocking::Client::new();
+        let ask = |token: &str| http.post(format!("{base}/ai/openai/v1/chat/completions")).bearer_auth(token)
+            .json(&json!({ "model": "gpt-test", "messages": [{ "role": "user", "content": "Say OK." }] })).send().unwrap();
+        let first = ask("anna-token-openai-0123");
+        assert_eq!(first.status(), 200, "{}", first.text().unwrap_or_default());
+        assert_eq!(seen_rx.recv().unwrap(), "bearer sk-team-test-123", "the team's key goes upstream, not the hub token");
+        assert_eq!(ask("anna-token-openai-0123").status(), 429, "the daily limit is used up");
+        assert_eq!(ask("bartek-token-openai-01").status(), 403, "no key for a viewer");
+        let usage = std::fs::read_to_string(dir.join("ai_usage.jsonl")).unwrap();
+        assert!(usage.contains("\"input_tokens\":10") && usage.contains("\"user\":\"anna\""), "{usage}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

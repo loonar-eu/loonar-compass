@@ -297,6 +297,7 @@ Set-WebConfigurationProperty -PSPath $p -Filter system.webServer/proxy -Name tim
   <tr><td><code>ai.keys</code></td><td>Którego klucza Claude używa osoba. Kolejność: nazwa użytkownika, potem <code>role:&lt;rola&gt;</code>, potem <code>*</code>. Brak dopasowania oznacza brak AI dla tej osoby.</td></tr>
   <tr><td><code>ai.limits</code></td><td>Tokeny na dzień i na miesiąc, a także USD na dzień i na miesiąc (<code>usd_per_day</code>, <code>usd_per_month</code>: koszt według cen modelu, z cache). Po przekroczeniu hub odmawia z czytelnym komunikatem. Podsumowanie zużycia pokazuje USD dziś i w tym miesiącu.</td></tr>
   <tr><td><code>ai.models</code></td><td>Dozwolone modele; inne są odrzucane.</td></tr>
+  <tr><td><code>ai.openai</code></td><td>Bramka dla modeli zgodnych z OpenAI: <code>{"url": "" (OpenAI) albo adres Azure OpenAI / innej usługi, "keys": [{"for": …, "secret": …}]}</code>. Compass z dostawcą OpenAI i <code>policy.ai_via_hub</code> wysyła zapytania tutaj; obowiązują te same limity, budżety i dozwolone modele.</td></tr>
   <tr><td><code>policy.ai_via_hub</code></td><td>Compass pyta AI tylko przez hub: na stacjach nie ma klucza API.</td></tr>
   <tr><td><code>policy.jira_via_hub</code>, <code>confluence_via_hub</code></td><td>Jira/Confluence przez konto serwisowe huba. Viewer może tylko czytać; każda zmiana jest w audycie.</td></tr>
   <tr><td><code>policy.min_approval</code></td><td>Najsłabszy dozwolony w Compass tryb zatwierdzania zapisów do modelu (<code>ask</code> jest najostrzejszy).</td></tr>
