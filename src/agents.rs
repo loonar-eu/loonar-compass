@@ -140,7 +140,7 @@ pub fn describe(cfg: &crate::config::AppConfig, kind: &str, id: i64) -> Option<(
         },
     };
     match kind {
-        "package" => q(format!("select coalesce(p.name,'') as c0, coalesce(o.stereotype,'') as c1, coalesce(parent.name,'') as c2 from t_package p left join t_object o on o.ea_guid = p.ea_guid and o.object_type = 'Package' left join t_package parent on parent.package_id = p.parent_id where p.package_id = {id}"))
+        "package" => q(format!("select coalesce(p.name,'') as c0, coalesce(o.stereotype,'') as c1, coalesce(parent.name,'') as c2 from t_package p left join t_object o on o.object_type = 'Package' and (o.ea_guid = p.ea_guid or o.pdata1 = cast(p.package_id as varchar(20))) left join t_package parent on parent.package_id = p.parent_id where p.package_id = {id}"))
             .map(|r| (format!("package \"{}\" (package_id {id}) in package \"{}\"", r[0], r[2]), "Package".to_string(), r[1].clone())),
         "attribute" => q(format!("select coalesce(a.name,'') as c0, coalesce(a.type,'') as c1, coalesce(o.name,'') as c2, o.object_type as c3, coalesce(a.stereotype,'') as c4 from t_attribute a join t_object o on o.object_id = a.object_id where a.id = {id}"))
             .map(|r| (format!("attribute \"{}\" : {} (attribute id {id}) of {} \"{}\"", r[0], r[1], r[3], r[2]), "Attribute".to_string(), r[4].clone())),

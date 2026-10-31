@@ -178,7 +178,7 @@ fn before_one(cfg: &AppConfig, op: &Value, reverse: &mut Vec<Value>, not_undoabl
                 };
                 let Some(r) = one(cfg, format!(
                     "select coalesce(p.name,'') as c0, coalesce(p.notes,'') as c1, coalesce(p.version,'') as c2, coalesce(o.status,'') as c3, coalesce(o.stereotype,'') as c4 \
-                     from t_package p left join t_object o on o.ea_guid = p.ea_guid and o.object_type = 'Package' where p.package_id = {p}"
+                     from t_package p left join t_object o on o.object_type = 'Package' and (o.ea_guid = p.ea_guid or o.pdata1 = cast(p.package_id as varchar(20))) where p.package_id = {p}"
                 )) else {
                     not_undoable.push(format!("{kind} {p}"));
                     return;
