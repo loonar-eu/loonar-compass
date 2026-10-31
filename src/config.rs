@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-/// The only model the application uses. It is not a user setting.
+/// The default Claude model (the setting `claude.model` chooses another one).
 pub const CLAUDE_MODEL: &str = "claude-haiku-5-5";
 /// Claude models offered in the settings (any other id can still be set in app.properties).
 pub const CLAUDE_MODELS: [&str; 4] = ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-1"];
@@ -460,7 +460,7 @@ impl AppConfig {
         };
 
         let mut cfg = Self {
-            // The model is fixed: the `claude.model` entry in the file is informational only and does not change the model.
+            // `claude.model`: the Claude model that answers (default CLAUDE_MODEL).
             claude_model: get_or("claude.model", CLAUDE_MODEL),
             claude_effort: get_or("claude.effort", ""),
             show_thinking: get_or("claude.show_thinking", "false") == "true",
@@ -679,6 +679,7 @@ pub mod secrets {
     }
 
     pub fn set(name: &str, value: &str) -> Result<()> {
+        forget(name);
         let entry = keyring::Entry::new(SERVICE, name)?;
         match long_value(value) {
             Some(bytes) => entry.set_secret(&bytes)?,
@@ -720,8 +721,25 @@ pub mod secrets {
         }
     }
 
+    /// Answers of `exists` for 2 s: the settings ask for every secret in every frame (LC-362: one Credential Manager
+    /// call per secret and frame). `set` and `delete` forget the name.
+    static EXISTS: std::sync::Mutex<Option<std::collections::HashMap<String, (std::time::Instant, bool)>>> = std::sync::Mutex::new(None);
+
+    fn forget(name: &str) {
+        if let Some(map) = EXISTS.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
+            map.remove(name);
+        }
+    }
+
     pub fn exists(name: &str) -> bool {
-        get(name).is_ok()
+        if let Some(Some((when, there))) = EXISTS.lock().unwrap_or_else(|p| p.into_inner()).as_ref().map(|m| m.get(name).copied()) {
+            if when.elapsed() < std::time::Duration::from_secs(2) {
+                return there;
+            }
+        }
+        let there = get(name).is_ok();
+        EXISTS.lock().unwrap_or_else(|p| p.into_inner()).get_or_insert_with(Default::default).insert(name.to_string(), (std::time::Instant::now(), there));
+        there
     }
 
     /// File in the user data folder with the names of the secrets saved for conversation connections (their names
@@ -747,6 +765,7 @@ pub mod secrets {
 
     /// Removes the secret (also under the pre-release service name); a missing secret is not an error.
     pub fn delete(name: &str) -> Result<()> {
+        forget(name);
         for service in [SERVICE, LEGACY_SERVICE] {
             match keyring::Entry::new(service, name)?.delete_credential() {
                 Ok(()) | Err(keyring::Error::NoEntry) => {}

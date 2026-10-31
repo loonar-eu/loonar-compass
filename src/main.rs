@@ -110,7 +110,8 @@ fn system_prompt(cfg: &AppConfig) -> String {
          things it cannot do.\n{about}",
         app = config::APP_NAME,
         version = app_version(),
-        model = config::CLAUDE_MODEL,
+        // The model that really answers (LC-362: the prompt always named the default Claude model).
+        model = cfg.ai_model(),
         docs = docs_url(),
         // The changelog itself is a tool (app_changelog): only its contents and the prerequisites stay here (LC-300).
         about = changelog::prompt_section(),
@@ -1706,6 +1707,8 @@ struct App {
     relang_pending: bool,
     relang_rx: Option<mpsc::Receiver<Result<String, String>>>,
     relang_message: String,
+    /// The audit log as last read: (length and time of the file, entries).
+    audit_cache: (Option<(u64, Option<std::time::SystemTime>)>, std::sync::Arc<Vec<Value>>),
     /// Building the Polish dictionary for EA's spell checker (Settings → Language).
     ea_lexicon_rx: Option<mpsc::Receiver<Result<String, String>>>,
     ea_lexicon_message: String,
@@ -1890,7 +1893,10 @@ impl App {
         if cfg.as_ref().is_some_and(|c| !c.uses_file() && c.db_password.is_empty()) {
             missing.push(crate::i18n::tr("database password"));
         }
-        if !secrets::exists(secrets::CLAUDE_API_KEY) {
+        // The Claude key only when Claude answers with a key of this computer: not with OpenAI or a local model, not
+        // with OAuth2, not with a team hub that can give the team's key (LC-362: those users landed in Settings at every start).
+        let needs_claude_key = cfg.as_ref().map_or(true, |c| !c.uses_openai() && c.ai_oauth_token_url.trim().is_empty() && hub::Client::from_config(c).is_none());
+        if needs_claude_key && !secrets::exists(secrets::CLAUDE_API_KEY) {
             missing.push(crate::i18n::tr("Claude API key@@in-sentence"));
         }
         // An EA file without security needs no EA account; a database model always does.
@@ -1953,6 +1959,7 @@ impl App {
             relang_pending: false,
             relang_rx: None,
             relang_message: String::new(),
+            audit_cache: (None, Default::default()),
             ea_lexicon_rx: None,
             ea_lexicon_message: String::new(),
             relang_checked: false,
@@ -3269,8 +3276,9 @@ impl App {
         let mut updates: Vec<(&str, String)> = Vec::new();
         match group {
             GROUP_CLAUDE => {
-                let _ = config::remove_properties(&self.props_path, &["claude.model"]);
                 let max_tokens: u32 = f.claude_max_tokens.trim().parse().context(crate::i18n::tr("Max tokens: enter a number"))?;
+                // Only after the values are checked (LC-362: a wrong Max tokens removed the chosen model).
+                let _ = config::remove_properties(&self.props_path, &["claude.model"]);
                 updates.push(("claude.max_tokens", max_tokens.to_string()));
                 updates.push(("claude.workspace_id", f.claude_workspace_id.trim().to_string()));
                 updates.push(("claude.model", f.claude_model.trim().to_string()));
@@ -5380,11 +5388,13 @@ impl App {
             ui.label(crate::i18n::tr("Complete the settings first."));
             return;
         };
-        let entries: Vec<Value> = std::fs::read_to_string(&file)
-            .unwrap_or_default()
-            .lines()
-            .filter_map(|l| serde_json::from_str(l).ok())
-            .collect();
+        // Read again only when the file changed (LC-362: it was read and parsed in every frame).
+        let stamp = std::fs::metadata(&file).ok().map(|m| (m.len(), m.modified().ok()));
+        if self.audit_cache.0 != stamp || stamp.is_none() {
+            let entries: Vec<Value> = std::fs::read_to_string(&file).unwrap_or_default().lines().filter_map(|l| serde_json::from_str(l).ok()).collect();
+            self.audit_cache = (stamp, std::sync::Arc::new(entries));
+        }
+        let entries = self.audit_cache.1.clone();
         ui.horizontal(|ui| {
             if ui.button(crate::i18n::tr("Open log file")).clicked() {
                 if file.is_file() {
