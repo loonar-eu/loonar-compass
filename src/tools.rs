@@ -1243,6 +1243,20 @@ pub(crate) fn align(r: &mut [(i64, i64, i64, i64, i64)], how: &str) -> Result<Ve
     Ok(r.iter().filter(|e| !before.contains(e)).copied().collect())
 }
 
+/// A read-only tool run straight from a command, without the AI (LC-389).
+pub fn run_direct(name: &str, input: &Value, cfg: &AppConfig) -> Result<String> {
+    match name {
+        "repo_doctor" => crate::repo_doctor::run(input, cfg),
+        "stale_publications" => crate::publications::stale(input, cfg),
+        "find_orphans" => crate::model_usage::find_orphans(input, cfg),
+        "find_duplicates" => crate::model_usage::find_duplicates(input, cfg),
+        "trace_gaps" => crate::trace_gaps::run(input, cfg),
+        "what_changed" => crate::changes::run(input, cfg),
+        "connector_visibility" if input["action"] == "hidden" => crate::visibility::run(input, cfg).map(|(_, text)| text),
+        other => bail!("{other} is not run without the assistant"),
+    }
+}
+
 /// The team's modelling rules (LC-372): shown, or saved to governance.json after the user approves the whole text.
 fn team_rules(input: &Value, ctx: &ToolContext) -> Result<String> {
     let file = ctx.cfg.base_dir.join("governance.json");

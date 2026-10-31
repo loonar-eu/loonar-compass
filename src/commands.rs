@@ -54,6 +54,28 @@ pub fn matching(input: &str) -> Vec<&'static Command> {
 }
 
 /// The request for a typed command (None: not a command of this list, sent as it is).
+/// A read-only command typed as it is (with at most a package, a number of days or an id): run the tool at once,
+/// without the AI (LC-389) – the result is shown as it is, and the user can ask the assistant to explain it.
+pub fn direct(input: &str) -> Option<(&'static str, serde_json::Value)> {
+    use serde_json::json;
+    let typed = input.trim();
+    let (name, args) = typed.split_once(char::is_whitespace).unwrap_or((typed, ""));
+    let args = args.trim();
+    let package = || if args.is_empty() { serde_json::Value::Null } else { args.parse::<i64>().map(|n| json!(n)).unwrap_or_else(|_| json!(args)) };
+    match name.to_lowercase().replace('_', "-").as_str() {
+        "/repo-doctor" if args.is_empty() => Some(("repo_doctor", json!({}))),
+        "/stale-pages" if args.is_empty() => Some(("stale_publications", json!({}))),
+        "/find-orphans" => Some(("find_orphans", json!({ "package": package() }))),
+        "/find-duplicates" => Some(("find_duplicates", json!({ "package": package() }))),
+        "/trace-gaps" => Some(("trace_gaps", json!({ "package": package() }))),
+        "/what-changed" if args.is_empty() || args.trim_end_matches(['d', 'D']).parse::<u32>().is_ok() || chrono::NaiveDate::parse_from_str(args, "%Y-%m-%d").is_ok() => {
+            Some(("what_changed", json!({ "since": args })))
+        }
+        "/show-hidden-links" => args.parse::<i64>().ok().map(|d| ("connector_visibility", json!({ "action": "hidden", "diagram": d }))),
+        _ => None,
+    }
+}
+
 pub fn request(input: &str) -> Option<String> {
     let typed = input.trim();
     let (name, args) = typed.split_once(char::is_whitespace).unwrap_or((typed, ""));
@@ -75,6 +97,13 @@ mod tests {
         let r = super::request("/where_used Klient").unwrap();
         assert!(r.contains("\"Klient\"") && r.contains("where_used"), "{r}");
         assert!(super::request("/tidy-diagram").unwrap().contains("EA"));
+        // LC-389: read-only commands typed plainly run without the AI; with words for the assistant they do not.
+        assert_eq!(super::direct("/repo-doctor").unwrap().0, "repo_doctor");
+        assert_eq!(super::direct("/find-orphans 385").unwrap().1["package"], 385);
+        assert_eq!(super::direct("/what-changed 14").unwrap().1["since"], "14");
+        assert!(super::direct("/what-changed this week by Anna").is_none());
+        assert!(super::direct("/repo-doctor and explain it").is_none());
+        assert!(super::direct("/merge-elements A into B").is_none());
         assert!(super::request("/glossary-add x").is_none(), "its own window");
         assert!(super::request("/nonsense").is_none());
     }

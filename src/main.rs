@@ -1720,6 +1720,8 @@ struct App {
     relang_pending: bool,
     relang_rx: Option<mpsc::Receiver<Result<String, String>>>,
     relang_message: String,
+    /// A command to answer without the AI in the next turn (LC-389).
+    direct: Option<(&'static str, Value)>,
     /// The audit log as last read: (length and time of the file, entries).
     audit_cache: (Option<(u64, Option<std::time::SystemTime>)>, std::sync::Arc<Vec<Value>>),
     /// Building the Polish dictionary for EA's spell checker (Settings → Language).
@@ -1972,6 +1974,7 @@ impl App {
             relang_pending: false,
             relang_rx: None,
             relang_message: String::new(),
+            direct: None,
             audit_cache: (None, Default::default()),
             ea_lexicon_rx: None,
             ea_lexicon_message: String::new(),
@@ -3849,9 +3852,13 @@ impl App {
             };
             return;
         }
-        // /command [arguments]: sent as the command's precise request (LC-337).
-        if let Some(request) = commands::request(&self.input) {
-            self.input = request;
+        // A read-only command typed plainly answers at once without the AI (LC-389); other commands are sent as their
+        // precise request (LC-337).
+        self.direct = if self.outbox.is_none() { commands::direct(&self.input) } else { None };
+        if self.direct.is_none() {
+            if let Some(request) = commands::request(&self.input) {
+                self.input = request;
+            }
         }
         // /glossary-add [term]: the glossary window instead of a message.
         if let Some(term) = glossary_ui::command(&self.input) {
@@ -3993,6 +4000,33 @@ impl App {
         };
         self.queued = 0;
         self.consumed = 0;
+
+        // A command answered without the AI (LC-389): the tool runs in the background, its result is the answer.
+        if let Some((tool, input)) = self.direct.take() {
+            let (events_tx, events_rx) = mpsc::channel::<WorkerEvent>();
+            let (outbox_tx, _inbox) = mpsc::channel::<Message>();
+            let wake = ctx.clone();
+            std::thread::spawn(move || {
+                let emit = |event: WorkerEvent| {
+                    let _ = events_tx.send(event);
+                    wake.request_repaint();
+                };
+                emit(WorkerEvent::StepStart(crate::i18n::fmt("⚡ {0} (without the AI)", &[tool.to_string()])));
+                match tools::run_direct(tool, &input, &cfg) {
+                    Ok(text) => {
+                        emit(WorkerEvent::StepEnd { ok: true, detail: String::new() });
+                        emit(WorkerEvent::Text(format!("{text}\n\n_{}_", crate::i18n::tr("Answered by Compass without the AI. Ask the assistant if you want it explained or acted on."))));
+                        emit(WorkerEvent::Done);
+                    }
+                    Err(e) => emit(WorkerEvent::Failed(format!("{e:#}"))),
+                }
+            });
+            self.events = Some(events_rx);
+            self.outbox = Some(outbox_tx);
+            self.status = crate::i18n::tr("Compass is reading the model…").into();
+            self.steps.clear();
+            return;
+        }
 
         // Work with the model, the database and EA runs in a separate thread. The window thread only draws and receives events.
         let (events_tx, events_rx) = mpsc::channel::<WorkerEvent>();
