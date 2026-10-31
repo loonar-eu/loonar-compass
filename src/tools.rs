@@ -343,6 +343,7 @@ pub fn definitions() -> Value {
         items.push(crate::governance::rules_definition());
         items.push(crate::trace_gaps::definition());
         items.push(crate::ea_help::definition());
+        items.push(crate::bulk::definition());
         items.push(crate::scripts::definition());
         items.push(crate::traceability::definition());
         items.push(crate::code_drift::definition());
@@ -849,6 +850,12 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "team_rules" => team_rules(input, ctx).map(Into::into),
         "trace_gaps" => crate::trace_gaps::run(input, ctx.cfg).map(Into::into),
         "ea_howto" => crate::ea_help::run(input, ctx.cfg).map(Into::into),
+        // A bulk change: the preview reads only; apply is one ordinary save (approval, undo journal, audit, verification).
+        "bulk_set" if input["action"].as_str() == Some("apply") => {
+            let ops = crate::bulk::ops_to_apply(input, ctx.cfg)?;
+            ea_write(&json!({ "ops": ops }), ctx).map(Into::into)
+        }
+        "bulk_set" => crate::bulk::preview(input, ctx.cfg).map(Into::into),
         "memory_save" => {
             let name = input["name"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["name".to_string()]))?;
             let content = input["content"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["content".to_string()]))?;
