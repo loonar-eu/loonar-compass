@@ -486,7 +486,7 @@ def home_page(lang):
     <header class="sec-h reveal"><h2>{t["r_h"]}</h2></header>
     <div class="req reveal">
       <div class="req-col"><h3>{t["r_need"]}</h3><ul class="ticks">{req}</ul></div>
-      <div class="req-col opt"><h3>{t["r_opt"]}</h3><ul class="ticks">{opt}</ul><p class="note">{t["r_note"]}</p></div>
+      <div class="req-col opt"><h3>{t["r_opt"]}</h3><ul class="ticks">{opt}</ul>{f'<p class="note">{t["r_note"]}</p>' if t["r_note"] else ""}</div>
     </div>
   </div>
 </section>

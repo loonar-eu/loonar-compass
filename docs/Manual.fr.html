@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<title>Loonar Compass 0.9.2 - Guide de l'utilisateur</title>
+<title>Loonar Compass 0.9.3 - Guide de l'utilisateur</title>
 <style>
   @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
   body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1f1e1b; }
@@ -39,7 +39,7 @@
   <img src="img/logo.png" alt="Logo de Loonar Compass">
   <h1 style="margin-top: 10mm;">Loonar Compass</h1>
   <div class="sub">Guide de l'utilisateur</div>
-  <div class="sub" style="font-size: 11pt;">version 0.9.2 &middot; octobre 2026</div>
+  <div class="sub" style="font-size: 11pt;">version 0.9.3 &middot; octobre 2026</div>
   <div class="owner">
     Loonar Mariusz Głowacki<br>
     ul. Gombrowicza 12, 73-110 Stargard<br>
@@ -112,8 +112,8 @@
   <tr><td>Modèle EA</td><td>Fichier de projet EA .qea ou .qeax (seul son chemin est nécessaire) ou référentiel dans une base PostgreSQL avec la sécurité utilisateur activée (informations nécessaires : serveur, port, nom de la base, compte et mot de passe de la base). Un fichier .qea est destiné à une seule personne ; un fichier .qeax à une petite équipe qui partage le fichier. Pour un usage en entreprise, donnez à Compass un rôle PostgreSQL avec le seul droit SELECT sur les tables EA (<code>t_*</code>) et réglez le chiffrement de la connexion sur « Obligatoire, certificat vérifié » (chapitre 5). Enterprise Architect enregistre avec ce même compte : pour un modèle que l'assistant doit aussi modifier, il faut en plus INSERT, UPDATE et DELETE sur ces tables, jamais les droits de superutilisateur. Un référentiel sur SQL Server, MySQL/MariaDB ou Oracle : les mêmes informations, avec la même règle pour le compte (chapitre 5, « SQL Server, MySQL et Oracle ») ; l'enregistrement exige une édition d'EA qui prend en charge les référentiels SGBD.</td></tr>
   <tr><td>Pilote ODBC (SQL Server, MySQL, Oracle)</td><td>Uniquement pour un modèle sur SQL Server, MySQL/MariaDB ou Oracle : le pilote ODBC 64 bits de l'éditeur de la base. Pour SQL Server, Windows dispose déjà de son propre pilote « SQL Server » ; le pilote « ODBC Driver 18 for SQL Server » (ou 17) de Microsoft est préférable et il est utilisé en premier lorsqu'il est installé.</td></tr>
   <tr><td>Compte utilisateur du modèle</td><td>Pour un modèle en base de données ou un fichier de modèle dont la sécurité est activée : identifiant et mot de passe d'un utilisateur défini dans le modèle EA. De préférence un compte distinct réservé à l'assistant, afin que ses modifications et ses verrous soient visibles séparément et n'entrent pas en conflit avec les vôtres.</td></tr>
-  <tr><td>Clé API</td><td>Une clé API Claude de la console Anthropic (Anthropic Console) ou, si vous choisissez le fournisseur OpenAI, une clé API OpenAI de la plateforme OpenAI (chapitre 5).</td></tr>
-  <tr><td>Internet</td><td>Connexion HTTPS à api.anthropic.com (ou à api.openai.com lorsque le fournisseur est OpenAI), directement ou via le proxy défini dans Windows (chapitre 18).</td></tr>
+  <tr><td>Clé API</td><td>Une clé API Claude de la console Anthropic (Anthropic Console) ou, si vous choisissez le fournisseur OpenAI, une clé API OpenAI de la plateforme OpenAI ou une clé Azure OpenAI (chapitre 5). Un modèle local (Ollama, LM Studio) n'a pas besoin de clé. Avec la passerelle d'IA du hub d'équipe, aucune clé n'est sur votre ordinateur (chapitre 22, « Clés d'IA, Jira et Confluence sur le hub »).</td></tr>
+  <tr><td>Internet</td><td>Connexion HTTPS à api.anthropic.com (ou à api.openai.com lorsque le fournisseur est OpenAI, ou à votre ressource Azure OpenAI), directement ou via le proxy défini dans Windows (chapitre 18). Un modèle local (Ollama, LM Studio) n'a pas besoin d'Internet pour l'IA. Avec la passerelle d'IA du hub d'équipe, Compass se connecte au hub à la place.</td></tr>
   <tr><td>Confluence (facultatif)</td><td>Confluence Cloud ou Data Center, uniquement pour la publication de pages par l'assistant : adresse Confluence, jeton et clé de l'espace (chapitre 13). Sans cela, les pages sont tout de même créées, et vous collez le code vous-même.</td></tr>
   <tr><td>Miro (facultatif)</td><td>Uniquement pour envoyer des diagrammes vers un tableau Miro : un jeton d'accès d'une application Miro (chapitre 12).</td></tr>
   <tr><td>Microsoft Office (facultatif)</td><td>Uniquement pour les fichiers PDF créés par l'assistant : Word convertit un document en PDF, PowerPoint une présentation (chapitre 13). Les fichiers Word et PowerPoint eux-mêmes sont créés sans Office.</td></tr>
@@ -124,7 +124,7 @@
 <div class="note"><b>Coûts.</b> L'application elle-même est gratuite. L'utilisation du modèle d'IA est facturée par le fournisseur choisi (Anthropic ou OpenAI) selon la consommation, sur le compte auquel appartient la clé API.</div>
 
 <h2 id="s3" data-page="install">3. Installation</h2>
-<p>Lancez le fichier <code>LoonarCompass-Setup-0.9.exe</code>. L'assistant d'installation vous guide à travers les étapes avec les boutons <b>Suivant</b> et <b>Précédent</b>. Des droits d'administrateur ne sont nécessaires que si vous installez l'application pour tous les utilisateurs de l'ordinateur.</p>
+<p>Lancez le fichier <code>LoonarCompass-Setup-0.9.3.exe</code>. L'assistant d'installation vous guide à travers les étapes avec les boutons <b>Suivant</b> et <b>Précédent</b>. Des droits d'administrateur ne sont nécessaires que si vous installez l'application pour tous les utilisateurs de l'ordinateur.</p>
 <div class="note"><b>Avertissement Windows SmartScreen.</b> Le programme d'installation n'est pas encore signé numériquement. Si Windows affiche « Windows a protégé votre ordinateur », cliquez sur <b>Informations complémentaires</b>, puis sur <b>Exécuter quand même</b>. Lorsque le contrôle intelligent des applications (Smart App Control) est activé, Windows bloque les applications non signées : attendez alors la version signée.</div>
 <figure class="small"><img src="img/en/installer-language.png" alt="Assistant d'installation : page de choix de la langue avec le polonais, l'anglais, l'allemand et le français"><figcaption>La première page de l'assistant d'installation : le choix de la langue</figcaption></figure>
 <ol>
@@ -161,7 +161,7 @@
 <table>
   <tr><th style="width: 26%;">Icône</th><th>Contenu</th></tr>
   <tr><td><b>Chat</b></td><td>La liste des conversations et la conversation avec l'assistant (chapitres 6 et 17)</td></tr>
-  <tr><td><b>Paramètres</b></td><td>Modèle d'IA, modèle EA, Enterprise Architect, langue et mode de validation, nouvelles versions, Confluence, Jira, SharePoint, agents d'événements, serveurs MCP, hub d'équipe, Miro (chapitre 5)</td></tr>
+  <tr><td><b>Paramètres</b></td><td>Modèle d'IA, modèle EA, Enterprise Architect, code source, langue et mode de validation, nouvelles versions, Confluence, Jira, SharePoint, OneDrive, Google Drive, agents d'événements, serveurs MCP, hub d'équipe, Miro (chapitre 5)</td></tr>
   <tr><td><b>Mémoire de l'assistant</b></td><td>Les points que l'assistant a retenus d'une conversation à l'autre (chapitre 15)</td></tr>
   <tr><td><b>Modèles de documents</b></td><td>Les modèles de documents que l'assistant remplit avec le contenu du modèle EA (chapitre 14)</td></tr>
   <tr><td><b>Journal des modifications du modèle</b></td><td>Les enregistrements de l'assistant dans le modèle, avec export vers Excel (chapitre 16)</td></tr>
@@ -179,11 +179,11 @@
   <li><b>L'en-tête de la conversation</b> affiche son titre, le bouton <b>Modèle : …</b> avec le modèle de la conversation (chapitre 17) et, pendant que l'assistant travaille, l'indicateur « L'assistant travaille ».</li>
   <li><b>Messages :</b> les vôtres sont dans une bulle beige, les réponses de l'assistant portent l'icône de l'application. Chaque message indique l'heure (les plus anciens aussi la date).</li>
   <li><b>L'écran d'une nouvelle conversation</b> affiche le logo, une indication de ce que vous pouvez faire et le modèle EA qu'utilisera la conversation, avec les boutons <b>Choisir un autre modèle…</b> et <b>Confirmer le modèle et commencer</b> (chapitre 17).</li>
-  <li><b>La carte de message</b> en bas : le champ de texte, le bouton de collage, le bouton <b>⌖</b> (choisir dans le modèle), avec Claude aussi les commutateurs <b>💭</b> (raisonnement) et <b>∑</b> (code dans le bac à sable), le modèle et le mode de validation, ainsi que les boutons ronds d'envoi et d'arrêt (chapitre 6). Sous la carte, un rappel : « Les réponses et les modifications sont préparées par un modèle d'IA et peuvent contenir des erreurs. Vérifiez-les avant de les valider. »</li>
+  <li><b>La carte de message</b> en bas : le champ de texte, le bouton de collage, le bouton <b>⌖</b> (choisir dans le modèle), avec Claude aussi les commutateurs <b>💭</b> (raisonnement) et <b>∑</b> (code dans le bac à sable), le commutateur <b>🌐</b> (Web), le modèle et le mode de validation, ainsi que les boutons ronds d'envoi et d'arrêt (chapitre 6). Sous la carte, un rappel : « Les réponses et les modifications sont préparées par un modèle d'IA et peuvent contenir des erreurs. Vérifiez-les avant de les valider. »</li>
 </ul>
 
 <h2 id="s5">5. Paramètres et langue</h2>
-<p>La vue <b>Paramètres</b> comporte douze cartes : <b>Modèle d'IA</b> et <b>Langue et validation des modifications</b> dans la colonne de gauche, <b>Modèle</b> et <b>Enterprise Architect</b> dans celle de droite, puis en dessous <b>Confluence</b>, <b>Jira</b>, <b>SharePoint</b>, <b>Agents d'événements (Compass dans EA)</b>, <b>Serveurs MCP</b>, <b>Équipe (Compass Hub)</b>, <b>Miro</b> et <b>Nouvelles versions (newsletter)</b>. Dans Compass ouvert dans Enterprise Architect, les cartes Modèle et Enterprise Architect n'apparaissent pas, car le modèle est le projet ouvert dans cette fenêtre EA (chapitre 10). Vous enregistrez chacune séparément avec le bouton situé sous la carte, et l'application teste aussitôt les données saisies. Le résultat apparaît sous le bouton : en vert avec une description ou en rouge avec la cause de l'erreur.</p>
+<p>La vue <b>Paramètres</b> comporte quinze cartes : <b>Modèle d'IA</b> et <b>Langue et validation des modifications</b> dans la colonne de gauche, <b>Modèle</b> et <b>Enterprise Architect</b> dans celle de droite, puis en dessous <b>Code source</b>, <b>Confluence</b>, <b>Jira</b>, <b>SharePoint</b>, <b>OneDrive</b>, <b>Google Drive</b>, <b>Agents d'événements (Compass dans EA)</b>, <b>Serveurs MCP</b>, <b>Équipe (Compass Hub)</b>, <b>Miro</b> et <b>Nouvelles versions (newsletter)</b>. Dans Compass ouvert dans Enterprise Architect, les cartes Modèle et Enterprise Architect n'apparaissent pas, car le modèle est le projet ouvert dans cette fenêtre EA (chapitre 10). Vous enregistrez chacune séparément avec le bouton situé sous la carte, et l'application teste aussitôt les données saisies. Le résultat apparaît sous le bouton : en vert avec une description ou en rouge avec la cause de l'erreur.</p>
 <figure><img src="img/en/settings.png" alt="Vue Paramètres d'une version antérieure de l'application, avec des cartes numérotées"><figcaption>Paramètres : chaque carte avec son propre enregistrement et son test (capture d'une version antérieure : les cartes étaient numérotées, la carte « Modèle d'IA » s'appelait « Claude » et le compte EA se trouvait dans la carte Enterprise Architect)</figcaption></figure>
 <table>
   <tr><th style="width: 26%;">Carte</th><th>Champs</th><th style="width: 34%;">Ce que vérifie le test</th></tr>
@@ -203,7 +203,7 @@
   <tr><td>Serveurs MCP</td><td>Liste de vos propres serveurs MCP, enregistrée dans le fichier <code>mcp_servers.json</code> à côté des paramètres, la liste <b>Ajouter un serveur prêt à l'emploi</b> et le champ <b>Jeton d'un serveur MCP</b> (chapitre 7)</td><td>« Enregistrer et tester les serveurs MCP » se connecte à chaque serveur et affiche le nombre de ses outils</td></tr>
   <tr><td>Agents d'événements (Compass dans EA)</td><td>Règles du fichier <code>event_agents.json</code> (chapitre 10)</td><td>« Enregistrer les agents d'événements » vérifie les règles et affiche le nombre d'agents</td></tr>
 </table>
-<p>Un champ de mot de passe ou de clé laissé vide conserve la valeur actuelle. La mention <b>enregistré</b> à côté d'un champ indique que la valeur est déjà mémorisée ; <b>ABSENT</b> signifie qu'elle manque encore.</p>
+<p>Un champ de mot de passe ou de clé laissé vide conserve la valeur actuelle. La mention <b>enregistré</b> à côté d'un champ indique que la valeur est déjà mémorisée ; <b>ABSENT</b> signifie qu'elle manque encore. Sont conservés dans le Gestionnaire d'identification Windows, jamais dans le fichier de paramètres : la clé API Claude, la clé API OpenAI, le mot de passe du compte EA, le mot de passe de la base, les jetons Confluence, Jira et Miro, les mots de passe des certificats pour Jira et Confluence, les jetons de connexion OneDrive et Google Drive, le secret client Google Drive, le secret client SharePoint, le secret client OAuth2 du service d'IA et le jeton du hub d'équipe.</p>
 <p><b>Valeurs par défaut.</b> Lorsqu'il n'existe encore aucun paramètre, les champs Serveur, Nom de la base et Compte utilisateur EA ainsi que les mots de passe sont vides (le champ Serveur affiche l'indication grise « p. ex. 127.0.0.1 ») ; le port est 5432, le compte de la base <code>postgres</code>, le chemin d'EA <code>C:\Program Files\Sparx Systems\EA\EA.exe</code>, le mode de validation ask, le fournisseur Anthropic (Claude), le modèle <code>claude-haiku-5-5</code>, l'effort « par défaut du modèle » et Jetons max. 10000. Les paramètres existants ne sont pas modifiés.</p>
 <p><b>Jetons max.</b> Si l'assistant interrompt son travail avec un message de réponse tronquée, augmentez cette valeur (par exemple à 20000). La limite ne coûte rien en soi : vous payez le texte réellement généré.</p>
 <p>Le mot de passe de la base ne doit pas contenir de point-virgule (;), car Enterprise Architect ne peut pas le transmettre dans sa chaîne de connexion. L'adresse Confluence doit commencer par <code>https://</code> ; <code>http://</code> n'est accepté que pour un serveur installé sur le même ordinateur.</p>
@@ -274,7 +274,7 @@
 <h2 id="s6" class="break">6. Conversation avec l'assistant</h2>
 <figure><img src="img/en/chat.png" alt="Fenêtre de conversation avec l'image d'un diagramme EA dans le chat"><figcaption>Une conversation avec l'image d'un diagramme : la liste des conversations à gauche, le chat à droite, la carte de message en bas</figcaption></figure>
 <h3>Écrire</h3>
-<p>Vous saisissez votre message dans la <b>carte de message</b> en bas de la fenêtre. La carte contient le champ de texte, le bouton de collage, le bouton <b>⌖</b> (Choisir dans le modèle, décrit ci-dessous), avec Claude aussi les commutateurs <b>💭</b> et <b>∑</b> (« Raisonnement et calculs » ci-dessous), le nom du modèle et le mode de validation actuel, ainsi que des boutons ronds : <b>Envoyer</b> et, pendant que l'assistant travaille, <b>Arrêter</b>.</p>
+<p>Vous saisissez votre message dans la <b>carte de message</b> en bas de la fenêtre. La carte contient le champ de texte, le bouton de collage, le bouton <b>⌖</b> (Choisir dans le modèle, décrit ci-dessous), avec Claude aussi les commutateurs <b>💭</b> et <b>∑</b>, le commutateur <b>🌐</b> (« Raisonnement et calculs » ci-dessous), le nom du modèle et le mode de validation actuel, ainsi que des boutons ronds : <b>Envoyer</b> et, pendant que l'assistant travaille, <b>Arrêter</b>.</p>
 <table>
   <tr><th style="width: 34%;">Touche</th><th>Action</th></tr>
   <tr><td><span class="key">Entrée</span></td><td>Envoie le message</td></tr>
@@ -286,6 +286,39 @@
 <h3>Choisir dans le modèle</h3>
 <p>Le bouton <b>⌖</b> à côté du bouton de collage ouvre <b>Choisir dans le modèle</b>. Saisissez une partie du nom d'un élément, d'un paquetage ou d'un diagramme dans le champ « Nom d’un élément, d’un paquetage ou d’un diagramme » ; avec un champ vide, vous voyez les « Paquetages principaux du modèle : ». Un clic sur un résultat l'ajoute au message sous forme de référence, par exemple «Élément: Commande (Class, id 26)». C'est la même référence que celle du menu contextuel d'EA <b>Ajouter à la conversation Compass</b> (chapitre 10) : l'assistant sait ainsi exactement de quel objet il s'agit.</p>
 <div class="prompt">Décris «Élément: Commande (Class, id 26)» et indique les diagrammes sur lesquels il figure.</div>
+<h3>Commandes</h3>
+<p>Tapez <b>/</b> dans le champ de message pour voir la liste des commandes, avec une ligne pour chacune. La commande choisie est placée dans le champ. Ajoutez ce dont elle a besoin, par exemple le nom d'un élément ou d'un paquetage, et envoyez le message. Une commande est une demande toute prête pour l'assistant : chaque modification du modèle vous est présentée pour validation, comme toujours (chapitre 16).</p>
+<p>Dans le tableau, <code>&lt;…&gt;</code> désigne ce que vous devez indiquer et <code>[…]</code> ce que vous pouvez indiquer.</p>
+<table>
+  <tr><th style="width: 34%;">Commande</th><th>Ce qu'elle fait</th></tr>
+  <tr><td><code>/tidy-diagram [diagram]</code></td><td>Range un diagramme : disposition, espacement et connecteurs droits.</td></tr>
+  <tr><td><code>/where-used &lt;element or relationship&gt;</code></td><td>Chaque utilisation : diagrammes (pour une relation : où elle est visible et où elle est masquée), relations, types, tagged values et flux d'information.</td></tr>
+  <tr><td><code>/find-orphans [package]</code></td><td>Les éléments que rien n'utilise (plus que la recherche d'orphelins d'EA).</td></tr>
+  <tr><td><code>/find-duplicates [package]</code></td><td>Les éléments et relations qui sont probablement des doublons, avec le degré d'utilisation de chacun.</td></tr>
+  <tr><td><code>/merge-elements &lt;duplicate&gt; into &lt;element to keep&gt;</code></td><td>Les relations, les places sur les diagrammes (positions conservées), les classificateurs, les types et les tagged values qui pointent vers le doublon passent à l'élément conservé, avec les tagged values et les notes du doublon ; ensuite le doublon est supprimé. La commande demande toujours votre accord, et Compass crée d'abord une baseline du paquetage.</td></tr>
+  <tr><td><code>/bulk-set &lt;which elements&gt; &lt;what to set&gt;</code></td><td>Modifie de nombreux éléments à la fois : statut, phase, version, auteur, stéréotype, tagged values ou un texte dans les noms. Vous voyez d'abord un tableau numéroté avant → après, puis un seul enregistrement des lignes que vous gardez. Peut être annulé.</td></tr>
+  <tr><td><code>/to-bin &lt;elements&gt;</code></td><td>Place les éléments dans le paquetage « Recycle bin (Compass) » au lieu de les supprimer. Vous pouvez les restaurer depuis ce paquetage.</td></tr>
+  <tr><td><code>/repo-doctor</code></td><td>Vérifie l'intégrité du référentiel : relations vers des éléments manquants, lignes de diagramme obsolètes, GUID utilisés deux fois, paquetages sans leur élément, anciens verrous et taille du fichier .eap/.eapx. Lecture seule.</td></tr>
+  <tr><td><code>/what-changed [since a date or days] [author] [package]</code></td><td>Ce qui a été créé ou modifié, par qui et où. Avec une baseline : ce qui a été ajouté, supprimé et modifié par rapport à elle, sans le bruit d'EA (dates, fins de ligne).</td></tr>
+  <tr><td><code>/validate-model [package]</code></td><td>Vérifie le modèle selon les règles de l'équipe : nommage, tagged values obligatoires, relations autorisées, stéréotypes interdits. Vous pouvez écrire les règles dans la conversation ; elles sont enregistrées dans <code>governance.json</code> après votre validation.</td></tr>
+  <tr><td><code>/trace-gaps [package] [steps]</code></td><td>Les exigences que rien ne réalise et les éléments de conception auxquels aucune exigence ne mène, aussi sur plusieurs étapes.</td></tr>
+  <tr><td><code>/how-in-ea &lt;what you want to do&gt;</code></td><td>Les étapes pour votre version d'EA (lue dans EA.exe), le guide de l'utilisateur de cette version et les problèmes connus d'EA avec leurs contournements.</td></tr>
+  <tr><td><code>/explain &lt;diagram&gt; [for whom]</code></td><td>Explique le diagramme en langage simple, pour la direction, un directeur financier, un auditeur ou un développeur.</td></tr>
+  <tr><td><code>/exec-view &lt;diagram&gt;</code></td><td>Une copie de présentation à côté de l'original : mêmes éléments et mêmes places ; attributs, opérations, stéréotypes et libellés des relations masqués ; couleurs par type.</td></tr>
+  <tr><td><code>/apply-style &lt;package or diagrams&gt; by &lt;stereotype|type|status&gt;</code></td><td>Un seul jeu de couleurs pour de nombreux diagrammes.</td></tr>
+  <tr><td><code>/context-diagram &lt;element&gt; [steps] [relationship types]</code></td><td>Un nouveau diagramme d'un élément et de ce qui lui est lié.</td></tr>
+  <tr><td><code>/visibility &lt;diagram&gt; &lt;what to show or hide&gt;</code></td><td>Une règle indiquant quelles relations le diagramme affiche. Elle est appliquée sur demande ou automatiquement quand une relation est créée dans EA. Elle est conservée dans <code>visibility.json</code> à côté des paramètres.</td></tr>
+  <tr><td><code>/show-hidden-links &lt;diagram&gt;</code></td><td>Les relations entre éléments du diagramme qui y sont masquées.</td></tr>
+  <tr><td><code>/fill-notes [package] [types]</code></td><td>Des brouillons de descriptions pour les éléments qui n'en ont pas, enregistrés après votre accord.</td></tr>
+  <tr><td><code>/matrix &lt;source package&gt; × &lt;target package&gt; [relationship type]</code></td><td>Une matrice de relations, aussi comme matrice propre d'EA.</td></tr>
+  <tr><td><code>/new-version &lt;element&gt;</code></td><td>Clone l'élément comme nouvelle version, avec une trace vers l'original.</td></tr>
+  <tr><td><code>/doc-package &lt;package&gt;</code></td><td>Un document Word lisible d'un paquetage.</td></tr>
+  <tr><td><code>/template-from-doc [name]</code></td><td>Transforme le document joint en modèle de rapport EA.</td></tr>
+  <tr><td><code>/send-to-miro [diagram]</code></td><td>Envoie un diagramme vers un tableau Miro (chapitre 12).</td></tr>
+  <tr><td><code>/glossary-add [term]</code></td><td>La fenêtre du glossaire du projet (pour le polonais avec les 14 formes d'un nom ou les formes d'un verbe).</td></tr>
+</table>
+<div class="prompt">/find-duplicates Shop domain</div>
+<p>Certaines de ces commandes existent aussi comme outils que l'assistant utilise de lui-même (chapitre 7) : inutile alors de taper la commande. Changer le type de relations (par exemple Composition → Serving, aussi pour de nombreuses relations à la fois, en gardant le nom, les notes, les tagged values, le tracé et le masquage) et aligner ou répartir des éléments sur un diagramme : demandez-le simplement avec vos mots.</p>
 <h3>Pièces jointes</h3>
 <p>Vous pouvez joindre jusqu'à 5 fichiers à un message, chacun de 10 Mo au maximum. Méthodes : faites glisser les fichiers dans la fenêtre (depuis l'Explorateur ou depuis un navigateur), collez-les depuis le presse-papiers (<span class="key">Ctrl</span> + <span class="key">V</span>) ou utilisez le bouton de collage de la carte de message.</p>
 <table>
@@ -306,7 +339,7 @@
   <li>Sous les messages apparaît la <b>carte des étapes</b> : ce que l'assistant fait en ce moment, combien de temps cela prend et le résultat de chaque étape. Pendant le travail, la carte est développée ; une fois le travail terminé, elle se réduit à une ligne ; un clic sur l'en-tête de la carte la développe à nouveau. En français, la carte affiche un court résultat traduit (par exemple « lignes : 12 », « enregistré dans le modèle EA », « image prête ») ; le résultat détaillé, rédigé en anglais, ne s'affiche que dans l'interface anglaise.</li>
   <li>Vous pouvez <b>continuer à écrire</b> : le message suivant est mis en file d'attente et l'assistant en tiendra compte à l'étape suivante, sans interrompre son travail.</li>
   <li>Le bouton <b>Arrêter</b> interrompt le travail après l'étape en cours. Une étape déjà commencée (par exemple un enregistrement dans EA) va jusqu'à son terme.</li>
-  <li>Une réponse compte <b>au plus 24 étapes</b>. Si l'assistant n'a pas terminé, il s'arrête pour éviter une boucle sans fin ; poursuivez dans un nouveau message.</li>
+  <li>Une réponse compte <b>au plus 40 étapes</b>. Si l'assistant atteint la limite alors qu'il travaille encore, il continue de lui-même. S'il s'arrête en indiquant ce qui est fait et ce qui reste, poursuivez dans un nouveau message (par exemple « continue »).</li>
 </ul>
 <figure><img src="img/en/steps.png" alt="Carte des étapes de l'assistant pendant son travail, avec la durée et le résultat de chaque étape"><figcaption>Les étapes de l'assistant pendant son travail</figcaption></figure>
 <h3>Évaluer les réponses et signaler depuis le chat</h3>
@@ -319,7 +352,7 @@
   <li><b>Sous-agents.</b> Pour une analyse plus vaste, l'assistant peut confier une tâche ciblée à un sous-agent : <b>impact</b> (ce qu'affecte une modification prévue), <b>review</b> (un paquetage, un brouillon ou des modifications prévues confrontés aux bonnes pratiques et aux instructions de l'équipe) ou <b>document</b> (un projet de texte d'une section de document). Le sous-agent ne fait que lire le modèle, dans son propre contexte, et renvoie un résultat compact, de sorte que la conversation reste courte. L'étape affiche « Sous-agent (impact) : … ».</li>
 </ul>
 <h3>Raisonnement et calculs</h3>
-<p>Deux commutateurs de la carte de message ne fonctionnent qu'avec Claude (avec OpenAI, ils ne s'affichent pas) ; le réglage est mémorisé.</p>
+<p>La carte de message a trois commutateurs : <b>💭</b> et <b>∑</b> ne fonctionnent qu'avec Claude (avec OpenAI, ils ne s'affichent pas), <b>🌐</b> fonctionne avec Claude et avec OpenAI. Le réglage est mémorisé.</p>
 <ul>
   <li><b>💭 Afficher le raisonnement de l’assistant dans les étapes.</b> Un résumé du raisonnement du modèle apparaît dans les étapes sous « 💭 Raisonnement de l’assistant ». Le modèle raisonne de toute façon ; le commutateur ne fait que l'afficher. L'ampleur du raisonnement reste réglée par l'effort de la carte <b>Modèle d'IA</b> (chapitre 5).</li>
   <li><b>∑ Code dans le bac à sable</b> (désactivé par défaut). L'assistant peut exécuter du code dans le bac à sable d'Anthropic pour des calculs et l'analyse de données, par exemple les totaux d'une estimation ou les statistiques d'un export du modèle. Son résultat apparaît comme l'étape « Code dans le bac à sable ». Les données que l'assistant y transmet vont à Anthropic, comme la conversation (chapitre 18).</li>
@@ -373,7 +406,8 @@
 <h3>Copie de paquetage et baseline</h3>
 <ul>
   <li><b>La copie de paquetage</b> crée un duplicata du paquetage avec tout son contenu.</li>
-  <li><b>Une baseline</b> est une version enregistrée d'un paquetage dans EA. Avant une suppression ou une restructuration importante d'un paquetage existant, l'assistant a pour consigne de créer une baseline. Ce n'est pas une garantie : pour les paquetages importants, demandez-lui explicitement une baseline et travaillez en mode <b>ask</b>.</li>
+  <li><b>Une baseline</b> est une version enregistrée d'un paquetage dans EA. Avant une modification qui supprime quelque chose, Compass crée lui-même une baseline du paquetage. Avant une restructuration importante d'un paquetage important, demandez explicitement une baseline et travaillez en mode <b>ask</b>.</li>
+  <li><b>Annulation :</b> la plupart des enregistrements de l'assistant peuvent être annulés (section 8.3). Pour les autres, Compass a créé une baseline.</li>
   <li><b>La restauration</b> se fait dans Enterprise Architect : cliquez avec le bouton droit sur le paquetage, choisissez <b>Manage Baselines</b>, sélectionnez la baseline et utilisez <b>Compare/Restore</b>. L'assistant ne restaure pas lui-même les baselines, car la restauration par automatisation fige EA.</li>
 </ul>
 <h3>Glossaire du projet EA</h3>
@@ -557,11 +591,11 @@
 <p><b>Astuce :</b> pour une modification en masse comme la troisième demande, lisez « Avant → après » avant de valider : chaque modification y est visible.</p>
 
 <h3>8.3 Annuler des modifications</h3>
-<p>Chaque enregistrement de l'assistant est consigné dans un journal d'annulation (la « machine à remonter le temps ») avec les opérations qui l'inversent. L'annulation supprime les objets créés et rend leurs valeurs précédentes aux champs modifiés, aux tagged values, aux positions et aux déplacements. Elle porte sur les enregistrements de l'assistant dans ce modèle ; les modifications faites à la main dans EA n'en font pas partie.</p>
+<p>Chaque enregistrement de l'assistant est consigné dans un journal d'annulation (la « machine à remonter le temps ») avec les opérations qui l'inversent. L'annulation supprime les objets créés et rend leurs valeurs précédentes aux champs modifiés, aux tagged values, aux positions et aux déplacements. Elle inverse aussi les attributs, opérations et paquetages créés ou modifiés, ainsi qu'une mise en page de diagramme. Elle porte sur les enregistrements de l'assistant dans ce modèle ; les modifications faites à la main dans EA n'en font pas partie.</p>
 <div class="prompt">Annule la dernière modification.</div>
 <div class="prompt">Montre l'historique des modifications de l'assistant dans ce modèle.</div>
 <p><b>Ce que vous voyez :</b> pour l'historique, une liste des enregistrements, du plus récent au plus ancien, avec ce qui peut être annulé. Pour une annulation, un panneau de validation « Annuler les derniers enregistrements de l'assistant (…) » avec la liste des enregistrements (il apparaît dans tous les modes) ; après validation, Compass annule les enregistrements et vérifie le résultat dans le modèle. S'il n'y a rien à annuler, l'assistant indique qu'il n'y a rien à annuler dans ce modèle.</p>
-<p><b>Les suppressions, les imports et la mise en page automatique des diagrammes</b> ne peuvent pas être inversés par des opérations. Avant un tel enregistrement, Compass crée dans EA une baseline du paquetage concerné. Vous la restaurez dans Enterprise Architect : cliquez avec le bouton droit sur le paquetage, choisissez <b>Manage Baselines</b>, sélectionnez la baseline et utilisez <b>Compare/Restore</b>.</p>
+<p><b>Les suppressions, les imports, les fusions d'éléments, les changements de type de relation et les couleurs</b> ne peuvent pas être inversés par des opérations. Avant un tel enregistrement, Compass crée dans EA une baseline du paquetage concerné. Vous la restaurez dans Enterprise Architect : cliquez avec le bouton droit sur le paquetage, choisissez <b>Manage Baselines</b>, sélectionnez la baseline et utilisez <b>Compare/Restore</b>.</p>
 <p><b>Astuce :</b> vous pouvez annuler plusieurs enregistrements à la fois (« Annule les trois dernières modifications ») ; demandez d'abord l'historique pour voir ce que l'annulation va couvrir.</p>
 
 <h3>8.4 Qualité du modèle et règles d'équipe</h3>
@@ -608,7 +642,7 @@
 <div class="prompt">Ajoute au diagramme Order process les couloirs Ventes et Entrepôt.</div>
 <div class="prompt">Ajoute à la classe Order un document lié avec le texte : Commande client – en-tête et lignes.</div>
 <p><b>Ce que vous voyez :</b> le panneau de validation habituel avec la description de la modification, puis, après l'enregistrement, la vérification du modèle. Si le même modèle est ouvert dans EA, le diagramme modifié s'actualise de lui-même dans votre fenêtre (chapitre 9).</p>
-<p><b>Astuce :</b> après la modification, demandez « Montre le diagramme Domain model » : vous le voyez sous forme d'image dans la conversation et jugez si la mise en page est lisible. Une mise en page automatique ne peut pas être inversée par des opérations ; Compass crée donc d'abord une baseline du paquetage (section 8.3).</p>
+<p><b>Astuce :</b> après la modification, demandez « Montre le diagramme Domain model » : vous le voyez sous forme d'image dans la conversation et jugez si la mise en page est lisible. Si la mise en page ne vous convient pas, annulez-la comme tout autre enregistrement (section 8.3).</p>
 
 <h3>8.10 Scripts EA</h3>
 <p>L'assistant écrit des scripts EA (JScript, VBScript ou JavaScript) et les exécute dans le modèle : ils affichent des données, vérifient quelque chose ou modifient de nombreux objets à la fois. Un groupe de scripts manquant est créé automatiquement. Le script s'exécute dans la fenêtre EA ouverte ou, s'il n'y en a pas, dans une session EA distincte en arrière-plan.</p>
@@ -706,7 +740,7 @@
 <pre>{"agents":[{"name":"Keep approved","event":"element_deleting","mode":"guard","applies_to":"Requirement",
   "prompt":"Block deleting a requirement whose status is Approved."}]}</pre>
 <p><b>Ce que vous voyez :</b> lorsque vous supprimez une exigence approuvée dans EA, le message « Loonar Compass a arrêté cette suppression : » avec la raison, et l'exigence reste en place. Dans System Output, les lignes « 🛡 Keep approved : bloqué - … » ou « 🛡 Keep approved : autorisé ».</p>
-<p><b>Astuce :</b> un gardien répond en quelques secondes ; s'il ne décide pas dans les 40 secondes (ou ne le peut pas, par exemple sans IA), la suppression est arrêtée, afin qu'un objet protégé ne soit jamais perdu par accident. Rédigez des demandes de gardien qui disent clairement quand bloquer.</p>
+<p><b>Astuce :</b> les gardiens fonctionnent tant que Compass tourne dans EA : EA les consulte avant une suppression. Un gardien répond en quelques secondes ; s'il ne décide pas dans les 40 secondes (ou ne le peut pas, par exemple sans IA), ou si Compass ne peut pas lire l'objet, la suppression est arrêtée, afin qu'un objet protégé ne soit jamais perdu par accident. Rédigez des demandes de gardien qui disent clairement quand bloquer.</p>
 
 <h3>8.23 Contrôle de version des paquetages</h3>
 <p>Pour les paquetages sous contrôle de version dans EA, l'assistant indique qui a extrait quoi, et il extrait et archive les paquetages (chapitre 7, « Contrôle de version des paquetages »).</p>
@@ -768,7 +802,7 @@
   <li>Vous choisissez la conversation dans la liste déroulante en haut de la fenêtre. La liste n'affiche que les conversations de ce projet. Le bouton <b>+</b> commence une nouvelle conversation, et le crayon renomme celle qui est sélectionnée.</li>
   <li>Les icônes des vues se trouvent en bas de la fenêtre ; dans une fenêtre étroite, les pages défilent horizontalement et verticalement.</li>
   <li><span class="key">Ctrl</span> + <span class="key">V</span> colle des images, des fichiers et du texte, comme dans l'application autonome.</li>
-  <li>Les paramètres dans EA n'ont pas de cartes Modèle et Enterprise Architect. Les cartes Modèle d'IA, Langue et validation des modifications, Confluence, Miro, Jira, SharePoint et Équipe (Compass Hub) fonctionnent comme dans l'application autonome (chapitre 5).</li>
+  <li>Les paramètres dans EA n'ont pas de cartes Modèle et Enterprise Architect. Les cartes Modèle d'IA, Langue et validation des modifications, Code source, Confluence, Miro, Jira, SharePoint, OneDrive, Google Drive et Équipe (Compass Hub) fonctionnent comme dans l'application autonome (chapitre 5).</li>
 </ul>
 <h3>Modifications, diagrammes et références aux objets</h3>
 <ul>
@@ -799,7 +833,7 @@
   <li>Le même agent réagit au même objet au plus une fois par minute.</li>
   <li>Le bouton <b>Enregistrer les agents d'événements</b> enregistre les règles et affiche le nombre d'agents.</li>
 </ul>
-<p><b>Gardiens.</b> Par défaut, un agent conseille après l'événement (<code>"mode": "advise"</code>). Avec <code>"mode": "guard"</code>, permis uniquement pour les événements <code>*_deleting</code>, EA consulte Compass avant de supprimer l'objet. Le gardien répond ALLOW ou BLOCK avec une raison. Avec BLOCK, EA affiche « Loonar Compass a arrêté cette suppression : » avec la raison et annule la suppression. Si le gardien ne décide pas dans les 40 secondes ou ne peut pas décider, la suppression est arrêtée avec un message. System Output affiche « 🛡 … : autorisé » ou « 🛡 … : bloqué - … ».</p>
+<p><b>Gardiens.</b> Par défaut, un agent conseille après l'événement (<code>"mode": "advise"</code>). Avec <code>"mode": "guard"</code>, permis uniquement pour les événements <code>*_deleting</code>, EA consulte Compass avant de supprimer l'objet. Le gardien répond ALLOW ou BLOCK avec une raison. Avec BLOCK, EA affiche « Loonar Compass a arrêté cette suppression : » avec la raison et annule la suppression. Les gardiens fonctionnent tant que Compass tourne dans EA. Si le gardien ne décide pas dans les 40 secondes ou ne peut pas décider, et aussi si Compass ne peut pas lire l'objet ou ne répond pas à temps, la suppression est arrêtée avec un message. System Output affiche « 🛡 … : autorisé » ou « 🛡 … : bloqué - … ».</p>
 <pre>{"agents":[{"name":"Keep approved","event":"element_deleting","mode":"guard","applies_to":"Requirement",
   "prompt":"Block deleting a requirement whose status is Approved."}]}</pre>
 <p><b>Agents de l'équipe.</b> Avec un hub d'équipe (chapitre 22), les agents de la politique de l'équipe (<code>event_agents</code>) fonctionnent dans le Compass dans EA de chacun, à côté des agents de cet ordinateur. Leurs noms portent la mention « (team) ».</p>
@@ -1022,7 +1056,7 @@
   <tr><th style="width: 36%;">Données</th><th>Emplacement</th></tr>
   <tr><td>Programme</td><td>Le dossier d'installation : <code>%LOCALAPPDATA%\Programs\Loonar Compass</code> (pour vous uniquement) ou <code>%ProgramFiles%\Loonar Compass</code> (pour tous les utilisateurs)</td></tr>
   <tr><td>Paramètres (<code>app.properties</code>, sans aucun secret), historique des conversations (<code>history</code> ; conversations supprimées dans <code>history\bin</code>), pièces jointes et documents créés : Word, Excel, PowerPoint, PDF, PNG, pages Confluence et leurs dossiers d'images <code>&lt;page&gt;_images</code> (<code>attachments</code>), mémoire de l'assistant (<code>memory</code>, index <code>MEMORY.md</code>), modèles de documents (<code>templates</code>), journal des modifications (<code>audit_log.jsonl</code>), pages Confluence publiées (<code>confluence_pages.json</code>)</td><td>Le dossier des données utilisateur : <code>%APPDATA%\Loonar Compass</code>. Chaque utilisateur Windows de l'ordinateur a le sien.</td></tr>
-  <tr><td>Clé API Claude, clé API OpenAI, mot de passe du compte EA, mot de passe de la base, jetons Confluence et Miro, secret client SharePoint, secret OAuth2 du service d'IA (<code>ai_oauth_client_secret</code>), jetons et secrets des serveurs MCP (<code>mcp_…</code>)</td><td>Gestionnaire d'identification Windows, entrées « loonar-compass » (protégées par le système)</td></tr>
+  <tr><td>Clé API Claude, clé API OpenAI, mot de passe du compte EA, mot de passe de la base, jetons Confluence, Jira et Miro, mots de passe des certificats pour Jira et Confluence, jetons de connexion OneDrive et Google Drive, secret client Google Drive, secret client SharePoint, secret client OAuth2 du service d'IA (<code>ai_oauth_client_secret</code>), jeton du hub d'équipe, jetons et secrets des serveurs MCP (<code>mcp_…</code>)</td><td>Gestionnaire d'identification Windows, entrées « loonar-compass » (protégées par le système)</td></tr>
   <tr><td>Instructions de modélisation de l'équipe</td><td>Dans le référentiel EA lui-même (un Artifact «CompassInstructions», chapitre 7), et non sur votre ordinateur</td></tr>
 </table>
 <p>L'historique des conversations est enregistré sous forme de fichiers ordinaires dans votre profil Windows : il est protégé par votre compte Windows, mais l'application ne le chiffre pas.</p>
@@ -1072,7 +1106,7 @@
   <tr><td>« EA n'a pas répondu dans les 300 s »</td><td>Le plus souvent, un compte ou un mot de passe d'utilisateur du modèle erroné (EA attend alors sur une fenêtre de connexion invisible) ou aucune licence disponible. Corrigez les données dans la carte Modèle (compte EA, données de la base) et utilisez « Enregistrer et tester l'accès à EA » dans la carte Enterprise Architect.</td></tr>
   <tr><td>Le premier enregistrement ou le premier diagramme prend du temps</td><td>C'est le démarrage d'Enterprise Architect en arrière-plan (de quelques secondes à plus de dix secondes). Les appels suivants sont rapides.</td></tr>
   <tr><td>« La réponse du modèle a été tronquée à la limite de … jetons »</td><td>Augmentez « Jetons max. » dans la carte « Modèle d'IA » ou demandez que la tâche soit effectuée en plusieurs parties plus petites.</td></tr>
-  <tr><td>« L'assistant a effectué 24 étapes sans terminer »</td><td>L'assistant s'est arrêté pour éviter une boucle sans fin. Poursuivez dans un nouveau message ou divisez la tâche en parties plus petites.</td></tr>
+  <tr><td>« L'assistant a effectué 40 étapes sans terminer »</td><td>La réponse a atteint la limite d'étapes et n'a pas continué d'elle-même. Poursuivez dans un nouveau message ou divisez la tâche en parties plus petites.</td></tr>
   <tr><td>Les modifications ne sont pas visibles dans Enterprise Architect</td><td>Si le même modèle est ouvert dans EA, l'assistant l'actualise lui-même. Sinon, actualisez le paquetage dans le navigateur de projet (<span class="key">F5</span>) ou rouvrez le diagramme.</td></tr>
   <tr><td>« Impossible de verrouiller l'objet »</td><td>L'objet est verrouillé par un autre utilisateur du modèle ; le message indique lequel. Levez le verrou dans EA ou demandez à son propriétaire de le faire.</td></tr>
   <tr><td>« ! » orange sur les icônes Paramètres, Mémoire de l'assistant, Modèles de documents</td><td>Après un changement de langue, la traduction attend une connexion au modèle d'IA. Vérifiez la clé API dans la carte « Modèle d'IA » et cliquez sur « Traduire maintenant » dans la carte « Langue et validation des modifications ».</td></tr>
@@ -1131,8 +1165,8 @@
 <h3>Installer le hub</h3>
 <p>Le hub est un programme à part entière, <code>compass-hub</code>, pour Windows et Linux. Il lit les modèles directement (une base PostgreSQL, SQL Server, MySQL/MariaDB ou Oracle, ou des fichiers .qea/.qeax) : le serveur n'a donc pas besoin d'Enterprise Architect. Téléchargements :</p>
 <ul>
-  <li><b>Windows :</b> <code>CompassHub-0.9.0-windows-x64.zip</code> avec <code>compass-hub.exe</code>, un exemple de <code>hub.json</code> et un README.</li>
-  <li><b>Docker :</b> l'image <code>ghcr.io/loonar-eu/compass-hub:0.9.0</code>, ou construisez-la vous-même dans le dossier racine du dépôt : <code>docker build -f hub/Dockerfile -t compass-hub .</code></li>
+  <li><b>Windows :</b> <code>CompassHub-0.9.3-windows-x64.zip</code> avec <code>compass-hub.exe</code>, un exemple de <code>hub.json</code> et un README.</li>
+  <li><b>Docker :</b> l'image <code>ghcr.io/loonar-eu/compass-hub:0.9.3</code>, ou construisez-la vous-même dans le dossier racine du dépôt : <code>docker build -f hub/Dockerfile -t compass-hub .</code></li>
 </ul>
 <p><b>Dans une console</b> (Windows ou Linux). Le hub tourne jusqu'à la fermeture de la console :</p>
 <pre>compass-hub hub.json</pre>
@@ -1140,8 +1174,9 @@
 <pre>compass-hub --service-install C:\Hub\hub.json
 compass-hub --service-uninstall</pre>
 <p><b>Dans Docker.</b> Placez <code>hub.json</code> avec <code>"listen": "0.0.0.0:8730"</code> dans le dossier de données, que le conteneur voit comme <code>/data</code> :</p>
-<pre>docker run -d --name compass-hub -p 8730:8730 -v /srv/compass-hub:/data \
-  -e LOONAR_SECRET_CLAUDE_API_KEY=... ghcr.io/loonar-eu/compass-hub:0.9.0</pre>
+<pre>docker run -d --name compass-hub -p 127.0.0.1:8730:8730 -v /srv/compass-hub:/data \
+  -e LOONAR_SECRET_CLAUDE_API_KEY=... ghcr.io/loonar-eu/compass-hub:0.9.3</pre>
+<p>Avec <code>-p 127.0.0.1:8730:8730</code>, le hub n'est accessible que depuis cet ordinateur. Pour les autres ordinateurs, placez devant lui un reverse proxy en HTTPS (voir « Sécurité du hub »).</p>
 <ul>
   <li>Le conteneur s'exécute sous l'utilisateur d'id 10001 : le dossier de données doit être accessible en écriture pour lui, car le hub y écrit <code>hub.json</code>, le journal d'audit, les notes, les ensembles de modifications et <code>hub.log</code>.</li>
   <li>Modèles : des fichiers .qea/.qeax dans le dossier de données, avec les chemins vus depuis le conteneur (par exemple <code>model.file=/data/models/shop.qea</code> dans l'<code>app.properties</code> de la source), ou une base de données. L'image contient unixODBC pour SQL Server, MySQL et Oracle ; le pilote ODBC Linux de l'éditeur (par exemple le paquet <code>msodbcsql18</code> de Microsoft) doit être ajouté dans une image construite sur celle-ci. PostgreSQL et les fichiers EA n'ont besoin de rien d'autre.</li>
@@ -1276,7 +1311,7 @@ compass-hub --service-uninstall</pre>
   <li><b>HubUrl</b> – l'adresse du hub d'équipe ; le champ des paramètres est verrouillé.</li>
   <li><b>RequireHub</b> = 1 – l'assistant ne fonctionne que connecté au hub et avec sa politique. Si le hub ne répond pas pendant un moment, Compass utilise la dernière politique reçue (au plus une semaine) ; sans elle, l'assistant ne fonctionne pas.</li>
   <li><b>WebAccess</b> = 0 – pas d'accès au web (le bouton 🌐 est verrouillé).</li>
-  <li><b>UpdateCheck</b> = 0 – pas de vérification quotidienne d'une nouvelle version.</li>
+  <li><b>UpdateCheck</b> = 0 – pas de vérification horaire d'une nouvelle version.</li>
   <li><b>MinApproval</b> = ask, plan ou auto – le mode d'approbation le moins strict.</li>
   <li><b>AllowedProviders</b> – les fournisseurs d'IA autorisés, p. ex. <code>anthropic</code> ou <code>anthropic,openai</code>.</li>
 </ul>
@@ -1355,7 +1390,7 @@ compass-hub --service-uninstall</pre>
 <p><b>Composants open source.</b> L'application contient des bibliothèques et des polices open source ; chacune conserve sa propre licence. Leur liste se trouve dans le fichier <code>THIRD-PARTY-NOTICES.txt</code> du dossier d'installation ; dans la vue <b>À propos</b>, le bouton <b>Afficher les licences des composants</b> ouvre ce fichier.</p>
 <p><b>Soutien.</b> Si l'application vous est utile, vous pouvez soutenir son développement par une contribution volontaire : vue <b>Soutenir le projet</b> ou <a href="https://suppi.pl/loonar">https://suppi.pl/loonar</a>.</p>
 <p><b>Contact.</b> Propriétaire de l'application : Loonar Mariusz Głowacki, ul. Gombrowicza 12, 73-110 Stargard. E-mail : mariusz@loonar.eu, site : <a href="https://loonar.eu">https://loonar.eu</a>, code source : <a href="https://github.com/loonar-eu/loonar-compass">https://github.com/loonar-eu/loonar-compass</a>. Le plus simple pour signaler un bug est d'utiliser la vue <b>Signaler un bug</b>.</p>
-<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.9. Sparx Systems et Enterprise Architect sont des marques déposées de Sparx Systems Pty Ltd. Claude et Anthropic sont des marques d'Anthropic, PBC. OpenAI et GPT sont des marques d'OpenAI. Atlassian, Confluence et Jira sont des marques d'Atlassian. Microsoft, Windows, Word, Excel, PowerPoint, Visio, SharePoint, SQL Server, Entra ID, Power BI, Azure, Azure DevOps et GitHub sont des marques du groupe Microsoft. Oracle et MySQL sont des marques déposées d'Oracle et/ou de ses sociétés affiliées ; MariaDB est une marque de MariaDB plc ; Okta est une marque d'Okta, Inc. GitLab est une marque de GitLab Inc., ServiceNow de ServiceNow, Inc. et Docker de Docker, Inc. PostgreSQL est une marque déposée de la PostgreSQL Community Association. Loonar Compass est un produit indépendant, sans lien avec ces sociétés, qui ne l'approuvent ni ne le parrainent.</p>
+<p style="color: #706d64; font-size: 9pt;">Loonar Compass 0.9.3. Sparx Systems et Enterprise Architect sont des marques déposées de Sparx Systems Pty Ltd. Claude et Anthropic sont des marques d'Anthropic, PBC. OpenAI et GPT sont des marques d'OpenAI. Atlassian, Confluence et Jira sont des marques d'Atlassian. Microsoft, Windows, Word, Excel, PowerPoint, Visio, SharePoint, SQL Server, Entra ID, Power BI, Azure, Azure DevOps et GitHub sont des marques du groupe Microsoft. Oracle et MySQL sont des marques déposées d'Oracle et/ou de ses sociétés affiliées ; MariaDB est une marque de MariaDB plc ; Okta est une marque d'Okta, Inc. GitLab est une marque de GitLab Inc., ServiceNow de ServiceNow, Inc. et Docker de Docker, Inc. PostgreSQL est une marque déposée de la PostgreSQL Community Association. Loonar Compass est un produit indépendant, sans lien avec ces sociétés, qui ne l'approuvent ni ne le parrainent.</p>
 
 </body>
 </html>

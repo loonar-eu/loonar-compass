@@ -2,7 +2,7 @@
 <html lang="pl">
 <head>
 <meta charset="utf-8">
-<title>Compass Hub 0.9.2 - Instrukcja instalacji dla działu IT</title>
+<title>Compass Hub 0.9.3 - Instrukcja instalacji dla działu IT</title>
 <style>
   @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
   body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1f1e1b; }
@@ -34,7 +34,7 @@
   <img src="img/logo.png" alt="Logo Loonar Compass">
   <h1 style="margin-top: 10mm;">Compass Hub</h1>
   <div class="sub">Instrukcja instalacji dla działu IT</div>
-  <div class="sub" style="font-size: 11pt;">wersja 0.9.2 &middot; październik 2026</div>
+  <div class="sub" style="font-size: 11pt;">wersja 0.9.3 &middot; październik 2026</div>
   <div class="owner">
     Loonar Mariusz Głowacki<br>
     ul. Gombrowicza 12, 73-110 Stargard<br>
@@ -96,18 +96,18 @@
   <tr><td>☐</td><td>Sekrety u osoby, która instaluje</td><td>Klucz(e) Claude API, token API Atlassian, sekret klienta OIDC, hasło do bazy. Nigdy nie trafiają do hub.json.</td></tr>
   <tr><td>☐</td><td>Wychodzące HTTPS z serwera</td><td><code>api.anthropic.com</code> (bramka AI), Twoja witryna Atlassian (Jira/Confluence). Przez proxy: ustaw <code>HTTPS_PROXY</code> dla usługi (krok 3).</td></tr>
 </table>
-<p>Pliki z wydania: <code>CompassHub-0.9.0-windows-x64.zip</code> (z <code>compass-hub.exe</code>, <code>hub.example.json</code>, <code>README.md</code> i licencjami), a dla stacji <code>LoonarCompass-Setup-0.9.exe</code> oraz folder <code>policies</code> (ADMX/ADML).</p>
+<p>Pliki z wydania: <code>CompassHub-0.9.3-windows-x64.zip</code> (z <code>compass-hub.exe</code>, <code>hub.example.json</code>, <code>README.md</code> i licencjami), a dla stacji <code>LoonarCompass-Setup-0.9.3.exe</code> oraz folder <code>policies</code> (ADMX/ADML).</p>
 
 <h2 id="s3" class="break">3. Krok 1 – Pliki i folder</h2>
 <ol>
   <li>Sprawdź SHA-256 pobranego pliku z wartością opublikowaną przy wydaniu:
-<pre>Get-FileHash .\CompassHub-0.9.0-windows-x64.zip -Algorithm SHA256</pre></li>
+<pre>Get-FileHash .\CompassHub-0.9.3-windows-x64.zip -Algorithm SHA256</pre></li>
   <li>Rozpakuj go do <code>C:\CompassHub</code> i utwórz podfoldery <code>models</code> i <code>secrets</code>.</li>
   <li>Ogranicz dostęp do folderu do usługi i administratorów. Hub zapisuje tu swoje dane, a tu leżą sekrety:
 <pre>icacls C:\CompassHub /inheritance:r /grant:r "SYSTEM:(OI)(CI)F" "BUILTIN\Administrators:(OI)(CI)F"</pre>
   W polskim Windows grupa nazywa się <code>BUILTIN\Administratorzy</code>; zamiast nazwy można podać SID <code>*S-1-5-32-544</code>.</li>
 </ol>
-<p><b>Sprawdzenie:</b> <code>C:\CompassHub\compass-hub.exe --version</code> wypisuje <code>0.9.0</code>.</p>
+<p><b>Sprawdzenie:</b> <code>C:\CompassHub\compass-hub.exe --version</code> wypisuje <code>0.9.3</code>.</p>
 
 <h2 id="s4">4. Krok 2 – hub.json i modele</h2>
 <p>Skopiuj <code>hub.example.json</code> do <code>C:\CompassHub\hub.json</code>. Minimalny start:</p>
@@ -314,13 +314,13 @@ Set-WebConfigurationProperty -PSPath $p -Filter system.webServer/proxy -Name tim
   <tr><td>Adres huba</td><td><code>HubUrl</code> (tekst)</td><td>Adres huba jest ustalony w Compass i nie można go zmienić.</td></tr>
   <tr><td>Wymagaj huba</td><td><code>RequireHub</code> = 1</td><td>Asystent działa tylko wtedy, gdy osoba jest zalogowana do huba.</td></tr>
   <tr><td>Dostęp do internetu</td><td><code>WebAccess</code> = 0</td><td>Bez wyszukiwania i czytania stron; przycisk 🌐 jest wyłączony.</td></tr>
-  <tr><td>Sprawdzanie aktualizacji</td><td><code>UpdateCheck</code> = 0</td><td>Bez codziennego sprawdzania nowej wersji.</td></tr>
+  <tr><td>Sprawdzanie aktualizacji</td><td><code>UpdateCheck</code> = 0</td><td>Bez cogodzinnego sprawdzania nowej wersji.</td></tr>
   <tr><td>Minimalny tryb zatwierdzania</td><td><code>MinApproval</code> = ask / plan / auto</td><td>Nie można wybrać słabszego trybu.</td></tr>
   <tr><td>Dozwoleni dostawcy AI</td><td><code>AllowedProviders</code>, np. <code>anthropic</code></td><td>Inni dostawcy (np. OpenAI) są odrzucani.</td></tr>
 </table>
 <p>Bez domeny te same wartości można zaimportować plikiem <code>LoonarCompass-company-policy.reg</code> (i usunąć plikiem <code>LoonarCompass-remove-policy.reg</code>). Zasady komputera są silniejsze niż polityka huba i ustawienia użytkownika; mogą Compass tylko zaostrzyć.</p>
-<p><b>Instalacja Compass.</b> <code>LoonarCompass-Setup-0.9.exe</code> instaluje dla bieżącego użytkownika (<code>%LOCALAPPDATA%\Programs\Loonar Compass</code>) albo dla wszystkich (<code>Program Files</code>) i rejestruje dodatek w Enterprise Architect. Dla narzędzi wdrożeniowych (Intune, Configuration Manager, skrypt startowy) instaluje bez okna:</p>
-<pre>LoonarCompass-Setup-0.9.exe --quiet --all-users</pre>
+<p><b>Instalacja Compass.</b> <code>LoonarCompass-Setup-0.9.3.exe</code> instaluje dla bieżącego użytkownika (<code>%LOCALAPPDATA%\Programs\Loonar Compass</code>) albo dla wszystkich (<code>Program Files</code>) i rejestruje dodatek w Enterprise Architect. Dla narzędzi wdrożeniowych (Intune, Configuration Manager, skrypt startowy) instaluje bez okna:</p>
+<pre>LoonarCompass-Setup-0.9.3.exe --quiet --all-users</pre>
 <table>
   <tr><th>Opcja</th><th>Działanie</th></tr>
   <tr><td><code>--quiet</code></td><td>Bez okna i bez pytań. Kod wyjścia 0 = zainstalowano, 1 = błąd, 740 = <code>--all-users</code> bez uprawnień administratora. Wynik jest w <code>%TEMP%\LoonarCompass-Setup.log</code> (dla SYSTEM: <code>C:\Windows\Temp</code>).</td></tr>
@@ -398,7 +398,7 @@ Start-Service CompassHub</pre>
 <p>Ten sam hub działa w kontenerze. Folder danych (hub.json z <code>"listen": "0.0.0.0:8730"</code>, modele i pliki huba) jest montowany jako <code>/data</code> i musi być zapisywalny dla użytkownika 10001. Sekrety pochodzą ze zmiennych <code>LOONAR_SECRET_*</code> albo z sekretów Dockera przez <code>LOONAR_SECRET_*_FILE</code>:</p>
 <pre>docker run -d --name compass-hub -p 127.0.0.1:8730:8730 -v /srv/compass-hub:/data \
   -e LOONAR_SECRET_CLAUDE_KEY_TEAM_FILE=/run/secrets/claude_key_team \
-  ghcr.io/loonar-eu/compass-hub:0.9.0</pre>
+  ghcr.io/loonar-eu/compass-hub:0.9.3</pre>
 <p>Przed nim postaw nginx albo inne proxy HTTPS, jak w kroku 5. Proxy ma nie zmieniać nagłówka <code>Location</code> przekierowań, przekazywać <code>X-Forwarded-For</code>, przyjmować zapytania do 32 MB i mieć limit czasu 5 minut. Dla modeli w SQL Server, MySQL lub Oracle zbuduj własny obraz na bazie tego i dodaj linuksowy sterownik ODBC producenta.</p>
 
 </body>
