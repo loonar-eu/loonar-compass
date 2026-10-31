@@ -135,6 +135,99 @@ fn scope_packages(cfg: &AppConfig, roots: &[String]) -> Result<HashSet<i64>> {
     }
 }
 
+/// One dimension of a portfolio view (LC-393): the SQL of its value and the join it needs.
+fn dimension(cfg: &AppConfig, name: &str, alias: &str) -> Result<(String, String), HttpError> {
+    let simple = |col: &str| Ok((format!("coalesce({col},'')"), String::new()));
+    match name {
+        "type" => simple("o.object_type"),
+        "stereotype" => simple("o.stereotype"),
+        "status" => simple("o.status"),
+        "phase" => simple("o.phase"),
+        "author" => simple("o.author"),
+        "version" => simple("o.version"),
+        "package" => simple("p.name"),
+        _ => match name.strip_prefix("tag:").map(str::trim).filter(|t| !t.is_empty() && t.len() <= 100) {
+            Some(tag) => {
+                let tag = crate::model_db::sql_text(cfg.model_source, tag);
+                Ok((format!("coalesce({alias}.value,'')"), format!(" left join (select object_id, max(value) as value from t_objectproperties where property = '{tag}' group by object_id) {alias} on {alias}.object_id = o.object_id")))
+            }
+            None => Err(deny(400, "dimension: type, stereotype, status, phase, author, version, package or tag:<name>")),
+        },
+    }
+}
+
+/// A portfolio view of a package with its subpackages: elements counted by one or two dimensions.
+fn portfolio(cfg: &AppConfig, packages: &HashSet<i64>, rows: &str, cols: Option<&str>, kind: Option<&str>) -> Result<Value, HttpError> {
+    let (r, rj) = dimension(cfg, rows, "tr")?;
+    let (c, cj) = match cols {
+        Some(c) => dimension(cfg, c, "tc")?,
+        None => ("''".into(), String::new()),
+    };
+    let kind = kind.map(str::trim).filter(|k| !k.is_empty()).map(|k| format!(" and o.object_type = '{}'", crate::model_db::sql_text(cfg.model_source, k))).unwrap_or_default();
+    let sql = format!(
+        "select {r} as c0, {c} as c1, count(*) as c2 from t_object o join t_package p on p.package_id = o.package_id{rj}{cj} \
+         where o.object_type not in ('Package', 'Note', 'Text', 'Boundary') and {}{kind} group by {r}, {c}",
+        in_list("o.package_id", packages)
+    );
+    let found = crate::tools::query_rows(cfg, &sql)?;
+    let mut row_names: Vec<String> = found.iter().map(|x| x[0].clone()).collect();
+    let mut col_names: Vec<String> = found.iter().map(|x| x[1].clone()).collect();
+    for list in [&mut row_names, &mut col_names] {
+        list.sort();
+        list.dedup();
+    }
+    let cells: Vec<Vec<i64>> = row_names
+        .iter()
+        .map(|rn| col_names.iter().map(|cn| found.iter().filter(|x| &x[0] == rn && &x[1] == cn).map(|x| x[2].parse::<i64>().unwrap_or(0)).sum()).collect())
+        .collect();
+    let label = |s: &String| if s.is_empty() { "(none)".to_string() } else { s.clone() };
+    Ok(json!({ "rows": row_names.iter().map(label).collect::<Vec<_>>(), "cols": if cols.is_some() { col_names.iter().map(label).collect::<Vec<_>>() } else { vec![] }, "cells": cells }))
+}
+
+/// The portfolio view of a request: the package (with subpackages, within the person's scope) and the dimensions.
+fn portfolio_of(source: &Source, scope: &Scope, query: &HashMap<String, String>) -> Result<(Value, String), HttpError> {
+    let package: i64 = query.get("package").and_then(|p| p.parse().ok()).ok_or_else(|| deny(400, crate::i18n::tr("give the package (package_id)")))?;
+    package_in(scope, package)?;
+    let mut packages = scope_packages(&source.cfg, &[package.to_string()])?;
+    if let Some(s) = scope {
+        packages.retain(|p| s.contains(p));
+    }
+    let rows = query.get("rows").map(String::as_str).unwrap_or("status");
+    let cols = query.get("cols").map(String::as_str).filter(|c| !c.is_empty());
+    let view = portfolio(&source.cfg, &packages, rows, cols, query.get("type").map(String::as_str))?;
+    let name = crate::tools::query_rows(&source.cfg, &format!("select name from t_package where package_id = {package}"))?.first().map(|r| r[0].clone()).unwrap_or_default();
+    let title = match cols { Some(c) => format!("{name}: {rows} × {c}"), None => format!("{name}: by {rows}") };
+    Ok((view, title))
+}
+
+/// The portfolio view as a presentation: a title slide and the counts (with shares) as bullets.
+fn portfolio_pptx(view: &Value, title: &str, model: &str) -> Result<Vec<u8>> {
+    let rows: Vec<String> = view["rows"].as_array().into_iter().flatten().filter_map(|v| v.as_str().map(String::from)).collect();
+    let cols: Vec<String> = view["cols"].as_array().into_iter().flatten().filter_map(|v| v.as_str().map(String::from)).collect();
+    let cells: Vec<Vec<i64>> = view["cells"].as_array().into_iter().flatten().map(|r| r.as_array().into_iter().flatten().filter_map(Value::as_i64).collect()).collect();
+    let total: i64 = cells.iter().flatten().sum::<i64>().max(1);
+    let mut slides = Vec::new();
+    let mut bullets: Vec<(String, u8)> = Vec::new();
+    for (i, r) in rows.iter().enumerate() {
+        let sum: i64 = cells[i].iter().sum();
+        bullets.push((format!("{r}: {sum} ({}%)", sum * 100 / total), 0));
+        if !cols.is_empty() {
+            for (j, c) in cols.iter().enumerate() {
+                if cells[i][j] > 0 {
+                    bullets.push((format!("{c}: {}", cells[i][j]), 1));
+                }
+            }
+        }
+        if bullets.len() >= 14 {
+            slides.push(crate::pptx::Slide { title: title.to_string(), bullets: std::mem::take(&mut bullets), picture: None });
+        }
+    }
+    if !bullets.is_empty() || slides.is_empty() {
+        slides.push(crate::pptx::Slide { title: title.to_string(), bullets, picture: None });
+    }
+    crate::pptx::build(title, &format!("{model} · {} elements · {}", total, chrono::Local::now().format("%Y-%m-%d")), &slides)
+}
+
 /// What a person with a package scope cannot use: questions over the whole model (GraphQL, the assistant, impact and
 /// gaps across packages) cannot be limited reliably, so they are refused (LC-385).
 fn scoped_out(what: &str) -> HttpError {
@@ -914,6 +1007,17 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
     // A Word or Excel report of a package: a file, not JSON.
     if request.method == "GET" {
         let parts: Vec<&str> = request.path.trim_matches('/').split('/').collect();
+        if let ["api", "sources", id, "portfolio.pptx"] = parts.as_slice() {
+            let result = (|| -> Result<(Vec<u8>, String), HttpError> {
+                let (source, scope) = hub.source_for(id, &user, role)?;
+                let (view, title) = portfolio_of(source, &scope, &request.query)?;
+                Ok((portfolio_pptx(&view, &title, &source.name).map_err(|e| deny(500, e.to_string()))?, format!("{title}.pptx")))
+            })();
+            return match result {
+                Ok((bytes, name)) => respond_file(&stream, "application/vnd.openxmlformats-officedocument.presentationml.presentation", &name, &bytes),
+                Err(HttpError(status, message)) => respond(&stream, status, "application/json; charset=utf-8", json!({ "error": message }).to_string().as_bytes()),
+            };
+        }
         if let ["api", "sources", id, "report"] = parts.as_slice() {
             let result = (|| -> Result<(Vec<u8>, &'static str, String), HttpError> {
                 let (source, scope) = hub.source_for(id, &user, role)?;
@@ -1556,6 +1660,12 @@ in the language of the question, short. You can only read the model (db_query an
                 }
             }
             Ok((200, json!(list)))
+        }
+        ("GET", ["api", "sources", id, "portfolio"]) => {
+            let (source, scope) = hub.source_for(id, &user, role)?;
+            let (mut view, title) = portfolio_of(source, &scope, &request.query)?;
+            view["title"] = json!(title);
+            Ok((200, view))
         }
         ("GET", ["api", "sources", id, rest @ ..]) => {
             let (source, scope) = hub.source_for(id, &user, role)?;
@@ -2795,6 +2905,38 @@ mod tests {
         assert_eq!(status("arch-token-comments-012", "resolved"), 200);
         let open: Value = http.get(format!("{base}/api/sources/shop/comments?status=open")).bearer_auth("arch-token-comments-012").send().unwrap().json().unwrap();
         assert!(open.as_array().unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// LC-393: a portfolio view by one and by two dimensions, and its PowerPoint.
+    /// `LOONAR_HUB_FILE_PROPS=… cargo test hub_portfolio -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a test model"]
+    fn hub_portfolio() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        let dir = std::env::temp_dir().join(format!("loonar-hub-portfolio-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0", "sources": [{ "id": "shop", "name": "Shop", "properties": std::env::var("LOONAR_HUB_FILE_PROPS").unwrap() }],
+            "users": [{ "name": "olek", "token": "viewer-token-portfolio-1", "role": "viewer" }] }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let cfg = hub.sources[0].cfg.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let base = format!("http://{}", rx.recv().unwrap());
+        let root = crate::tools::query_rows(&cfg, "select package_id from t_package where parent_id = 0").unwrap()[0][0].clone();
+        let http = reqwest::blocking::Client::new();
+        let get = |q: &str| http.get(format!("{base}/api/sources/shop/{q}")).bearer_auth("viewer-token-portfolio-1").send().unwrap();
+        let one: Value = get(&format!("portfolio?package={root}&rows=status")).json().unwrap();
+        println!("{one}");
+        assert!(!one["rows"].as_array().unwrap().is_empty() && one["cols"].as_array().unwrap().is_empty());
+        let two: Value = get(&format!("portfolio?package={root}&rows=type&cols=status")).json().unwrap();
+        let total = |v: &Value| v["cells"].as_array().unwrap().iter().flat_map(|r| r.as_array().unwrap().iter().map(|n| n.as_i64().unwrap())).sum::<i64>();
+        assert_eq!(total(&one), total(&two), "the same elements counted");
+        assert_eq!(get(&format!("portfolio?package={root}&rows=tag:Owner")).status(), 200);
+        assert_eq!(get(&format!("portfolio?package={root}&rows=drop table")).status(), 400);
+        let pptx = get(&format!("portfolio.pptx?package={root}&rows=type&cols=status"));
+        assert_eq!(pptx.status(), 200);
+        assert!(pptx.bytes().unwrap().starts_with(b"PK"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

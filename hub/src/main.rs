@@ -34,6 +34,8 @@ mod graphql;
 mod docx;
 #[path = "../../src/xlsx.rs"]
 mod xlsx;
+#[path = "../../src/pptx.rs"]
+mod pptx;
 #[path = "../../src/oidc.rs"]
 mod oidc;
 #[path = "../../src/openai.rs"]

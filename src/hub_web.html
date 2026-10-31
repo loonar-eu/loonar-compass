@@ -96,6 +96,7 @@ h3 { font-size:14px; margin:16px 0 6px; }
       <button data-tab="search">Search</button>
       <button data-tab="lint">Model check</button>
       <button data-tab="gap">Gaps</button>
+      <button data-tab="portfolio">Portfolio</button>
       <button data-tab="audit">Audit trail</button>
       <button data-tab="notes">Team notes</button>
       <button data-tab="changes">Change sets</button>
@@ -118,6 +119,9 @@ h3 { font-size:14px; margin:16px 0 6px; }
       <div class="row"><input id="asis" placeholder="as-is package id"><input id="tobe" placeholder="to-be package id"><button id="gapgo">Compare</button></div>
       <div id="gap"></div>
     </div>
+    <div id="view-portfolio" hidden><p class="muted">Pick a package on the left: its elements (with subpackages) counted by one or two properties; tag:&lt;name&gt; uses a tagged value (e.g. tag:Owner, tag:Lifecycle).</p>
+      <div class="row"><input id="pfrows" value="status" placeholder="rows: type, stereotype, status, phase, author, version, package, tag:…"><input id="pfcols" placeholder="columns (optional)"><input id="pftype" placeholder="only this element type (optional)"><button id="pfgo">Show</button><button id="pfppt" class="ghost">PowerPoint</button><button id="pfcsv" class="ghost">CSV</button></div>
+      <div id="portfolio"></div></div>
     <div id="view-audit" hidden><div id="audit"></div></div>
     <div id="view-notes" hidden><div id="notes"></div></div>
     <div id="view-changes" hidden><div id="changes"></div></div>
@@ -347,6 +351,36 @@ $('gapgo').onclick = async () => {
   try { $('gap').innerHTML = table((await api('/api/sources/' + source() + '/gap?as_is=' + encodeURIComponent($('asis').value) + '&to_be=' + encodeURIComponent($('tobe').value))).text); }
   catch (e) { $('gap').innerHTML = '<p class="error">' + esc(e.message) + '</p>'; }
 };
+// Portfolio views (LC-393): a bar per value, or a heat map of two properties.
+let portfolioView = null;
+function portfolioQuery() {
+  return 'package=' + encodeURIComponent(selectedPackage || '') + '&rows=' + encodeURIComponent($('pfrows').value.trim() || 'status') + '&cols=' + encodeURIComponent($('pfcols').value.trim()) + '&type=' + encodeURIComponent($('pftype').value.trim());
+}
+$('pfgo').onclick = async () => {
+  if (!selectedPackage) { $('portfolio').innerHTML = '<p class="error">Pick a package on the left first.</p>'; return; }
+  try {
+    const v = portfolioView = await api('/api/sources/' + source() + '/portfolio?' + portfolioQuery());
+    const max = Math.max(1, ...v.cells.flat());
+    if (!v.cols.length) {
+      const total = v.cells.reduce((a, r) => a + r[0], 0) || 1;
+      $('portfolio').innerHTML = '<h3>' + esc(v.title) + '</h3><table>' + v.rows.map((r, i) => '<tr><td>' + esc(r) + '</td><td style="width:60%"><div style="background:var(--accent);height:14px;width:' + Math.round(v.cells[i][0] * 100 / max) + '%"></div></td><td>' + v.cells[i][0] + ' (' + Math.round(v.cells[i][0] * 100 / total) + '%)</td></tr>').join('') + '</table>';
+    } else {
+      $('portfolio').innerHTML = '<h3>' + esc(v.title) + '</h3><table><tr><th></th>' + v.cols.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr>' + v.rows.map((r, i) => '<tr><td>' + esc(r) + '</td>' + v.cells[i].map(n => '<td style="text-align:center;background:rgba(220,80,40,' + (n ? (0.12 + 0.75 * n / max).toFixed(2) : 0) + ')">' + (n || '') + '</td>').join('') + '</tr>').join('') + '</table>';
+    }
+  } catch (e) { $('portfolio').innerHTML = '<p class="error">' + esc(e.message) + '</p>'; }
+};
+$('pfppt').onclick = async () => {
+  if (!selectedPackage) return;
+  const r = await fetch('/api/sources/' + source() + '/portfolio.pptx?' + portfolioQuery(), { headers: { Authorization: 'Bearer ' + token } });
+  if (!r.ok) { $('portfolio').innerHTML = '<p class="error">' + esc((await r.json().catch(() => ({}))).error || r.status) + '</p>'; return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob()); a.download = 'portfolio.pptx'; a.click();
+};
+$('pfcsv').onclick = () => {
+  const v = portfolioView; if (!v) return;
+  const q = s => '"' + String(s).replace(/"/g, '""') + '"';
+  const lines = [[''].concat(v.cols.length ? v.cols : ['count']).map(q).join(',')].concat(v.rows.map((r, i) => [q(r)].concat(v.cells[i]).join(',')));
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/csv' })); a.download = 'portfolio.csv'; a.click();
+};
 async function loadAudit() {
   const entries = await api('/api/audit?limit=200');
   $('audit').innerHTML = entries.length ? '<table><tr><th>Time</th><th>User</th><th>Model</th><th>Change</th><th>Result</th></tr>' + entries.map(e => '<tr><td>' + esc((e.time || e.received || '').slice(0, 19).replace('T', ' ')) + '</td><td>' + esc(e.user) + '</td><td>' + esc(e.source || e.database || '') + '</td><td><pre>' + esc(e.summary) + '</pre></td><td>' + (e.ok ? '✓' : '<span class="error">✗ ' + esc(e.error || '') + '</span>') + '</td></tr>').join('') + '</table>' : '<p class="muted">No changes recorded yet.</p>';
@@ -404,7 +438,7 @@ async function ask() {
 }
 function show(tab) {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-  ['ask', 'search', 'lint', 'gap', 'audit', 'notes', 'changes', 'users', 'policy'].forEach(t => $('view-' + t).hidden = t !== tab);
+  ['ask', 'search', 'lint', 'gap', 'portfolio', 'audit', 'notes', 'changes', 'users', 'policy'].forEach(t => $('view-' + t).hidden = t !== tab);
   if (tab === 'policy') api('/api/policy').then(p => { $('policytext').value = JSON.stringify(p, null, 2); $('policystatus').textContent = ''; }).catch(e => $('policystatus').textContent = e.message);
   if (tab === 'users') loadUsers().catch(e => $('users').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
   if (tab === 'changes') loadChanges().catch(e => $('changes').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
