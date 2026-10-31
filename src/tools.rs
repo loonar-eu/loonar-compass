@@ -348,6 +348,7 @@ pub fn definitions() -> Value {
         items.push(crate::merge::definition());
         items.push(crate::visibility::definition());
         items.push(crate::style::definition());
+        items.push(crate::context_diagram::definition());
         items.push(json!({
             "name": "align_elements",
             "description": "Line up elements of a diagram without moving the others: align left / right / top / bottom / center (horizontal centres) / \
@@ -915,6 +916,10 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
                 .collect();
             let findings: Vec<String> = new_ids.iter().flat_map(|id| crate::governance::check_object(ctx.cfg, "connector", *id).unwrap_or_default()).collect();
             Ok(if findings.is_empty() { saved } else { format!("{saved}\nModel check of the new relationship: {}", findings.join("; ")) }.into())
+        }
+        "context_diagram" => {
+            let ops = crate::context_diagram::plan(input, ctx.cfg)?;
+            ea_write(&json!({ "ops": ops }), ctx).map(Into::into)
         }
         "apply_style" => {
             let (ops, text) = crate::style::plan(input, ctx.cfg)?;

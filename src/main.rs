@@ -50,6 +50,7 @@ mod recycle;
 mod merge;
 mod visibility;
 mod style;
+mod context_diagram;
 mod model_usage;
 mod glossary_ui;
 mod relang;
