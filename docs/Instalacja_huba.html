@@ -121,6 +121,7 @@
 <ul>
   <li><code>listen</code> zostaje na <code>127.0.0.1</code>: z hubem rozmawia tylko IIS na tym samym serwerze.</li>
   <li><code>sources</code>: jeden wpis na model. <code>id</code> ma być krótkie i stałe, bo używają go użytkownicy i Power BI. <code>properties</code> jest względne wobec hub.json.</li>
+  <li><code>readers</code> i <code>scopes</code> (w źródle, opcjonalnie): <code>"readers": ["anna", "role:architect"]</code> – tylko te osoby (i admini) w ogóle widzą źródło; <code>"scopes": [{"for": "role:viewer", "packages": ["{GUID}", 42]}]</code> – pierwszy wpis dla osoby, jej roli albo <code>*</code> ogranicza ją do tych pakietów i ich podpakietów w widoku WWW, wyszukiwaniu, szczegółach elementu, raportach, tabelach Power BI i MCP. GraphQL, asystenta (Ask), analizy wpływu i luk oraz zestawów zmian nie da się ograniczyć pakietami, więc osoba z zakresem dostaje tam jasną odmowę.</li>
   <li>Pomiń <code>users</code>: hub utworzy wtedy konto <code>admin</code> (krok 4) i sam zapisze użytkowników, tylko jako skróty.</li>
 </ul>
 <p>Plik modelu, np. <code>C:\CompassHub\models\architecture.properties</code>:</p>
