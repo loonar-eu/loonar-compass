@@ -202,9 +202,10 @@ pub fn guard_decision(answer: &str) -> Option<String> {
     Some(reason.unwrap_or_else(|| crate::i18n::tr("blocked by a guard of the model").to_string()))
 }
 
-/// The guard requests EA has made (Compass in a tab of EA): files `loonar-ea-guard-<name>-<n>.req` with "event:id".
+/// The guard requests EA has made (Compass in a tab of EA): files `loonar-ea-guard-<name>-<n>.req` with "event:id", or
+/// for a creation (LC-391) "event:package_id<TAB>type<TAB>stereotype" ending with a line break (complete only then).
 /// The answer goes to the same name with `.res`: "allow" or "block\n<reason>".
-pub fn guard_requests(rot_name: &str) -> Vec<(PathBuf, String, i64)> {
+pub fn guard_requests(rot_name: &str) -> Vec<(PathBuf, String, i64, Vec<String>)> {
     let prefix = format!("loonar-ea-guard-{rot_name}-");
     let mut out = Vec::new();
     for entry in std::fs::read_dir(std::env::temp_dir()).into_iter().flatten().flatten() {
@@ -215,10 +216,15 @@ pub fn guard_requests(rot_name: &str) -> Vec<(PathBuf, String, i64)> {
         let path = entry.path();
         let Ok(text) = std::fs::read_to_string(&path) else { continue };
         // A request the add-in is still writing does not parse yet: it stays for the next round (LC-345).
-        if let Some((event, id)) = text.trim().split_once(':') {
-            if let Ok(id) = id.trim().parse() {
+        if let Some((event, rest)) = text.trim_start().split_once(':') {
+            let creating = event.trim().ends_with("_creating");
+            if creating && !rest.ends_with('\n') {
+                continue;
+            }
+            let mut parts = rest.trim_end_matches(['\r', '\n']).split('\t');
+            if let Ok(id) = parts.next().unwrap_or("").trim().parse() {
                 let _ = std::fs::remove_file(&path);
-                out.push((path, event.trim().to_string(), id));
+                out.push((path, event.trim().to_string(), id, parts.map(|p| p.trim().to_string()).collect()));
             }
         }
     }
@@ -282,6 +288,12 @@ mod tests {
         assert_eq!(taken.len(), 1);
         assert_eq!((taken[0].1.as_str(), taken[0].2), ("element_deleting", 42));
         assert!(!path.exists());
+        // LC-391: a creation is complete only with its line break (a cut type must not be decided on).
+        std::fs::write(&path, "element_creating:7\tCla").unwrap();
+        assert!(super::guard_requests(&rot).is_empty());
+        std::fs::write(&path, "element_creating:7\tClass\tentity\r\n").unwrap();
+        let taken = super::guard_requests(&rot);
+        assert_eq!((taken[0].1.as_str(), taken[0].2, taken[0].3.clone()), ("element_creating", 7, vec!["Class".to_string(), "entity".to_string()]));
     }
 
     /// LC-345: the description of a package on a real SQL Server (the query has no varchar cast):

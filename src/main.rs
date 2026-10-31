@@ -6286,13 +6286,20 @@ fn start_guards(cfg: &AppConfig) {
             let Some(rot) = ea_ui::rot_name() else { return };
             let mut agents = agents::load_all(&cfg);
             let mut loaded = std::time::Instant::now();
-            // The safety net (LC-382) takes a snapshot before deletions: EA asks about them too.
-            let extra: &[&str] = if cfg.safety_net { safety_net::EVENTS } else { &[] };
-            agents::publish_guarded_events(rot, &agents, extra);
+            // The safety net (LC-382) takes a snapshot before deletions, and the creation rules (LC-391) are checked
+            // before an element or diagram is created: EA asks about these too.
+            let extra = |cfg: &AppConfig| -> Vec<&'static str> {
+                let mut events: Vec<&'static str> = if cfg.safety_net { safety_net::EVENTS.to_vec() } else { Vec::new() };
+                if governance::has_creation_rules(cfg) {
+                    events.extend_from_slice(governance::CREATION_EVENTS);
+                }
+                events
+            };
+            agents::publish_guarded_events(rot, &agents, &extra(&cfg));
             loop {
                 if loaded.elapsed() > std::time::Duration::from_secs(5) {
                     agents = agents::load_all(&cfg);
-                    agents::publish_guarded_events(rot, &agents, extra);
+                    agents::publish_guarded_events(rot, &agents, &extra(&cfg));
                     loaded = std::time::Instant::now();
                 }
                 guard_requests_once(&cfg, rot, &agents);
@@ -6304,7 +6311,17 @@ fn start_guards(cfg: &AppConfig) {
 
 /// Answers the guard requests EA has made so far (see `start_guards`).
 fn guard_requests_once(cfg: &AppConfig, rot: &str, agents: &[agents::Agent]) {
-                for (request, event, id) in agents::guard_requests(rot) {
+                for (request, event, id, extra) in agents::guard_requests(rot) {
+                    // Creation rules (LC-391): decided at once from the team's rules, without the AI.
+                    if governance::CREATION_EVENTS.contains(&event.as_str()) {
+                        let (kind, stereotype) = (extra.first().cloned().unwrap_or_default(), extra.get(1).cloned().unwrap_or_default());
+                        let block = governance::creation_block(cfg, &event, id, &kind, &stereotype);
+                        if let Some(reason) = &block {
+                            ea_ui::output(&format!("🛡 {reason}"));
+                        }
+                        agents::answer_guard(&request, block.as_deref());
+                        continue;
+                    }
                     // The safety net's snapshot (LC-382): taken while the object still exists; a failure never stops the deletion.
                     if cfg.safety_net && safety_net::EVENTS.contains(&event.as_str()) {
                         match safety_net::snapshot(cfg, &event, id) {

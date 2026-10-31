@@ -168,6 +168,34 @@ namespace LoonarCompass
         public bool EA_OnPreDeleteMethod(object repository, object info) { return Ask(repository, "method_deleting", info, "MethodID"); }
         public bool EA_OnPreDeleteGlossaryTerm(object repository, object info) { return Ask(repository, "glossary_term_deleting", info, "GlossaryID"); }
 
+        // Before something new is created EA asks too: the team's rules on what may be created where (LC-391). Compass
+        // answers at once from its rules; without such rules it does not list these events and EA does not wait.
+        public bool EA_OnPreNewElement(object repository, object info) { return AskNew("element_creating", info); }
+        public bool EA_OnPreNewDiagram(object repository, object info) { return AskNew("diagram_creating", info); }
+
+        static bool AskNew(string kind, object info)
+        {
+            if (current == null || current.IsDisposed || !current.Guarded(kind))
+                return true;
+            string line;
+            try
+            {
+                dynamic properties = info;
+                string type = Convert.ToString(properties.Get("Type").Value);
+                string stereotype = "";
+                try { stereotype = Convert.ToString(properties.Get("Stereotype").Value); } catch { }
+                // The line break marks the request complete (Compass does not decide on a half-written type).
+                line = kind + ":" + Convert.ToString(properties.Get("ParentID").Value) + "\t" + type + "\t" + stereotype + "\n";
+            }
+            catch (Exception e)
+            {
+                // The rules cannot be checked without the details: the creation goes ahead (only deletions fail closed).
+                Log.Write(kind + " rules: " + e.Message);
+                return true;
+            }
+            return current.Guard(kind, line);
+        }
+
         static bool Ask(object repository, string kind, object info, string property)
         {
             if (current == null || current.IsDisposed)

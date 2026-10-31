@@ -122,7 +122,59 @@ fn forbidden_stereotype(rule: &Value, otype: &str, stereo: &str) -> Option<Strin
 }
 
 /// The rule kinds of governance.json (team_rules refuses others: a typo would silently check nothing).
-const RULE_KINDS: &[&str] = &["naming", "required_tags", "allowed_relations", "forbidden_stereotypes", "archimate"];
+const RULE_KINDS: &[&str] = &["naming", "required_tags", "allowed_relations", "forbidden_stereotypes", "archimate", "creation"];
+
+/// The events of EA the creation rules decide (LC-391).
+pub const CREATION_EVENTS: &[&str] = &["element_creating", "diagram_creating"];
+
+/// Whether the team has rules on what may be created where.
+pub fn has_creation_rules(cfg: &AppConfig) -> bool {
+    load_rules(cfg, &Value::Null)["creation"].as_array().is_some_and(|r| !r.is_empty())
+}
+
+/// Who may create what where (LC-391): "creation": [{"package": name | package_id | GUID, "allow": [types], "deny": [types],
+/// "diagrams": [diagram types], "message": "…"}]. The rule of the nearest package (the package itself, then its parents)
+/// decides; types are element types or «stereotypes» (e.g. "Class", "«entity»"). Some(reason) = the creation is stopped.
+pub fn creation_block(cfg: &AppConfig, event: &str, package: i64, kind: &str, stereotype: &str) -> Option<String> {
+    let rules = load_rules(cfg, &Value::Null);
+    let list = rules["creation"].as_array()?;
+    // The package and its parents, nearest first: (id, name, GUID).
+    let mut chain = Vec::new();
+    let mut id = package;
+    for _ in 0..40 {
+        let row = query_rows(cfg, &format!("select package_id, name, ea_guid, parent_id from t_package where package_id = {id}")).ok()?.into_iter().next()?;
+        chain.push((row[0].clone(), row[1].clone(), row[2].clone()));
+        id = row[3].parse().unwrap_or(0);
+        if id == 0 {
+            break;
+        }
+    }
+    let matches = |rule: &Value, p: &(String, String, String)| match &rule["package"] {
+        Value::Number(n) => n.to_string() == p.0,
+        Value::String(s) => s.trim() == p.0 || s.trim().eq_ignore_ascii_case(&p.1) || s.trim().trim_matches(['{', '}']).eq_ignore_ascii_case(p.2.trim_matches(['{', '}'])),
+        _ => false,
+    };
+    let (rule, place) = chain.iter().find_map(|p| list.iter().find(|r| matches(r, p)).map(|r| (r, p.1.clone())))?;
+    let named = |list: &Value, value: &str| {
+        list.as_array().into_iter().flatten().filter_map(Value::as_str).any(|t| {
+            let t = t.trim();
+            match t.strip_prefix('«').and_then(|s| s.strip_suffix('»')) {
+                Some(st) => stereotype.split(',').any(|s| s.trim().eq_ignore_ascii_case(st) || s.trim().rsplit("::").next().is_some_and(|x| x.eq_ignore_ascii_case(st))),
+                None => t.eq_ignore_ascii_case(value),
+            }
+        })
+    };
+    let (allow, label) = if event == "diagram_creating" { (&rule["diagrams"], "diagram") } else { (&rule["allow"], "element") };
+    let denied = event != "diagram_creating" && named(&rule["deny"], kind);
+    let not_allowed = allow.as_array().is_some_and(|a| !a.is_empty()) && !named(allow, kind);
+    if !(denied || not_allowed) {
+        return None;
+    }
+    let what = if stereotype.is_empty() { kind.to_string() } else { format!("{kind} «{stereotype}»") };
+    Some(rule["message"].as_str().map(String::from).unwrap_or_else(|| {
+        crate::i18n::fmt("the team's rules do not allow a {0} {1} in the package \"{2}\"", &[crate::i18n::tr(label).to_string(), what, place])
+    }))
+}
 
 /// Checks the shape of the team's rules: an object of known kinds, lists of objects with the fields each kind needs.
 pub fn check_rules(rules: &Value) -> Result<()> {
@@ -133,6 +185,13 @@ pub fn check_rules(rules: &Value) -> Result<()> {
             "required_tags" => &["tag"],
             "allowed_relations" => &["connector_type", "source", "target"],
             "forbidden_stereotypes" => &["stereotype"],
+            "creation" => {
+                let list = value.as_array().with_context(|| "\"creation\" must be a list".to_string())?;
+                for (i, rule) in list.iter().enumerate() {
+                    anyhow::ensure!(rule["package"].is_string() || rule["package"].is_number(), "\"creation\" rule {}: missing \"package\"", i + 1);
+                }
+                continue;
+            }
             "archimate" => {
                 anyhow::ensure!(value.is_boolean(), "\"archimate\" is true or false");
                 continue;
@@ -158,7 +217,9 @@ settings; without it the rules from the team hub's policy). action show: the rul
 new rules (the whole object; always shown to the user for approval). Kinds: naming [{applies_to: \"Class\" or \"«stereotype»\", pattern: \
 \"*Service\" (wildcards * ?), message}], required_tags [{applies_to, tag}], allowed_relations [{connector_type, source, target}] (a listed \
 relationship type is allowed only between the listed ends), forbidden_stereotypes [{applies_to, stereotype, message}], archimate (true/false: \
-the ArchiMate 3.2 relationship table). Use it for /validate-model when the team has no rules yet: draft them from the user's words, save after approval.",
+the ArchiMate 3.2 relationship table), creation [{package: name | package_id | GUID, allow: [element types or \"«stereotype»\"], \
+deny: [types], diagrams: [diagram types], message}] (who may create what where: with Compass open in EA, EA asks before an element or diagram \
+is created in that package or below it, and a type the rule does not allow is stopped with the message). Use it for /validate-model when the team has no rules yet: draft them from the user's words, save after approval.",
         "input_schema": { "type": "object", "properties": {
             "action": { "type": "string", "enum": ["show", "save"] },
             "rules": { "type": "object", "description": "For save: the whole rules object" }
@@ -713,6 +774,32 @@ pub fn check_object_with(cfg: &AppConfig, kind: &str, id: i64, rules: &Value) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LC-391 on a model copy: the nearest package's rule decides what may be created.
+    /// `LOONAR_TEST_PROPS=… cargo test creation_rules_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a test model"]
+    fn creation_rules_live() {
+        let mut cfg = AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
+        cfg.base_dir = std::env::temp_dir().join(format!("loonar-creation-{}", std::process::id()));
+        std::fs::create_dir_all(&cfg.base_dir).unwrap();
+        // A package with a child package.
+        let rows = query_rows(&cfg, "select c.package_id, p.package_id, p.name from t_package c join t_package p on p.package_id = c.parent_id where p.parent_id <> 0 order by c.package_id").unwrap();
+        let (child, parent, parent_name) = (rows[0][0].parse::<i64>().unwrap(), rows[0][1].parse::<i64>().unwrap(), rows[0][2].clone());
+        assert!(!has_creation_rules(&cfg));
+        std::fs::write(cfg.base_dir.join("governance.json"), json!({ "creation": [{ "package": parent, "allow": ["Class", "«entity»"], "deny": ["Actor"], "diagrams": ["Logical"] }] }).to_string()).unwrap();
+        assert!(has_creation_rules(&cfg));
+        assert!(check_rules(&load_rules(&cfg, &Value::Null)).is_ok());
+        assert_eq!(creation_block(&cfg, "element_creating", child, "Class", ""), None, "allowed in a child package");
+        assert_eq!(creation_block(&cfg, "element_creating", parent, "Table", "entity"), None, "allowed by its stereotype");
+        let blocked = creation_block(&cfg, "element_creating", child, "Component", "");
+        assert!(blocked.as_deref().is_some_and(|b| b.contains(&parent_name)), "{blocked:?}");
+        assert!(creation_block(&cfg, "diagram_creating", parent, "Sequence", "").is_some());
+        assert_eq!(creation_block(&cfg, "diagram_creating", parent, "Logical", ""), None);
+        let root: i64 = query_rows(&cfg, "select package_id from t_package where parent_id = 0").unwrap()[0][0].parse().unwrap();
+        assert_eq!(creation_block(&cfg, "element_creating", root, "Component", ""), None, "no rule above");
+        let _ = std::fs::remove_dir_all(&cfg.base_dir);
+    }
 
     #[test]
     fn default_names_and_wildcards() {
