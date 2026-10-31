@@ -83,7 +83,8 @@ struct Source {
     cfg: AppConfig,
     /// Who may read the source at all ("readers": ["anna", "role:architect", …]; empty = everybody) (LC-385).
     readers: Vec<String>,
-    /// Package scopes ("scopes": [{"for": "<user>" | "role:<role>" | "*", "packages": [package_id or GUID, …]}]):
+    /// Package scopes ("scopes": [{"for": "<user>" | "role:<role>" | "eagroup:<EA group>" | "*", "packages": [package_id, GUID or
+    /// "$group_locks:<EA group>", …]}]):
     /// the first entry for the person, their role or everybody limits them to these packages and their subpackages.
     scopes: Vec<(String, Vec<String>)>,
 }
@@ -112,9 +113,29 @@ fn within(scope: &Scope, col: &str) -> String {
     scope.as_ref().map(|s| format!(" and {}", in_list(col, s))).unwrap_or_default()
 }
 
-/// The given packages (package_id or GUID) and all their subpackages.
+/// The EA security groups of a person, by their login in the model (LC-425): "eagroup:<name>" entries for wanted().
+fn ea_groups(cfg: &AppConfig, user: &str) -> Vec<String> {
+    let login = crate::model_db::sql_text(cfg.model_source, &user.to_lowercase());
+    crate::tools::query_rows(cfg, &format!(
+        "select g.groupname from t_secuser u join t_secusergroup ug on ug.userid = u.userid join t_secgroup g on g.groupid = ug.groupid where lower(u.userlogin) = '{login}'"
+    ))
+    .unwrap_or_default()
+    .into_iter()
+    .map(|r| format!("eagroup:{}", r[0].trim().to_lowercase()))
+    .collect()
+}
+
+/// The given packages (package_id or GUID) and all their subpackages. "$group_locks:<group>" stands for the packages
+/// that EA group has locked (its area of the model, LC-425).
 fn scope_packages(cfg: &AppConfig, roots: &[String]) -> Result<HashSet<i64>> {
     let rows = crate::tools::query_rows(cfg, "select package_id as c0, parent_id as c1, ea_guid as c2 from t_package")?;
+    let mut roots: Vec<String> = roots.to_vec();
+    for group in roots.clone().iter().filter_map(|r| r.trim().strip_prefix("$group_locks:")) {
+        let g = crate::model_db::sql_text(cfg.model_source, &group.trim().to_lowercase());
+        roots.extend(crate::tools::query_rows(cfg, &format!(
+            "select l.entityid from t_seclocks l join t_secgroup g on g.groupid = l.groupid where lower(g.groupname) = '{g}'"
+        ))?.into_iter().map(|r| r[0].clone()));
+    }
     let wanted: HashSet<String> = roots.iter().map(|r| r.trim().trim_matches(['{', '}']).to_lowercase()).collect();
     let mut found: HashSet<i64> = rows
         .iter()
@@ -1208,7 +1229,14 @@ impl Hub {
         if role == Role::Admin {
             return Ok((source, None));
         }
-        let roots = wanted(user, role).iter().find_map(|w| source.scopes.iter().find(|(who, _)| who == w).map(|(_, p)| p.clone()));
+        // The person, their role, their EA security groups (by their login in this model, LC-425), everybody.
+        let mut who: Vec<String> = wanted(user, role).to_vec();
+        if source.scopes.iter().any(|(w, _)| w.starts_with("eagroup:")) {
+            let star = who.pop();
+            who.extend(ea_groups(&source.cfg, user));
+            who.extend(star);
+        }
+        let roots = who.iter().find_map(|w| source.scopes.iter().find(|(s, _)| s == w).map(|(_, p)| p.clone()));
         match roots {
             None => Ok((source, None)),
             Some(roots) => Ok((source, Some(scope_packages(&source.cfg, &roots)?))),
@@ -3378,6 +3406,9 @@ mod tests {
             .json(&json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": { "name": "element_details", "arguments": { "source": "shop", "element": outside_id.parse::<i64>().unwrap() } } }))
             .send().unwrap().json().unwrap();
         assert_eq!(mcp["result"]["isError"], true, "{mcp}");
+        // LC-425: the EA groups of a login (none in a model without security) and $group_locks without locks resolve to nothing.
+        assert!(super::ea_groups(&cfg, "nobody-here").is_empty());
+        assert!(super::scope_packages(&cfg, &["$group_locks:nogroup".to_string()]).unwrap().is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
