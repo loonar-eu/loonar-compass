@@ -8367,12 +8367,22 @@ impl eframe::App for App {
                                 cfg.code_execution = !on;
                                 let _ = config::save_properties(&self.props_path, &[("claude.code_execution", (!on).to_string())]);
                             }
-                            // The web (search and reading pages through Anthropic): off unless switched on; the team
-                            // policy of the hub can switch it off for everybody (the step of the answer then says so).
+                        }
+                        // The web: off unless switched on; the team policy of the hub can switch it off for everybody (the
+                        // step of the answer then says so). With Claude it searches and reads pages through Anthropic; with
+                        // OpenAI and compatible models Compass reads the pages named in the conversation (it was not shown
+                        // there, although it works).
+                        if let Some(cfg) = self.cfg.as_mut() {
                             let on = cfg.web_access;
                             let blocked = cfg.policy.web_access == Some(false);
                             let label = egui::RichText::new("🌐").color(if on { theme::NAV } else { theme::HINT });
-                            let tip = if on { crate::i18n::tr("The assistant may search the web and read pages (click to switch off)") } else { crate::i18n::tr("Let the assistant search the web and read pages (the searches go through Anthropic; the team policy of the hub can switch this off)") };
+                            let tip = if cfg.uses_openai() {
+                                if on { crate::i18n::tr("The assistant may read web pages named in the conversation (click to switch off)") } else { crate::i18n::tr("Let the assistant read web pages named in the conversation (Compass reads them; no web search)") }
+                            } else if on {
+                                crate::i18n::tr("The assistant may search the web and read pages (click to switch off)")
+                            } else {
+                                crate::i18n::tr("Let the assistant search the web and read pages (the searches go through Anthropic; the team policy of the hub can switch this off)")
+                            };
                             let tip = if blocked { crate::i18n::tr("Web access is switched off by your organisation (the computer's policy).") } else { tip };
                             if ui.add_enabled(!blocked, egui::Button::new(label).selected(on).frame(false)).on_hover_text(tip).on_disabled_hover_text(tip).clicked() {
                                 cfg.web_access = !on;

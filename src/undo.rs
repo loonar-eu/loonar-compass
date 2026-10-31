@@ -347,7 +347,7 @@ pub fn definition() -> Value {
         "name": "undo_change",
         "description": "Time machine of the assistant's saves to this model. action list: the journal (newest first) with what can be undone; undo: undoes the latest \
 `count` saves not undone yet (default 1), newest first: created objects are deleted, changed fields, tagged values, positions and moves get their previous values. \
-Attributes, operations and packages changed or created are reversed too. Deletions, imports, diagram layout and the operations listed as not undoable (e.g. scenarios, glossary terms, linked documents, legends) cannot be reversed by operations: before such a save Compass made an EA baseline of the package - tell the user to restore it in EA \
+Attributes, operations and packages changed or created and a diagram layout are reversed too. Deletions, imports, merges, changes of relationship type and the operations listed as not undoable (e.g. scenarios, glossary terms, linked documents, legends) cannot be reversed by operations: before such a save Compass made an EA baseline of the package - tell the user to restore it in EA \
 (package in the browser → Manage Baselines → Restore). The user approves the undo.",
         "input_schema": { "type": "object", "properties": {
             "action": { "type": "string", "enum": ["list", "undo"] },
