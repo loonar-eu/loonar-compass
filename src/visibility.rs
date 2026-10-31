@@ -151,12 +151,21 @@ pub fn run(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)> {
         _ => {
             let all = load(cfg);
             let mut text = format!("Visibility policies ({}):\n", all.len());
-            for (_, p) in all {
-                text.push_str(&format!("  - \"{}\": {}\n", p["name"].as_str().unwrap_or("?"), p));
+            for (guid, p) in all {
+                // Each policy with the number of relationships its diagram hides now (LC-415).
+                let id = query_rows(cfg, &format!("select diagram_id from t_diagram where ea_guid = '{}'", crate::model_db::sql_text(cfg.model_source, &guid))).ok()
+                    .and_then(|r| r.first().and_then(|r| r[0].parse::<i64>().ok()));
+                let hidden = id.map(|d| format!(" – {} relationships hidden there", hidden_count(cfg, d))).unwrap_or_default();
+                text.push_str(&format!("  - \"{}\"{hidden}: {}\n", p["name"].as_str().unwrap_or("?"), p));
             }
             Ok((Vec::new(), text))
         }
     }
+}
+
+/// Relationships between elements of the diagram that are hidden on it (LC-415).
+pub(crate) fn hidden_count(cfg: &AppConfig, diagram: i64) -> usize {
+    connectors_of(cfg, diagram).map(|c| c.into_iter().filter(|c| c.5).count()).unwrap_or(0)
 }
 
 /// After a relationship is made in EA: on every diagram with an "auto" policy that has both its ends and does not
@@ -185,7 +194,9 @@ pub fn auto_apply(cfg: &AppConfig, connector: i64) -> Vec<String> {
         let result = crate::ea::run_batch(cfg, &ops, &crate::ea::BatchOptions::default());
         crate::tools::audit(cfg, &ops, &result);
         if result.is_ok() {
-            done.push(crate::i18n::fmt("hidden on \"{0}\" by its visibility policy", &[r[2].clone()]));
+            // How many relationships the diagram hides now (LC-415): the person sees the count, not only this one.
+            let total = hidden_count(cfg, diagram);
+            done.push(crate::i18n::fmt("hidden on \"{0}\" by its visibility policy ({1} relationships hidden there now; /show-hidden-links lists them)", &[r[2].clone(), total.to_string()]));
         }
     }
     done
