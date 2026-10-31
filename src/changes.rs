@@ -76,42 +76,137 @@ fn same_text(a: &str, b: &str) -> bool {
 /// EA's comparison log (DoBaselineCompare) as a readable list without its noise (LC-371): items only in the model
 /// (added), only in the baseline (deleted), changed – with the properties that really changed (not DateModified,
 /// DateCreated, nor text that differs only in line ends or whitespace; EA's internal "Scope" is shown as Visibility).
+/// EA nests the items (LC-440): a relationship sits in the "Links" of its element, the places of elements on a diagram
+/// in its "Visual Elements"; a value only on one side ("Model only" / "Baseline only", e.g. notes written after the
+/// baseline) is a change; the kind of an item comes from its "Type" property, as EA leaves the type attribute empty.
 pub(crate) fn baseline_diff(xml: &str) -> (Vec<String>, Vec<String>, Vec<String>, usize) {
     let (mut added, mut deleted, mut changed, mut noise) = (Vec::new(), Vec::new(), Vec::new(), 0usize);
-    for segment in xml.split("<CompareItem ").skip(1) {
-        let head = segment.split('>').next().unwrap_or("");
-        let head = format!(" {head}");
-        let (name, kind, status) = (xml_attr(&head, "name"), xml_attr(&head, "type"), xml_attr(&head, "status"));
-        let label = if kind.is_empty() { format!("\"{name}\"") } else { format!("{kind} \"{name}\"") };
-        match status.as_str() {
-            "Model only" => added.push(label),
-            "Baseline only" => deleted.push(label),
-            "Changed" => {
-                let mut props = Vec::new();
-                for p in segment.split("<Property ").skip(1) {
+    // Open items: (name, type attribute, label).
+    let mut stack: Vec<(String, String, String)> = Vec::new();
+    // Elements moved or resized on each diagram, reported as one line per diagram.
+    let mut layout: Vec<(String, usize)> = Vec::new();
+    let mut rest = xml;
+    loop {
+        let open = rest.find("<CompareItem ");
+        let close = rest.find("</CompareItem>");
+        match (open, close) {
+            (Some(o), c) if c.is_none_or(|c| o < c) => {
+                let segment = &rest[o + "<CompareItem ".len()..];
+                let head = format!(" {}", segment.split('>').next().unwrap_or(""));
+                let own_end = segment.find("<CompareItem ").into_iter().chain(segment.find("</CompareItem>")).min().unwrap_or(segment.len());
+                let body = &segment[..own_end];
+                let (name, kind, status) = (xml_attr(&head, "name"), xml_attr(&head, "type"), xml_attr(&head, "status"));
+                // Changed properties: (name, baseline, model).
+                let mut props: Vec<(String, String, String)> = Vec::new();
+                let mut item_type = String::new();
+                let mut element = false;
+                for p in body.split("<Property ").skip(1) {
                     let p = format!(" {}", p.split("/>").next().unwrap_or(""));
-                    if xml_attr(&p, "status") != "Changed" {
-                        continue;
-                    }
                     let prop = xml_attr(&p, "name");
                     let (model, base) = (xml_attr(&p, "model"), xml_attr(&p, "baseline"));
-                    if matches!(prop.as_str(), "DateModified" | "DateCreated" | "Modified" | "Created") || same_text(&model, &base) {
+                    if prop == "Type" {
+                        item_type = if model.is_empty() { base.clone() } else { model.clone() };
+                    }
+                    element |= prop == "Abstract";
+                    if !matches!(xml_attr(&p, "status").as_str(), "Changed" | "Model only" | "Baseline only") {
                         continue;
                     }
-                    let prop = if prop == "Scope" { "Visibility".to_string() } else { prop };
-                    let short = |t: &str| if t.chars().count() > 80 { format!("{}…", t.chars().take(80).collect::<String>()) } else { t.to_string() };
-                    props.push(format!("{prop}: \"{}\" → \"{}\"", short(&base), short(&model)));
+                    let duid_only = |t: &str| t.split(';').filter(|x| !x.trim().is_empty()).all(|x| x.trim_start().starts_with("DUID="));
+                    if matches!(prop.as_str(), "DateModified" | "DateCreated" | "Modified" | "Created") || same_text(&model, &base) || (prop == "Style" && duid_only(&model) && duid_only(&base)) || prop == "Geometry" {
+                        // Geometry: the bends of a line, a layout change of the diagram, not of the model.
+                        continue;
+                    }
+                    props.push((if prop == "Scope" { "Visibility".to_string() } else { prop }, base, model));
                 }
-                if props.is_empty() {
-                    noise += 1;
-                } else {
-                    changed.push(format!("{label}: {}", props.join("; ")));
+                let parent = stack.last().cloned();
+                let owner = stack.iter().rev().nth(1).map(|s| s.0.clone()).unwrap_or_default();
+                let label = match (kind.as_str(), parent.as_ref().map(|p| p.1.as_str())) {
+                    ("DGM", _) => format!("\"{name}\" {} \"{owner}\"", "on diagram"),
+                    (_, Some("Links")) => format!("{} \"{name}\" ({} \"{owner}\")", "relationship", "of"),
+                    (_, Some(container)) if !container.is_empty() && container != "DGM" && !kind.is_empty() => format!("{container} \"{name}\""),
+                    (_, Some(container)) if !container.is_empty() && container != "DGM" => format!("{container} \"{name}\" ({} \"{owner}\")", "of"),
+                    _ if element && !item_type.is_empty() => format!("{item_type} \"{name}\""),
+                    _ if !item_type.is_empty() => format!("{} \"{name}\" ({item_type})", "diagram"),
+                    _ if !kind.is_empty() => format!("{kind} \"{name}\""),
+                    _ => format!("\"{name}\""),
+                };
+                let container = matches!(kind.as_str(), "Links" | "Visual Elements") || (kind == name && !kind.is_empty() && kind != "DGM");
+                if !container {
+                    match status.as_str() {
+                        "Model only" => added.push(label.clone()),
+                        "Baseline only" => deleted.push(label.clone()),
+                        "Changed" | "Identical" if !props.is_empty() || status == "Changed" => {
+                            let geometry = |p: &str| matches!(p, "Left" | "Top" | "Right" | "Bottom");
+                            if kind == "DGM" && props.iter().any(|p| geometry(&p.0)) {
+                                match layout.iter_mut().find(|l| l.0 == owner) {
+                                    Some(l) => l.1 += 1,
+                                    None => layout.push((owner.clone(), 1)),
+                                }
+                            }
+                            let shown: Vec<String> = props
+                                .iter()
+                                .filter(|p| !(kind == "DGM" && geometry(&p.0)))
+                                .map(|(prop, base, model)| match settings_diff(base, model) {
+                                    // "A=1;B=2;" settings: only the ones that differ.
+                                    Some(diff) => format!("{prop}: {diff}"),
+                                    None => {
+                                        let short = |t: &str| if t.chars().count() > 80 { format!("{}…", t.chars().take(80).collect::<String>()) } else { t.to_string() };
+                                        format!("{prop}: \"{}\" → \"{}\"", short(base), short(model))
+                                    }
+                                })
+                                .collect();
+                            if !shown.is_empty() {
+                                changed.push(format!("{label}: {}", shown.join("; ")));
+                            } else if status == "Changed" && !(kind == "DGM" && props.iter().any(|p| geometry(&p.0))) {
+                                // A change of the item's children only (they are listed themselves) or of EA's noise.
+                                noise += usize::from(props.is_empty() && !body_has_children(segment, own_end));
+                            }
+                        }
+                        _ => {}
+                    }
                 }
+                stack.push((name, kind, label));
+                rest = &segment[own_end..];
             }
-            _ => {}
+            (_, Some(c)) => {
+                stack.pop();
+                rest = &rest[c + "</CompareItem>".len()..];
+            }
+            _ => break,
         }
     }
+    for (diagram, count) in layout {
+        changed.push(format!("diagram \"{diagram}\": layout changed (elements moved or resized: {count})"));
+    }
     (added, deleted, changed, noise)
+}
+
+/// The settings that differ between two "Key=value;Key=value;" texts, or None when they are not such texts.
+fn settings_diff(base: &str, model: &str) -> Option<String> {
+    let pairs = |t: &str| -> Option<Vec<(String, String)>> {
+        let parts: Vec<&str> = t.split(';').map(str::trim).filter(|p| !p.is_empty()).collect();
+        (parts.len() > 1 && parts.iter().all(|p| p.contains('='))).then(|| parts.iter().filter_map(|p| p.split_once('=')).map(|(k, v)| (k.to_string(), v.to_string())).collect())
+    };
+    let (a, b) = (pairs(base)?, pairs(model)?);
+    let get = |list: &[(String, String)], key: &str| list.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone()).unwrap_or_default();
+    let mut keys: Vec<&String> = a.iter().chain(b.iter()).map(|(k, _)| k).collect();
+    keys.dedup();
+    let mut seen = std::collections::HashSet::new();
+    let diffs: Vec<String> = keys
+        .into_iter()
+        .filter(|k| seen.insert(k.to_string()) && k.as_str() != "DUID")
+        .filter_map(|k| {
+            let (x, y) = (get(&a, k), get(&b, k));
+            (x != y).then(|| format!("{k} \"{x}\" → \"{y}\""))
+        })
+        .take(10)
+        .collect();
+    Some(diffs.join(", "))
+}
+
+/// Whether an item has items of its own right after its properties (its change is theirs).
+fn body_has_children(segment: &str, own_end: usize) -> bool {
+    segment[own_end..].starts_with("<CompareItem ")
 }
 
 /// The comparison of a package with a baseline, through EA.
@@ -226,6 +321,25 @@ mod tests {
         assert_eq!(noise, 1, "notes that differ only in line ends are noise");
     }
 
+    /// LC-440: EA's real log nests the items and leaves the type empty; notes written after the baseline are "Model only".
+    #[test]
+    fn baseline_log_as_ea_writes_it() {
+        let xml = r#"<EA.CompareLog><ComparePackage name="P"><CompareResults><CompareItem name="P" type="" guid="{1}" status="Identical"><Properties><Property name="Abstract" model="false" baseline="false" status="Identical"/></Properties>
+<CompareItem name="Faktura" type="" guid="{2}" status="Changed"><Properties><Property name="Abstract" model="false" baseline="false" status="Identical"/><Property name="DateModified" model="2" baseline="1" status="Changed"/><Property name="Notes" model="Faktura VAT." status="Model only"/><Property name="Type" model="Class" baseline="Class" status="Identical"/></Properties></CompareItem>
+<CompareItem name="Serwis" type="" guid="{3}" status="Changed"><Properties><Property name="Abstract" model="false" baseline="false" status="Identical"/><Property name="Type" model="Class" baseline="Class" status="Identical"/></Properties><CompareItem name="Links" type="Links" guid="{3}Links" status="Identical"><CompareItem name="Sequence (zapisz())" type="" guid="{4}" status="Changed"><Properties><Property name="Type" model="Sequence" baseline="Sequence" status="Identical"/><Property name="Name" model="zapisz()" baseline="zapisz()" status="Identical"/><Property name="Notes" model="nowa" baseline="" status="Changed"/></Properties></CompareItem></CompareItem></CompareItem>
+<CompareItem name="BB3 Sekwencja" type="" guid="{5}" status="Changed"><Properties><Property name="Type" model="Sequence" baseline="Sequence" status="Identical"/></Properties><CompareItem name="Visual Elements" type="Visual Elements" guid="{5}Visual Elements" status="Identical"><CompareItem name="Serwis" type="DGM" guid="DGM-{3}{5}" status="Changed"><Properties><Property name="Top" model="20" baseline="50" status="Changed"/><Property name="Style" baseline="DUID=47E60C04;" status="Baseline only"/></Properties></CompareItem></CompareItem></CompareItem>
+<CompareItem name="Rabat" type="" guid="{6}" status="Model only"><Properties><Property name="Abstract" model="false" status="Model only"/><Property name="Type" model="Class" status="Model only"/></Properties></CompareItem>
+</CompareItem></CompareResults></ComparePackage></EA.CompareLog>"#;
+        let (added, deleted, changed, _) = super::baseline_diff(xml);
+        assert_eq!(added, vec!["Class \"Rabat\""]);
+        assert!(deleted.is_empty());
+        assert_eq!(changed, vec![
+            "Class \"Faktura\": Notes: \"\" → \"Faktura VAT.\"".to_string(),
+            "relationship \"Sequence (zapisz())\" (of \"Serwis\"): Notes: \"\" → \"nowa\"".to_string(),
+            "diagram \"BB3 Sekwencja\": layout changed (elements moved or resized: 1)".to_string(),
+        ]);
+    }
+
     /// LC-371: on a model copy: `LOONAR_TEST_PROPS=E:/livetest/undo/undo.properties cargo test what_changed_live -- --ignored --nocapture`
     #[test]
     #[ignore = "requires the model from LOONAR_TEST_PROPS"]
@@ -234,5 +348,21 @@ mod tests {
         let report = super::run(&serde_json::json!({ "since": "3650" }), &cfg).expect("what_changed");
         println!("{}", report.lines().take(20).collect::<Vec<_>>().join("\n"));
         assert!(report.starts_with("Changes in the whole model since"));
+    }
+
+    /// LC-440: EA's raw comparison of a package with a baseline, on a model copy (LOONAR_TEST_PACKAGE, LOONAR_TEST_BASELINE).
+    #[test]
+    #[ignore = "requires EA and the model from LOONAR_TEST_PROPS"]
+    fn baseline_compare_raw_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("app.properties");
+        let package: i64 = std::env::var("LOONAR_TEST_PACKAGE").expect("LOONAR_TEST_PACKAGE").parse().unwrap();
+        let file = std::env::temp_dir().join("lc440-compare.xml");
+        crate::ea::run_batch(&cfg, &[serde_json::json!({ "op": "baseline_compare", "package": package, "baseline": std::env::var("LOONAR_TEST_BASELINE").unwrap_or_default(), "file": file.display().to_string() })], &crate::ea::BatchOptions::default()).expect("compare");
+        crate::ea::shutdown();
+        let (added, deleted, changed, noise) = super::baseline_diff(&std::fs::read_to_string(&file).unwrap());
+        println!("added {added:#?}
+deleted {deleted:#?}
+changed {changed:#?}
+noise {noise}");
     }
 }

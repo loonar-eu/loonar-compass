@@ -116,7 +116,7 @@ struct Requirement {
 
 fn plan(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)> {
     let file = std::path::Path::new(input["file"].as_str().unwrap_or("")).file_name().context("file")?.to_string_lossy().to_string();
-    let bytes = std::fs::read(cfg.attachments_dir.join(&file)).with_context(|| format!("there is no attachment {file}"))?;
+    let bytes = std::fs::read(crate::history::attachment_path(&cfg.attachments_dir, &file)).with_context(|| format!("there is no attachment {file}"))?;
     let text = String::from_utf8_lossy(&bytes);
     let tests = if text.trim_start().trim_start_matches('\u{feff}').starts_with('<') { junit(&text) } else { csv(&file, &bytes)? };
     if tests.is_empty() {

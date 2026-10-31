@@ -212,7 +212,7 @@ fn act(site: &Site, service: &str, place: &str, input: &Value, ctx: &crate::tool
             if given.contains(['/', '\\', ':']) {
                 bail!("{}", crate::i18n::tr("upload only files from the attachments folder (documents and presentations you created)"));
             }
-            let file = attachment_named(&ctx.cfg.attachments_dir, given)
+            let file = crate::history::attachment_named(&ctx.cfg.attachments_dir, given)
                 .with_context(|| crate::i18n::tr("upload only files from the attachments folder (documents and presentations you created)"))?;
             let local = ctx.cfg.attachments_dir.join(&file);
             let folder = input["folder"].as_str().unwrap_or("");
@@ -225,25 +225,6 @@ fn act(site: &Site, service: &str, place: &str, input: &Value, ctx: &crate::tool
     }
 }
 
-/// The file in the attachments folder: its stored name ("<id>_Name.docx") or, as the model usually says it, the
-/// name the user sees ("Name.docx"); then the newest such file.
-fn attachment_named(dir: &std::path::Path, given: &str) -> Option<String> {
-    if dir.join(given).is_file() {
-        return Some(given.to_string());
-    }
-    std::fs::read_dir(dir)
-        .ok()?
-        .flatten()
-        .filter(|e| e.path().is_file())
-        .filter_map(|e| {
-            let name = e.file_name().to_string_lossy().to_string();
-            let shown = crate::history::display_name(&name).to_string();
-            // Spaces and other characters are "_" in a stored name ("Test SharePoint.docx" → "…_Test_SharePoint.docx").
-            (shown.eq_ignore_ascii_case(given) || shown.eq_ignore_ascii_case(&crate::history::sanitize_name(given))).then(|| (e.metadata().and_then(|m| m.modified()).ok(), name))
-        })
-        .max_by_key(|(modified, _)| *modified)
-        .map(|(_, name)| name)
-}
 
 pub fn onedrive_definition() -> Value {
     json!({
@@ -358,8 +339,8 @@ mod tests {
         assert!(read.contains("W1 The customer places an order"));
         std::fs::write(cfg.attachments_dir.join("abc_Review.pptx"), b"pptx bytes").unwrap();
         std::fs::write(cfg.attachments_dir.join("27f7f074a214445481c5a853f29f5b70_Test_SharePoint.docx"), b"docx").unwrap();
-        assert_eq!(super::attachment_named(&cfg.attachments_dir, "Test SharePoint.docx").as_deref(), Some("27f7f074a214445481c5a853f29f5b70_Test_SharePoint.docx"), "the shown name finds the stored file");
-        assert_eq!(super::attachment_named(&cfg.attachments_dir, "abc_Review.pptx").as_deref(), Some("abc_Review.pptx"));
+        assert_eq!(crate::history::attachment_named(&cfg.attachments_dir, "Test SharePoint.docx").as_deref(), Some("27f7f074a214445481c5a853f29f5b70_Test_SharePoint.docx"), "the shown name finds the stored file");
+        assert_eq!(crate::history::attachment_named(&cfg.attachments_dir, "abc_Review.pptx").as_deref(), Some("abc_Review.pptx"));
         let up = run(&json!({ "action": "upload", "file": "abc_Review.pptx", "folder": "Reports" }), &ctx).unwrap();
         assert!(up.contains("Uploaded to SharePoint: https://contoso.sharepoint.com/sites/Arch/Documents/Reports/x (10 bytes)"), "{up}");
         assert!(run(&json!({ "action": "upload", "file": "..\\\\app.properties" }), &ctx).is_err(), "only attachments");

@@ -177,7 +177,7 @@ pub fn import_mermaid(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, Str
     let text = match input["file"].as_str().filter(|f| !f.trim().is_empty()) {
         Some(f) => {
             let name = std::path::Path::new(f).file_name().context("file")?.to_string_lossy().to_string();
-            std::fs::read_to_string(cfg.attachments_dir.join(&name)).with_context(|| format!("there is no attachment {name}"))?
+            std::fs::read_to_string(crate::history::attachment_path(&cfg.attachments_dir, &name)).with_context(|| format!("there is no attachment {name}"))?
         }
         None => input["text"].as_str().unwrap_or("").to_string(),
     };

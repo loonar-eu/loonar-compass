@@ -627,20 +627,65 @@ pub fn preview(cfg: &AppConfig, ops: &[Value]) -> String {
     let name_of = |table: &str, key: &str, id: i64| -> String {
         one(format!("select coalesce(name,'') as c0 from {table} where {key} = {id}")).map(|r| r[0].clone()).unwrap_or_else(|| format!("#{id}"))
     };
+    // Objects created earlier in the same write are named by their key ("#bin"): the card shows their name (LC-442).
+    let created: BTreeMap<String, String> = ops
+        .iter()
+        .filter_map(|op| Some((format!("#{}", op["key"].as_str()?.trim_start_matches('#')), op["name"].as_str().unwrap_or("").to_string())))
+        .collect();
+    let connector = |id: i64| -> String {
+        one(format!(
+            "select c.connector_type as c0, coalesce(s.name,'') as c1, coalesce(t.name,'') as c2, coalesce(c.name,'') as c3 from t_connector c \
+             left join t_object s on s.object_id = c.start_object_id left join t_object t on t.object_id = c.end_object_id where c.connector_id = {id}"
+        ))
+        .map(|r| format!("{}{} \"{}\" → \"{}\" (#{id})", r[0], if r[3].is_empty() { String::new() } else { format!(" \"{}\"", r[3]) }, r[1], r[2]))
+        .unwrap_or_else(|| format!("{} #{id}", crate::i18n::tr("connector")))
+    };
+    let feature = |table: &str, key: &str, id: i64| -> String {
+        one(format!("select coalesce(f.name,'') as c0, coalesce(o.name,'') as c1 from {table} f left join t_object o on o.object_id = f.object_id where f.{key} = {id}"))
+            .map(|r| format!("\"{}.{}\"", r[1], r[0]))
+            .unwrap_or_else(|| format!("#{id}"))
+    };
+    // Every field by what it points to: a connector id is not an element id (LC-441).
     let target = |op: &Value, field: &str| -> String {
         match &op[field] {
             Value::Number(n) => {
                 let id = n.as_i64().unwrap_or(0);
                 match field {
-                    "package" | "parent" => format!("\"{}\"", name_of("t_package", "package_id", id)),
+                    "package" | "parent" | "child_package" | "target_package" => format!("\"{}\"", name_of("t_package", "package_id", id)),
                     "diagram" => format!("\"{}\"", name_of("t_diagram", "diagram_id", id)),
+                    "connector" => connector(id),
+                    "attribute" => feature("t_attribute", "id", id),
+                    "operation" => feature("t_operation", "operationid", id),
                     _ => format!("\"{}\"", name_of("t_object", "object_id", id)),
                 }
             }
-            Value::String(s) => s.clone(),
+            Value::String(s) => match created.get(&format!("#{}", s.trim_start_matches('#'))) {
+                Some(name) if s.starts_with('#') => format!("\"{name}\" ({})", crate::i18n::tr("new@@created in this write")),
+                _ => s.clone(),
+            },
             _ => String::new(),
         }
     };
+    // Field changes as "field: "before" → "after"" for the fields the write gives (LC-442).
+    let short = |s: &str| if s.chars().count() > 60 { format!("{}…", s.chars().take(60).collect::<String>()) } else { s.to_string() };
+    let changes_of = |op: &Value, sql: String, fields: &[&str]| -> (Option<Vec<String>>, Vec<String>) {
+        let before = one(sql);
+        let mut changes = Vec::new();
+        for (index, field) in fields.iter().enumerate() {
+            let after = match &op[*field] {
+                Value::String(s) => s.clone(),
+                Value::Number(n) => n.to_string(),
+                Value::Bool(b) => b.to_string(),
+                _ => continue,
+            };
+            let was = before.as_ref().and_then(|b| b.get(index + 1).cloned()).unwrap_or_default();
+            if after != was {
+                changes.push(format!("{field}: \"{}\" → \"{}\"", short(&was), short(&after)));
+            }
+        }
+        (before, changes)
+    };
+    let id_of = |op: &Value, field: &str| op[field].as_i64().unwrap_or(0);
     for op in ops.iter().take(80) {
         let name = op["name"].as_str().unwrap_or("");
         let line = match op["op"].as_str().unwrap_or("") {
@@ -650,32 +695,66 @@ pub fn preview(cfg: &AppConfig, ops: &[Value]) -> String {
             "create_connector" => format!("+ {} {} → {}", op["type"].as_str().unwrap_or("relationship"), target(op, "source"), target(op, "target")),
             "place" => format!("+ {} → {}", target(op, "element"), target(op, "diagram")),
             "update_element" => {
-                let id = op["element"].as_i64().unwrap_or(0);
-                let before = one(format!("select coalesce(name,'') as c0, coalesce(stereotype,'') as c1, coalesce(alias,'') as c2, coalesce(note,'') as c3 from t_object where object_id = {id}"));
-                let mut changes = Vec::new();
-                if let Some(b) = &before {
-                    for (field, index) in [("name", 0), ("stereotype", 1), ("alias", 2), ("notes", 3)] {
-                        if let Some(after) = op[field].as_str() {
-                            if after != b[index] {
-                                let short = |s: &str| if s.chars().count() > 60 { format!("{}…", s.chars().take(60).collect::<String>()) } else { s.to_string() };
-                                changes.push(format!("{field}: \"{}\" → \"{}\"", short(&b[index]), short(after)));
-                            }
-                        }
-                    }
-                }
-                let other: Vec<&str> = op.as_object().map(|o| o.keys().map(|k| k.as_str()).filter(|k| !["op", "element", "name", "stereotype", "alias", "notes"].contains(k)).collect()).unwrap_or_default();
+                const FIELDS: &[&str] = &["name", "stereotype", "alias", "notes", "status", "version", "author", "phase", "complexity"];
+                let id = id_of(op, "element");
+                let (before, mut changes) = changes_of(op, format!(
+                    "select coalesce(name,'') as c0, coalesce(name,'') as c1, coalesce(stereotype,'') as c2, coalesce(alias,'') as c3, coalesce(note,'') as c4, \
+                     coalesce(status,'') as c5, coalesce(version,'') as c6, coalesce(author,'') as c7, coalesce(phase,'') as c8, coalesce(complexity,'') as c9 \
+                     from t_object where object_id = {id}"
+                ), FIELDS);
+                let other: Vec<&str> = op.as_object().map(|o| o.keys().map(|k| k.as_str()).filter(|k| *k != "op" && *k != "element" && !FIELDS.contains(k)).collect()).unwrap_or_default();
                 if !other.is_empty() {
                     changes.push(other.join(", "));
                 }
                 format!("~ \"{}\": {}", before.map(|b| b[0].clone()).unwrap_or_else(|| format!("#{id}")), if changes.is_empty() { crate::i18n::tr("no visible change").to_string() } else { changes.join("; ") })
             }
+            "update_attribute" | "update_operation" | "update_connector" | "update_package" | "update_diagram" => {
+                let kind = op["op"].as_str().unwrap_or("");
+                let (field, sql, fields): (&str, String, &[&str]) = match kind {
+                    "update_attribute" => ("attribute", format!(
+                        "select '' as c0, coalesce(name,'') as c1, coalesce(type,'') as c2, coalesce(scope,'') as c3, coalesce(notes,'') as c4, coalesce(stereotype,'') as c5 from t_attribute where id = {}",
+                        id_of(op, "attribute")
+                    ), &["name", "type", "visibility", "notes", "stereotype"]),
+                    "update_operation" => ("operation", format!(
+                        "select '' as c0, coalesce(name,'') as c1, coalesce(type,'') as c2, coalesce(scope,'') as c3, coalesce(notes,'') as c4, coalesce(stereotype,'') as c5 from t_operation where operationid = {}",
+                        id_of(op, "operation")
+                    ), &["name", "return_type", "visibility", "notes", "stereotype"]),
+                    "update_connector" => ("connector", format!(
+                        "select '' as c0, coalesce(name,'') as c1, coalesce(stereotype,'') as c2, coalesce(direction,'') as c3, coalesce(notes,'') as c4, coalesce(sourcecard,'') as c5, \
+                         coalesce(sourcerole,'') as c6, coalesce(destcard,'') as c7, coalesce(destrole,'') as c8 from t_connector where connector_id = {}",
+                        id_of(op, "connector")
+                    ), &["name", "stereotype", "direction", "notes", "source_multiplicity", "source_role", "target_multiplicity", "target_role"]),
+                    "update_package" => ("package", format!(
+                        "select '' as c0, coalesce(name,'') as c1, coalesce(notes,'') as c2, coalesce(version,'') as c3 from t_package where package_id = {}",
+                        id_of(op, "package")
+                    ), &["name", "notes", "version"]),
+                    _ => ("diagram", format!(
+                        "select '' as c0, coalesce(name,'') as c1, coalesce(notes,'') as c2, coalesce(stereotype,'') as c3 from t_diagram where diagram_id = {}",
+                        id_of(op, "diagram")
+                    ), &["name", "notes", "stereotype"]),
+                };
+                let (_, mut changes) = changes_of(op, sql, fields);
+                let other: Vec<&str> = op.as_object().map(|o| o.keys().map(|k| k.as_str()).filter(|k| *k != "op" && *k != field && !fields.contains(k)).collect()).unwrap_or_default();
+                if !other.is_empty() {
+                    changes.push(other.join(", "));
+                }
+                format!("~ {}: {}", target(op, field), if changes.is_empty() { crate::i18n::tr("no visible change").to_string() } else { changes.join("; ") })
+            }
+            "set_color" => format!("~ {} ({}): {} → {}", target(op, "element"), target(op, "diagram"), crate::i18n::tr("fill color"), op["bgcolor"].as_str().unwrap_or("")),
+            "change_connector_type" => format!("~ {}: {} → {}", target(op, "connector"), crate::i18n::tr("type"), op["type"].as_str().unwrap_or("")),
+            "reverse_connector" => format!("~ {}: {}", target(op, "connector"), crate::i18n::tr("direction reversed")),
+            "merge_elements" => format!("− {}", crate::i18n::fmt("MERGE {0} into {1} and DELETE {0}", &[target(op, "remove"), target(op, "keep")])),
             "move" => format!("→ {} → {}", ["element", "package", "diagram"].iter().map(|f| target(op, f)).find(|s| !s.is_empty()).unwrap_or_default(), target(op, "target")),
             "delete" | "delete_package" | "delete_scenario" | "delete_attribute" | "delete_operation" => {
-                let what = ["element", "package", "diagram", "connector", "scenario", "attribute", "operation"].iter().map(|f| target(op, f)).find(|s| !s.is_empty()).unwrap_or_default();
+                let what = ["connector", "attribute", "operation", "scenario", "diagram", "package", "element"].iter().map(|f| target(op, f)).find(|s| !s.is_empty()).unwrap_or_default();
                 format!("− {} {what}", crate::i18n::tr("DELETE"))
             }
             "remove_from_diagram" => format!("− {} ⟵ {}", target(op, "element"), target(op, "diagram")),
-            other => format!("· {other} {name}"),
+            other => {
+                // Any other write: what it acts on, by name (not only its kind).
+                let on: Vec<String> = ["element", "connector", "diagram", "package", "attribute", "operation"].iter().map(|f| target(op, f)).filter(|s| !s.is_empty()).collect();
+                format!("· {other} {}", if on.is_empty() { name.to_string() } else { on.join(", ") }).trim_end().to_string()
+            }
         };
         lines.push(line);
     }

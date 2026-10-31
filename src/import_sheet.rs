@@ -114,13 +114,14 @@ fn csv_rows(text: &str, separator: char) -> Vec<Vec<String>> {
 /// One planned row: (number, what, label, operation).
 type Planned = (usize, &'static str, String, Option<Value>);
 
-/// A name folded for comparing: lower case, without accents, spaces or punctuation.
-fn fold(name: &str) -> String {
+/// A name folded for comparing: lower case, without accents, spaces or punctuation (also for duplicates, LC-439).
+pub(crate) fn fold(name: &str) -> String {
     name.to_lowercase()
         .chars()
         .map(|c| match c {
             'ą' => 'a', 'ć' => 'c', 'ę' => 'e', 'ł' => 'l', 'ń' => 'n', 'ó' => 'o', 'ś' => 's', 'ź' | 'ż' => 'z',
             'ä' | 'à' | 'á' | 'â' => 'a', 'ö' | 'ô' | 'ò' => 'o', 'ü' | 'ù' | 'û' | 'ú' => 'u', 'é' | 'è' | 'ê' | 'ë' => 'e', 'ß' => 's', 'ç' => 'c',
+            'ı' | 'î' | 'ï' | 'í' => 'i', 'ğ' => 'g', 'ş' => 's', 'ñ' => 'n',
             c => c,
         })
         .filter(|c| c.is_alphanumeric())
@@ -175,7 +176,7 @@ fn plan(input: &Value, cfg: &AppConfig) -> Result<(Vec<Planned>, Vec<Value>, Str
         Some(f) => folder_rows(f)?,
         None => {
             let file = std::path::Path::new(input["file"].as_str().unwrap_or("")).file_name().context("file (or folder)")?.to_string_lossy().to_string();
-            let bytes = std::fs::read(cfg.attachments_dir.join(&file)).with_context(|| format!("there is no attachment {file}"))?;
+            let bytes = std::fs::read(crate::history::attachment_path(&cfg.attachments_dir, &file)).with_context(|| format!("there is no attachment {file}"))?;
             read_rows(&file, &bytes)?
         }
     };
@@ -423,7 +424,7 @@ fn exchange_items(xml: &str) -> (&'static str, Vec<(String, String)>, std::colle
 /// LC-424: what EA's import of an exchange file left out, against the package it went into.
 fn fidelity(input: &Value, cfg: &AppConfig) -> Result<String> {
     let file = std::path::Path::new(input["file"].as_str().unwrap_or("")).file_name().context("file: the exchange file (XML) attached")?.to_string_lossy().to_string();
-    let bytes = std::fs::read(cfg.attachments_dir.join(&file)).with_context(|| format!("there is no attachment {file}"))?;
+    let bytes = std::fs::read(crate::history::attachment_path(&cfg.attachments_dir, &file)).with_context(|| format!("there is no attachment {file}"))?;
     let xml = String::from_utf8_lossy(&bytes).to_string();
     let (format, elements, relations) = exchange_items(&xml);
     if elements.is_empty() {
@@ -497,7 +498,7 @@ pub fn run(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)> {
             Some(folder) => folder_rows(folder)?,
             None => {
                 let file = std::path::Path::new(input["file"].as_str().unwrap_or("")).file_name().context("file")?.to_string_lossy().to_string();
-                read_rows(&file, &std::fs::read(cfg.attachments_dir.join(&file)).with_context(|| format!("there is no attachment {file}"))?)?
+                read_rows(&file, &std::fs::read(crate::history::attachment_path(&cfg.attachments_dir, &file)).with_context(|| format!("there is no attachment {file}"))?)?
             }
         };
         let mut text = format!("{} rows. Columns: {}\nSamples:\n", rows.len().saturating_sub(1), rows.first().map(|h| h.join(" | ")).unwrap_or_default());

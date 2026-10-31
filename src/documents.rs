@@ -205,6 +205,31 @@ fn pdf(bytes: &[u8]) -> Result<String> {
     }
 }
 
+/// Why a PDF cannot be opened at all, or `None` when it can (a scan without a text layer can). The model's API refuses a
+/// damaged PDF and the attachment goes with every turn, so one such file stopped the whole conversation (LC-437).
+/// The answer is kept per file content, as the attachments are sent again with every turn.
+pub fn pdf_unreadable(bytes: &[u8]) -> Option<String> {
+    use std::hash::{Hash, Hasher};
+    static SEEN: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<u64, Option<String>>>> = std::sync::OnceLock::new();
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    bytes.hash(&mut hasher);
+    let key = hasher.finish();
+    let seen = SEEN.get_or_init(Default::default);
+    if let Some(known) = seen.lock().ok().and_then(|s| s.get(&key).cloned()) {
+        return known;
+    }
+    let owned = bytes.to_vec();
+    let reason = match std::panic::catch_unwind(move || pdf_extract::extract_text_from_mem(&owned)) {
+        Ok(Ok(_)) => None,
+        Ok(Err(e)) => Some(e.to_string()),
+        Err(_) => Some("damaged or unsupported".to_string()),
+    };
+    if let Ok(mut s) = seen.lock() {
+        s.insert(key, reason.clone());
+    }
+    reason
+}
+
 /// The text of a document by its extension.
 pub fn text_of(name: &str, bytes: &[u8]) -> Result<String> {
     let ext = std::path::Path::new(name).extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();

@@ -24,7 +24,7 @@ before deleting or renaming, and for /where-used. Element = t_object.object_id o
         json!({
             "name": "find_duplicates",
             "description": "Likely duplicates in a package (with child packages) or the whole model: elements of the same type whose names are \
-the same or nearly the same (letter case, spaces, _ and -, a plural s), each with its package and how much uses it (relationships and diagrams) – \
+the same or nearly the same (letter case, accents, spaces, _ and -, a plural s), each with its package and how much uses it (relationships and diagrams) – \
 to choose which one to keep; and relationships of the same type and stereotype between the same two elements. Reads only. Use it for \
 /find-duplicates and before merging (merge_elements).",
             "input_schema": { "type": "object", "properties": {
@@ -196,9 +196,10 @@ pub(crate) fn package_scope(cfg: &AppConfig, package: &Value) -> Result<(String,
 }
 
 
-/// A name for comparing (LC-369): lower case, without spaces, "_", "-" and ".", and without one plural "s" at the end.
+/// A name for comparing (LC-369): lower case, without accents (Zamówienie = Zamowienie, LC-439), spaces and punctuation,
+/// and without one plural "s" at the end.
 pub(crate) fn name_key(name: &str) -> String {
-    let key: String = name.to_lowercase().chars().filter(|c| !matches!(c, ' ' | '_' | '-' | '.' | '\t')).collect();
+    let key = crate::import_sheet::fold(name);
     match key.strip_suffix('s') {
         Some(stem) if stem.chars().count() >= 3 => stem.to_string(),
         _ => key,
@@ -357,6 +358,9 @@ mod tests {
         assert_eq!(super::name_key("Order Line"), super::name_key("order_line"));
         assert_eq!(super::name_key("e-mail"), super::name_key("Email"));
         assert_ne!(super::name_key("Customer"), super::name_key("Custom"));
+        // LC-439: names written with and without Polish letters.
+        assert_eq!(super::name_key("Zamówienie"), super::name_key("Zamowienie"));
+        assert_eq!(super::name_key("Płatność"), super::name_key("platnosc"));
         assert_eq!(super::name_key("Bus"), "bus", "a stem shorter than 3 letters keeps its s");
         assert_eq!(super::name_key("as"), "as");
     }

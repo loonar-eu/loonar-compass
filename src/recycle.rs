@@ -112,7 +112,7 @@ pub fn element_reach(cfg: &AppConfig, id: i64) -> Option<String> {
     let links = query_rows(cfg, &format!("select count(*) from t_connector where start_object_id = {id} or end_object_id = {id}")).ok()?.first()?.first()?.clone();
     let diagrams = query_rows(cfg, &format!("select d.name from t_diagramobjects x join t_diagram d on d.diagram_id = x.diagram_id where x.object_id = {id} order by d.name")).ok()?;
     let names: Vec<String> = diagrams.iter().take(5).map(|r| format!("\"{}\"", r[0])).collect();
-    Some(crate::i18n::fmt("it has {0} relationships and is on {1} diagrams{2}", &[
+    Some(crate::i18n::fmt("relationships: {0}, diagrams: {1}{2}", &[
         links,
         diagrams.len().to_string(),
         if names.is_empty() { String::new() } else { format!(": {}{}", names.join(", "), if diagrams.len() > 5 { ", …" } else { "" }) },

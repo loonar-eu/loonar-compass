@@ -320,7 +320,7 @@ fn read_spec(v: &Value) -> Spec {
 
 fn plan(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)> {
     let file = std::path::Path::new(input["file"].as_str().unwrap_or("")).file_name().context("file")?.to_string_lossy().to_string();
-    let text = std::fs::read_to_string(cfg.attachments_dir.join(&file)).with_context(|| format!("there is no attachment {file}"))?;
+    let text = std::fs::read_to_string(crate::history::attachment_path(&cfg.attachments_dir, &file)).with_context(|| format!("there is no attachment {file}"))?;
     let doc: Value = match serde_json::from_str(&text) {
         Ok(v) => v,
         Err(_) => yaml_to_json(&text).with_context(|| format!("{file} is neither JSON nor YAML that Compass can read"))?,

@@ -6227,6 +6227,7 @@ fn tool_step(name: &str, input: &Value) -> String {
         "ea_show_diagram" => crate::i18n::fmt("Getting diagram {0} from EA as an image", &[(input["diagram_id"]).to_string()]),
         "miro_send" => crate::i18n::fmt("Opening \"Send to Miro\" for diagram {0}", &[(input["diagram_id"]).to_string()]),
         "package_matrix" => crate::i18n::fmt("Relationship matrix of packages {0} × {1}", &[input["source"].to_string(), input["target"].to_string()]),
+        "where_used" if input["connector"].is_number() => crate::i18n::fmt("Where relationship {0} is used", &[input["connector"].to_string()]),
         "where_used" => crate::i18n::fmt("Where element {0} is used", &[input["element"].to_string()]),
         "find_orphans" => crate::i18n::tr("Looking for elements nothing uses").to_string(),
         "memory_save" => crate::i18n::fmt("Remembering a note: {0}", &[(input["name"].as_str().unwrap_or("")).to_string()]),
@@ -6529,25 +6530,49 @@ fn ask_from_command_line(args: &[String], default_props: &Path) -> anyhow::Resul
     }));
     let mut md = format!("# Conversation without a window (Loonar Compass {})\n\nSettings: {}\nReasoning: {reasoning}, code execution: {code}, writes: {}\n",
         env!("CARGO_PKG_VERSION"), props.display(), if approve { "approved" } else { "refused" });
-    let mut history: Vec<Message> = Vec::new();
+    // The steps of every answer go with the next message, as in the window (LC-435): without them the assistant did
+    // not know in the next turn what it had read or saved, and denied its own writes.
+    let mut session = history::Session::new();
     let mut failed = false;
     for (n, text) in said.iter().enumerate() {
-        history.push(Message { role: "user".into(), text: text.clone(), attachments: if n == 0 { stored.clone() } else { vec![] }, created: chrono::Utc::now().to_rfc3339() });
+        session.messages.push(Message { role: "user".into(), text: text.clone(), attachments: if n == 0 { stored.clone() } else { vec![] }, created: chrono::Utc::now().to_rfc3339() });
         md += &format!("\n## Message {}\n\n> {}\n", n + 1, text.replace('\n', "\n> "));
         if n == 0 && !stored.is_empty() {
             md += &format!("\nAttachments: {}\n", stored.join(", "));
         }
         let lines = std::sync::Mutex::new(Vec::<String>::new());
+        let record = std::sync::Mutex::new(Vec::<(String, Option<String>)>::new());
         let answers = std::sync::Mutex::new(Vec::<String>::new());
         let (_tx, inbox) = mpsc::channel();
-        let result = run_turn(&cfg, &history, &approver, &inbox, &AtomicBool::new(false), &|e| match e {
-            WorkerEvent::StepStart(t) => lines.lock().unwrap().push(format!("- ▶ {t}")),
-            WorkerEvent::StepEnd { ok, detail } => lines.lock().unwrap().push(format!("  - {} {}", if ok { "✓" } else { "✗" }, detail.replace('\n', "\n    "))),
+        let emit = |e| match e {
+            WorkerEvent::StepStart(t) => {
+                if !t.starts_with(TASKS_MARK) {
+                    record.lock().unwrap().push((shorten(&t, 200), None));
+                }
+                lines.lock().unwrap().push(format!("- ▶ {t}"))
+            }
+            WorkerEvent::StepEnd { ok, detail } => {
+                if let Some(step) = record.lock().unwrap().iter_mut().rev().find(|s| s.1.is_none()) {
+                    step.1 = Some(format!(" {} {}", if ok { "✓" } else { "✗" }, shorten(&detail, 160)));
+                }
+                lines.lock().unwrap().push(format!("  - {} {}", if ok { "✓" } else { "✗" }, detail.replace('\n', "\n    ")))
+            }
             WorkerEvent::Text(t) => answers.lock().unwrap().push(t),
             WorkerEvent::Images(names) => lines.lock().unwrap().push(format!("  - images: {}", names.join(", "))),
             WorkerEvent::Failed(e) => lines.lock().unwrap().push(format!("- ✗ error: {e}")),
             _ => {}
-        });
+        };
+        // A read-only command typed plainly is answered without the AI, as in the window (LC-389, LC-438).
+        let result = match commands::direct(text) {
+            Some((tool, input)) => {
+                emit(WorkerEvent::StepStart(crate::i18n::fmt("⚡ {0} (without the AI)", &[tool.to_string()])));
+                tools::run_direct(tool, &input, &cfg).map(|answer| {
+                    emit(WorkerEvent::StepEnd { ok: true, detail: String::new() });
+                    emit(WorkerEvent::Text(format!("{answer}\n\n_{}_", crate::i18n::tr("Answered by Compass without the AI. Ask the assistant if you want it explained or acted on."))));
+                })
+            }
+            None => run_turn(&cfg, &session.messages_for_model(), &approver, &inbox, &AtomicBool::new(false), &emit),
+        };
         md += &format!("\n### Steps\n\n{}\n", lines.into_inner().unwrap().join("\n"));
         let answers = answers.into_inner().unwrap();
         md += "\n### Answer\n\n";
@@ -6566,7 +6591,12 @@ fn ask_from_command_line(args: &[String], default_props: &Path) -> anyhow::Resul
             md += &format!("\n### Error\n\n{e:#}\n");
             failed = true;
         }
-        history.push(Message { role: "assistant".into(), text: answers.join("\n\n"), attachments: vec![], created: chrono::Utc::now().to_rfc3339() });
+        let answer = Message { role: "assistant".into(), text: answers.join("\n\n"), attachments: vec![], created: chrono::Utc::now().to_rfc3339() };
+        let steps: Vec<String> = record.into_inner().unwrap().into_iter().take(60).map(|(text, result)| format!("{text}{}", result.unwrap_or_else(|| " (not finished)".into()))).collect();
+        if !steps.is_empty() {
+            session.steps.insert(answer.created.clone(), steps);
+        }
+        session.messages.push(answer);
     }
     let approvals = approvals.lock().unwrap().clone();
     if !approvals.is_empty() {
@@ -7164,6 +7194,10 @@ fn file_blocks(name: &str, bytes: &[u8], unpack: bool, blocks: &mut Vec<Value>) 
     let ext = Path::new(name).extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
     let b64 = || base64::engine::general_purpose::STANDARD.encode(bytes);
     match ext.as_str() {
+        "pdf" if documents::pdf_unreadable(bytes).is_some() => {
+            let reason = documents::pdf_unreadable(bytes).unwrap_or_default();
+            blocks.push(text_block(&format!("[Attachment: {name} - the PDF cannot be read ({reason}), its content is not available]")));
+        }
         "pdf" => {
             blocks.push(text_block(&format!("[Attachment: {name}]")));
             blocks.push(json!({
@@ -9189,6 +9223,17 @@ mod tests {
             Some(super::ModelChoice::Database { name, engine, .. }) => assert_eq!((name.as_str(), engine.as_str()), ("ea_lab_my", "mysql")),
             _ => panic!("an ODBC data source is a database project"),
         }
+    }
+
+    /// LC-437: a damaged PDF is not sent to the model (its API refuses it in every turn); a mention goes instead.
+    #[test]
+    fn damaged_pdf_attachment_is_only_mentioned() {
+        let mut blocks = Vec::new();
+        super::file_blocks("uszkodzony.pdf", b"%PDF-1.4\n\x01\x02 not a pdf at all", true, &mut blocks);
+        assert_eq!(blocks.len(), 1);
+        let text = blocks[0]["text"].as_str().unwrap_or("");
+        assert!(text.starts_with("[Attachment: uszkodzony.pdf - the PDF cannot be read"), "{text}");
+        assert!(!blocks.iter().any(|b| b["type"] == "document"));
     }
 
     #[test]

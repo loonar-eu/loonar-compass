@@ -204,7 +204,7 @@ pub fn run(input: &Value, cfg: &AppConfig) -> Result<crate::tools::ToolOutput> {
         }
         "diff" => {
             let file = std::path::Path::new(input["file"].as_str().unwrap_or("")).file_name().context("file: the earlier export attached to the conversation")?.to_string_lossy().to_string();
-            let before_text = std::fs::read_to_string(cfg.attachments_dir.join(&file)).with_context(|| format!("there is no attachment {file}"))?;
+            let before_text = std::fs::read_to_string(crate::history::attachment_path(&cfg.attachments_dir, &file)).with_context(|| format!("there is no attachment {file}"))?;
             let before = parse(&before_text);
             if before.is_empty() {
                 bail!("{file} is not a text export of Compass");

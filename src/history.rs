@@ -417,6 +417,39 @@ pub fn sanitize_name(original: &str) -> String {
         .collect()
 }
 
+/// The file in the attachments folder: its stored name ("<id>_Name.docx") or, as the model usually says it, the
+/// name the user sees ("Name.docx", also with the spaces and letters the stored name turned into "_"); then the newest
+/// such file. Every tool that reads an attachment finds it this way (LC-436: the model is shown the name without the id).
+pub fn attachment_named(dir: &Path, given: &str) -> Option<String> {
+    let given = given.trim();
+    if given.is_empty() {
+        return None;
+    }
+    if dir.join(given).is_file() {
+        return Some(given.to_string());
+    }
+    let source = Path::new(given);
+    let stored_form = format!("{}.{}", sanitize(source.file_stem().and_then(|s| s.to_str()).unwrap_or("")), source.extension().and_then(|e| e.to_str()).unwrap_or("bin"));
+    std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .filter(|e| e.path().is_file())
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().to_string();
+            let shown = display_name(&name).to_string();
+            (shown.eq_ignore_ascii_case(given) || shown.eq_ignore_ascii_case(&sanitize_name(given)) || shown.eq_ignore_ascii_case(&stored_form))
+                .then(|| (e.metadata().and_then(|m| m.modified()).ok(), name))
+        })
+        .max_by_key(|(modified, _)| *modified)
+        .map(|(_, name)| name)
+}
+
+/// The path of an attachment named by the model (see `attachment_named`); a name that matches no file stays as given,
+/// so reading it reports the missing attachment.
+pub fn attachment_path(dir: &Path, given: &str) -> PathBuf {
+    dir.join(attachment_named(dir, given).unwrap_or_else(|| given.to_string()))
+}
+
 /// Copies the attachment file into the `attachments` folder; returns the name it was saved under.
 pub fn store_attachment(attachments_dir: &Path, source: &Path) -> Result<String> {
     std::fs::create_dir_all(attachments_dir)?;
@@ -551,6 +584,24 @@ pub fn import(source: &Path, attachments_dir: &Path, model: ModelChoice) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LC-436: a tool finds an attached file by the name the model is shown (without the id, with spaces or "_").
+    #[test]
+    fn attachment_by_the_shown_name() {
+        let dir = std::env::temp_dir().join(format!("lc436-{}", uuid::Uuid::new_v4().simple()));
+        let source = dir.join("in").join("Specyfikacja pakietu Żółw.docx");
+        std::fs::create_dir_all(source.parent().unwrap()).unwrap();
+        std::fs::write(&source, b"docx").unwrap();
+        let files = dir.join("files");
+        let stored = store_attachment(&files, &source).unwrap();
+        let shown = display_name(&stored).to_string();
+        for given in ["Specyfikacja pakietu Żółw.docx", shown.as_str(), stored.as_str(), "specyfikacja_pakietu_Żółw.DOCX"] {
+            assert_eq!(attachment_named(&files, given).as_deref(), Some(stored.as_str()), "{given}");
+        }
+        assert_eq!(attachment_named(&files, "inny.docx"), None);
+        assert_eq!(attachment_path(&files, "inny.docx"), files.join("inny.docx"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     fn settings(text: &str) -> crate::config::AppConfig {
         let dir = std::env::temp_dir().join(format!("loonar-model-choice-{}-{}", std::process::id(), text.len()));

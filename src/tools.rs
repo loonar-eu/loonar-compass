@@ -1910,7 +1910,7 @@ fn jira_files(ctx: &ToolContext, input: &Value) -> Result<Vec<(String, Vec<u8>)>
             files.push((format!("{}.png", crate::history::sanitize_name(&name)), picture(ctx, source)?));
         } else if let Some(stored) = source.strip_prefix("image:").or_else(|| source.strip_prefix("file:")) {
             let stored = std::path::Path::new(stored.trim()).file_name().context(crate::i18n::tr("image name"))?.to_string_lossy().to_string();
-            let bytes = std::fs::read(ctx.cfg.attachments_dir.join(&stored)).with_context(|| crate::i18n::fmt("there is no file {0} in this conversation", &[stored.clone()]))?;
+            let bytes = std::fs::read(crate::history::attachment_path(&ctx.cfg.attachments_dir, &stored)).with_context(|| crate::i18n::fmt("there is no file {0} in this conversation", &[stored.clone()]))?;
             files.push((crate::history::display_name(&stored).to_string(), bytes));
         } else {
             bail!("{}", crate::i18n::fmt("unknown attachment '{0}' (use diagram:ID, image:FILE_NAME or file:FILE_NAME)", &[source.to_string()]));
@@ -2490,7 +2490,21 @@ fn destructive_details(cfg: &AppConfig, ops: &[Value]) -> Vec<String> {
                 continue;
             }
             "delete_attribute" | "delete_operation" | "delete_scenario" => {
-                lines.push(crate::i18n::fmt("DELETE {0} of element {1}", &[kind.trim_start_matches("delete_").to_string(), op["element"].as_i64().map(|id| name_of("t_object", "object_id", id)).unwrap_or_else(|| op["element"].to_string())]));
+                // An attribute or operation is given by its own id; its element is found from it (LC-442: "element null").
+                let (field, table, key) = match kind {
+                    "delete_attribute" => ("attribute", "t_attribute", "id"),
+                    "delete_operation" => ("operation", "t_operation", "operationid"),
+                    _ => ("scenario", "", ""),
+                };
+                let (what, element) = match op[field].as_i64().filter(|_| !table.is_empty()) {
+                    Some(id) => query_rows(cfg, &format!("select coalesce(f.name,'') as c0, f.object_id as c1 from {table} f where f.{key} = {id}"))
+                        .ok()
+                        .and_then(|r| r.into_iter().next())
+                        .map(|r| (format!("{field} \"{}\"", r[0]), r[1].parse::<i64>().map(|e| name_of("t_object", "object_id", e)).unwrap_or_default()))
+                        .unwrap_or_else(|| (format!("{field} ID {id}"), String::new())),
+                    None => (format!("{field} {}", op[field].as_str().unwrap_or("")), op["element"].as_i64().map(|id| name_of("t_object", "object_id", id)).unwrap_or_default()),
+                };
+                lines.push(crate::i18n::fmt("DELETE {0} of element {1}", &[what, element]));
                 continue;
             }
             "version_control" => {
@@ -2521,7 +2535,21 @@ fn destructive_details(cfg: &AppConfig, ops: &[Value]) -> Vec<String> {
                 }
                 op[*field].as_i64().map(|id| (*field, name_of(table, column, id)))
             });
-        let Some((field, name)) = target else { continue };
+        let Some((field, mut name)) = target else { continue };
+        // A relationship without a name: its type and ends (LC-441).
+        if field == "connector" {
+            if let Some(r) = op["connector"].as_i64().and_then(|id| {
+                query_rows(cfg, &format!(
+                    "select c.connector_type as c0, coalesce(s.name,'') as c1, coalesce(t.name,'') as c2 from t_connector c left join t_object s on s.object_id = c.start_object_id \
+                     left join t_object t on t.object_id = c.end_object_id where c.connector_id = {id}"
+                ))
+                .ok()?
+                .into_iter()
+                .next()
+            }) {
+                name = format!("{name} ({} \"{}\" → \"{}\")", r[0], r[1], r[2]);
+            }
+        }
         let what = match field {
             "element" => crate::i18n::tr("element"),
             "diagram" => crate::i18n::tr("diagram"),
@@ -2550,7 +2578,7 @@ fn destructive_details(cfg: &AppConfig, ops: &[Value]) -> Vec<String> {
 /// the attachments of the conversation the user is asked first (its text goes to the AI provider).
 fn read_path(ctx: &ToolContext, given: &str, folder: bool) -> Result<std::path::PathBuf> {
     let given = given.trim();
-    let attachment = ctx.cfg.attachments_dir.join(given);
+    let attachment = crate::history::attachment_path(&ctx.cfg.attachments_dir, given);
     if !folder && !given.contains(['\\', '/', ':']) && attachment.is_file() {
         return Ok(attachment);
     }

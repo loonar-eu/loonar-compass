@@ -1957,7 +1957,7 @@ Requirements nothing realises and design nothing justifies, through several step
 How to do something in your version of Enterprise Architect ‖ Jak zrobić coś w Twojej wersji Enterprise Architect ‖ Wie man etwas in Ihrer Version von Enterprise Architect macht ‖ Comment faire quelque chose dans votre version d'Enterprise Architect
 Change many elements at once: status, stereotype, author, tags, names ‖ Zmień wiele elementów naraz: status, stereotyp, autor, tagi, nazwy ‖ Viele Elemente auf einmal ändern: Status, Stereotyp, Autor, Tags, Namen ‖ Modifier plusieurs éléments à la fois : statut, stéréotype, auteur, tags, noms
 Put elements into the model's recycle bin instead of deleting them ‖ Przenieś elementy do kosza modelu zamiast je usuwać ‖ Elemente in den Papierkorb des Modells legen statt sie zu löschen ‖ Mettre des éléments dans la corbeille du modèle au lieu de les supprimer
-it has {0} relationships and is on {1} diagrams{2} ‖ ma {0} relacji i jest na {1} diagramach{2} ‖ es hat {0} Beziehungen und ist auf {1} Diagrammen{2} ‖ il a {0} relations et figure sur {1} diagrammes{2}
+relationships: {0}, diagrams: {1}{2} ‖ relacje: {0}, diagramy: {1}{2} ‖ Beziehungen: {0}, Diagramme: {1}{2} ‖ relations : {0}, diagrammes : {1}{2}
 Merge a duplicate into another element: relationships, diagrams and types move over ‖ Scal duplikat z innym elementem: relacje, diagramy i typy przechodzą na niego ‖ Ein Duplikat mit einem anderen Element zusammenführen: Beziehungen, Diagramme und Typen gehen über ‖ Fusionner un doublon avec un autre élément : relations, diagrammes et types sont repris
 duplicates merged into the kept elements ‖ duplikaty scalone z zachowanymi elementami ‖ Duplikate mit den behaltenen Elementen zusammengeführt ‖ doublons fusionnés avec les éléments conservés
 MERGE {0} into {1} and DELETE {0} ‖ SCAL {0} z {1} i USUŃ {0} ‖ {0} mit {1} ZUSAMMENFÜHREN und {0} LÖSCHEN ‖ FUSIONNER {0} dans {1} et SUPPRIMER {0}
@@ -2051,3 +2051,7 @@ The technology cannot be built yet:\n{0} ‖ Technologii nie da się jeszcze zbu
 Recently used ‖ Ostatnio użyte ‖ Zuletzt verwendet ‖ Utilisées récemment
 Remove from favourites ‖ Usuń z ulubionych ‖ Aus den Favoriten entfernen ‖ Retirer des favoris
 Add to favourites (shown first) ‖ Dodaj do ulubionych (pokazywane na górze) ‖ Zu den Favoriten hinzufügen (oben angezeigt) ‖ Ajouter aux favoris (affichés en premier)
+new@@created in this write ‖ nowy ‖ neu ‖ nouveau
+fill color ‖ kolor wypełnienia ‖ Füllfarbe ‖ couleur de remplissage
+direction reversed ‖ odwrócony kierunek ‖ Richtung umgekehrt ‖ sens inversé
+Where relationship {0} is used ‖ Gdzie jest używana relacja {0} ‖ Wo Beziehung {0} verwendet wird ‖ Où la relation {0} est utilisée

@@ -403,7 +403,7 @@ pub(crate) fn document_blob(cfg: &AppConfig, docid: &str) -> Result<Vec<u8>> {
 fn document(cfg: &AppConfig, input: &Value) -> Result<Option<(String, String, Option<chrono::NaiveDateTime>)>> {
     let Some(name) = input["document"].as_str().map(str::trim).filter(|d| !d.is_empty()) else { return Ok(None) };
     let file = std::path::Path::new(name).file_name().context("document")?.to_string_lossy().to_string();
-    let path = cfg.attachments_dir.join(&file);
+    let path = crate::history::attachment_path(&cfg.attachments_dir, &file);
     let bytes = std::fs::read(&path).with_context(|| format!("there is no attachment {file}"))?;
     let text = crate::documents::text_of(&file, &bytes)?;
     let time = std::fs::metadata(&path).and_then(|m| m.modified()).ok().map(|t| chrono::DateTime::<chrono::Local>::from(t).naive_local());
@@ -579,7 +579,7 @@ fn compare(input: &Value, cfg: &AppConfig) -> Result<String> {
 fn docx_xml(cfg: &AppConfig, input: &Value) -> Result<(String, String)> {
     let name = input["document"].as_str().map(str::trim).filter(|d| !d.is_empty()).context("document: the DOCX attached to the conversation")?;
     let file = std::path::Path::new(name).file_name().context("document")?.to_string_lossy().to_string();
-    let bytes = std::fs::read(cfg.attachments_dir.join(&file)).with_context(|| format!("there is no attachment {file}"))?;
+    let bytes = std::fs::read(crate::history::attachment_path(&cfg.attachments_dir, &file)).with_context(|| format!("there is no attachment {file}"))?;
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes.as_slice())).context("the document is not a DOCX")?;
     let document = crate::documents::part(&mut archive, "word/document.xml").context("word/document.xml is missing: not a Word document")?;
     Ok((document, crate::documents::part(&mut archive, "word/comments.xml").unwrap_or_default()))

@@ -279,7 +279,7 @@ fn stereotype_text(s: &Stereotype) -> String {
 fn technology_of(cfg: &crate::config::AppConfig, technology: Option<&str>, file: Option<&str>) -> Result<(Technology, String)> {
     if let Some(file) = file.map(str::trim).filter(|f| !f.is_empty()) {
         let name = Path::new(file).file_name().context("file")?.to_string_lossy().to_string();
-        let bytes = std::fs::read(cfg.attachments_dir.join(&name)).with_context(|| format!("there is no attachment {name}"))?;
+        let bytes = std::fs::read(crate::history::attachment_path(&cfg.attachments_dir, &name)).with_context(|| format!("there is no attachment {name}"))?;
         let xml = String::from_utf8_lossy(&bytes).to_string();
         return Ok((parse(&xml, &name), xml));
     }
