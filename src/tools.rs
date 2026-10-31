@@ -641,7 +641,8 @@ drawn earlier with render_image (NAME from its result). Use it when the user ask
             "description": "Works with the Enterprise Architect window that the user has open (the same model): \
 action=context returns the open diagram, the elements and the connector selected on it, and the selection in the project browser \
 (use it when the user says \"this\", \"the selected\", \"this diagram\", \"here\"); action=open_diagram {diagram} opens the diagram in the user's EA window; \
-action=show_element {element} shows the element in the project browser. After every ea_write the changed diagrams refresh \
+action=show_element {element} shows the element in the project browser; action=open_diagram with element too opens the diagram with that \
+element selected (after where_used: \"show me where it is\"). After every ea_write the changed diagrams refresh \
 in the user's window automatically, so don't ask the user to press F5 (unless the EA window was closed or shows a different model).",
             "input_schema": {
                 "type": "object",
@@ -923,7 +924,24 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "ea_show_diagram" => ea_show_diagram(input, ctx),
         "miro_send" => crate::miro::tool(input, ctx.cfg).map(Into::into),
         "package_matrix" => crate::matrix::tool(input, ctx.cfg),
-        "where_used" => crate::model_usage::where_used(input, ctx.cfg).map(Into::into),
+        "where_used" => {
+            let mut text = crate::model_usage::where_used(input, ctx.cfg)?;
+            text.push_str("\n(The user can ask to open a diagram with the element selected – ea_ui open_diagram {diagram, element} – or to show it in the project browser – ea_ui show_element.)");
+            if input["thumbnails"] != true || input["element"].is_null() {
+                return Ok(text.into());
+            }
+            // Pictures of the first diagrams it is on (LC-411).
+            let id = input["element"].as_i64().or_else(|| query_rows(ctx.cfg, &format!("select object_id from t_object where name = '{}'", crate::model_db::sql_text(ctx.cfg.model_source, input["element"].as_str().unwrap_or("")))).ok()?.first()?[0].parse().ok());
+            let diagrams: Vec<i64> = id.map(|e| query_rows(ctx.cfg, &format!("select distinct diagram_id from t_diagramobjects where object_id = {e}")).unwrap_or_default()).unwrap_or_default()
+                .into_iter().filter_map(|r| r[0].parse().ok()).take(4).collect();
+            let mut images = Vec::new();
+            for d in diagrams {
+                if let Ok(shown) = ea_show_diagram(&json!({ "diagram_id": d }), ctx) {
+                    images.extend(shown.images);
+                }
+            }
+            Ok(ToolOutput { text, images, files: Vec::new() })
+        }
         "find_orphans" => crate::model_usage::find_orphans(input, ctx.cfg).map(Into::into),
         "find_duplicates" => crate::model_usage::find_duplicates(input, ctx.cfg).map(Into::into),
         "elements_without_notes" => crate::model_usage::elements_without_notes(input, ctx.cfg).map(Into::into),
@@ -1169,6 +1187,11 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
                     let id = input["diagram"].as_i64().with_context(|| crate::i18n::fmt("missing field '{0}'", &["diagram".to_string()]))? as i32;
                     crate::ea_ui::open_diagram(db, id)?;
                     Ok(format!("Opened diagram id={id} in the user's EA window.").into())
+                }
+                "open_diagram" if input["element"].as_i64().is_some() => {
+                    let (d, e) = (input["diagram"].as_i64().unwrap_or(0) as i32, input["element"].as_i64().unwrap_or(0) as i32);
+                    crate::ea_ui::open_diagram_at(db, d, e)?;
+                    Ok(format!("Opened diagram id={d} with element id={e} selected in the user's EA window.").into())
                 }
                 "show_element" => {
                     let id = input["element"].as_i64().with_context(|| crate::i18n::fmt("missing field '{0}'", &["element".to_string()]))? as i32;

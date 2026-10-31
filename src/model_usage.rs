@@ -17,7 +17,8 @@ For a relationship (connector): every diagram that shows both its ends, with whe
 before deleting or renaming, and for /where-used. Element = t_object.object_id or its exact name; connector = t_connector.connector_id.",
             "input_schema": { "type": "object", "properties": {
                 "element": { "description": "object_id or exact name" },
-                "connector": { "type": "integer", "description": "connector_id (instead of element)" }
+                "connector": { "type": "integer", "description": "connector_id (instead of element)" },
+                "thumbnails": { "type": "boolean", "description": "Also pictures of up to 4 diagrams it is on (slower: EA draws them)" }
             } }
         }),
         json!({

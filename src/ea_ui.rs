@@ -931,6 +931,20 @@ pub fn open_diagram(target: &Target, diagram_id: i32) -> Result<()> {
     })
 }
 
+/// Opens a diagram in the user's EA window with an element selected on it (LC-411).
+pub fn open_diagram_at(target: &Target, diagram_id: i32, element_id: i32) -> Result<()> {
+    let db = target.clone();
+    with_running_ea(Duration::from_secs(15), move |repo| {
+        same_model(repo, &db)?;
+        repo.call("OpenDiagram", &[i(diagram_id)])?;
+        let diagram = repo.call_obj("GetDiagramByID", &[i(diagram_id)])?;
+        let element = repo.call_obj("GetElementByID", &[i(element_id)])?;
+        let kind = element.text("Type").unwrap_or_default();
+        diagram.obj("SelectedObjects")?.call("AddNew", &[crate::com::s(&element_id.to_string()), crate::com::s(&kind)])?;
+        Ok(())
+    })
+}
+
 /// Shows an element in the project browser of the user's EA window.
 pub fn show_element(target: &Target, element_id: i32) -> Result<()> {
     let db = target.clone();
