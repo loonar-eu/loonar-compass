@@ -43,6 +43,7 @@ mod commands;
 mod ea_lexicon;
 mod repo_doctor;
 mod changes;
+mod trace_gaps;
 mod model_usage;
 mod glossary_ui;
 mod relang;

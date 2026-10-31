@@ -341,6 +341,7 @@ pub fn definitions() -> Value {
         items.push(crate::repo_doctor::definition());
         items.push(crate::changes::definition());
         items.push(crate::governance::rules_definition());
+        items.push(crate::trace_gaps::definition());
         items.push(crate::scripts::definition());
         items.push(crate::traceability::definition());
         items.push(crate::code_drift::definition());
@@ -845,6 +846,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "repo_doctor" => crate::repo_doctor::run(input, ctx.cfg).map(Into::into),
         "what_changed" => crate::changes::run(input, ctx.cfg).map(Into::into),
         "team_rules" => team_rules(input, ctx).map(Into::into),
+        "trace_gaps" => crate::trace_gaps::run(input, ctx.cfg).map(Into::into),
         "memory_save" => {
             let name = input["name"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["name".to_string()]))?;
             let content = input["content"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["content".to_string()]))?;
