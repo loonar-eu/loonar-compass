@@ -344,6 +344,7 @@ pub fn definitions() -> Value {
         items.push(crate::trace_gaps::definition());
         items.push(crate::template_doctor::definition());
         items.push(crate::safety_net::definition());
+        items.extend(crate::sequence::definitions());
         items.push(crate::ea_help::definition());
         items.push(crate::bulk::definition());
         items.push(crate::recycle::definition());
@@ -902,6 +903,12 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             ea_write(&json!({ "ops": ops }), ctx).map(Into::into)
         }
         "safety_net" => crate::safety_net::run(input, ctx.cfg).map(Into::into),
+        "sequence_check" => crate::sequence::check(input, ctx.cfg).map(Into::into),
+        // A sequence from text is one ordinary save; the report (bound, new, missing operations) goes with its result.
+        "sequence_from_text" => {
+            let (ops, report) = crate::sequence::from_text(input, ctx.cfg)?;
+            ea_write(&json!({ "ops": ops }), ctx).map(|saved| format!("{report}\n\n{saved}")).map(Into::into)
+        }
         "ea_howto" => crate::ea_help::run(input, ctx.cfg).map(Into::into),
         // A bulk change: the preview reads only; apply is one ordinary save (approval, undo journal, audit, verification).
         "bulk_set" if input["action"].as_str() == Some("apply") => {

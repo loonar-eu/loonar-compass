@@ -46,6 +46,7 @@ mod changes;
 mod trace_gaps;
 mod template_doctor;
 mod safety_net;
+mod sequence;
 mod ea_help;
 mod bulk;
 mod recycle;
