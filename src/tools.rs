@@ -343,6 +343,7 @@ pub fn definitions() -> Value {
         items.push(crate::governance::rules_definition());
         items.push(crate::trace_gaps::definition());
         items.push(crate::template_doctor::definition());
+        items.push(crate::safety_net::definition());
         items.push(crate::ea_help::definition());
         items.push(crate::bulk::definition());
         items.push(crate::recycle::definition());
@@ -895,6 +896,12 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "team_rules" => team_rules(input, ctx).map(Into::into),
         "trace_gaps" => crate::trace_gaps::run(input, ctx.cfg).map(Into::into),
         "template_doctor" => crate::template_doctor::run(input, ctx.cfg).map(Into::into),
+        // Restoring from the safety net is one ordinary save (approval, undo journal, audit, verification).
+        "safety_net" if input["action"].as_str() == Some("restore") => {
+            let ops = crate::safety_net::restore_ops(input, ctx.cfg)?;
+            ea_write(&json!({ "ops": ops }), ctx).map(Into::into)
+        }
+        "safety_net" => crate::safety_net::run(input, ctx.cfg).map(Into::into),
         "ea_howto" => crate::ea_help::run(input, ctx.cfg).map(Into::into),
         // A bulk change: the preview reads only; apply is one ordinary save (approval, undo journal, audit, verification).
         "bulk_set" if input["action"].as_str() == Some("apply") => {

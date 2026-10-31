@@ -172,6 +172,9 @@ pub struct AppConfig {
     pub web_access: bool,
     /// Checking every hour whether a newer release exists (`app.update_check`, on by default).
     pub update_check: bool,
+    /// `safety_net.enabled`: snapshots before deletions done by hand in EA and a journal of the day's manual changes
+    /// (LC-382; off by default – EA then waits for Compass's answer before each deletion).
+    pub safety_net: bool,
     /// The rules of the computer set by IT (Group Policy, Intune): they win over the settings.
     pub policy: MachinePolicy,
     /// The only domains the assistant may search and read (`claude.web_domains`, comma-separated; empty = any).
@@ -474,6 +477,7 @@ impl AppConfig {
             code_execution: get_or("claude.code_execution", "false") == "true",
             web_access: get_or("claude.web_access", "false") == "true",
             update_check: get_or("app.update_check", "true") == "true",
+            safety_net: get_or("safety_net.enabled", "false") == "true",
             policy: MachinePolicy::default(),
             web_domains: get_or("claude.web_domains", "").split(',').map(|d| d.trim().to_lowercase()).filter(|d| !d.is_empty()).collect(),
             claude_url: get_or("claude.url", ""),

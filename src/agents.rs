@@ -238,8 +238,9 @@ pub fn answer_guard(request: &Path, block: Option<&str>) {
 }
 
 /// The events EA has to ask about (they have guards): written for the add-in, so that it waits only when needed.
-pub fn publish_guarded_events(rot_name: &str, agents: &[Agent]) {
+pub fn publish_guarded_events(rot_name: &str, agents: &[Agent], extra: &[&str]) {
     let mut events: Vec<&str> = agents.iter().filter(|a| a.is_guard()).map(|a| a.event.as_str()).collect();
+    events.extend_from_slice(extra);
     events.sort();
     events.dedup();
     let file = std::env::temp_dir().join(format!("loonar-ea-guards-{rot_name}.txt"));

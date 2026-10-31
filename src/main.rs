@@ -45,6 +45,7 @@ mod repo_doctor;
 mod changes;
 mod trace_gaps;
 mod template_doctor;
+mod safety_net;
 mod ea_help;
 mod bulk;
 mod recycle;
@@ -4463,6 +4464,19 @@ impl App {
                 .color(theme::MUTED),
             ).wrap());
             ui.add_space(6.0);
+            // The safety net (LC-382): saved at once; the guard thread of EA reads it when Compass starts in EA.
+            let mut net = self.cfg.as_ref().is_some_and(|c| c.safety_net);
+            if ui
+                .checkbox(&mut net, crate::i18n::tr("Safety net: a snapshot before each deletion done by hand in EA, and a journal of the day's manual changes (/safety-net)"))
+                .on_hover_text(crate::i18n::tr("EA waits a moment for Compass before each deletion of an element, package or diagram. Takes effect after Compass is opened again in EA."))
+                .changed()
+            {
+                let _ = config::save_properties(&self.props_path, &[("safety_net.enabled", net.to_string())]);
+                if let Some(c) = self.cfg.as_mut() {
+                    c.safety_net = net;
+                }
+            }
+            ui.add_space(6.0);
             if self.form.agents_json.trim().is_empty() {
                 ui.label(egui::RichText::new(crate::i18n::tr("Example:")).small().color(theme::MUTED));
                 ui.label(egui::RichText::new("{\"agents\": [\n  {\"name\": \"Component owner\", \"event\": \"element_created\", \"applies_to\": \"Component\",\n   \"prompt\": \"Check that the new component has an owner and a description; suggest what to fill in.\"},\n  {\"name\": \"Flows\", \"event\": \"connector_created\", \"applies_to\": \"ControlFlow\", \"prompt\": \"Does this flow make sense in the process?\"}\n]}").small().monospace().color(theme::MUTED));
@@ -6259,11 +6273,13 @@ fn start_guards(cfg: &AppConfig) {
             let Some(rot) = ea_ui::rot_name() else { return };
             let mut agents = agents::load_all(&cfg);
             let mut loaded = std::time::Instant::now();
-            agents::publish_guarded_events(rot, &agents);
+            // The safety net (LC-382) takes a snapshot before deletions: EA asks about them too.
+            let extra: &[&str] = if cfg.safety_net { safety_net::EVENTS } else { &[] };
+            agents::publish_guarded_events(rot, &agents, extra);
             loop {
                 if loaded.elapsed() > std::time::Duration::from_secs(5) {
                     agents = agents::load_all(&cfg);
-                    agents::publish_guarded_events(rot, &agents);
+                    agents::publish_guarded_events(rot, &agents, extra);
                     loaded = std::time::Instant::now();
                 }
                 guard_requests_once(&cfg, rot, &agents);
@@ -6276,6 +6292,13 @@ fn start_guards(cfg: &AppConfig) {
 /// Answers the guard requests EA has made so far (see `start_guards`).
 fn guard_requests_once(cfg: &AppConfig, rot: &str, agents: &[agents::Agent]) {
                 for (request, event, id) in agents::guard_requests(rot) {
+                    // The safety net's snapshot (LC-382): taken while the object still exists; a failure never stops the deletion.
+                    if cfg.safety_net && safety_net::EVENTS.contains(&event.as_str()) {
+                        match safety_net::snapshot(cfg, &event, id) {
+                            Ok(summary) => ea_ui::output(&crate::i18n::fmt("🛟 Snapshot before the deletion: {0}", &[summary])),
+                            Err(e) => ea_ui::output(&crate::i18n::fmt("🛟 No snapshot before the deletion ({0})", &[format!("{e:#}")])),
+                        }
+                    }
                     let mut block = None;
                     let described = agents::describe(cfg, &event, id);
                     // Fail closed (LC-345): the object could not be read, so no guard could decide – the deletion stops.
@@ -7613,6 +7636,11 @@ impl eframe::App for App {
                     std::thread::spawn(move || {
                         let agents = agents::load_all(&cfg);
                         for (kind, id, given) in events {
+                            // The journal of the day's manual changes (LC-382), with what the object was.
+                            if cfg.safety_net {
+                                let what = agents::describe(&cfg, &kind, id).or_else(|| given.clone()).map(|d| d.0);
+                                safety_net::journal(&cfg, &kind, id, what.as_deref());
+                            }
                             // Event agents (AI): advice in System Output; the same agent and object at most once a minute.
                             if !agents.is_empty() {
                                 let event = agents::event_of(&kind);
