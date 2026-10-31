@@ -219,6 +219,11 @@ async function loadUsers() {
       list.map(u => '<tr><td>' + esc(u.user) + '</td><td>' + esc(u.key || '') + '</td><td>' + u.tokens_today + '</td><td>' + u.tokens_month + '</td></tr>').join('') + '</table>' +
       '<p class="muted small">Tokens read from the cache count a tenth. Keys and limits per person, role or everybody are set in hub.json, section "ai".</p>'
       : '<p class="muted">Nobody has used the AI through the hub yet.</p>';
+    // Cost by model and by role this month (LC-405).
+    api('/api/users/ai/groups').then(g => {
+      const t = (title, rows) => rows.length ? '<h4>' + title + '</h4><table><tr><th></th><th>Today (USD)</th><th>This month (USD)</th><th>Tokens this month</th></tr>' + rows.map(r => '<tr><td>' + esc(r.name) + '</td><td>' + r.usd_today.toFixed(2) + '</td><td>' + r.usd_month.toFixed(2) + '</td><td>' + r.tokens_month + '</td></tr>').join('') + '</table>' : '';
+      $('aiusage').insertAdjacentHTML('beforeend', t('By model', g.by_source) + t('By role', g.by_role));
+    }).catch(() => {});
   }).catch(() => {});
   api('/api/users/company').then(list => {
     $('company').innerHTML = list.length ? '<table><tr><th>Account</th><th>Role at the last sign-in</th><th>Last sign-in</th></tr>' +

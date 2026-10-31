@@ -577,6 +577,8 @@ struct Head {
     host: String,
     /// The cookie "lc_signin" that binds a company sign-in to the browser that started it (H9).
     signin: String,
+    /// X-Compass-Source: the hub id of the model a request of the AI gateway is about (LC-405).
+    client_source: String,
 }
 
 /// The REST calls Compass makes to the team's Jira and Confluence through the hub (LC-351); everything else, DELETE
@@ -676,7 +678,7 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
     let mut parts = first.split_whitespace();
     let method = parts.next().unwrap_or("").to_string();
     let target = parts.next().unwrap_or("/").to_string();
-    let (mut length, mut token, mut forwarded, mut content_type, mut host, mut signin) = (0usize, String::new(), None, String::new(), String::new(), String::new());
+    let (mut length, mut token, mut forwarded, mut content_type, mut host, mut signin, mut client_source) = (0usize, String::new(), None, String::new(), String::new(), String::new(), String::new());
     for count in 0.. {
         if count > MAX_HEADERS {
             return Err(deny(431, "too many headers"));
@@ -694,6 +696,7 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
                 "x-api-key" if token.is_empty() => token = value.trim().to_string(),
                 "content-type" => content_type = value.trim().to_string(),
                 "host" => host = value.trim().to_string(),
+                "x-compass-source" => client_source = value.trim().chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').take(64).collect(),
                 "cookie" => {
                     if let Some(v) = value.split(';').filter_map(|c| c.trim().strip_prefix("lc_signin=")).next() {
                         signin = v.trim().to_string();
@@ -707,7 +710,7 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
     if length > MAX_AI_BODY || (length > MAX_BODY && !target.starts_with("/ai/")) {
         return Err(deny(413, "request body too large"));
     }
-    Ok(Head { method, target, length, token, forwarded, content_type, host, signin })
+    Ok(Head { method, target, length, token, forwarded, content_type, host, signin, client_source })
 }
 
 /// An address of X-Forwarded-For: "10.1.2.3", "2001:db8::1", or with a port as IIS/ARR sends it by default
@@ -999,6 +1002,7 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
         Err(HttpError(status, message)) => return respond(&stream, status, "application/json; charset=utf-8", json!({ "error": message }).to_string().as_bytes()),
     };
     let content_type = head.content_type.clone();
+    let client_source = head.client_source.clone();
     let request = Request { method: head.method, path, query, token: head.token, body };
     // An account with a password set by someone else (the default one, a reset) can only change it or sign out.
     if must_change && !matches!((request.method.as_str(), request.path.as_str()), ("GET", "/api/me") | ("POST", "/api/password") | ("POST", "/api/logout")) {
@@ -1037,9 +1041,9 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
     }
     // The team's services for Compass: Claude with the team's key, Jira and Confluence with the team's account.
     let gateway = if request.method == "POST" && request.path == "/ai/v1/messages" {
-        Some(hub.ai_gateway(&user, role, &request.body))
+        Some(hub.ai_gateway(&user, role, &request.body, &client_source))
     } else if request.method == "POST" && request.path == "/ai/openai/v1/chat/completions" {
-        Some(hub.ai_gateway_openai(&user, role, &request.body))
+        Some(hub.ai_gateway_openai(&user, role, &request.body, &client_source))
     } else if let Some(rest) = request.path.strip_prefix("/proxy/jira") {
         Some(hub.service_proxy("jira", &user, role, &request.method, rest, &request.query, &request.body, &content_type))
     } else if let Some(rest) = request.path.strip_prefix("/proxy/confluence") {
@@ -1384,6 +1388,10 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
         ("GET", ["api", "users", "ai"]) => {
             require(role, Role::Admin)?;
             Ok((200, json!(hub.ai_usage_all())))
+        }
+        ("GET", ["api", "users", "ai", "groups"]) => {
+            require(role, Role::Admin)?;
+            Ok((200, hub.ai_usage_groups()))
         }
         ("GET", ["api", "users", "company"]) => {
             require(role, Role::Admin)?;
@@ -2107,7 +2115,7 @@ impl Hub {
     /// Compass sends its requests here with the hub token. The first entry for the person, then for their role,
     /// then for everybody gives the key (a hub secret, e.g. LOONAR_SECRET_CLAUDE_KEY_TEAM). Usage per person goes to
     /// ai_usage.jsonl. The request is passed to Anthropic as it is.
-    fn ai_gateway(&self, user: &str, role: Role, body: &[u8]) -> Result<(u16, String, Vec<u8>), HttpError> {
+    fn ai_gateway(&self, user: &str, role: Role, body: &[u8], source: &str) -> Result<(u16, String, Vec<u8>), HttpError> {
         let (secret, key) = self.ai_key(&self.ai["keys"], user, role)?;
         let request = self.ai_allowed(user, role, body)?;
         let http = reqwest::blocking::Client::builder().timeout(Duration::from_secs(600)).build().map_err(|e| HttpError(500, e.to_string()))?;
@@ -2116,7 +2124,7 @@ impl Hub {
         let status = response.status().as_u16();
         let bytes = response.bytes().map_err(|e| deny(502, format!("Anthropic: {e}")))?.to_vec();
         if let Ok(answer) = serde_json::from_slice::<Value>(&bytes) {
-            self.log_ai_usage(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "key": secret, "model": request["model"], "status": status,
+            self.log_ai_usage(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "role": role.name(), "source": source, "key": secret, "model": request["model"], "status": status,
                 "input_tokens": answer["usage"]["input_tokens"], "output_tokens": answer["usage"]["output_tokens"],
                 "cache_creation_input_tokens": answer["usage"]["cache_creation_input_tokens"], "cache_read_input_tokens": answer["usage"]["cache_read_input_tokens"] }));
         }
@@ -2126,7 +2134,7 @@ impl Hub {
     /// The AI gateway for OpenAI-compatible models (LC-390): "ai": {"openai": {"url": "" (OpenAI) | an Azure OpenAI or
     /// another OpenAI-compatible base, "keys": [{"for", "secret"}]}}. The same limits, budgets and allowed models as for
     /// Claude; usage goes to ai_usage.jsonl.
-    fn ai_gateway_openai(&self, user: &str, role: Role, body: &[u8]) -> Result<(u16, String, Vec<u8>), HttpError> {
+    fn ai_gateway_openai(&self, user: &str, role: Role, body: &[u8], source: &str) -> Result<(u16, String, Vec<u8>), HttpError> {
         let openai = &self.ai["openai"];
         if !openai.is_object() {
             return Err(deny(404, crate::i18n::tr("the hub has no OpenAI gateway: ask the administrator of the hub")));
@@ -2141,7 +2149,7 @@ impl Hub {
         let status = response.status().as_u16();
         let bytes = response.bytes().map_err(|e| deny(502, format!("OpenAI: {e}")))?.to_vec();
         if let Ok(answer) = serde_json::from_slice::<Value>(&bytes) {
-            self.log_ai_usage(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "key": secret, "model": request["model"], "status": status,
+            self.log_ai_usage(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "role": role.name(), "source": source, "key": secret, "model": request["model"], "status": status,
                 "input_tokens": answer["usage"]["prompt_tokens"], "output_tokens": answer["usage"]["completion_tokens"] }));
         }
         Ok((status, "application/json".into(), bytes))
@@ -2216,6 +2224,38 @@ impl Hub {
             }
         }
         (day, month, usd_day, usd_month)
+    }
+
+    /// The AI cost grouped by the model (hub source id) and by role, today and this month (LC-405). Requests from
+    /// before the role and source were logged count under "(not recorded)".
+    fn ai_usage_groups(&self) -> Value {
+        let text = std::fs::read_to_string(self.dir.join("ai_usage.jsonl")).unwrap_or_default();
+        let now = chrono::Local::now();
+        let (today, this_month) = (now.format("%Y-%m-%d").to_string(), now.format("%Y-%m").to_string());
+        let mut groups: std::collections::BTreeMap<(String, String), [f64; 4]> = std::collections::BTreeMap::new();
+        for entry in text.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok()) {
+            let time = entry["time"].as_str().unwrap_or("");
+            if !time.starts_with(&this_month) {
+                continue;
+            }
+            let tokens = (entry["input_tokens"].as_u64().unwrap_or(0) + entry["output_tokens"].as_u64().unwrap_or(0)) as f64;
+            let usd = cost_of(&entry);
+            for (by, value) in [("source", entry["source"].as_str()), ("role", entry["role"].as_str())] {
+                let name = value.filter(|v| !v.is_empty()).unwrap_or("(not recorded)").to_string();
+                let g = groups.entry((by.to_string(), name)).or_insert([0.0; 4]);
+                g[1] += tokens;
+                g[3] += usd;
+                if time.starts_with(&today) {
+                    g[0] += tokens;
+                    g[2] += usd;
+                }
+            }
+        }
+        let list = |by: &str| -> Vec<Value> {
+            groups.iter().filter(|((b, _), _)| b == by).map(|((_, name), g)| json!({ "name": name, "tokens_today": g[0] as u64, "tokens_month": g[1] as u64,
+                "usd_today": (g[2] * 100.0).round() / 100.0, "usd_month": (g[3] * 100.0).round() / 100.0 })).collect()
+        };
+        json!({ "by_source": list("source"), "by_role": list("role") })
     }
 
     /// The AI usage of every person, today and this month (the Users tab of the administrator).
@@ -2981,7 +3021,7 @@ mod tests {
         std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
         let base = format!("http://{}", rx.recv().unwrap());
         let http = reqwest::blocking::Client::new();
-        let ask = |token: &str| http.post(format!("{base}/ai/openai/v1/chat/completions")).bearer_auth(token)
+        let ask = |token: &str| http.post(format!("{base}/ai/openai/v1/chat/completions")).bearer_auth(token).header("X-Compass-Source", "shop")
             .json(&json!({ "model": "gpt-test", "messages": [{ "role": "user", "content": "Say OK." }] })).send().unwrap();
         let first = ask("anna-token-openai-0123");
         assert_eq!(first.status(), 200, "{}", first.text().unwrap_or_default());
@@ -2989,7 +3029,7 @@ mod tests {
         assert_eq!(ask("anna-token-openai-0123").status(), 429, "the daily limit is used up");
         assert_eq!(ask("bartek-token-openai-01").status(), 403, "no key for a viewer");
         let usage = std::fs::read_to_string(dir.join("ai_usage.jsonl")).unwrap();
-        assert!(usage.contains("\"input_tokens\":10") && usage.contains("\"user\":\"anna\""), "{usage}");
+        assert!(usage.contains("\"input_tokens\":10") && usage.contains("\"user\":\"anna\"") && usage.contains("\"source\":\"shop\"") && usage.contains("\"role\":\"architect\""), "{usage}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

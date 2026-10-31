@@ -115,6 +115,23 @@ pub struct ClaudeClient {
 }
 
 impl ClaudeClient {
+    /// Requests through the team hub carry the hub id of the model (X-Compass-Source), for the hub's cost reports by
+    /// model (LC-405); older hubs ignore the header.
+    fn naming_source(mut self, cfg: &crate::config::AppConfig) -> Self {
+        let source = cfg.hub_source.trim();
+        if source.is_empty() {
+            return self;
+        }
+        let mut headers = reqwest::header::HeaderMap::new();
+        if let Ok(value) = reqwest::header::HeaderValue::from_str(source) {
+            headers.insert("x-compass-source", value);
+        }
+        if let Ok(http) = reqwest::blocking::Client::builder().redirect(crate::net::same_origin_redirects()).timeout(Duration::from_secs(900)).connect_timeout(Duration::from_secs(20)).default_headers(headers).build() {
+            self.http = http;
+        }
+        self
+    }
+
     pub fn new(api_key: String, model: String, max_tokens: u32, workspace_id: String) -> Result<Self> {
         let http = reqwest::blocking::Client::builder().redirect(crate::net::same_origin_redirects())
             // A long document in one answer takes minutes (32 000 tokens at about 80 a second).
@@ -134,7 +151,7 @@ impl ClaudeClient {
                 client.openai = true;
                 client.openai_url = format!("{hub}/ai/openai/v1");
                 client.via_hub = true;
-                return Ok(client);
+                return Ok(client.naming_source(cfg));
             }
             // A local endpoint (Ollama, LM Studio) works without a key.
             // Only a model on this computer works without a key; in the organization's network (http:// allowed there,
@@ -161,7 +178,7 @@ impl ClaudeClient {
             let mut client = Self::new(token, cfg.claude_model.clone(), max_tokens, String::new())?.with_effort(&cfg.claude_effort).with_thinking(cfg.show_thinking);
             client.base_url = format!("{hub}/ai");
             client.via_hub = true;
-            return Ok(client);
+            return Ok(client.naming_source(cfg));
         }
         let oauth = if cfg.ai_oauth_token_url.trim().is_empty() {
             None
