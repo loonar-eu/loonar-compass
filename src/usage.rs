@@ -191,6 +191,23 @@ pub fn init(settings_dir: &std::path::Path) {
     prune(&dir);
 }
 
+/// What the calls of this month cost in USD on this computer (the local log; models without a price count 0) (LC-390).
+pub fn month_usd() -> f64 {
+    let Some(dir) = DIR.get() else { return 0.0 };
+    month_usd_in(dir, &chrono::Local::now().format("%Y-%m").to_string())
+}
+
+pub(crate) fn month_usd_in(dir: &std::path::Path, month: &str) -> f64 {
+    std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy().starts_with(month))
+        .flat_map(|e| std::fs::read_to_string(e.path()).unwrap_or_default().lines().map(str::to_string).collect::<Vec<_>>())
+        .filter_map(|l| serde_json::from_str::<Value>(&l).ok()?["usd"].as_f64())
+        .sum()
+}
+
 /// A new answer starts in this thread: its totals start from zero.
 pub fn begin_answer() {
     ANSWER.with(|a| *a.borrow_mut() = Totals::default());
@@ -244,6 +261,18 @@ fn prune(dir: &std::path::Path) {
 
 #[cfg(test)]
 mod tests {
+    /// LC-390: the month's cost from the local log.
+    #[test]
+    fn month_cost() {
+        let dir = std::env::temp_dir().join(format!("loonar-usage-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("2026-10-01.jsonl"), "{\"usd\":0.5}\n{\"usd\":null}\n").unwrap();
+        std::fs::write(dir.join("2026-10-31.jsonl"), "{\"usd\":1.25}\n").unwrap();
+        std::fs::write(dir.join("2026-09-30.jsonl"), "{\"usd\":9}\n").unwrap();
+        assert!((super::month_usd_in(&dir, "2026-10") - 1.75).abs() < 1e-9);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     use super::*;
 
     fn haiku(input: u64, w5: u64, read: u64, output: u64) -> Call {

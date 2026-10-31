@@ -195,6 +195,8 @@ pub struct AppConfig {
     /// Endpoint compatible with the OpenAI API (empty = OpenAI): Azure OpenAI, Ollama, LM Studio, a company gateway.
     pub openai_url: String,
     pub claude_max_tokens: u32,
+    /// `ai.budget_month_usd`: a monthly budget of this computer for the AI in USD (0 = none), without a team hub (LC-390).
+    pub ai_budget_month_usd: f64,
     /// Workspace ID from the Anthropic Console: required for an API key that is not scoped to a workspace
     /// (empty = the header is not sent).
     pub claude_workspace_id: String,
@@ -482,6 +484,7 @@ impl AppConfig {
             openai_model: get_or("openai.model", OPENAI_MODELS[0]),
             openai_url: get_or("openai.url", ""),
             claude_max_tokens: get_or("claude.max_tokens", "10000").parse().context("claude.max_tokens")?,
+            ai_budget_month_usd: get_or("ai.budget_month_usd", "0").trim().replace(',', ".").parse().context("ai.budget_month_usd")?,
             claude_workspace_id: get_or("claude.workspace_id", ""),
             model_source: ModelSource::parse(&get_or("model.source", "postgres")).context("model.source")?,
             // A relative model file is next to the settings (a portable copy), whatever folder EA or Compass starts in.

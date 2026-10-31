@@ -6510,6 +6510,13 @@ fn run_turn_with(
     emit: &dyn Fn(WorkerEvent),
     allowed: Option<&[&str]>,
 ) -> anyhow::Result<()> {
+    // The monthly AI budget of this computer (LC-390): a used-up budget stops new answers until next month.
+    if cfg.ai_budget_month_usd > 0.0 {
+        let spent = usage::month_usd();
+        if spent >= cfg.ai_budget_month_usd {
+            bail!("{}", crate::i18n::fmt("The AI budget of this month is used up ({0} of {1} USD, setting ai.budget_month_usd).", &[format!("{spent:.2}"), format!("{:.2}", cfg.ai_budget_month_usd)]));
+        }
+    }
     // The computer's policy set by IT: the AI providers allowed, and the team hub when it is required.
     if !cfg.policy.provider_allowed(&cfg.ai_provider) {
         bail!("{}", crate::i18n::fmt("Your organisation does not allow the AI provider {0} (the computer's policy allows: {1}).", &[cfg.ai_provider.clone(), cfg.policy.allowed_providers.join(", ")]));
