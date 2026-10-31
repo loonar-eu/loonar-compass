@@ -7,8 +7,9 @@
 //!   {"name": "files", "command": "node", "args": ["server.js"], "env": {"ROOT": "C:/docs"}, "trusted": false, "enabled": true}
 //! ]}
 //! `${secret:NAME}` takes a value from Windows Credential Manager (the application's entries), `${env:NAME}` from the
-//! environment, so tokens do not have to be written into the file. Tools of a server that is not "trusted" ask for consent
-//! before each call, unless the tool declares itself read-only (annotations.readOnlyHint).
+//! environment, so tokens do not have to be written into the file (in "env" or "headers": values in "args" are visible
+//! to other programs in the process list). Tools of a server that is not "trusted" ask for consent before each call,
+//! also tools that declare themselves read-only (the server's own claim is not trusted).
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::{json, Value};
@@ -22,6 +23,10 @@ use std::time::Duration;
 
 const PROTOCOL: &str = "2025-06-18";
 const TIMEOUT: Duration = Duration::from_secs(120);
+/// A server that could not be reached is not tried again for this long (each answer would wait for it again, I16).
+const RETRY_AFTER: Duration = Duration::from_secs(300);
+/// Text of a tool result passed to the model at most (a larger answer is cut, with a note).
+const MAX_RESULT: usize = 100_000;
 /// Tool names sent to the model: mcp__<server>__<tool>, at most 64 characters, letters, digits, '_' and '-'.
 const PREFIX: &str = "mcp__";
 
@@ -261,7 +266,7 @@ impl Connection {
                 Some(other) => bail!("{}", crate::i18n::fmt("MCP server {0}: unknown auth type {1} (basic, oauth2)", &[config.name.clone(), other.to_string()])),
                 None => {}
             }
-            let client = reqwest::blocking::Client::builder().timeout(TIMEOUT).redirect(crate::net::same_origin_redirects()).build()?;
+            let client = reqwest::blocking::Client::builder().timeout(TIMEOUT).connect_timeout(Duration::from_secs(10)).redirect(crate::net::same_origin_redirects()).build()?;
             Transport::Http { client, url: config.url.clone().unwrap_or_default(), headers, session: None }
         };
         let mut conn = Connection { config: config.clone(), transport, next_id: 0, tools: Vec::new() };
@@ -364,6 +369,8 @@ impl Connection {
 
 /// Open connections, by server name (kept for the whole session of the application).
 static CONNECTIONS: Mutex<Option<HashMap<String, Connection>>> = Mutex::new(None);
+/// Servers that could not be opened, and when (they are skipped for RETRY_AFTER).
+static UNREACHABLE: Mutex<Option<HashMap<String, std::time::Instant>>> = Mutex::new(None);
 
 fn with_connection<T>(config: &ServerConfig, f: impl FnOnce(&mut Connection) -> Result<T>) -> Result<T> {
     let mut guard = CONNECTIONS.lock().unwrap_or_else(|p| p.into_inner());
@@ -378,7 +385,22 @@ fn with_connection<T>(config: &ServerConfig, f: impl FnOnce(&mut Connection) -> 
         map.remove(&config.name);
     }
     if !map.contains_key(&config.name) {
-        let conn = Connection::open(config)?;
+        {
+            let mut down = UNREACHABLE.lock().unwrap_or_else(|p| p.into_inner());
+            if let Some(since) = down.get_or_insert_with(HashMap::new).get(&config.name) {
+                if since.elapsed() < RETRY_AFTER {
+                    bail!("{}", crate::i18n::fmt("MCP server {0} did not answer a moment ago; it is tried again in {1} min (\"Save and test MCP servers\" in the settings tries at once)", &[config.name.clone(), ((RETRY_AFTER - since.elapsed()).as_secs() / 60 + 1).to_string()]));
+                }
+            }
+        }
+        let conn = match Connection::open(config) {
+            Ok(conn) => conn,
+            Err(e) => {
+                UNREACHABLE.lock().unwrap_or_else(|p| p.into_inner()).get_or_insert_with(HashMap::new).insert(config.name.clone(), std::time::Instant::now());
+                return Err(e);
+            }
+        };
+        UNREACHABLE.lock().unwrap_or_else(|p| p.into_inner()).get_or_insert_with(HashMap::new).remove(&config.name);
         map.insert(config.name.clone(), conn);
     }
     let conn = map.get_mut(&config.name).expect("connection");
@@ -396,6 +418,7 @@ fn with_connection<T>(config: &ServerConfig, f: impl FnOnce(&mut Connection) -> 
 /// Closes all connections (stops the local server programs).
 pub fn shutdown() {
     CONNECTIONS.lock().unwrap_or_else(|p| p.into_inner()).take();
+    UNREACHABLE.lock().unwrap_or_else(|p| p.into_inner()).take();
 }
 
 fn tool_name(server: &str, tool: &str) -> String {
@@ -413,6 +436,9 @@ pub fn definitions(base_dir: &Path) -> (Vec<Value>, Vec<String>) {
         Err(e) => return (defs, vec![format!("{e:#}")]),
     };
     for server in servers {
+        if server.args.iter().any(|a| a.contains("${secret:")) {
+            errors.push(crate::i18n::fmt("MCP server {0}: a secret is passed in \"args\", where other programs can read it in the process list; put it in \"env\" instead", &[server.name.clone()]));
+        }
         match with_connection(&server, |c| Ok(c.tools.clone())) {
             Ok(tools) => {
                 for t in tools {
@@ -476,7 +502,12 @@ pub fn call(base_dir: &Path, name: &str, input: &Value) -> Result<String> {
     if parts.is_empty() && !result["structuredContent"].is_null() {
         parts.push(result["structuredContent"].to_string());
     }
-    let text = parts.join("\n");
+    let mut text = parts.join("\n");
+    if text.chars().count() > MAX_RESULT {
+        let total = text.chars().count();
+        text = text.chars().take(MAX_RESULT).collect();
+        text.push_str(&format!("\n[… cut: the server returned {total} characters, {MAX_RESULT} are shown]"));
+    }
     if result["isError"] == true {
         bail!("{}", crate::i18n::fmt("MCP tool {0} reported an error: {1}", &[tool, text]));
     }

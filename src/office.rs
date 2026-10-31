@@ -40,7 +40,10 @@ pub fn docx_to_pdf(docx: &Path, pdf: &Path) -> Result<()> {
             let _ = document.call("Close", &[b(false)]);
             saved.map(|_| ())
         })();
-        let _ = word.call("Quit", &[]);
+        // Word left open when the user has documents in it (an instance shared with the user's Word).
+        if word.obj("Documents").and_then(|d| d.int("Count")).unwrap_or(1) == 0 {
+            let _ = word.call("Quit", &[]);
+        }
         result
     })
 }
@@ -59,7 +62,25 @@ pub fn pptx_to_pdf(pptx: &Path, pdf: &Path) -> Result<()> {
             let _ = presentation.call("Close", &[]);
             saved.map(|_| ())
         })();
-        let _ = powerpoint.call("Quit", &[]);
+        // PowerPoint runs as one instance: when the user has presentations open, it is theirs and stays open (I17).
+        if powerpoint.obj("Presentations").and_then(|p| p.int("Count")).unwrap_or(1) == 0 {
+            let _ = powerpoint.call("Quit", &[]);
+        }
         result
     })
+}
+
+#[cfg(test)]
+mod tests {
+    /// I17: converting with PowerPoint while the user has a presentation open leaves their PowerPoint open.
+    /// Start PowerPoint with a presentation first, then `LOONAR_TEST_PPTX=… cargo test office_keeps_users_powerpoint -- --ignored`.
+    #[test]
+    #[ignore = "requires PowerPoint with an open presentation"]
+    fn office_keeps_users_powerpoint() {
+        let pptx = std::path::PathBuf::from(std::env::var("LOONAR_TEST_PPTX").unwrap());
+        let pdf = std::env::temp_dir().join(format!("loonar-i17-{}.pdf", std::process::id()));
+        super::pptx_to_pdf(&pptx, &pdf).unwrap();
+        assert!(std::fs::metadata(&pdf).unwrap().len() > 1000);
+        let _ = std::fs::remove_file(&pdf);
+    }
 }

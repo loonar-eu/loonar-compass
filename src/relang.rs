@@ -81,8 +81,11 @@ pub fn run(cfg: &AppConfig, props: &Path, from: Lang, to: Lang) -> Result<String
             _ => (name.clone(), translated.clone()),
         };
         let new_name = if new_name.is_empty() { name.clone() } else { new_name };
-        templates::save(&cfg.templates_dir, &new_name, &body)?;
-        if new_name != name {
+        let saved = templates::save(&cfg.templates_dir, &new_name, &body)?;
+        // The old file goes only when the new one is another file: a name that differs only in letter case is the same
+        // file on Windows, and removing it would lose the template (I8).
+        let old_file = path.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+        if saved.to_lowercase() != old_file {
             let _ = std::fs::remove_file(path);
         }
         templates_done += 1;
