@@ -135,6 +135,40 @@ pub fn parse(text: &str) -> Result<Vec<Agent>> {
     Ok(out)
 }
 
+/// An agent in plain words, for a preview before it is saved (LC-406).
+pub fn in_words(a: &Agent) -> String {
+    let when = if a.event == "scheduled" { format!("on the schedule \"{}\"", a.schedule) } else { format!("when {}", a.event.replace('_', " ")) };
+    let what = match a.applies_to.trim() {
+        "" | "*" => "any object".to_string(),
+        t => format!("objects matching \"{t}\""),
+    };
+    let how = if a.is_guard() { "decides whether to stop it (a BLOCK cancels the deletion in EA)" } else { "advises in the Loonar Compass tab of System Output" };
+    format!("{when}, for {what}, the assistant {how}: \"{}\"", a.prompt)
+}
+
+/// Each agent of a team list checked on its own (LC-406): (name, the problem or none, the agent in plain words); also
+/// names used twice.
+pub fn check_each(list: &[Value]) -> Vec<(String, Option<String>, String)> {
+    let mut seen = std::collections::HashSet::new();
+    list.iter()
+        .map(|a| {
+            let name = a["name"].as_str().unwrap_or("").trim().to_string();
+            if name.is_empty() {
+                return (name, Some(crate::i18n::tr("give the agent a name").to_string()), String::new());
+            }
+            if !seen.insert(name.to_lowercase()) {
+                return (name.clone(), Some(crate::i18n::fmt("the name {0} is used twice", &[name])), String::new());
+            }
+            let mut one = a.clone();
+            one["enabled"] = Value::Bool(true);
+            match parse(&serde_json::json!({ "agents": [one] }).to_string()) {
+                Ok(parsed) => (name, None, parsed.first().map(in_words).unwrap_or_default()),
+                Err(e) => (name, Some(e.to_string()), String::new()),
+            }
+        })
+        .collect()
+}
+
 pub fn load(base_dir: &Path) -> Vec<Agent> {
     std::fs::read_to_string(config_file(base_dir)).ok().and_then(|t| parse(&t).ok()).unwrap_or_default()
 }
@@ -352,6 +386,17 @@ mod tests {
         assert!(!path.exists());
         // LC-391: a creation is complete only with its line break (a cut type must not be decided on).
         std::fs::write(&path, "element_creating:7\tCla").unwrap();
+        // LC-406: each agent of a team list checked on its own, with a plain description.
+        let checked = super::check_each(&[
+            serde_json::json!({ "name": "Keep", "event": "element_deleting", "mode": "guard", "applies_to": "Requirement", "prompt": "Block approved ones." }),
+            serde_json::json!({ "name": "Keep", "event": "element_created", "prompt": "x" }),
+            serde_json::json!({ "name": "Bad", "event": "element_created", "mode": "guard", "prompt": "x" }),
+            serde_json::json!({ "name": "Daily", "event": "scheduled", "schedule": "daily 07:30", "prompt": "Summarise.", "enabled": false }),
+        ]);
+        assert!(checked[0].1.is_none() && checked[0].2.contains("when element deleting, for objects matching \"Requirement\", the assistant decides"), "{checked:?}");
+        assert!(checked[1].1.as_deref().is_some_and(|e| e.contains("used twice")), "{checked:?}");
+        assert!(checked[2].1.as_deref().is_some_and(|e| e.contains("_deleting")), "{checked:?}");
+        assert!(checked[3].1.is_none() && checked[3].2.starts_with("on the schedule \"daily 07:30\""), "a switched-off agent is still checked: {checked:?}");
         assert!(super::guard_requests(&rot).is_empty());
         std::fs::write(&path, "element_creating:7\tClass\tentity\r\n").unwrap();
         let taken = super::guard_requests(&rot);

@@ -103,6 +103,7 @@ h3 { font-size:14px; margin:16px 0 6px; }
       <button data-tab="requests">Review requests</button>
       <button data-tab="users" id="userstab" hidden>Users</button>
       <button data-tab="policy" id="policytab" hidden>Team policy</button>
+      <button data-tab="agents" id="agentstab" hidden>Team agents</button>
     </div>
     <div id="view-ask">
       <p class="muted">Ask about the selected model in your own words, e.g. "Which systems use the payment gateway?" The assistant only reads the model.</p>
@@ -126,6 +127,10 @@ h3 { font-size:14px; margin:16px 0 6px; }
     <div id="view-audit" hidden><div id="audit"></div></div>
     <div id="view-notes" hidden><div id="notes"></div></div>
     <div id="view-changes" hidden><div id="changes"></div></div>
+    <div id="view-agents" hidden><p class="muted">Agents that run in everybody's Compass in EA: when something happens to an object (or on a schedule), the assistant
+      advises in System Output, or – for deletions – guards and can stop them. Check shows what each agent will do; Save keeps them in the team policy.</p>
+      <div id="agents"></div>
+      <div class="row"><button id="agadd" class="ghost">Add an agent</button><button id="agcheck" class="ghost">Check</button><button id="agsave">Save</button><span id="agstatus" class="muted"></span></div></div>
     <div id="view-requests" hidden><p class="muted">Elements you own that an architect asked you to look at: confirm them, or say what needs to change.</p><div id="requests"></div></div>
     <div id="view-users" hidden><div id="users"></div></div>
     <div id="view-policy" hidden>
@@ -271,6 +276,7 @@ async function login() {
     if (me.must_change) { try { sessionStorage.setItem('hubToken', token); } catch (e) {} showChange(); return; }
     $('userstab').hidden = me.role !== 'admin';
     $('policytab').hidden = me.role !== 'admin';
+    $('agentstab').hidden = me.role !== 'admin';
     try { sessionStorage.setItem('hubToken', token); } catch (e) {}
     $('who').textContent = me.name + ' · ' + me.role;
     $('loginview').hidden = true;
@@ -405,6 +411,52 @@ async function post(path, body) {
   if (!r.ok) throw new Error(v.error || r.status);
   return v;
 }
+// The team's event agents as a form (LC-406).
+let agentEvents = [], agentList = [];
+async function loadAgents() {
+  const got = await api('/api/agents');
+  agentEvents = got.events; agentList = got.agents;
+  drawAgents();
+}
+function drawAgents(checked) {
+  const opt = (v, cur) => '<option' + (v === cur ? ' selected' : '') + '>' + esc(v) + '</option>';
+  $('agents').innerHTML = agentList.length ? agentList.map((a, i) => {
+    const c = checked && checked[i];
+    return '<div class="note" data-i="' + i + '"><div class="row"><input class="ag-name" placeholder="Name" value="' + esc(a.name || '') + '">' +
+      '<select class="ag-event">' + agentEvents.map(e => opt(e, a.event || 'element_created')).join('') + '</select>' +
+      '<input class="ag-schedule" placeholder="schedule: hourly, every 4h, daily 07:30, weekly mon 08:00" value="' + esc(a.schedule || '') + '"' + (a.event === 'scheduled' ? '' : ' hidden') + '>' +
+      '<input class="ag-applies" placeholder="applies to: * , a type, «stereotype»" value="' + esc(a.applies_to || '*') + '">' +
+      '<select class="ag-mode">' + ['advise', 'guard'].map(m => opt(m, a.mode || 'advise')).join('') + '</select>' +
+      '<label><input type="checkbox" class="ag-on"' + (a.enabled === false ? '' : ' checked') + '> on</label><button class="ag-del ghost">Remove</button></div>' +
+      '<textarea class="ag-prompt" rows="2" style="width:100%" placeholder="What the assistant should check or do">' + esc(a.prompt || '') + '</textarea>' +
+      (c ? (c.problem ? '<p class="error">' + esc(c.problem) + '</p>' : '<p class="muted">' + esc(c.means) + '</p>') : '') + '</div>';
+  }).join('') : '<p class="muted">No team agents yet.</p>';
+  document.querySelectorAll('#agents .note').forEach(n => {
+    const i = Number(n.dataset.i);
+    n.querySelector('.ag-event').onchange = () => { readAgents(); drawAgents(); };
+    n.querySelector('.ag-del').onclick = () => { readAgents(); agentList.splice(i, 1); drawAgents(); };
+  });
+}
+function readAgents() {
+  document.querySelectorAll('#agents .note').forEach(n => {
+    const a = agentList[Number(n.dataset.i)], q = s => n.querySelector(s);
+    a.name = q('.ag-name').value.trim(); a.event = q('.ag-event').value; a.applies_to = q('.ag-applies').value.trim() || '*';
+    a.mode = q('.ag-mode').value; a.prompt = q('.ag-prompt').value.trim(); a.enabled = q('.ag-on').checked;
+    if (a.event === 'scheduled') a.schedule = q('.ag-schedule').value.trim(); else delete a.schedule;
+  });
+}
+async function sendAgents(method) {
+  readAgents();
+  $('agstatus').textContent = '';
+  const r = await fetch('/api/agents' + (method === 'POST' ? '/check' : ''), { method, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ agents: agentList }) });
+  const res = await r.json();
+  drawAgents(res.checked);
+  $('agstatus').textContent = res.error || (method === 'PUT' ? 'Saved: every Compass takes them at its next start.' : (res.valid ? 'All agents are valid.' : 'Fix the agents marked.'));
+}
+$('agadd').onclick = () => { readAgents(); agentList.push({ name: '', event: 'element_created', applies_to: '*', mode: 'advise', prompt: '' }); drawAgents(); };
+$('agcheck').onclick = () => sendAgents('POST').catch(e => $('agstatus').textContent = e.message);
+$('agsave').onclick = () => sendAgents('PUT').catch(e => $('agstatus').textContent = e.message);
+
 // Review requests addressed to me (LC-407): confirm, or say what needs to change (optionally as a decision).
 async function loadRequests() {
   const list = await api('/api/requests');
@@ -459,7 +511,8 @@ async function ask() {
 }
 function show(tab) {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-  ['ask', 'search', 'lint', 'gap', 'portfolio', 'audit', 'notes', 'changes', 'requests', 'users', 'policy'].forEach(t => $('view-' + t).hidden = t !== tab);
+  ['ask', 'search', 'lint', 'gap', 'portfolio', 'audit', 'notes', 'changes', 'requests', 'users', 'policy', 'agents'].forEach(t => $('view-' + t).hidden = t !== tab);
+  if (tab === 'agents') loadAgents().catch(e => $('agents').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
   if (tab === 'requests') loadRequests().catch(e => $('requests').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
   if (tab === 'policy') api('/api/policy').then(p => { $('policytext').value = JSON.stringify(p, null, 2); $('policystatus').textContent = ''; }).catch(e => $('policystatus').textContent = e.message);
   if (tab === 'users') loadUsers().catch(e => $('users').innerHTML = '<p class="error">' + esc(e.message) + '</p>');

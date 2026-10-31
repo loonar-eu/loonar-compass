@@ -2039,3 +2039,9 @@ only the person asked or an architect answers a review request ‖ na prośbę o
 say what needs to change ‖ napisz, co trzeba zmienić ‖ schreiben Sie, was sich ändern muss ‖ indiquez ce qui doit changer
 there is no review request {0} ‖ nie ma prośby o przegląd {0} ‖ es gibt keine Prüfanfrage {0} ‖ il n'y a pas de demande de revue {0}
 write the question ‖ wpisz pytanie ‖ schreiben Sie die Frage ‖ écrivez la question
+agents: a list ‖ agents: lista ‖ agents: eine Liste ‖ agents : une liste
+at most 100 team agents ‖ najwyżej 100 agentów zespołu ‖ höchstens 100 Team-Agenten ‖ au plus 100 agents d'équipe
+fix the agents marked before saving ‖ popraw zaznaczonych agentów przed zapisaniem ‖ korrigieren Sie vor dem Speichern die markierten Agenten ‖ corrigez les agents signalés avant d'enregistrer
+give the agent a name ‖ nadaj agentowi nazwę ‖ geben Sie dem Agenten einen Namen ‖ donnez un nom à l'agent
+team event agents changed ({0}) ‖ zmienieni agenci zdarzeń zespołu ({0}) ‖ Ereignis-Agenten des Teams geändert ({0}) ‖ agents d'événements de l'équipe modifiés ({0})
+the name {0} is used twice ‖ nazwa {0} jest użyta dwa razy ‖ der Name {0} wird zweimal verwendet ‖ le nom {0} est utilisé deux fois

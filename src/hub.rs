@@ -1182,6 +1182,18 @@ impl Hub {
         Ok(())
     }
 
+    /// Writes the team policy into hub.json (atomically) and takes it into use; the change goes to the audit trail.
+    fn write_policy(&self, policy: Value, user: &str, summary: String) -> Result<()> {
+        let mut file: Value = serde_json::from_str(&std::fs::read_to_string(&self.file)?)?;
+        file["policy"] = policy.clone();
+        let temp = self.file.with_extension("json.tmp");
+        std::fs::write(&temp, serde_json::to_string_pretty(&file).unwrap_or_default())?;
+        std::fs::rename(&temp, &self.file)?;
+        *self.policy.lock().unwrap() = policy;
+        let _ = self.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": "", "summary": summary, "ok": true }));
+        Ok(())
+    }
+
     /// The review comments and decisions (comments.json next to hub.json).
     fn comments(&self) -> Vec<Value> {
         std::fs::read_to_string(self.dir.join("comments.json")).ok().and_then(|t| serde_json::from_str::<Vec<Value>>(&t).ok()).unwrap_or_default()
@@ -1596,13 +1608,37 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
             if !policy.is_object() {
                 return Err(deny(400, crate::i18n::tr("the policy is a JSON object")));
             }
-            let mut file: Value = serde_json::from_str(&std::fs::read_to_string(&hub.file).map_err(|e| deny(500, e.to_string()))?).map_err(|e| deny(500, e.to_string()))?;
-            file["policy"] = policy.clone();
-            let temp = hub.file.with_extension("json.tmp");
-            std::fs::write(&temp, serde_json::to_string_pretty(&file).unwrap_or_default()).and_then(|_| std::fs::rename(&temp, &hub.file)).map_err(|e| deny(500, e.to_string()))?;
-            *hub.policy.lock().unwrap() = policy;
-            let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": "", "summary": crate::i18n::tr("team policy changed"), "ok": true }));
+            hub.write_policy(policy, &user, crate::i18n::tr("team policy changed").to_string()).map_err(|e| deny(500, e.to_string()))?;
             Ok((200, json!({ "ok": true })))
+        }
+        // The team's event agents as a form (LC-406): the events to choose from, a check with each agent in plain words,
+        // and saving them into the policy (only when every agent is valid).
+        ("GET", ["api", "agents"]) => {
+            require(role, Role::Admin)?;
+            let mut events: Vec<&str> = crate::agents::EVENTS.to_vec();
+            events.push("scheduled");
+            Ok((200, json!({ "agents": hub.policy.lock().unwrap()["event_agents"].as_array().cloned().unwrap_or_default(), "events": events })))
+        }
+        ("POST", ["api", "agents", "check"]) | ("PUT", ["api", "agents"]) => {
+            require(role, Role::Admin)?;
+            let list = body()?["agents"].as_array().cloned().ok_or_else(|| deny(400, crate::i18n::tr("agents: a list")))?;
+            if list.len() > 100 {
+                return Err(deny(400, crate::i18n::tr("at most 100 team agents")));
+            }
+            let checked: Vec<Value> = crate::agents::check_each(&list).into_iter().map(|(name, problem, plain)| json!({ "name": name, "problem": problem, "means": plain })).collect();
+            let valid = checked.iter().all(|c| c["problem"].is_null());
+            if request.method == "PUT" {
+                if !valid {
+                    return Ok((400, json!({ "error": crate::i18n::tr("fix the agents marked before saving"), "checked": checked })));
+                }
+                let mut policy = hub.policy.lock().unwrap().clone();
+                if !policy.is_object() {
+                    policy = json!({});
+                }
+                policy["event_agents"] = json!(list);
+                hub.write_policy(policy, &user, crate::i18n::fmt("team event agents changed ({0})", &[list.len().to_string()])).map_err(|e| deny(500, e.to_string()))?;
+            }
+            Ok((200, json!({ "valid": valid, "checked": checked })))
         }
         ("GET", ["api", "sources"]) => Ok((200, json!(hub.sources.iter().filter(|s| Hub::can_read(s, &user, role)).map(|s| json!({ "id": s.id, "name": s.name, "kind": if s.cfg.uses_file() { "file" } else { "database" } })).collect::<Vec<_>>()))),
         // Questions of people without EA: the assistant reads the source and answers (it cannot change the model).
@@ -3093,6 +3129,36 @@ mod tests {
         assert_eq!(status("arch-token-comments-012", "resolved"), 200);
         let open: Value = http.get(format!("{base}/api/sources/shop/comments?status=open")).bearer_auth("arch-token-comments-012").send().unwrap().json().unwrap();
         assert!(open.as_array().unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// LC-406: the team's agents edited as a form: checked one by one, saved only when all are valid.
+    #[test]
+    fn hub_agents_form() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        let dir = std::env::temp_dir().join(format!("loonar-hub-agents-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0", "sources": [],
+            "users": [{ "name": "adm", "token": "admin-token-agents-0123", "role": "admin" }, { "name": "ada", "token": "arch-token-agents-01234", "role": "architect" }],
+            "policy": { "min_approval": "plan" } }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let base = format!("http://{}", rx.recv().unwrap());
+        let http = reqwest::blocking::Client::new();
+        assert_eq!(http.get(format!("{base}/api/agents")).bearer_auth("arch-token-agents-01234").send().unwrap().status(), 403);
+        let got: Value = http.get(format!("{base}/api/agents")).bearer_auth("admin-token-agents-0123").send().unwrap().json().unwrap();
+        assert!(got["events"].as_array().unwrap().iter().any(|e| e == "scheduled") && got["agents"].as_array().unwrap().is_empty());
+        let bad = json!({ "agents": [{ "name": "Guard new", "event": "element_created", "mode": "guard", "prompt": "No." }] });
+        let checked: Value = http.post(format!("{base}/api/agents/check")).bearer_auth("admin-token-agents-0123").json(&bad).send().unwrap().json().unwrap();
+        assert_eq!(checked["valid"], false);
+        assert_eq!(http.put(format!("{base}/api/agents")).bearer_auth("admin-token-agents-0123").json(&bad).send().unwrap().status(), 400, "not saved");
+        let good = json!({ "agents": [{ "name": "Keep requirements", "event": "element_deleting", "mode": "guard", "applies_to": "Requirement", "prompt": "Block approved requirements." }] });
+        let saved: Value = http.put(format!("{base}/api/agents")).bearer_auth("admin-token-agents-0123").json(&good).send().unwrap().json().unwrap();
+        assert!(saved["valid"] == true && saved["checked"][0]["means"].as_str().unwrap().contains("decides whether to stop it"), "{saved}");
+        let file: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("hub.json")).unwrap()).unwrap();
+        assert_eq!(file["policy"]["event_agents"][0]["name"], "Keep requirements");
+        assert_eq!(file["policy"]["min_approval"], "plan", "the rest of the policy stays");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
