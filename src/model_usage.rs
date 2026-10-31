@@ -12,9 +12,13 @@ pub fn definitions() -> Vec<Value> {
         json!({
             "name": "where_used",
             "description": "Every use of one element in the model: diagrams it is on, its relationships (type, direction, other end), instances \
-and lifelines classified by it, attributes, parameters and operations typed by it, tagged values pointing at it. Use it for \"where is X used\", \
-before deleting or renaming an element, and for /where-used. Element = t_object.object_id or its exact name.",
-            "input_schema": { "type": "object", "properties": { "element": { "description": "object_id or exact name" } }, "required": ["element"] }
+and lifelines classified by it, attributes, parameters and operations typed by it, information flows conveying it, tagged values pointing at it. \
+For a relationship (connector): every diagram that shows both its ends, with whether it is visible or hidden there. Use it for \"where is X used\", \
+before deleting or renaming, and for /where-used. Element = t_object.object_id or its exact name; connector = t_connector.connector_id.",
+            "input_schema": { "type": "object", "properties": {
+                "element": { "description": "object_id or exact name" },
+                "connector": { "type": "integer", "description": "connector_id (instead of element)" }
+            } }
         }),
         json!({
             "name": "find_orphans",
@@ -60,6 +64,9 @@ fn section(out: &mut String, title: &str, rows: Vec<String>) {
 }
 
 pub fn where_used(input: &Value, cfg: &AppConfig) -> Result<String> {
+    if let Some(connector) = input["connector"].as_i64() {
+        return connector_used(cfg, connector);
+    }
     let (id, name, kind, guid) = element_id(cfg, &input["element"])?;
     let guid_q = crate::model_db::sql_text(cfg.model_source, &guid);
     let mut out = format!("Uses of element \"{name}\" ({kind}, id {id}):\n");
@@ -100,6 +107,37 @@ pub fn where_used(input: &Value, cfg: &AppConfig) -> Result<String> {
         "select o.name, t.property from t_objectproperties t join t_object o on o.object_id = t.object_id where t.value = '{guid_q}' order by 1"
     ))?;
     section(&mut out, "Tagged values pointing at it", tags.iter().map(|r| format!("{} – tag \"{}\"", r[0], r[1])).collect());
+    // Information flows that convey it (EA keeps them in t_xref, behavior "conveyed") (LC-365).
+    let flows = query_rows(cfg, &format!(
+        "select c.connector_id, s.name, t.name from t_xref x join t_connector c on c.ea_guid = x.client join t_object s on s.object_id = c.start_object_id \
+         join t_object t on t.object_id = c.end_object_id where x.behavior = 'conveyed' and x.description like '%{guid_q}%' order by 2"
+    ))
+    .unwrap_or_default();
+    section(&mut out, "Information flows conveying it", flows.iter().map(|r| format!("\"{}\" → \"{}\" (connector_id {})", r[1], r[2], r[0])).collect());
+    Ok(out)
+}
+
+/// Where a relationship shows (LC-365): every diagram with both its ends, visible or hidden there (t_diagramlinks).
+/// EA's "Find in all diagrams" does not cover connectors.
+fn connector_used(cfg: &AppConfig, id: i64) -> Result<String> {
+    let c = query_rows(cfg, &format!(
+        "select c.connector_type, coalesce(c.stereotype,''), coalesce(c.name,''), s.name, t.name, c.start_object_id, c.end_object_id from t_connector c \
+         join t_object s on s.object_id = c.start_object_id join t_object t on t.object_id = c.end_object_id where c.connector_id = {id}"
+    ))?;
+    let Some(c) = c.first() else { bail!("there is no connector with id {id}") };
+    let stereotype = if c[1].is_empty() { String::new() } else { format!(" «{}»", c[1]) };
+    let label = if c[2].is_empty() { String::new() } else { format!(" \"{}\"", c[2]) };
+    let mut out = format!("Uses of relationship {}{stereotype} \"{}\" → \"{}\" (connector_id {id}){label}:\n", c[0], c[3], c[4]);
+    let diagrams = query_rows(cfg, &format!(
+        "select d.diagram_id, d.name, p.name, coalesce((select max(l.hidden) from t_diagramlinks l where l.diagramid = d.diagram_id and l.connectorid = {id}), 0) \
+         from t_diagram d join t_package p on p.package_id = d.package_id \
+         where exists (select 1 from t_diagramobjects a where a.diagram_id = d.diagram_id and a.object_id = {}) \
+         and exists (select 1 from t_diagramobjects b where b.diagram_id = d.diagram_id and b.object_id = {}) order by d.name",
+        c[5], c[6]
+    ))?;
+    let hidden = |v: &str| v == "1" || v.eq_ignore_ascii_case("true");
+    section(&mut out, "Diagrams where it is visible", diagrams.iter().filter(|r| !hidden(&r[3])).map(|r| format!("\"{}\" (package \"{}\", diagram_id {})", r[1], r[2], r[0])).collect());
+    section(&mut out, "Diagrams with both ends where it is hidden", diagrams.iter().filter(|r| hidden(&r[3])).map(|r| format!("\"{}\" (package \"{}\", diagram_id {})", r[1], r[2], r[0])).collect());
     Ok(out)
 }
 
@@ -163,5 +201,18 @@ mod tests {
         let orphans = super::find_orphans(&serde_json::json!({ "package": 385 }), &cfg).expect("find_orphans");
         println!("{orphans}");
         assert!(orphans.starts_with("Elements in package \"Stakeholders\""));
+    }
+
+    /// LC-365: a relationship's diagrams on any test model:
+    /// `LOONAR_TEST_PROPS=E:/livetest/undo/undo.properties cargo test connector_where_used_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires the model from LOONAR_TEST_PROPS"]
+    fn connector_where_used_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("app.properties");
+        let id: i64 = crate::tools::query_rows(&cfg, "select c.connector_id from t_connector c where exists (select 1 from t_diagramobjects a join t_diagramobjects b on b.diagram_id = a.diagram_id where a.object_id = c.start_object_id and b.object_id = c.end_object_id) order by c.connector_id")
+            .unwrap()[0][0].parse().unwrap();
+        let used = super::where_used(&serde_json::json!({ "connector": id }), &cfg).expect("where_used for a connector");
+        println!("{used}");
+        assert!(used.starts_with("Uses of relationship") && used.contains("Diagrams where it is visible (") && !used.contains("Diagrams where it is visible (0)"));
     }
 }
