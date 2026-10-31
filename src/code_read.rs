@@ -57,6 +57,13 @@ pub fn definitions() -> Vec<Value> {
     ]
 }
 
+/// A drive, the users folder or one user's profile folder: approved once, never remembered.
+fn too_broad(folder: &Path) -> bool {
+    let text = folder.to_string_lossy().to_lowercase();
+    let parts: Vec<&str> = text.trim_end_matches('\\').split('\\').collect();
+    parts.len() <= 1 || (parts.len() <= 3 && parts.get(1) == Some(&"users"))
+}
+
 /// A full local path without "..", inside a code folder from Settings or approved by the user now.
 pub fn allowed(cfg: &crate::config::AppConfig, given: &str, ask: &dyn Fn(&str) -> Result<()>) -> Result<PathBuf> {
     let text = given.trim().trim_matches('"').replace('/', "\\");
@@ -72,13 +79,19 @@ pub fn allowed(cfg: &crate::config::AppConfig, given: &str, ask: &dyn Fn(&str) -
         !root.is_empty() && (text.to_lowercase() == root || text.to_lowercase().starts_with(&format!("{root}\\")))
     });
     if !inside {
-        // The folder (of a file: the folder it is in) is remembered once approved: no question for it again.
-        let folder = if path.is_file() { path.parent().map(Path::to_path_buf).unwrap_or_else(|| path.clone()) } else { path.clone() };
-        ask(&crate::i18n::fmt(
-            "Read the source code in {0}? What is read goes to the AI model of the conversation. The folder is then remembered in Settings → Source code and read without asking.",
-            &[folder.display().to_string()],
-        ))?;
-        remember(cfg, &folder);
+        // LC-360: a single file is approved for this reading only (its whole parent folder, e.g. C:\Users\me, was
+        // remembered for all later conversations). A folder is remembered, unless it is a drive or a profile root.
+        if path.is_file() {
+            ask(&crate::i18n::fmt("Read the file {0}? What is read goes to the AI model of the conversation.", &[path.display().to_string()]))?;
+        } else {
+            ask(&crate::i18n::fmt(
+                "Read the source code in {0}? What is read goes to the AI model of the conversation. The folder is then remembered in Settings → Source code and read without asking.",
+                &[path.display().to_string()],
+            ))?;
+            if !too_broad(&path) {
+                remember(cfg, &path);
+            }
+        }
     }
     Ok(path)
 }
@@ -224,6 +237,17 @@ pub fn read(path: &Path, from: Option<i64>, to: Option<i64>) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LC-360: drives and profile roots are never remembered as code folders.
+    #[test]
+    fn broad_folders() {
+        for broad in [r"C:\", r"D:", r"C:\Users", r"C:\Users\me", r"c:\users\me\"] {
+            assert!(too_broad(Path::new(broad)), "{broad}");
+        }
+        for fine in [r"C:\Users\me\src", r"E:\src\shop", r"C:\work"] {
+            assert!(!too_broad(Path::new(fine)), "{fine}");
+        }
+    }
 
     #[test]
     fn tree_search_read() {

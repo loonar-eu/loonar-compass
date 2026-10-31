@@ -423,6 +423,10 @@ fn cells(line: &str) -> Vec<String> {
 
 /// Builds the document. `resolve` turns an image source from the Markdown (e.g. `diagram:12`, `image:file.png`) into an image.
 pub fn build(title: &str, markdown: &str, mut resolve: impl FnMut(&str, &str) -> Result<Picture>) -> Result<Vec<u8>> {
+    // Control characters are not allowed in XML 1.0: one in the text made the file unreadable for Word (LC-360).
+    let clean = |text: &str| text.chars().filter(|c| !c.is_control() || matches!(c, '\n' | '\t' | '\r')).collect::<String>();
+    let (title, markdown) = (clean(title), clean(markdown));
+    let (title, markdown) = (title.as_str(), markdown.as_str());
     let heading = |id: &str, name: &str, size: usize, color: &str, before: u32| {
         Style::new(id, StyleType::Paragraph).name(name).size(size).bold().color(color).line_spacing(LineSpacing::new().before(before).after(80))
     };
@@ -554,6 +558,14 @@ mod tests {
     fn builds_document_with_table_list_and_picture() {
         let xml = xml_of("# Description\n\nText with **bold words**.\n\n- item\n- second\n\n| UC | FR |\n|---|---|\n| UC-04 | FR-05 |\n\n![Matrix](image:test)\n");
         assert!(xml.contains("UC-04") && xml.contains("bold words") && xml.contains("Matrix"));
+    }
+
+    /// LC-360: control characters do not reach document.xml.
+    #[test]
+    fn control_characters_left_out() {
+        let xml = xml_of("Tekst\u{0}z\u{8}znakami\u{1b}sterującymi");
+        assert!(xml.contains("Tekstzznakamisterującymi"), "{xml}");
+        assert!(!xml.chars().any(|c| c.is_control() && !matches!(c, '\n' | '\t' | '\r')));
     }
 
     #[test]

@@ -161,6 +161,11 @@ impl Connection {
         let value = self.send(client.get(self.url(path)).query(&[("jql", jql), ("maxResults", max.as_str()), ("fields", LIST_FIELDS)]), crate::i18n::tr("searching issues"))?;
         let issues = value["issues"].as_array().cloned().unwrap_or_default();
         let mut lines = vec![crate::i18n::fmt("Jira issues for \"{0}\": {1}", &[jql.to_string(), issues.len().to_string()])];
+        // Only one page is read (LC-360: the page size looked like the total): say when there are more.
+        let more = value["isLast"] == false || value["nextPageToken"].is_string() || value["total"].as_u64().is_some_and(|t| t as usize > issues.len());
+        if more {
+            lines.push(crate::i18n::tr("There are more issues than shown: narrow the JQL or ask for more.").to_string());
+        }
         lines.push(crate::i18n::tr("Columns: key | type | status | priority | assignee | summary | labels | updated").to_string());
         for issue in &issues {
             let f = &issue["fields"];

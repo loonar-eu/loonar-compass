@@ -23,7 +23,8 @@ pub struct Site {
 fn encode_path(path: &str) -> String {
     path.trim_matches('/')
         .split('/')
-        .filter(|p| !p.is_empty())
+        // "." and ".." would be resolved by the URL parser and leave the library (LC-360): left out.
+        .filter(|p| !p.is_empty() && *p != "." && *p != "..")
         .map(|p| p.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-._~ ".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect::<String>().replace(' ', "%20"))
         .collect::<Vec<_>>()
         .join("/")
