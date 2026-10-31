@@ -107,7 +107,13 @@ fn attachment_name(caption: &str, index: usize) -> String {
 }
 
 /// Converts the content to storage XHTML. `resolve(source)` returns the image PNG (e.g. `diagram:12`).
-pub fn to_storage(markdown: &str, mut resolve: impl FnMut(&str) -> Result<Vec<u8>>) -> Result<(String, Vec<Attachment>)> {
+pub fn to_storage(markdown: &str, resolve: impl FnMut(&str) -> Result<Vec<u8>>) -> Result<(String, Vec<Attachment>)> {
+    to_storage_named(markdown, resolve, |_| None)
+}
+
+/// As to_storage, with the attachment name of an image chosen by `name_of(source)` when it gives one – e.g. a diagram
+/// under its GUID, so publishing again replaces the same attachment whatever the caption (LC-426).
+pub fn to_storage_named(markdown: &str, mut resolve: impl FnMut(&str) -> Result<Vec<u8>>, name_of: impl Fn(&str) -> Option<String>) -> Result<(String, Vec<Attachment>)> {
     let mut out = String::new();
     let mut attachments: Vec<Attachment> = Vec::new();
     // Stack of open panels (:::info …): closing tags.
@@ -203,7 +209,7 @@ pub fn to_storage(markdown: &str, mut resolve: impl FnMut(&str) -> Result<Vec<u8
                 flush(&mut paragraph, &mut out);
                 let source = source.trim_end_matches(')');
                 let png = resolve(source).with_context(|| crate::i18n::fmt("image \"{0}\"", &[source.to_string()]))?;
-                let mut name = attachment_name(caption, attachments.len() + 1);
+                let mut name = name_of(source).unwrap_or_else(|| attachment_name(caption, attachments.len() + 1));
                 if attachments.iter().any(|a| a.file_name == name) {
                     name = format!("{}-{}.png", name.trim_end_matches(".png"), attachments.len() + 1);
                 }
@@ -483,6 +489,17 @@ pub fn published(file: &Path) -> Vec<Value> {
 
 #[cfg(test)]
 mod tests {
+    /// LC-426: a diagram gets the name given for it (its GUID), whatever the caption.
+    #[test]
+    fn diagrams_named_by_guid() {
+        let (xml, attachments) = super::to_storage_named("![Old caption](diagram:5)
+![x](image:a)
+", |_| Ok(vec![1]), |s| (s == "diagram:5").then(|| "diagram-AB-12.png".to_string())).unwrap();
+        assert_eq!(attachments[0].file_name, "diagram-AB-12.png");
+        assert_eq!(attachments[1].file_name, "x.png");
+        assert!(xml.contains("ri:filename=\"diagram-AB-12.png\""));
+    }
+
     #[test]
     fn converts_markdown_with_confluence_macros() {
         let md = "[TOC]\n# Scope\nText with **important** and `code` and {status:Green:YES} and {jira:PROJ-1}.\n\n:::info Note\nPanel content\n:::\n\n- item <b>\n- second\n\n| System | Description |\n|---|---|\n| CRM | change |\n\n![Diagram 1](diagram:5)\n";

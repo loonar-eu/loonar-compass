@@ -1028,6 +1028,16 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             let ops = exec_view_ops(ctx.cfg, input)?;
             ea_write(&json!({ "ops": ops }), ctx).map(Into::into)
         }
+        // Publishing a stale page again (LC-426): the same source, space and page, with fresh diagrams; the usual approval.
+        "stale_publications" if input["action"].as_str() == Some("republish") => {
+            let wanted = input["target"].as_str().unwrap_or("");
+            let record = crate::publications::find(ctx.cfg, wanted).with_context(|| format!("no publication \"{wanted}\" is recorded"))?;
+            if record["again"]["page"].is_string() {
+                publish_confluence(&json!({ "page": record["again"]["page"], "space": record["again"]["space"], "page_id": record["again"]["page_id"] }), ctx)
+            } else {
+                Ok(format!("\"{}\" is a {}: create it again with create_document from its template and the current model.", record["title"].as_str().unwrap_or(""), record["kind"].as_str().unwrap_or("document")).into())
+            }
+        }
         "stale_publications" => crate::publications::stale(input, ctx.cfg).map(Into::into),
         "import_sheet" => {
             let (ops, text) = crate::import_sheet::run(input, ctx.cfg)?;
@@ -2120,11 +2130,17 @@ fn publish_confluence(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
     ctx.approver.confirm_kind("confluence", &format!("{question}
 
 {}", shorten_for_approval(markdown)))?;
-    let (storage, attachments) = crate::confluence::to_storage(markdown, |source| picture(ctx, source))?;
+    // Diagrams under their GUID (LC-426): publishing again replaces the same attachments whatever the captions.
+    let guid_name = |source: &str| -> Option<String> {
+        let id: i64 = source.strip_prefix("diagram:")?.trim().parse().ok()?;
+        let guid = query_rows(ctx.cfg, &format!("select ea_guid from t_diagram where diagram_id = {id}")).ok()?.first()?[0].clone();
+        Some(format!("diagram-{}.png", guid.trim_matches(['{', '}'])))
+    };
+    let (storage, attachments) = crate::confluence::to_storage_named(markdown, |source| picture(ctx, source), guid_name)?;
     let target_id = existing.as_ref().map(|page| page.id.clone());
     let (id, link, created) = connection.publish(&space, &title, Some(&parent), target_id.as_deref(), &storage, &attachments)?;
-    // What it shows of the model, to tell later when it is no longer current (LC-386).
-    crate::publications::record(ctx.cfg, "Confluence page", &title, &link, markdown);
+    // What it shows of the model, to tell later when it is no longer current (LC-386), and how to publish it again (LC-426).
+    crate::publications::record_with(ctx.cfg, "Confluence page", &title, &link, markdown, json!({ "page": page, "space": space, "page_id": id }));
     crate::confluence::remember(
         &ctx.cfg.confluence_pages_file,
         json!({ "page_id": id, "title": title, "space": space, "url": link, "source": page, "published": chrono::Local::now().to_rfc3339() }),

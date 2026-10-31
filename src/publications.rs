@@ -12,8 +12,12 @@ pub fn definition() -> Value {
         "name": "stale_publications",
         "description": "Pages and documents published from the model (Confluence pages, Word documents) that are no longer current: the diagrams \
 they show, or elements on those diagrams, changed after the publication. Lists each with what changed, so it can be published again \
-(publish_confluence with the same page, or a new document). Reads only. Use it for /stale-pages and before a review.",
-        "input_schema": { "type": "object", "properties": {} }
+(publish_confluence with the same page, or a new document). Reads only. Use it for /stale-pages and before a review. action republish \
+with target (the page address or title from the list): publishes that Confluence page again with fresh diagrams (the usual approval).",
+        "input_schema": { "type": "object", "properties": {
+            "action": { "type": "string", "enum": ["list", "republish"] },
+            "target": { "type": "string" }
+        } }
     })
 }
 
@@ -34,6 +38,11 @@ pub(crate) fn diagrams_in(markdown: &str) -> Vec<i64> {
 
 /// Records a publication (the same target replaces its earlier record).
 pub fn record(cfg: &AppConfig, kind: &str, title: &str, target: &str, markdown: &str) {
+    record_with(cfg, kind, title, target, markdown, json!({}));
+}
+
+/// A publication with what is needed to publish it again (LC-426): for a Confluence page its source file, space and id.
+pub fn record_with(cfg: &AppConfig, kind: &str, title: &str, target: &str, markdown: &str, again: Value) {
     let diagrams = diagrams_in(markdown);
     if diagrams.is_empty() {
         return;
@@ -41,11 +50,18 @@ pub fn record(cfg: &AppConfig, kind: &str, title: &str, target: &str, markdown: 
     let mut all: Vec<Value> = std::fs::read_to_string(file(cfg)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
     all.retain(|e| !(e["kind"] == kind && e["target"] == target));
     all.push(json!({ "kind": kind, "title": title, "target": target, "model": crate::undo::model_key(cfg), "diagrams": diagrams,
-                     "published": chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string() }));
+                     "published": chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(), "again": again }));
     let tmp = file(cfg).with_extension("json.tmp");
     if std::fs::write(&tmp, serde_json::to_string_pretty(&all).unwrap_or_default()).is_ok() {
         let _ = std::fs::rename(&tmp, file(cfg));
     }
+}
+
+/// The record of a publication by its title or target (address or file), for publishing it again (LC-426).
+pub fn find(cfg: &AppConfig, wanted: &str) -> Option<Value> {
+    let all: Vec<Value> = std::fs::read_to_string(file(cfg)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    let w = wanted.trim().to_lowercase();
+    all.into_iter().rev().find(|e| e["target"].as_str().is_some_and(|t| t.to_lowercase() == w) || e["title"].as_str().is_some_and(|t| t.to_lowercase() == w))
 }
 
 pub fn stale(_input: &Value, cfg: &AppConfig) -> Result<String> {
