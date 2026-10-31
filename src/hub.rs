@@ -294,6 +294,21 @@ pub fn serve(hub: Hub, listen: &str, ready: impl FnOnce(String)) -> Result<()> {
     Ok(())
 }
 
+/// What one request of the AI gateway cost in USD at the model's prices (0 for a model without a price) (LC-390).
+fn cost_of(entry: &Value) -> f64 {
+    let n = |k: &str| entry[k].as_u64().unwrap_or(0);
+    crate::usage::Call {
+        model: entry["model"].as_str().unwrap_or("").to_string(),
+        input: n("input_tokens"),
+        cache_write_5m: n("cache_creation_input_tokens"),
+        cache_read: n("cache_read_input_tokens"),
+        output: n("output_tokens"),
+        ..Default::default()
+    }
+    .usd()
+    .unwrap_or(0.0)
+}
+
 /// A trailing " (address)" of a failed sign-in left out (for people who are not admins).
 fn hide_address(text: &str) -> String {
     match text.rfind(" (") {
@@ -1743,11 +1758,18 @@ impl Hub {
         let secret = wanted.iter().find_map(|w| keys.iter().find(|k| k["for"].as_str().is_some_and(|f| f.trim().to_lowercase() == *w)).and_then(|k| k["secret"].as_str()))
             .ok_or_else(|| deny(403, crate::i18n::tr("the hub has no AI key for you: ask the administrator of the hub")))?;
         let key = crate::config::secrets::get(secret).map_err(|e| HttpError(500, format!("{e:#}")))?;
-        // Limits ("ai": {"limits": [{"for": …, "tokens_per_day": N, "tokens_per_month": N}]}): the first entry for the
-        // person, their role or everybody; input and output tokens counted from ai_usage.jsonl.
+        // Limits ("ai": {"limits": [{"for": …, "tokens_per_day": N, "tokens_per_month": N, "usd_per_day": X,
+        // "usd_per_month": X}]}): the first entry for the person, their role or everybody; tokens and their cost at the
+        // model's prices (LC-390) counted from ai_usage.jsonl.
         let limits = self.ai["limits"].as_array().cloned().unwrap_or_default();
         if let Some(limit) = wanted.iter().find_map(|w| limits.iter().find(|l| l["for"].as_str().is_some_and(|f| f.trim().to_lowercase() == *w))) {
-            let (day, month) = self.ai_usage_of(user);
+            let (day, month, usd_day, usd_month) = self.ai_usage_of(user);
+            if limit["usd_per_day"].as_f64().is_some_and(|max| usd_day >= max) {
+                return Err(deny(429, crate::i18n::fmt("your AI budget for today is used up ({0} USD); it renews tomorrow or ask the administrator of the hub", &[format!("{usd_day:.2}")])));
+            }
+            if limit["usd_per_month"].as_f64().is_some_and(|max| usd_month >= max) {
+                return Err(deny(429, crate::i18n::fmt("your AI budget for this month is used up ({0} USD); ask the administrator of the hub", &[format!("{usd_month:.2}")])));
+            }
             if limit["tokens_per_day"].as_u64().is_some_and(|max| day >= max) {
                 return Err(deny(429, crate::i18n::fmt("your AI limit for today is used up ({0} tokens); it renews tomorrow or ask the administrator of the hub", &[day.to_string()])));
             }
@@ -1778,25 +1800,28 @@ impl Hub {
         Ok((status, "application/json".into(), bytes))
     }
 
-    /// Tokens (input + output) the person used today and this month, from ai_usage.jsonl.
-    fn ai_usage_of(&self, user: &str) -> (u64, u64) {
+    /// Tokens (input + output) the person used today and this month, and what they cost in USD, from ai_usage.jsonl.
+    fn ai_usage_of(&self, user: &str) -> (u64, u64, f64, f64) {
         let text = std::fs::read_to_string(self.dir.join("ai_usage.jsonl")).unwrap_or_default();
         let now = chrono::Local::now();
         let (today, this_month) = (now.format("%Y-%m-%d").to_string(), now.format("%Y-%m").to_string());
-        let (mut day, mut month) = (0u64, 0u64);
+        let (mut day, mut month, mut usd_day, mut usd_month) = (0u64, 0u64, 0f64, 0f64);
         for entry in text.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok()).filter(|e| e["user"].as_str().is_some_and(|u| u.eq_ignore_ascii_case(user))) {
             let time = entry["time"].as_str().unwrap_or("");
             // What the request costs, in input tokens: tokens read from the cache count a tenth, as Anthropic bills them.
             let tokens = entry["input_tokens"].as_u64().unwrap_or(0) + entry["output_tokens"].as_u64().unwrap_or(0)
                 + entry["cache_creation_input_tokens"].as_u64().unwrap_or(0) + entry["cache_read_input_tokens"].as_u64().unwrap_or(0) / 10;
+            let usd = cost_of(&entry);
             if time.starts_with(&this_month) {
                 month += tokens;
+                usd_month += usd;
                 if time.starts_with(&today) {
                     day += tokens;
+                    usd_day += usd;
                 }
             }
         }
-        (day, month)
+        (day, month, usd_day, usd_month)
     }
 
     /// The AI usage of every person, today and this month (the Users tab of the administrator).
@@ -1806,9 +1831,10 @@ impl Hub {
         people.sort_by_key(|p| p.to_lowercase());
         people.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
         people.iter().map(|p| {
-            let (day, month) = self.ai_usage_of(p);
+            let (day, month, usd_day, usd_month) = self.ai_usage_of(p);
             let key = text.lines().rev().filter_map(|l| serde_json::from_str::<Value>(l).ok()).find(|e| e["user"].as_str().is_some_and(|u| u.eq_ignore_ascii_case(p))).and_then(|e| e["key"].as_str().map(String::from)).unwrap_or_default();
-            json!({ "user": p, "tokens_today": day, "tokens_month": month, "key": key })
+            // The cost too (LC-390): the Users tab and reports show money, not only tokens.
+            json!({ "user": p, "tokens_today": day, "tokens_month": month, "usd_today": (usd_day * 100.0).round() / 100.0, "usd_month": (usd_month * 100.0).round() / 100.0, "key": key })
         }).collect()
     }
 
@@ -2285,6 +2311,14 @@ mod tests {
     /// Behind a proxy on this computer the client is the last X-Forwarded-For address (wrong sign-ins of one client do
     /// not lock out the others), and a wrong sign-in is in the audit trail with ✗ and that address. The header from
     /// another computer is not trusted (the test can only connect from loopback, so it checks the trusted case).
+    /// LC-390: the cost of a gateway request at the model's prices.
+    #[test]
+    fn gateway_cost() {
+        let entry = json!({ "model": "claude-sonnet-5-5", "input_tokens": 1_000_000, "output_tokens": 100_000 });
+        assert!((cost_of(&entry) - 3.0).abs() < 1e-9, "{}", cost_of(&entry));
+        assert_eq!(cost_of(&json!({ "model": "gpt-x", "input_tokens": 5 })), 0.0);
+    }
+
     /// LC-354: addresses of failed sign-ins are hidden from people who are not admins.
     #[test]
     fn addresses_hidden() {
