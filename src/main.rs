@@ -6306,9 +6306,50 @@ fn start_guards(cfg: &AppConfig) {
                     loaded = std::time::Instant::now();
                 }
                 guard_requests_once(&cfg, rot, &agents);
+                scheduled_agents_once(&cfg, &agents);
                 std::thread::sleep(std::time::Duration::from_millis(150));
             }
         });
+    });
+}
+
+/// Scheduled agents (LC-428): while Compass is open in EA, an agent with the event "scheduled" runs when its schedule
+/// is due (checked once a minute; the last runs are kept in scheduled_agents.json), reads the model and advises in the
+/// "Loonar Compass" tab of System Output. One run at a time.
+fn scheduled_agents_once(cfg: &AppConfig, agents: &[agents::Agent]) {
+    static LAST_CHECK: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+    static RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    {
+        let mut last = LAST_CHECK.lock().unwrap_or_else(|p| p.into_inner());
+        if last.is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(60)) {
+            return;
+        }
+        *last = Some(std::time::Instant::now());
+    }
+    if RUNNING.load(std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    let file = cfg.base_dir.join("scheduled_agents.json");
+    let mut runs: serde_json::Map<String, Value> = std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    let now = chrono::Local::now().naive_local();
+    let Some(agent) = agents.iter().find(|a| {
+        // The team's scheduled agents would run on every computer of the team at once: only this computer's run here.
+        a.event == "scheduled" && !a.name.ends_with("(team)") && agents::due(&a.schedule, runs.get(&a.name).and_then(|v| v.as_str()).and_then(|t| chrono::NaiveDateTime::parse_from_str(t, "%Y-%m-%d %H:%M:%S").ok()), now)
+    }) else {
+        return;
+    };
+    runs.insert(agent.name.clone(), json!(now.format("%Y-%m-%d %H:%M:%S").to_string()));
+    let _ = std::fs::write(&file, serde_json::to_string_pretty(&runs).unwrap_or_default());
+    RUNNING.store(true, std::sync::atomic::Ordering::SeqCst);
+    let (cfg, agent) = (cfg.clone(), agent.clone());
+    std::thread::spawn(move || {
+        ea_ui::output(&crate::i18n::fmt("⏰ {0}: running ({1})…", &[agent.name.clone(), agent.schedule.clone()]));
+        let prompt = format!("[Scheduled agent \"{}\", {}] Task: {}\n\nYou may read the model (db_query and the other reading tools); you cannot change it now. Answer briefly: findings first.", agent.name, agent.schedule, agent.prompt);
+        match run_agent(&cfg, &prompt, std::time::Duration::from_secs(180)) {
+            Ok(answer) => ea_ui::output(&format!("⏰ {}: {}", agent.name, answer.trim())),
+            Err(e) => ea_ui::output(&crate::i18n::fmt("⏰ {0}: no answer ({1})", &[agent.name.clone(), format!("{e:#}")])),
+        }
+        RUNNING.store(false, std::sync::atomic::Ordering::SeqCst);
     });
 }
 

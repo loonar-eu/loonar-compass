@@ -48,6 +48,44 @@ pub struct Agent {
     pub prompt: String,
     /// "advise" or "guard" (a guard can stop a deletion).
     pub mode: String,
+    /// For the event "scheduled" (LC-428): "hourly", "every 4h", "every 30m", "daily 07:30" or "weekly mon 08:00".
+    pub schedule: String,
+}
+
+/// Whether a scheduled agent is due now, given when it last ran (LC-428).
+pub fn due(schedule: &str, last: Option<chrono::NaiveDateTime>, now: chrono::NaiveDateTime) -> bool {
+    use chrono::{Datelike, Duration, NaiveTime};
+    let words: Vec<String> = schedule.split_whitespace().map(|w| w.to_lowercase()).collect();
+    let every = |d: Duration| last.is_none_or(|l| now - l >= d);
+    let at = |t: &str| NaiveTime::parse_from_str(t, "%H:%M").ok();
+    match words.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
+        ["hourly"] => every(Duration::hours(1)),
+        ["every", n] => {
+            let (num, unit) = n.split_at(n.len().saturating_sub(1));
+            match (num.parse::<i64>(), unit) {
+                (Ok(k), "h") if k > 0 => every(Duration::hours(k)),
+                (Ok(k), "m") if k >= 5 => every(Duration::minutes(k)),
+                _ => false,
+            }
+        }
+        ["daily", t] => at(t).is_some_and(|t| {
+            let today = now.date().and_time(t);
+            now >= today && last.is_none_or(|l| l < today)
+        }),
+        ["weekly", day, t] => at(t).is_some_and(|t| {
+            let wanted = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"].iter().position(|d| day.starts_with(d));
+            let Some(wanted) = wanted else { return false };
+            let back = (now.weekday().num_days_from_monday() as i64 - wanted as i64).rem_euclid(7);
+            let slot = (now.date() - Duration::days(back)).and_time(t);
+            now >= slot && last.is_none_or(|l| l < slot)
+        }),
+        _ => false,
+    }
+}
+
+fn valid_schedule(schedule: &str) -> bool {
+    let probe = chrono::NaiveDate::from_ymd_opt(2026, 1, 5).and_then(|d| d.and_hms_opt(23, 59, 0)).unwrap_or_default();
+    due(schedule, None, probe)
 }
 
 impl Agent {
@@ -71,7 +109,11 @@ pub fn parse(text: &str) -> Result<Vec<Agent>> {
             continue;
         }
         let event = a["event"].as_str().unwrap_or("").trim().to_string();
-        if !EVENTS.contains(&event.as_str()) {
+        let schedule = a["schedule"].as_str().unwrap_or("").trim().to_string();
+        if event == "scheduled" && !valid_schedule(&schedule) {
+            bail!("{}", crate::i18n::fmt("event agent {0}: schedule must be hourly, every 4h, every 30m, daily 07:30 or weekly mon 08:00", &[a["name"].as_str().unwrap_or("?").to_string()]));
+        }
+        if event != "scheduled" && !EVENTS.contains(&event.as_str()) {
             bail!("{}", crate::i18n::fmt("event agent {0}: event must be one of {1}", &[a["name"].as_str().unwrap_or("?").to_string(), EVENTS.join(", ")]));
         }
         let prompt = a["prompt"].as_str().unwrap_or("").trim().to_string();
@@ -85,7 +127,10 @@ pub fn parse(text: &str) -> Result<Vec<Agent>> {
         if mode == "guard" && !event.ends_with("_deleting") {
             bail!("{}", crate::i18n::fmt("event agent {0}: only the *_deleting events can be guarded (EA asks before deleting; other events are reported after they happen)", &[a["name"].as_str().unwrap_or("?").to_string()]));
         }
-        out.push(Agent { name: a["name"].as_str().unwrap_or("agent").to_string(), event, applies_to: a["applies_to"].as_str().unwrap_or("*").to_string(), prompt, mode });
+        if mode == "guard" && event == "scheduled" {
+            bail!("{}", crate::i18n::fmt("event agent {0}: a scheduled agent advises, it cannot guard", &[a["name"].as_str().unwrap_or("?").to_string()]));
+        }
+        out.push(Agent { name: a["name"].as_str().unwrap_or("agent").to_string(), event, applies_to: a["applies_to"].as_str().unwrap_or("*").to_string(), prompt, mode, schedule });
     }
     Ok(out)
 }
@@ -275,6 +320,23 @@ Answer in at most 4 short lines, in the language of the task.",
 
 #[cfg(test)]
 mod tests {
+    /// LC-428: schedules – due once per slot, and the forms that are refused.
+    #[test]
+    fn schedules() {
+        let t = |s: &str| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M").unwrap();
+        assert!(super::due("daily 07:30", None, t("2026-11-02 08:00")));
+        assert!(!super::due("daily 07:30", Some(t("2026-11-02 07:31")), t("2026-11-02 12:00")));
+        assert!(super::due("daily 07:30", Some(t("2026-11-01 07:31")), t("2026-11-02 07:30")));
+        assert!(!super::due("daily 07:30", None, t("2026-11-02 07:00")));
+        assert!(super::due("every 4h", Some(t("2026-11-02 04:00")), t("2026-11-02 08:00")));
+        assert!(!super::due("every 4h", Some(t("2026-11-02 05:00")), t("2026-11-02 08:00")));
+        assert!(super::due("weekly mon 08:00", Some(t("2026-10-26 08:01")), t("2026-11-02 09:00")));
+        assert!(!super::due("weekly mon 08:00", Some(t("2026-11-02 08:01")), t("2026-11-04 09:00")));
+        assert!(super::parse(r#"{"agents":[{"name":"Morning","event":"scheduled","schedule":"daily 07:30","prompt":"Check the Shop package"}]}"#).is_ok());
+        assert!(super::parse(r#"{"agents":[{"name":"X","event":"scheduled","schedule":"sometimes","prompt":"p"}]}"#).is_err());
+        assert!(super::parse(r#"{"agents":[{"name":"X","event":"scheduled","schedule":"every 1m","prompt":"p"}]}"#).is_err());
+    }
+
     /// LC-345: a request the add-in is still writing stays until it is complete; then it is taken once.
     #[test]
     fn guard_requests_wait_for_a_complete_request() {
