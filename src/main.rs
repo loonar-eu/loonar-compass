@@ -49,6 +49,7 @@ mod safety_net;
 mod sequence;
 mod api_import;
 mod text_export;
+mod notation;
 mod ea_help;
 mod bulk;
 mod recycle;
