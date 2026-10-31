@@ -55,6 +55,7 @@ mod translate_model;
 mod migration;
 mod baseline_diff;
 mod readonly_why;
+mod what_if;
 mod ea_help;
 mod bulk;
 mod recycle;

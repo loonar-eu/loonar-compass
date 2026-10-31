@@ -462,6 +462,12 @@ fn report(package: i64, packages: usize, elements: usize, connectors: usize, fin
     out.join("\n")
 }
 
+/// What would be wrong with a relationship between ends of these types and stereotypes (UML/BPMN sanity and ArchiMate
+/// 3.2), for /what-if (LC-404).
+pub(crate) fn relation_problem(connector_type: &str, connector_stereotype: &str, source_type: &str, source_stereotype: &str, target_type: &str, target_stereotype: &str) -> Option<String> {
+    uml_problem(connector_type, source_type, target_type).or_else(|| archimate_problem(connector_stereotype, source_stereotype, target_stereotype))
+}
+
 /// UML/BPMN sanity of a relationship by the types of its ends (without rules of the organization).
 fn uml_problem(connector_type: &str, source_type: &str, target_type: &str) -> Option<String> {
     let flow = matches!(connector_type, "ControlFlow" | "ObjectFlow");
