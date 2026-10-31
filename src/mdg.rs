@@ -474,13 +474,25 @@ Without arguments: the profiles used in the model and the list of technologies. 
 With technology and stereotype: that stereotype's tagged values with type, allowed values and default. \
 action lint (LC-396): problems of a technology (or an attached MDG .xml) – stereotypes without a metaclass, names or tagged values defined twice, \
 enumerations without values or with a default outside them, toolbox entries for stereotypes it does not define, stereotypes the model uses that it \
-does not define. action compare: two versions (technology/file against other/other_file) – stereotypes and tagged values added, removed, changed. Use it before creating elements with stereotypes of a technology (the exact stereotype and metatype) and before filling tagged values.",
+does not define. action compare: two versions (technology/file against other/other_file) – stereotypes and tagged values added, removed, changed. \
+action build (LC-409): a new MDG technology from a metamodel the user described in words – first turn the description into spec (show it to the user as a short list: \
+stereotype → metaclass, parent, tagged values with types and lists; ask only about what is really unclear), then build: the technology file (profile, toolbox page, diagram type) \
+comes as a file in the chat, checked like /mdg-check. Use it before creating elements with stereotypes of a technology (the exact stereotype and metatype) and before filling tagged values.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "technology": { "type": "string", "description": "Technology id, name or profile name; empty = the list." },
                 "stereotype": { "type": "string", "description": "A stereotype of that technology (its tagged values)." },
-                "action": { "type": "string", "enum": ["show", "lint", "compare"], "description": "show (default); lint: problems of a technology; compare: technology/file against other/other_file" },
+                "action": { "type": "string", "enum": ["show", "lint", "compare", "build"], "description": "show (default); lint: problems of a technology; compare: technology/file against other/other_file; build: a new technology file from spec" },
+                "spec": {
+                    "type": "object",
+                    "description": "build: the technology the user described in words. id (1–12 letters/digits, the key), name, version, notes, profile (a name without spaces, the prefix of every stereotype), diagram (name of its diagram type), stereotypes: [{name, extends: UML metaclass or a list (Class, Component, Interface, Node, Artifact, Actor, Activity, Package, Requirement, … or a connector: Association, Dependency, Realization, Usage, InformationFlow, Generalization…), generalizes: another stereotype of this technology, abstract: true (only a parent, not in the toolbox), label (toolbox text), notes, tags: [{name, type (String, Integer, Decimal, Boolean, Date, Memo, URL, RefGUID, enumeration), values (list for enumeration), default, description}]}]",
+                    "properties": {
+                        "id": { "type": "string" }, "name": { "type": "string" }, "version": { "type": "string" }, "notes": { "type": "string" },
+                        "profile": { "type": "string" }, "diagram": { "type": "string" },
+                        "stereotypes": { "type": "array", "items": { "type": "object" } }
+                    }
+                },
                 "file": { "type": "string", "description": "lint/compare: an MDG .xml attached to the conversation instead of technology" },
                 "other": { "type": "string", "description": "compare: the other technology" },
                 "other_file": { "type": "string", "description": "compare: the other version as an attached .xml" }
@@ -537,9 +549,265 @@ Read it before checking a package in or out (ea_write op version_control) and wh
     })
 }
 
+/// UML metaclasses a stereotype of a new technology may extend (LC-409): the element and connector types EA offers.
+const METACLASSES: &[&str] = &[
+    "Action", "Activity", "ActivityPartition", "Actor", "Artifact", "Attribute", "Boundary", "Class", "Collaboration", "Component", "DataType", "Decision",
+    "Device", "Enumeration", "Event", "ExecutionEnvironment", "Interaction", "Interface", "Node", "Note", "Object", "Operation", "Package", "Part", "Port",
+    "Requirement", "Signal", "State", "StateMachine", "UseCase", "Abstraction", "Aggregation", "Association", "Composition", "ControlFlow", "Dependency",
+    "Generalization", "InformationFlow", "ObjectFlow", "Realization", "Usage",
+];
+
+/// Connector metaclasses (the rest are element types).
+const CONNECTORS: &[&str] = &["Abstraction", "Aggregation", "Association", "Composition", "ControlFlow", "Dependency", "Generalization", "InformationFlow", "ObjectFlow", "Realization", "Usage"];
+
+/// Tagged value types EA understands in a profile.
+const TAG_TYPES: &[&str] = &["String", "Integer", "Decimal", "Boolean", "Date", "DateTime", "Memo", "enumeration", "URL", "RefGUID", "RefGUIDList", "Color"];
+
+fn xml_attr(text: &str) -> String {
+    text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\n', "&#xA;").replace('\r', "")
+}
+
+fn bad_name(name: &str) -> bool {
+    name.trim().is_empty() || name.contains("::") || name.contains(['"', '<', '>', '(', ')', '&'])
+}
+
+/// An MDG technology file built from a description the assistant turned into a spec (LC-409): one profile of
+/// stereotypes (metaclasses, generalisation, tagged values), a toolbox page with all of them and a diagram type
+/// that opens that toolbox. Returns the XML and the problems that stop it (empty when it can be written).
+pub(crate) fn build(spec: &Value) -> (String, Vec<String>) {
+    let mut problems = Vec::new();
+    let text = |v: &Value| v.as_str().map(str::trim).unwrap_or("").to_string();
+    let id = text(&spec["id"]);
+    let name = { let n = text(&spec["name"]); if n.is_empty() { id.clone() } else { n } };
+    let version = { let v = text(&spec["version"]); if v.is_empty() { "1.0".to_string() } else { v } };
+    let profile = { let p = text(&spec["profile"]); if p.is_empty() { id.clone() } else { p } };
+    if id.is_empty() || id.len() > 12 || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        problems.push(format!("id \"{id}\": 1–12 letters, digits, _ or - (EA uses it as the technology key)"));
+    }
+    if bad_name(&profile) || profile.contains(' ') {
+        problems.push(format!("profile \"{profile}\": a name without spaces, :: or brackets (it prefixes every stereotype)"));
+    }
+    let list = spec["stereotypes"].as_array().cloned().unwrap_or_default();
+    if list.is_empty() {
+        problems.push("no stereotypes".to_string());
+    }
+    let names: Vec<String> = list.iter().map(|s| text(&s["name"])).collect();
+    let mut stereotypes = String::new();
+    let mut toolbox = String::new();
+    for (i, s) in list.iter().enumerate() {
+        let sname = &names[i];
+        if bad_name(sname) {
+            problems.push(format!("stereotype \"{sname}\": a name without ::, quotes or brackets"));
+            continue;
+        }
+        if names[..i].iter().any(|n| n.eq_ignore_ascii_case(sname)) {
+            problems.push(format!("«{sname}» is described twice"));
+        }
+        let extends: Vec<String> = match &s["extends"] {
+            Value::String(one) => vec![one.trim().to_string()],
+            Value::Array(many) => many.iter().filter_map(|m| m.as_str()).map(|m| m.trim().to_string()).collect(),
+            _ => Vec::new(),
+        };
+        let parent = text(&s["generalizes"]);
+        if !parent.is_empty() && !names.iter().any(|n| n == &parent) {
+            problems.push(format!("«{sname}» specialises «{parent}», which this technology does not describe"));
+        }
+        if extends.is_empty() && parent.is_empty() {
+            problems.push(format!("«{sname}» extends no metaclass (extends: e.g. Class, Component, Dependency)"));
+        }
+        let label = { let l = text(&s["label"]); if l.is_empty() { sname.clone() } else { l } };
+        let mut applies = String::new();
+        for m in &extends {
+            match METACLASSES.iter().find(|k| k.eq_ignore_ascii_case(m)) {
+                Some(k) => {
+                    applies.push_str(&format!("<Apply type=\"{k}\"/>"));
+                    toolbox.push_str(&format!("\n              <Tag name=\"{profile}::{sname}(UML::{k})\" type=\"\" description=\"\" unit=\"\" values=\"\" default=\"{}\"/>", xml_attr(&label)));
+                }
+                None => problems.push(format!("«{sname}» extends \"{m}\", which is not a UML metaclass EA offers ({})", METACLASSES.join(", "))),
+            }
+        }
+        let mut tags = String::new();
+        let mut tag_names: Vec<String> = Vec::new();
+        for t in s["tags"].as_array().into_iter().flatten() {
+            let tname = text(&t["name"]);
+            if bad_name(&tname) {
+                problems.push(format!("«{sname}»: a tagged value without a proper name"));
+                continue;
+            }
+            if tag_names.iter().any(|n| n.eq_ignore_ascii_case(&tname)) {
+                problems.push(format!("«{sname}».{tname} is described twice"));
+            }
+            tag_names.push(tname.clone());
+            let kind_in = { let k = text(&t["type"]); if k.is_empty() { "String".to_string() } else { k } };
+            let values: Vec<String> = match &t["values"] {
+                Value::Array(v) => v.iter().filter_map(|x| x.as_str()).map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect(),
+                Value::String(v) => v.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect(),
+                _ => Vec::new(),
+            };
+            let kind = if kind_in.eq_ignore_ascii_case("enum") || kind_in.eq_ignore_ascii_case("list") || (!values.is_empty() && !kind_in.eq_ignore_ascii_case("boolean")) {
+                "enumeration".to_string()
+            } else {
+                match TAG_TYPES.iter().find(|k| k.eq_ignore_ascii_case(&kind_in)) {
+                    Some(k) => k.to_string(),
+                    None => {
+                        problems.push(format!("«{sname}».{tname}: the type \"{kind_in}\" is not one EA knows ({})", TAG_TYPES.join(", ")));
+                        "String".to_string()
+                    }
+                }
+            };
+            let values = if kind == "Boolean" { vec!["True".to_string(), "False".to_string()] } else { values };
+            let default = text(&t["default"]);
+            if kind == "enumeration" && values.is_empty() {
+                problems.push(format!("«{sname}».{tname}: a list without values"));
+            }
+            if !default.is_empty() && !values.is_empty() && !values.iter().any(|v| v.eq_ignore_ascii_case(&default)) {
+                problems.push(format!("«{sname}».{tname}: the default \"{default}\" is not one of {}", values.join(", ")));
+            }
+            tags.push_str(&format!(
+                "\n              <Tag name=\"{}\" type=\"{kind}\" description=\"{}\" unit=\"\" values=\"{}\" default=\"{}\"/>",
+                xml_attr(&tname),
+                xml_attr(&text(&t["description"])),
+                xml_attr(&values.join(",")),
+                xml_attr(&default)
+            ));
+        }
+        let general = if parent.is_empty() { String::new() } else { format!(" generalizes=\"{0}\" baseStereotypes=\"{0}\"", xml_attr(&parent)) };
+        let abstract_ = if s["abstract"] == true { " isAbstract=\"true\"" } else { "" };
+        stereotypes.push_str(&format!(
+            "\n          <Stereotype name=\"{}\" notes=\"{}\"{general}{abstract_}>\n            <AppliesTo>{applies}</AppliesTo>{}\n          </Stereotype>",
+            xml_attr(sname),
+            xml_attr(&text(&s["notes"])),
+            if tags.is_empty() { String::new() } else { format!("\n            <TaggedValues>{tags}\n            </TaggedValues>") }
+        ));
+        if s["abstract"] == true {
+            // Abstract stereotypes are only parents: not offered in the toolbox.
+            toolbox = toolbox.lines().filter(|l| !l.contains(&format!("{profile}::{sname}("))).collect::<Vec<_>>().join("\n");
+        }
+    }
+    let diagram = { let d = text(&spec["diagram"]); if d.is_empty() { format!("{name} diagram") } else { d } };
+    // EA refuses a technology with empty notes ("Error parsing"): the name stands in.
+    let notes = xml_attr(&{ let n = text(&spec["notes"]); if n.is_empty() { name.clone() } else { n } });
+    let (id_x, name_x, profile_x, version_x) = (xml_attr(&id), xml_attr(&name), xml_attr(&profile), xml_attr(&version));
+    let xml = format!(
+        r#"<?xml version="1.0" encoding="utf-8"?>
+<MDG.Technology version="1.0">
+  <Documentation id="{id_x}" name="{name_x}" version="{version_x}" notes="{notes}"/>
+  <UMLProfiles>
+    <UMLProfile profiletype="uml2">
+      <Documentation id="{id_x}-P" name="{profile_x}" version="{version_x}" notes="{notes}"/>
+      <Content>
+        <Stereotypes>{stereotypes}
+        </Stereotypes>
+        <TaggedValueTypes/>
+      </Content>
+    </UMLProfile>
+  </UMLProfiles>
+  <DiagramProfile>
+    <UMLProfile profiletype="uml2">
+      <Documentation id="{id_x}-D" name="{id_x}" version="{version_x}" notes="{notes}"/>
+      <Content>
+        <Stereotypes>
+          <Stereotype name="{id_x}Diagram" notes="{notes}">
+            <AppliesTo>
+              <Apply type="Diagram_Logical">
+                <Property name="alias" value="{}"/>
+                <Property name="diagramID" value="{id_x}"/>
+                <Property name="toolbox" value="{id_x}::{profile_x}"/>
+              </Apply>
+            </AppliesTo>
+          </Stereotype>
+        </Stereotypes>
+        <TaggedValueTypes/>
+      </Content>
+    </UMLProfile>
+  </DiagramProfile>
+  <UIToolboxes>
+    <UMLProfile profiletype="uml2">
+      <Documentation id="{id_x}-T" name="{id_x}" version="{version_x}" notes="{notes}"/>
+      <Content>
+        <Stereotypes>
+          <Stereotype name="{profile_x}" notes="">
+            <AppliesTo>
+              <Apply type="ToolboxPage"/>
+            </AppliesTo>
+            <TaggedValues>{toolbox}
+            </TaggedValues>
+          </Stereotype>
+        </Stereotypes>
+      </Content>
+    </UMLProfile>
+  </UIToolboxes>
+</MDG.Technology>
+"#,
+        xml_attr(&diagram)
+    );
+    (xml, problems)
+}
+
+/// The tool's build action (LC-409): the technology file as a file in the chat, checked like /mdg-check does,
+/// and a word on what is a connector and what an element. The file name: `<id>.xml`.
+pub(crate) fn build_report(spec: &Value, cfg: &crate::config::AppConfig) -> Result<(String, String)> {
+    let (xml, problems) = build(spec);
+    if !problems.is_empty() {
+        bail!("{}", crate::i18n::fmt("The technology cannot be built yet:\n{0}", &[problems.iter().map(|p| format!("- {p}")).collect::<Vec<_>>().join("\n")]));
+    }
+    let tech = parse(&xml, "new");
+    let found = lint(&tech, &xml, &used(cfg));
+    let mut out = vec![format!("MDG technology {} ({}) version {}: profile {}, {} stereotypes, a toolbox page and the diagram type \"{}\".", tech.name, tech.id, tech.version, spec["profile"].as_str().filter(|p| !p.trim().is_empty()).unwrap_or(&tech.id), tech.stereotypes.iter().filter(|s| real(s) && !s.applies_to.iter().any(|a| a.starts_with("Diagram_"))).count(), spec["diagram"].as_str().filter(|d| !d.trim().is_empty()).map(str::to_string).unwrap_or(format!("{} diagram", tech.name)))];
+    for s in tech.stereotypes.iter().filter(|s| real(s) && !s.applies_to.iter().any(|a| a.starts_with("Diagram_"))) {
+        let kind = if s.applies_to.iter().all(|a| CONNECTORS.contains(&a.as_str())) && !s.applies_to.is_empty() { "connector" } else { "element" };
+        out.push(format!("- «{}» {kind} → {}{}", s.name, s.applies_to.join(", "), if s.tags.is_empty() { String::new() } else { format!("; tags: {}", s.tags.iter().map(|t| t.0.clone()).collect::<Vec<_>>().join(", ")) }));
+    }
+    out.push(if found.is_empty() { "Check (as /mdg-check): no problems found.".to_string() } else { format!("Check (as /mdg-check): {} remark(s):\n{}", found.len(), found.iter().map(|f| format!("  - {f}")).collect::<Vec<_>>().join("\n")) });
+    out.push("To use it: in EA, Specialize > Technologies > Publish-Tech > Import MDG Technology (into the model, shared with the team; then reload the project so EA offers the stereotypes), or save the file into %APPDATA%\\Sparx Systems\\EA\\MDGTechnologies and restart EA (only this computer). The user sees the file in the chat with \"Open\" and \"Save as…\"; do not name a folder for it.".to_string());
+    Ok((xml, out.join("\n")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LC-409 in EA: the built file for an import test (`cargo test mdg_build_file -- --ignored`, then import it into a model copy).
+    #[test]
+    #[ignore = "writes E:/livetest/mdg/ZZCAP.xml for a live import"]
+    fn mdg_build_file() {
+        let spec = json!({ "id": "ZZCAP", "name": "ZZ Capabilities", "profile": "ZZCap", "stereotypes": [
+            { "name": "Capability", "extends": "Class", "label": "Zdolność", "tags": [{ "name": "maturity", "values": ["low", "mid", "high"], "default": "mid" }, { "name": "critical", "type": "Boolean", "default": "False" }] },
+            { "name": "supports", "extends": "Dependency", "tags": [{ "name": "strength", "type": "Integer" }] } ] });
+        let (xml, problems) = build(&spec);
+        assert!(problems.is_empty(), "{problems:?}");
+        std::fs::create_dir_all("E:/livetest/mdg").unwrap();
+        std::fs::write("E:/livetest/mdg/ZZCAP.xml", xml).unwrap();
+    }
+
+    /// LC-409: a profile described in words, built and read back: stereotypes, generalisation, tags, toolbox and lint clean.
+    #[test]
+    fn builds_a_technology_from_a_spec() {
+        let spec = json!({
+            "id": "CAP", "name": "Capabilities & Co", "profile": "Cap", "notes": "Test",
+            "stereotypes": [
+                { "name": "Base", "extends": "Class", "abstract": true, "tags": [{ "name": "owner" }] },
+                { "name": "Capability", "extends": ["Class"], "generalizes": "Base", "label": "Business capability",
+                  "tags": [{ "name": "maturity", "values": ["low", "mid", "high"], "default": "mid" }, { "name": "critical", "type": "boolean", "default": "false" }, { "name": "since", "type": "Date" }] },
+                { "name": "realizes", "extends": "Dependency" }
+            ]
+        });
+        let (xml, problems) = build(&spec);
+        assert!(problems.is_empty(), "{problems:?}");
+        let t = parse(&xml, "t");
+        assert_eq!((t.id.as_str(), t.name.as_str()), ("CAP", "Capabilities & Co"));
+        assert!(t.profiles.contains(&"Cap".to_string()));
+        let cap = t.stereotypes.iter().find(|s| s.name == "Capability").unwrap();
+        assert_eq!(cap.applies_to, vec!["Class"]);
+        assert!(cap.tags.iter().any(|t| t.0 == "maturity" && t.1 == "enumeration" && t.2 == "low,mid,high" && t.3 == "mid"));
+        assert!(cap.tags.iter().any(|t| t.0 == "critical" && t.1 == "Boolean"));
+        assert!(xml.contains(r#"generalizes="Base""#) && xml.contains(r#"Cap::Capability(UML::Class)" type="" description="" unit="" values="" default="Business capability""#));
+        assert!(xml.contains("Cap::realizes(UML::Dependency)") && !xml.contains("Cap::Base("), "abstract stereotypes stay out of the toolbox");
+        assert!(lint(&t, &xml, &BTreeMap::new()).is_empty(), "{:?}", lint(&t, &xml, &BTreeMap::new()));
+        let (_, bad) = build(&json!({ "id": "too long id!", "stereotypes": [{ "name": "X", "extends": "Klasse", "tags": [{ "name": "a", "type": "enum" }, { "name": "a" }] }, { "name": "Y", "generalizes": "Z" }] }));
+        let all = bad.join("\n");
+        assert!(all.contains("id \"too long id!\"") && all.contains("\"Klasse\"") && all.contains("a list without values") && all.contains("«X».a is described twice") && all.contains("«Z»"), "{all}");
+    }
 
     /// LC-396 on EA's own technology files: a version compared with itself has no differences; ArchiMate 2 → 3 has.
     #[test]

@@ -1150,6 +1150,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "estimate_change" => crate::estimate::estimate(ctx.cfg, &input["elements"].as_array().into_iter().flatten().filter_map(|v| v.as_i64()).collect::<Vec<_>>(), input["depth"].as_u64().unwrap_or(2) as usize).map(Into::into),
         "change_sets" => change_sets(input, ctx).map(Into::into),
         "review_comments" => review_comments(input, ctx).map(Into::into),
+        "mdg_technologies" if input["action"] == "build" => mdg_build(input, ctx),
         "mdg_technologies" => crate::mdg::run(input, ctx.cfg).map(Into::into),
         "sharepoint" => crate::sharepoint::run(input, ctx).map(Into::into),
         "onedrive" => crate::sharepoint::run_onedrive(input, ctx).map(Into::into),
@@ -2378,6 +2379,16 @@ fn create_presentation(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         images: Vec::new(),
         files,
     })
+}
+
+/// A new MDG technology file from the user's description (LC-409), shown as a file in the chat.
+fn mdg_build(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
+    let (xml, text) = crate::mdg::build_report(&input["spec"], ctx.cfg)?;
+    std::fs::create_dir_all(&ctx.cfg.attachments_dir).context(crate::i18n::tr("attachments folder"))?;
+    let id = input["spec"]["id"].as_str().unwrap_or("MDG").trim();
+    let stored = format!("{}_{}.xml", uuid::Uuid::new_v4().simple(), crate::history::sanitize_name(id));
+    std::fs::write(ctx.cfg.attachments_dir.join(&stored), xml.as_bytes()).context(crate::i18n::tr("saving the document"))?;
+    Ok(ToolOutput { text, images: Vec::new(), files: vec![stored] })
 }
 
 /// Builds an Excel workbook from data given by the model (e.g. db_query results) and shows it as a file in the chat.
