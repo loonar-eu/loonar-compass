@@ -293,7 +293,7 @@ Set-WebConfigurationProperty -PSPath $p -Filter system.webServer/proxy -Name tim
 <table>
   <tr><th>Setting</th><th>Meaning</th></tr>
   <tr><td><code>ai.keys</code></td><td>Which Claude key a person uses. Order: the user name, then <code>role:&lt;role&gt;</code>, then <code>*</code>. No match means no AI for that person.</td></tr>
-  <tr><td><code>ai.limits</code></td><td>Tokens per day and per month. Above the limit, the hub refuses with a clear message.</td></tr>
+  <tr><td><code>ai.limits</code></td><td>Tokens per day and per month, and also USD per day and per month (<code>usd_per_day</code>, <code>usd_per_month</code>: the cost at the model's prices, cache included). Above the limit, the hub refuses with a clear message. The usage summary shows USD today and this month.</td></tr>
   <tr><td><code>ai.models</code></td><td>The allowed models; other models are refused.</td></tr>
   <tr><td><code>policy.ai_via_hub</code></td><td>Compass asks the AI only through the hub: no API key on the workstations.</td></tr>
   <tr><td><code>policy.jira_via_hub</code>, <code>confluence_via_hub</code></td><td>Jira/Confluence through the service account of the hub. A viewer may only read; every change is audited.</td></tr>
