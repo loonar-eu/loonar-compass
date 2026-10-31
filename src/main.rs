@@ -47,6 +47,7 @@ mod trace_gaps;
 mod template_doctor;
 mod safety_net;
 mod sequence;
+mod api_import;
 mod ea_help;
 mod bulk;
 mod recycle;

@@ -345,6 +345,7 @@ pub fn definitions() -> Value {
         items.push(crate::template_doctor::definition());
         items.push(crate::safety_net::definition());
         items.extend(crate::sequence::definitions());
+        items.push(crate::api_import::definition());
         items.push(crate::ea_help::definition());
         items.push(crate::bulk::definition());
         items.push(crate::recycle::definition());
@@ -915,6 +916,13 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         }
         "safety_net" => crate::safety_net::run(input, ctx.cfg).map(Into::into),
         "sequence_check" => crate::sequence::check(input, ctx.cfg).map(Into::into),
+        // An API specification as a model (LC-397): preview reads only, apply is one ordinary save.
+        "import_api" => {
+            let (ops, text) = crate::api_import::run(input, ctx.cfg)?;
+            if ops.is_empty() { Ok(text.into()) } else { ea_write(&json!({ "ops": ops }), ctx).map(|saved| format!("{text}
+
+{saved}")).map(Into::into) }
+        }
         // A sequence from text is one ordinary save; the report (bound, new, missing operations) goes with its result.
         "sequence_from_text" => {
             let (ops, report) = crate::sequence::from_text(input, ctx.cfg)?;
