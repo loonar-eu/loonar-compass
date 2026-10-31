@@ -482,6 +482,8 @@ struct Head {
     content_type: String,
     /// The Host header ("" when missing).
     host: String,
+    /// The cookie "lc_signin" that binds a company sign-in to the browser that started it (H9).
+    signin: String,
 }
 
 /// The REST calls Compass makes to the team's Jira and Confluence through the hub (LC-351); everything else, DELETE
@@ -581,7 +583,7 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
     let mut parts = first.split_whitespace();
     let method = parts.next().unwrap_or("").to_string();
     let target = parts.next().unwrap_or("/").to_string();
-    let (mut length, mut token, mut forwarded, mut content_type, mut host) = (0usize, String::new(), None, String::new(), String::new());
+    let (mut length, mut token, mut forwarded, mut content_type, mut host, mut signin) = (0usize, String::new(), None, String::new(), String::new(), String::new());
     for count in 0.. {
         if count > MAX_HEADERS {
             return Err(deny(431, "too many headers"));
@@ -599,6 +601,11 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
                 "x-api-key" if token.is_empty() => token = value.trim().to_string(),
                 "content-type" => content_type = value.trim().to_string(),
                 "host" => host = value.trim().to_string(),
+                "cookie" => {
+                    if let Some(v) = value.split(';').filter_map(|c| c.trim().strip_prefix("lc_signin=")).next() {
+                        signin = v.trim().to_string();
+                    }
+                }
                 "x-forwarded-for" => forwarded = value.split(',').next_back().and_then(|a| forwarded_address(a.trim())),
                 _ => {}
             }
@@ -607,7 +614,7 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
     if length > MAX_AI_BODY || (length > MAX_BODY && !target.starts_with("/ai/")) {
         return Err(deny(413, "request body too large"));
     }
-    Ok(Head { method, target, length, token, forwarded, content_type, host })
+    Ok(Head { method, target, length, token, forwarded, content_type, host, signin })
 }
 
 /// An address of X-Forwarded-For: "10.1.2.3", "2001:db8::1", or with a port as IIS/ARR sends it by default
@@ -698,15 +705,24 @@ fn compass_return(url: &str) -> bool {
 }
 
 /// A redirect (the company sign-in): to the provider, or back to the page.
-fn redirect(mut stream: &TcpStream, location: &str) -> Result<()> {
+fn redirect(stream: &TcpStream, location: &str) -> Result<()> {
+    redirect_with_cookie(stream, location, None)
+}
+
+fn redirect_with_cookie(mut stream: &TcpStream, location: &str, cookie: Option<&str>) -> Result<()> {
+    let cookie = cookie.map(|c| format!("Set-Cookie: {c}\r\n")).unwrap_or_default();
     write!(
         stream,
         "HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n\
-         X-Frame-Options: DENY\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\n\r\n"
+         X-Frame-Options: DENY\r\nReferrer-Policy: no-referrer\r\n{cookie}Connection: close\r\n\r\n"
     )?;
     stream.flush()?;
     Ok(())
 }
+
+/// The cookie that binds a company sign-in to this browser for 10 minutes (sent back by the provider's redirect, which
+/// is a top-level navigation, so SameSite=Lax lets it through).
+const SIGNIN_COOKIE: &str = "lc_signin={0}; Path=/auth; Max-Age=600; HttpOnly; SameSite=Lax";
 
 /// A small page when the company sign-in did not work, with the way back.
 fn sign_in_problem(stream: &TcpStream, message: &str) -> Result<()> {
@@ -786,8 +802,9 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
                     Some(_) => return sign_in_problem(&stream, &crate::i18n::tr("The return address of the sign-in is not allowed.")),
                     None => None,
                 };
-                return match provider.start(return_to) {
-                    Ok(url) => redirect(&stream, &url),
+                let browser = format!("{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
+                return match provider.start(return_to, &browser) {
+                    Ok(url) => redirect_with_cookie(&stream, &url, Some(&SIGNIN_COOKIE.replace("{0}", &browser))),
                     Err(e) => {
                         log(&hub.dir, &format!("company sign-in could not start: {e:#}"));
                         sign_in_problem(&stream, &crate::i18n::tr("The company sign-in is not available right now. Try again later or ask the administrator of the hub."))
@@ -806,7 +823,7 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
                     return sign_in_problem(&stream, &crate::i18n::fmt("The sign-in was refused: {0}", &[if detail.is_empty() { error.clone() } else { detail }]));
                 }
                 let (code, state) = (query.get("code").cloned().unwrap_or_default(), query.get("state").cloned().unwrap_or_default());
-                return match provider.finish(&code, &state) {
+                return match provider.finish(&code, &state, &head.signin) {
                     Ok(who) => {
                         if hub.users.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|u| u.name.eq_ignore_ascii_case(&who.name)) {
                             log(&hub.dir, &format!("company sign-in of {} refused: a local user has the same name", who.name));
@@ -2776,6 +2793,8 @@ mod tests {
         let sign_in_at = |login: &str, user: &str, password: &str| -> reqwest::blocking::Response {
             let to_provider = http.get(format!("{base}{login}")).send().unwrap();
             assert_eq!(to_provider.status(), 302);
+            let hub_cookie = to_provider.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_string();
+            assert!(hub_cookie.starts_with("lc_signin="), "{hub_cookie}");
             let url = to_provider.headers()["location"].to_str().unwrap().to_string();
             assert!(url.contains("code_challenge_method=S256") && url.contains("nonce="));
             let page = http.get(&url).send().unwrap();
@@ -2786,7 +2805,8 @@ mod tests {
             assert_eq!(back.status(), 302, "Keycloak accepted the password");
             let callback = back.headers()["location"].to_str().unwrap().to_string();
             assert!(callback.starts_with(&format!("{base}/auth/callback?")), "{callback}");
-            http.get(&callback).send().unwrap()
+            // H9: the same callback from a browser without the cookie is refused (it would be someone else's sign-in).
+            http.get(&callback).header("Cookie", hub_cookie.clone()).send().unwrap()
         };
         let sign_in = |user: &str, password: &str| sign_in_at("/auth/login", user, password);
         // Compass: the session goes back to its one-time address on this computer; any other return is refused.

@@ -111,6 +111,8 @@ struct Pending {
     started: Instant,
     /// Where the session goes after the sign-in when Compass started it (an address on the user's computer).
     return_to: Option<String>,
+    /// The browser that started the sign-in (a random value in its cookie): the callback must come from it (H9).
+    browser: String,
 }
 
 /// The signed-in person: name, e-mail (if given) and role name.
@@ -209,7 +211,7 @@ impl Provider {
     }
 
     /// The address of the provider's sign-in page for a new sign-in.
-    pub fn start(&self, return_to: Option<String>) -> Result<String> {
+    pub fn start(&self, return_to: Option<String>, browser: &str) -> Result<String> {
         let m = self.metadata(false)?;
         let (state, verifier, nonce) = (random(), random(), random());
         let challenge = b64url(&sha2::Sha256::digest(verifier.as_bytes()));
@@ -219,7 +221,7 @@ impl Provider {
             if pending.len() > 2000 {
                 bail!("too many sign-ins in progress, try again in a few minutes");
             }
-            pending.insert(state.clone(), Pending { verifier, nonce: nonce.clone(), started: Instant::now(), return_to });
+            pending.insert(state.clone(), Pending { verifier, nonce: nonce.clone(), started: Instant::now(), return_to, browser: browser.to_string() });
         }
         let separator = if m.authorization_endpoint.contains('?') { '&' } else { '?' };
         Ok(format!(
@@ -235,9 +237,13 @@ impl Provider {
     }
 
     /// The provider sent the user back with a code: exchange it, check the ID token and give the identity.
-    pub fn finish(&self, code: &str, state: &str) -> Result<Identity> {
+    pub fn finish(&self, code: &str, state: &str, browser: &str) -> Result<Identity> {
         let pending = self.pending.lock().unwrap_or_else(|p| p.into_inner()).remove(state).filter(|p| p.started.elapsed() < PENDING_FOR);
         let pending = pending.ok_or_else(|| anyhow!("{}", crate::i18n::tr("the sign-in expired or was not started here: start it again")))?;
+        // A link with someone else's sign-in (login CSRF): the browser that comes back is not the one that started it.
+        if pending.browser.is_empty() || pending.browser != browser {
+            bail!("{}", crate::i18n::tr("the sign-in was started in another browser: start it again here"));
+        }
         let m = self.metadata(false)?;
         let form = [
             ("grant_type", "authorization_code"),
