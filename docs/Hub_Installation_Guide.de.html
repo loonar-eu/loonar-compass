@@ -190,7 +190,7 @@ Restart-Service CompassHub</pre>
 <h2 id="s7">7. Schritt 5 – HTTPS mit IIS (URL Rewrite + ARR)</h2>
 <p>Der Hub spricht reines HTTP auf 127.0.0.1. IIS gibt ihm den Firmennamen und das Zertifikat.</p>
 <ol>
-  <li>Installieren Sie IIS mit URL Rewrite und ARR. Legen Sie eine Site an, z. B. <b>CompassHub</b>, mit einer Bindung für <code>https</code>, Port 443, dem Hostnamen <code>hub.company.com</code> und dem Zertifikat. Der physische Pfad ist ein leerer Ordner, z. B. <code>C:\inetpub\compasshub</code>.</li>
+  <li>Installieren Sie IIS mit URL Rewrite und ARR. Legen Sie eine Site an, z. B. <b>CompassHub</b>, mit einer Bindung für <code>https</code>, Port 443, dem Hostnamen <code>hub.company.com</code> und dem Zertifikat. Der physische Pfad ist ein leerer Ordner, z. B. <code>C:\inetpub\compasshub</code>. Hat der Hub keine Firmenanmeldung (<code>oidc</code>), ergänzen Sie in <code>hub.json</code> <code>"allowed_hosts": ["hub.company.com"]</code>: Ein Hub auf 127.0.0.1 antwortet nur auf seine eigenen Namen (sonst 421).</li>
   <li>Schalten Sie den Proxy ein und das Umschreiben des Hosts in Weiterleitungen aus. Dies ist <b>erforderlich</b>; andernfalls schreibt ARR die Weiterleitung zu AD FS auf die eigene Adresse des Hubs um, und die Firmenanmeldung schlägt fehl. Setzen Sie außerdem das Timeout für lange KI-Antworten:
 <pre>Import-Module WebAdministration
 $p = 'MACHINE/WEBROOT/APPHOST'

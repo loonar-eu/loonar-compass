@@ -282,6 +282,9 @@ pub struct Hub {
     trusted_proxies: Vec<IpAddr>,
     /// The hub listens only on this computer: requests must name this computer in Host (DNS rebinding, LC-350).
     local_only: bool,
+    /// Host names of the hub behind a reverse proxy on this computer, also accepted in Host: "allowed_hosts" in
+    /// hub.json and the host of the OIDC redirect_uri (lower case, without a port).
+    allowed_hosts: Vec<String>,
     file: PathBuf,
     dir: PathBuf,
     sources: Vec<Source>,
@@ -438,9 +441,18 @@ pub fn load(file: &Path) -> Result<(Hub, String)> {
     let listen = value["listen"].as_str().unwrap_or(DEFAULT_LISTEN).to_string();
     let local_only = listens_on_loopback(&listen);
     let trusted_proxies: Vec<IpAddr> = value["trusted_proxies"].as_array().into_iter().flatten().filter_map(|v| v.as_str()?.trim().parse().ok()).collect();
+    // Behind IIS/ARR or nginx on this computer the proxy passes the public name in Host: that name is the hub's own
+    // (the address of the OIDC callback, or listed), so it is not a rebinding page.
+    let mut allowed_hosts: Vec<String> = value["allowed_hosts"].as_array().into_iter().flatten().filter_map(|v| v.as_str()).map(host_name).filter(|h| !h.is_empty()).collect();
+    if let Some(callback) = value["oidc"]["redirect_uri"].as_str().and_then(|u| reqwest::Url::parse(u).ok()) {
+        if let Some(h) = callback.host_str() {
+            allowed_hosts.push(host_name(h));
+        }
+    }
     let hub = Hub {
         trusted_proxies,
         local_only,
+        allowed_hosts,
         file: file.to_path_buf(), dir, sources, users: Mutex::new(users), sessions: Mutex::new(HashMap::new()), policy: Mutex::new(value["policy"].clone()),
         audit_lock: Mutex::new(()), ask_lock: Mutex::new(()), change_lock: Mutex::new(()), failures: Mutex::new(HashMap::new()), asks: Mutex::new(HashMap::new()),
         integrations: value["integrations"].clone(),
@@ -657,13 +669,20 @@ fn listens_on_loopback(listen: &str) -> bool {
 }
 
 /// Whether a Host header names this computer (any port); an empty one (HTTP/1.0) passes.
-fn host_is_local(host: &str) -> bool {
+/// The name in a Host header, without the port and the brackets of an IPv6 address, in lower case.
+fn host_name(host: &str) -> String {
     let host = host.trim();
-    if host.is_empty() {
+    let name = if let Some(rest) = host.strip_prefix('[') { rest.split(']').next().unwrap_or("") } else if host.matches(':').count() > 1 { host } else { host.rsplit_once(':').map_or(host, |(h, _)| h) };
+    name.trim_end_matches('.').to_ascii_lowercase()
+}
+
+/// Host names this computer, or one of the hub's own public names (`allowed`).
+fn host_is_local(host: &str, allowed: &[String]) -> bool {
+    if host.trim().is_empty() {
         return true;
     }
-    let name = if let Some(rest) = host.strip_prefix('[') { rest.split(']').next().unwrap_or("") } else { host.rsplit_once(':').map_or(host, |(h, _)| h) };
-    name.eq_ignore_ascii_case("localhost") || name.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback())
+    let name = host_name(host);
+    name == "localhost" || name.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback()) || allowed.iter().any(|a| *a == name)
 }
 
 fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Head, HttpError> {
@@ -894,7 +913,7 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
     };
     // A hub on this computer only answers requests addressed to this computer: a web page of another site whose name
     // resolves to 127.0.0.1 (DNS rebinding) is refused (LC-350).
-    if hub.local_only && !host_is_local(&head.host) {
+    if hub.local_only && !host_is_local(&head.host, &hub.allowed_hosts) {
         return respond(&stream, 421, "application/json; charset=utf-8", json!({ "error": "this hub answers only requests to localhost" }).to_string().as_bytes());
     }
     let (path, query) = split_target(&head.target);
@@ -3002,10 +3021,10 @@ mod tests {
         assert!(listens_on_loopback("127.0.0.1:8730") && listens_on_loopback("[::1]:8730") && listens_on_loopback("localhost:8730"));
         assert!(!listens_on_loopback("0.0.0.0:8730") && !listens_on_loopback("10.0.0.5:8730"));
         for ok in ["127.0.0.1:8730", "localhost", "LOCALHOST:1", "[::1]:8730", ""] {
-            assert!(host_is_local(ok), "{ok}");
+            assert!(host_is_local(ok, &[]), "{ok}");
         }
         for bad in ["evil.example:8730", "attacker.test", "10.0.0.5:8730", "[2001:db8::1]:80"] {
-            assert!(!host_is_local(bad), "{bad}");
+            assert!(!host_is_local(bad, &[]), "{bad}");
         }
         crate::i18n::set(crate::i18n::Lang::En);
         let dir = std::env::temp_dir().join(format!("loonar-hub-host-{}", std::process::id()));
@@ -3018,6 +3037,22 @@ mod tests {
         let http = reqwest::blocking::Client::new();
         assert_eq!(http.get(format!("{base}/api/health")).send().unwrap().status().as_u16(), 200);
         assert_eq!(http.get(format!("{base}/api/health")).header("Host", "rebind.example:8730").send().unwrap().status().as_u16(), 421);
+    }
+
+    /// LC-350: behind IIS/ARR on the same computer the public name of the hub (OIDC callback, allowed_hosts) is accepted.
+    #[test]
+    fn host_names_of_the_hub() {
+        let allowed = vec!["hub.lab.local".to_string(), "compass.example".to_string()];
+        assert!(super::host_is_local("127.0.0.1:8730", &[]));
+        assert!(super::host_is_local("[::1]:8730", &[]));
+        assert!(super::host_is_local("LOCALHOST", &[]));
+        assert!(super::host_is_local("Hub.Lab.Local", &allowed));
+        assert!(super::host_is_local("hub.lab.local:443", &allowed));
+        assert!(super::host_is_local("compass.example.", &allowed));
+        assert!(!super::host_is_local("hub.lab.local", &[]));
+        assert!(!super::host_is_local("rebind.example", &allowed));
+        assert!(!super::host_is_local("hub.lab.local.evil.example", &allowed));
+        assert_eq!(super::host_name("[::1]:8730"), "::1");
     }
 
     /// LC-350: with a company sign-in (OIDC) and no users there is no default admin/passw0rd account.
