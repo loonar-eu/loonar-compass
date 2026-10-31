@@ -370,7 +370,7 @@ pub fn definitions() -> Value {
             "description": "A presentation copy of a diagram for management or business (the original stays as it is): a new diagram next to it with \
 the same elements in the same places, attributes, operations and stereotypes hidden, relationship labels hidden, elements coloured by type, \
 optionally a title. One save the user approves (the copy can be deleted or undone). Use it for /exec-view; offer a short explanation (/explain) or \
-speaker notes with it.",
+a slide of the copy with speaker notes (create_presentation, notes).",
             "input_schema": { "type": "object", "properties": {
                 "diagram": { "type": "integer" },
                 "name": { "type": "string", "description": "Name of the copy (default: <name> – presentation)" }
