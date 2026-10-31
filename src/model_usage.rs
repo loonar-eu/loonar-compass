@@ -32,6 +32,18 @@ to choose which one to keep; and relationships of the same type and stereotype b
             } }
         }),
         json!({
+            "name": "elements_without_notes",
+            "description": "Elements without a description in a package (with child packages), 30 at a time (offset for the next ones), each with \
+what tells what it is: type, stereotype, package, its relationships to other elements and the diagrams it is on. Reads only. For /fill-notes: \
+draft a short description of each from this context (in the language of the model's names), show them to the user, and save the accepted ones \
+with ea_write update_element notes (the user approves; they can be undone).",
+            "input_schema": { "type": "object", "properties": {
+                "package": { "description": "package_id or exact name" },
+                "types": { "type": "array", "items": { "type": "string" } },
+                "offset": { "type": "integer" }
+            } }
+        }),
+        json!({
             "name": "find_orphans",
             "description": "Elements of a package (with child packages) that nothing uses: on no diagram, without relationships, not a classifier \
 or type of anything, not pointed at by a tagged value, without child elements. EA's own \"orphans\" search only checks diagrams. \
@@ -233,6 +245,45 @@ pub fn find_duplicates(input: &Value, cfg: &AppConfig) -> Result<String> {
     Ok(out)
 }
 
+/// Elements without notes with their context, 30 at a time (LC-380).
+pub fn elements_without_notes(input: &Value, cfg: &AppConfig) -> Result<String> {
+    let (scope, title) = package_scope(cfg, &input["package"])?;
+    let types: Vec<String> = input["types"].as_array().into_iter().flatten().filter_map(|t| t.as_str()).map(|t| format!("'{}'", crate::model_db::sql_text(cfg.model_source, t))).collect();
+    let type_filter = if types.is_empty() { String::new() } else { format!("and o.object_type in ({})", types.join(",")) };
+    let offset = input["offset"].as_u64().unwrap_or(0) as usize;
+    let rows = query_rows(cfg, &format!(
+        "select o.object_id, o.name, o.object_type, coalesce(o.stereotype,''), p.name from t_object o join t_package p on p.package_id = o.package_id \
+         where coalesce(o.note,'') = '' and coalesce(o.name,'') <> '' \
+         and o.object_type not in ('Note', 'Text', 'Boundary', 'Package', 'ProvidedInterface', 'RequiredInterface', 'Port', 'ActionPin', 'ActivityParameter', \
+         'Decision', 'MergeNode', 'Synchronization', 'StateNode', 'InitialNode', 'ActivityFinal', 'FlowFinal', 'Constraint') {type_filter} {scope} order by p.name, o.name"
+    ))?;
+    let mut out = format!("Elements without a description in {title}: {} (showing {}–{}).\n", rows.len(), offset + 1, (offset + 30).min(rows.len()));
+    for r in rows.iter().skip(offset).take(30) {
+        let links = query_rows(cfg, &format!(
+            "select c.connector_type, case when c.start_object_id = {0} then 'to' else 'from' end, o.name, o.object_type from t_connector c \
+             join t_object o on o.object_id = case when c.start_object_id = {0} then c.end_object_id else c.start_object_id end \
+             where (c.start_object_id = {0} or c.end_object_id = {0}) and c.connector_type not in ('NoteLink') order by 1",
+            r[0]
+        ))
+        .unwrap_or_default();
+        let diagrams = query_rows(cfg, &format!("select d.name from t_diagramobjects x join t_diagram d on d.diagram_id = x.diagram_id where x.object_id = {}", r[0])).unwrap_or_default();
+        out.push_str(&format!(
+            "\n- \"{}\" ({}{}, id {}, package \"{}\")\n  relationships: {}\n  diagrams: {}\n",
+            r[1],
+            r[2],
+            if r[3].is_empty() { String::new() } else { format!(" «{}»", r[3]) },
+            r[0],
+            r[4],
+            if links.is_empty() { "none".to_string() } else { links.iter().take(12).map(|l| format!("{} {} \"{}\" ({})", l[0], l[1], l[2], l[3])).collect::<Vec<_>>().join("; ") },
+            if diagrams.is_empty() { "none".to_string() } else { diagrams.iter().take(6).map(|d| format!("\"{}\"", d[0])).collect::<Vec<_>>().join(", ") }
+        ));
+    }
+    if rows.len() > offset + 30 {
+        out.push_str(&format!("\nMore: offset {}.\n", offset + 30));
+    }
+    Ok(out)
+}
+
 /// The rest of find_orphans: the elements nothing uses in the scope.
 fn find_orphans_rest(input: &Value, cfg: &AppConfig, scope: String, title: String) -> Result<String> {
     let types: Vec<String> = input["types"].as_array().into_iter().flatten().filter_map(|t| t.as_str()).map(|t| format!("'{}'", crate::model_db::sql_text(cfg.model_source, t))).collect();
@@ -285,6 +336,17 @@ mod tests {
         assert_ne!(super::name_key("Customer"), super::name_key("Custom"));
         assert_eq!(super::name_key("Bus"), "bus", "a stem shorter than 3 letters keeps its s");
         assert_eq!(super::name_key("as"), "as");
+    }
+
+    /// LC-380: elements without notes with their context, on a model copy:
+    /// `LOONAR_TEST_PROPS=E:/livetest/undo/undo.properties cargo test without_notes_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires the model from LOONAR_TEST_PROPS"]
+    fn without_notes_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("app.properties");
+        let found = super::elements_without_notes(&serde_json::json!({ "types": ["Class"] }), &cfg).expect("elements_without_notes");
+        println!("{}", found.lines().take(9).collect::<Vec<_>>().join("\n"));
+        assert!(found.starts_with("Elements without a description in the whole model") && found.contains("relationships:"));
     }
 
     /// LC-369: duplicates on a test model (reads only):

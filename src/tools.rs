@@ -861,6 +861,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "where_used" => crate::model_usage::where_used(input, ctx.cfg).map(Into::into),
         "find_orphans" => crate::model_usage::find_orphans(input, ctx.cfg).map(Into::into),
         "find_duplicates" => crate::model_usage::find_duplicates(input, ctx.cfg).map(Into::into),
+        "elements_without_notes" => crate::model_usage::elements_without_notes(input, ctx.cfg).map(Into::into),
         "repo_doctor" => crate::repo_doctor::run(input, ctx.cfg).map(Into::into),
         "what_changed" => crate::changes::run(input, ctx.cfg).map(Into::into),
         "team_rules" => team_rules(input, ctx).map(Into::into),
