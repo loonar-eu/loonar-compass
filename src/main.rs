@@ -51,6 +51,7 @@ mod merge;
 mod visibility;
 mod style;
 mod context_diagram;
+mod diagram_clone;
 mod model_usage;
 mod glossary_ui;
 mod relang;

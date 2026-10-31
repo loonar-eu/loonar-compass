@@ -349,6 +349,7 @@ pub fn definitions() -> Value {
         items.push(crate::visibility::definition());
         items.push(crate::style::definition());
         items.push(crate::context_diagram::definition());
+        items.push(crate::diagram_clone::definition());
         items.push(json!({
             "name": "exec_view",
             "description": "A presentation copy of a diagram for management or business (the original stays as it is): a new diagram next to it with \
@@ -931,6 +932,10 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "exec_view" => {
             let ops = exec_view_ops(ctx.cfg, input)?;
             ea_write(&json!({ "ops": ops }), ctx).map(Into::into)
+        }
+        "clone_diagram" => {
+            let (ops, text) = crate::diagram_clone::plan(input, ctx.cfg)?;
+            if input["action"].as_str() == Some("apply") { ea_write(&json!({ "ops": ops }), ctx).map(Into::into) } else { Ok(format!("{text}\nNothing was changed yet: action apply does it after approval.").into()) }
         }
         "context_diagram" => {
             let ops = crate::context_diagram::plan(input, ctx.cfg)?;
