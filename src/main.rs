@@ -53,6 +53,7 @@ mod style;
 mod context_diagram;
 mod diagram_clone;
 mod publications;
+mod import_sheet;
 mod model_usage;
 mod glossary_ui;
 mod relang;

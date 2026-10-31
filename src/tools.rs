@@ -351,6 +351,7 @@ pub fn definitions() -> Value {
         items.push(crate::context_diagram::definition());
         items.push(crate::diagram_clone::definition());
         items.push(crate::publications::definition());
+        items.push(crate::import_sheet::definition());
         items.push(json!({
             "name": "exec_view",
             "description": "A presentation copy of a diagram for management or business (the original stays as it is): a new diagram next to it with \
@@ -935,6 +936,10 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             ea_write(&json!({ "ops": ops }), ctx).map(Into::into)
         }
         "stale_publications" => crate::publications::stale(input, ctx.cfg).map(Into::into),
+        "import_sheet" => {
+            let (ops, text) = crate::import_sheet::run(input, ctx.cfg)?;
+            if ops.is_empty() { Ok(text.into()) } else { ea_write(&json!({ "ops": ops }), ctx).map(Into::into) }
+        }
         "clone_diagram" => {
             let (ops, text) = crate::diagram_clone::plan(input, ctx.cfg)?;
             if input["action"].as_str() == Some("apply") { ea_write(&json!({ "ops": ops }), ctx).map(Into::into) } else { Ok(format!("{text}\nNothing was changed yet: action apply does it after approval.").into()) }
