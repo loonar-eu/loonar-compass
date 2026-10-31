@@ -42,6 +42,12 @@ pub(crate) fn since_date(given: &str, today: chrono::NaiveDate) -> Result<chrono
     }
 }
 
+/// A date and time "YYYY-MM-DD HH:MM:SS" as a literal of the model's engine (Oracle: TIMESTAMP '…').
+pub(crate) fn date_text(source: ModelSource, stamp: &str) -> String {
+    let stamp: String = stamp.chars().filter(|c| c.is_ascii_digit() || matches!(c, '-' | ':' | ' ')).collect();
+    if source == ModelSource::Oracle { format!("timestamp '{stamp}'") } else { format!("'{stamp}'") }
+}
+
 /// A date literal of the model's engine (Oracle compares dates with DATE '…'; the others with the ISO text).
 fn date_literal(source: ModelSource, date: chrono::NaiveDate) -> String {
     let text = date.format("%Y-%m-%d").to_string();

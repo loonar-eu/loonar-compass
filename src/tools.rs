@@ -350,6 +350,7 @@ pub fn definitions() -> Value {
         items.push(crate::style::definition());
         items.push(crate::context_diagram::definition());
         items.push(crate::diagram_clone::definition());
+        items.push(crate::publications::definition());
         items.push(json!({
             "name": "exec_view",
             "description": "A presentation copy of a diagram for management or business (the original stays as it is): a new diagram next to it with \
@@ -933,6 +934,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             let ops = exec_view_ops(ctx.cfg, input)?;
             ea_write(&json!({ "ops": ops }), ctx).map(Into::into)
         }
+        "stale_publications" => crate::publications::stale(input, ctx.cfg).map(Into::into),
         "clone_diagram" => {
             let (ops, text) = crate::diagram_clone::plan(input, ctx.cfg)?;
             if input["action"].as_str() == Some("apply") { ea_write(&json!({ "ops": ops }), ctx).map(Into::into) } else { Ok(format!("{text}\nNothing was changed yet: action apply does it after approval.").into()) }
@@ -1858,6 +1860,8 @@ fn publish_confluence(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
     let (storage, attachments) = crate::confluence::to_storage(markdown, |source| picture(ctx, source))?;
     let target_id = existing.as_ref().map(|page| page.id.clone());
     let (id, link, created) = connection.publish(&space, &title, Some(&parent), target_id.as_deref(), &storage, &attachments)?;
+    // What it shows of the model, to tell later when it is no longer current (LC-386).
+    crate::publications::record(ctx.cfg, "Confluence page", &title, &link, markdown);
     crate::confluence::remember(
         &ctx.cfg.confluence_pages_file,
         json!({ "page_id": id, "title": title, "space": space, "url": link, "source": page, "published": chrono::Local::now().to_rfc3339() }),
@@ -1930,6 +1934,7 @@ fn create_document(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         Ok(crate::docx::Picture { png, caption: caption.to_string() })
     })?;
     let stored = format!("{}_{}.docx", uuid::Uuid::new_v4().simple(), crate::history::sanitize_name(file_name.trim_end_matches(".docx")));
+    crate::publications::record(ctx.cfg, "Word document", if title.is_empty() { file_name } else { title }, file_name, markdown);
     std::fs::write(ctx.cfg.attachments_dir.join(&stored), &bytes).context(crate::i18n::tr("saving the document"))?;
     let format = input["format"].as_str().unwrap_or("docx");
     if format == "pdf" || format == "both" {
