@@ -348,6 +348,7 @@ pub fn definitions() -> Value {
         items.push(crate::api_import::definition());
         items.push(crate::text_export::definition());
         items.push(crate::notation::definition());
+        items.push(crate::test_results::definition());
         items.push(crate::ea_help::definition());
         items.push(crate::bulk::definition());
         items.push(crate::recycle::definition());
@@ -920,6 +921,11 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "sequence_check" => crate::sequence::check(input, ctx.cfg).map(Into::into),
         "export_text" => crate::text_export::run(input, ctx.cfg),
         "diagram_as_text" => crate::notation::run(input, ctx.cfg).map(Into::into),
+        // Test results (LC-399): the report reads only; apply writes tagged values on the requirements (one save).
+        "test_results" => {
+            let (ops, text) = crate::test_results::run(input, ctx.cfg)?;
+            if ops.is_empty() { Ok(text.into()) } else { ea_write(&json!({ "ops": ops }), ctx).map(|saved| format!("{text}\n\n{saved}")).map(Into::into) }
+        }
         // An API specification as a model (LC-397): preview reads only, apply is one ordinary save.
         "import_api" => {
             let (ops, text) = crate::api_import::run(input, ctx.cfg)?;

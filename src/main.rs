@@ -50,6 +50,7 @@ mod sequence;
 mod api_import;
 mod text_export;
 mod notation;
+mod test_results;
 mod ea_help;
 mod bulk;
 mod recycle;
