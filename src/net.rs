@@ -11,13 +11,12 @@ pub fn same_origin_redirects() -> reqwest::redirect::Policy {
     })
 }
 
-/// An address in a private network: this computer, 10.x, 172.16–31.x, 192.168.x, 100.64–127.x (VPNs such as Tailscale),
-/// 169.254.x, IPv6 fc00::/7 and fe80::/10.
+/// An address in a private network: this computer, 10.x, 172.16–31.x, 192.168.x, 169.254.x, IPv6 fc00::/7 and fe80::/10.
+/// Not 100.64.0.0/10: operators also give it to their customers (CGNAT), so plain http there may cross their network.
 pub fn is_private_ip(ip: std::net::IpAddr) -> bool {
     match ip {
         std::net::IpAddr::V4(v4) => {
-            let o = v4.octets();
-            v4.is_loopback() || v4.is_private() || v4.is_link_local() || (o[0] == 100 && (64..128).contains(&o[1]))
+            v4.is_loopback() || v4.is_private() || v4.is_link_local()
         }
         std::net::IpAddr::V6(v6) => {
             let first = v6.segments()[0];
@@ -164,10 +163,10 @@ mod model_url_tests {
     #[test]
     fn model_addresses() {
         for ok in ["https://api.example.com/v1", "http://127.0.0.1:11434/v1", "http://localhost:11434/v1", "http://10.1.2.3:11434/v1", "http://192.168.1.20:11434/v1",
-            "http://172.20.0.5:8000/v1", "http://100.101.102.103:11434/v1", "http://[fd00::5]:11434/v1"] {
+            "http://172.20.0.5:8000/v1", "http://[fd00::5]:11434/v1"] {
             assert!(super::check_model_url(ok).is_ok(), "{ok}");
         }
-        for bad in ["http://8.8.8.8:11434/v1", "http://172.32.0.1/v1", "http://user:pw@10.0.0.1/v1", "ftp://10.0.0.1/", "http://[2001:4860::1]/v1"] {
+        for bad in ["http://100.101.102.103:11434/v1", "http://8.8.8.8:11434/v1", "http://172.32.0.1/v1", "http://user:pw@10.0.0.1/v1", "ftp://10.0.0.1/", "http://[2001:4860::1]/v1"] {
             assert!(super::check_model_url(bad).is_err(), "{bad}");
         }
     }
