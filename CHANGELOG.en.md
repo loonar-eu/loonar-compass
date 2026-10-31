@@ -2,6 +2,26 @@
 
 All notable changes to Loonar Compass (named Loonar EA Assistant until version 0.3).
 
+## Version 0.9.3
+
+- **Commands in the chat:** type `/` for the list. `/where-used` (elements and now relationships too: on which diagrams they are visible or hidden), `/find-orphans`, `/find-duplicates`, `/repo-doctor` (integrity of the repository: broken links, stale diagram rows, duplicate GUIDs, old locks), `/what-changed` (since a date, by author, or against a baseline without EA's noise), `/validate-model` (the team's rules, now also editable from the chat and with forbidden stereotypes), `/trace-gaps` (requirements nothing realises and design nothing justifies, over several steps), `/how-in-ea` (the steps for your EA version and known EA problems), `/explain`, `/matrix`, `/tidy-diagram`, `/new-version`, `/doc-package`, `/template-from-doc`, `/send-to-miro`, `/glossary-add`.
+- **Changes of many elements at once (`/bulk-set`):** status, phase, version, author, stereotype, tagged values and a text in names, for a package, types, a stereotype or a name; first a numbered table before → after, then one save of the rows you keep.
+- **Merging duplicates (`/merge-elements`):** the duplicate's relationships, places on diagrams (positions kept), classifiers, types of attributes and parameters and tagged values pointing at it go to the element you keep, with its tags and notes; then it is deleted (a baseline first).
+- **Another type for relationships:** e.g. Composition → Serving, also many at once; the new relationship keeps the name, notes, tags, route, style and hiding on every diagram.
+- **Which relationships a diagram shows (`/visibility`, `/show-hidden-links`):** a policy per diagram (show only these types or stereotypes, never these), applied on request or automatically when a relationship is made in EA.
+- **Recycle bin (`/to-bin`):** elements go to the package "Recycle bin (Compass)" instead of being deleted and can be restored; the deletion card says how many relationships and diagrams an element takes with it.
+- **Diagrams:** a context diagram of an element (`/context-diagram`), a presentation copy for management (`/exec-view`), one colour scheme for many diagrams by stereotype, type or status (`/apply-style`), aligning and distributing elements; an automatic layout can now be undone, and Compass says when EA's layout moved nothing.
+- **Descriptions for elements without one (`/fill-notes`):** drafted from their relationships and diagrams, saved when you accept them.
+- **Miro from EA:** send a diagram or the selected part of it to Miro from the context menu of EA.
+- **Richer Word documents:** code with its indentation and colours, coloured and struck-through text for changes, notes in boxes, tables with headers.
+- **Package matrix:** relationships between two packages as a table, an image and an Excel file, also saved as EA's own matrix.
+- **EA document templates from your document:** a Word document becomes a template of EA's report generator.
+- **EA context menu:** "Find where a method is used on diagrams" and "Clone as a new version" with a trace to the original, in EA's language (English, German, French).
+- **Project glossary window (`/glossary-add`):** for Polish, all 14 forms of a noun or the forms of a verb, with how often each occurs in the model.
+- **Polish spelling in EA's notes:** Settings → Language downloads a Polish dictionary (SJP.pl) for EA's spell checker.
+- **Safer and steadier:** text with letters outside ASCII and damaged PDFs no longer close the application (a failed answer is reported, the window stays); queries on SQL Server, MySQL and Oracle refuse statements and server functions that are not reads and stop after 60 s; MySQL text cannot break out of SQL; deletion guards stop a deletion whenever they cannot decide; an approved script no longer approves other SQL in its strings; undo covers attributes, operations and packages and names what it cannot undo; version control always asks; the team hub: no default admin with a company sign-in, the Jira/Confluence proxy only for Compass's calls in the team's project and space, limits for GraphQL, groups matched whole; outside data (Confluence, web pages, SharePoint, OneDrive, Google Drive) marked for the model and shown whole for approval; large images made smaller; the usage statistics are asked for clearly.
+- **Fixes:** optimistic locking (expect_unchanged) on SQL Server, MySQL and Oracle; the start no longer asks OpenAI, hub or OAuth users for a Claude key; the assistant names the model that really answers; an imported conversation keeps only its own attachments; Jira says when there are more issues than shown.
+
 ## Version 0.9.2 (2026-10-30)
 
 - **Visible arrows on diagrams:** connectors that are not messages of a sequence diagram are no longer bound to one diagram (before, e.g. a dependency drawn on the diagram “Dependent systems” showed on no other diagram). Showing a hidden connector removes its duplicate entries on the diagram, and the new repair “connectors not visible on a diagram” unbinds bound connectors, removes duplicates and, on request, shows hidden ones. When arrows are missing, the assistant checks these causes first.

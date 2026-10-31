@@ -2,6 +2,26 @@
 
 Wszystkie istotne zmiany w aplikacji Loonar Compass (do wersji 0.3 pod nazwą Loonar EA Assistant).
 
+## Wersja 0.9.3
+
+- **Komendy w czacie:** wpisz `/`, aby zobaczyć listę. `/where-used` (elementy, a teraz także relacje: na których diagramach są widoczne lub ukryte), `/find-orphans`, `/find-duplicates`, `/repo-doctor` (integralność repozytorium: zerwane powiązania, martwe wiersze diagramów, zdublowane GUID-y, stare blokady), `/what-changed` (od daty, według autora albo względem baseline'u bez szumu EA), `/validate-model` (reguły zespołu – teraz także do edycji z czatu i z zakazanymi stereotypami), `/trace-gaps` (wymagania bez realizacji i projekt bez uzasadnienia, także przez kilka kroków), `/how-in-ea` (kroki dla Twojej wersji EA i znane problemy EA), `/explain`, `/matrix`, `/tidy-diagram`, `/new-version`, `/doc-package`, `/template-from-doc`, `/send-to-miro`, `/glossary-add`.
+- **Zmiana wielu elementów naraz (`/bulk-set`):** status, faza, wersja, autor, stereotyp, wartości tagów i tekst w nazwach – dla pakietu, typów, stereotypu albo nazwy; najpierw ponumerowana tabela przed → po, potem jeden zapis wierszy, które zostawisz.
+- **Scalanie duplikatów (`/merge-elements`):** relacje duplikatu, jego miejsca na diagramach (z pozycjami), klasyfikatory, typy atrybutów i parametrów oraz wskazujące na niego tagi przechodzą na zachowany element razem z tagami i notatkami; potem duplikat jest usuwany (najpierw baseline).
+- **Inny typ relacji:** np. Composition → Serving, także wiele naraz; nowa relacja zachowuje nazwę, notatki, tagi, przebieg, styl i ukrycie na każdym diagramie.
+- **Które relacje pokazuje diagram (`/visibility`, `/show-hidden-links`):** polityka diagramu (pokazuj tylko te typy lub stereotypy, tych nigdy), stosowana na prośbę albo automatycznie, gdy w EA powstaje relacja.
+- **Kosz (`/to-bin`):** elementy trafiają do pakietu „Recycle bin (Compass)” zamiast być usuwane i można je przywrócić; karta usuwania podaje, ile relacji i diagramów element zabierze ze sobą.
+- **Diagramy:** diagram kontekstu elementu (`/context-diagram`), kopia prezentacyjna dla zarządu (`/exec-view`), jeden schemat kolorów dla wielu diagramów według stereotypu, typu albo statusu (`/apply-style`), wyrównywanie i równe rozmieszczanie elementów; automatyczny układ można teraz cofnąć, a Compass mówi, gdy układ EA niczego nie przesunął.
+- **Opisy elementów bez opisu (`/fill-notes`):** szkice z relacji i diagramów, zapisywane po Twojej akceptacji.
+- **Miro z EA:** wyślij diagram albo zaznaczony fragment do Miro z menu kontekstowego EA.
+- **Bogatsze dokumenty Word:** kod z wcięciami i kolorami, kolorowy i przekreślony tekst zmian, notatki w ramkach, tabele z nagłówkami.
+- **Macierz pakietów:** relacje między dwoma pakietami jako tabela, obraz i plik Excel, zapisywana też jako własna macierz EA.
+- **Szablony dokumentów EA z Twojego dokumentu:** dokument Word staje się szablonem generatora raportów EA.
+- **Menu kontekstowe EA:** „Znajdź użycie metody na diagramach” i „Klonuj jako nową wersję” ze śladem do oryginału, w języku EA (angielski, niemiecki, francuski).
+- **Okno słownika projektu (`/glossary-add`):** dla polskiego wszystkie 14 form rzeczownika albo formy czasownika, z liczbą wystąpień w modelu.
+- **Polska pisownia w notatkach EA:** Ustawienia → Język pobiera polski słownik (SJP.pl) dla korektora EA.
+- **Bezpieczniej i stabilniej:** tekst ze znakami spoza ASCII i uszkodzone PDF-y nie zamykają już aplikacji (nieudana odpowiedź jest zgłaszana, okno zostaje); zapytania na SQL Server, MySQL i Oracle odrzucają polecenia i funkcje serwera, które nie są odczytem, i kończą się po 60 s; tekst na MySQL nie wyjdzie poza SQL; strażnicy usuwania zatrzymują usunięcie zawsze, gdy nie mogą zdecydować; zatwierdzony skrypt nie zatwierdza już innego SQL w swoich napisach; cofanie obejmuje atrybuty, operacje i pakiety i mówi, czego nie cofnie; kontrola wersji zawsze pyta; hub zespołu: bez domyślnego admina przy logowaniu firmowym, pośrednik do Jiry i Confluence tylko dla wywołań Compassa w projekcie i przestrzeni zespołu, limity GraphQL, grupy porównywane w całości; dane z zewnątrz (Confluence, strony WWW, SharePoint, OneDrive, Google Drive) oznaczane dla modelu i pokazywane w całości do zatwierdzenia; duże obrazy zmniejszane; zgoda na statystyki użycia jest jednoznaczna.
+- **Poprawki:** blokada optymistyczna (expect_unchanged) na SQL Server, MySQL i Oracle; start nie wymaga klucza Claude od użytkowników OpenAI, huba i OAuth; asystent podaje model, który naprawdę odpowiada; zaimportowana rozmowa zachowuje tylko własne załączniki; Jira mówi, gdy zgłoszeń jest więcej niż pokazano.
+
 ## Wersja 0.9.2 (2026-10-30)
 
 - **Widoczne strzałki na diagramach:** połączenia, które nie są komunikatami diagramu sekwencji, nie są już przypinane do jednego diagramu (wcześniej np. zależność narysowana na diagramie „Systemy zależne” nie pokazywała się na żadnym innym). Pokazanie ukrytego połączenia usuwa jego zdublowane wpisy na diagramie, a nowa naprawa „połączenia niewidoczne na diagramie” odpina przypięte połączenia, usuwa duplikaty i – na życzenie – pokazuje ukryte. Asystent przy brakujących strzałkach sprawdza najpierw te przyczyny.
