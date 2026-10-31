@@ -1507,7 +1507,7 @@ fn undo_change(input: &Value, ctx: &ToolContext) -> Result<String> {
         undone.push(e["id"].as_str().unwrap_or("").to_string());
     }
     crate::undo::mark_undone(ctx.cfg, &undone);
-    refresh_user_ea(ctx.cfg, &[], &json!({}));
+    refresh_user_ea(ctx.cfg, &[], &json!({}), &[]);
     Ok(out.join("\n"))
 }
 
@@ -2484,6 +2484,9 @@ fn ea_write(input: &Value, ctx: &ToolContext) -> Result<String> {
             baselines.push(format!("package {package}: {version}"));
         }
     }
+    // Diagrams the deleted elements and relationships are on (known only before the save): reloaded afterwards and
+    // checked for links left behind (LC-412).
+    let touched = diagrams_of_deleted(ctx.cfg, ops);
     let result = ea::run_batch(ctx.cfg, ops, &BatchOptions::default());
     audit_in_mode(ctx.cfg, ctx.approver.mode, ops, &result);
     match &result {
@@ -2496,10 +2499,14 @@ fn ea_write(input: &Value, ctx: &ToolContext) -> Result<String> {
         }
     }
     if let Ok(done) = &result {
-        refresh_user_ea(ctx.cfg, ops, done);
+        refresh_user_ea(ctx.cfg, ops, done, &touched);
     }
     let done = result?;
     let mut text = format_created(&done);
+    let ghosts = ghost_links(ctx.cfg, &touched);
+    if !ghosts.is_empty() {
+        text.push_str(&format!("\nLinks left on diagrams after the deletion (EA did not remove them; repair_diagram_links on each removes them): {}\n", ghosts.join(", ")));
+    }
     if !related.is_empty() {
         text.push_str(&format!("\nDeleted together with relationships (tell the user): {}\n", related.join(" | ")));
     }
@@ -2520,9 +2527,44 @@ Tell the user exactly which of these changes did not happen; do not say they wer
     Ok(text)
 }
 
+/// The diagrams that show the elements and relationships a save deletes (LC-412).
+fn diagrams_of_deleted(cfg: &AppConfig, ops: &[Value]) -> Vec<i32> {
+    let mut out = Vec::new();
+    for op in ops.iter().filter(|o| o["op"] == "delete") {
+        let sql = if let Some(e) = op["element"].as_i64() {
+            format!("select distinct diagram_id from t_diagramobjects where object_id = {e}")
+        } else if let Some(c) = op["connector"].as_i64() {
+            format!("select distinct diagramid from t_diagramlinks where connectorid = {c}")
+        } else {
+            continue;
+        };
+        out.extend(query_rows(cfg, &sql).unwrap_or_default().into_iter().filter_map(|r| r[0].parse::<i32>().ok()));
+    }
+    out.sort_unstable();
+    out.dedup();
+    out
+}
+
+/// Diagram links that point at a relationship no longer in the model, or whose ends are no longer on the diagram.
+fn ghost_links(cfg: &AppConfig, diagrams: &[i32]) -> Vec<String> {
+    if diagrams.is_empty() {
+        return Vec::new();
+    }
+    let list = diagrams.iter().map(i32::to_string).collect::<Vec<_>>().join(",");
+    query_rows(cfg, &format!(
+        "select l.diagramid, count(*) from t_diagramlinks l left join t_connector c on c.connector_id = l.connectorid where l.diagramid in ({list}) and (c.connector_id is null \
+         or not exists (select 1 from t_diagramobjects a where a.diagram_id = l.diagramid and a.object_id = c.start_object_id) \
+         or not exists (select 1 from t_diagramobjects b where b.diagram_id = l.diagramid and b.object_id = c.end_object_id)) group by l.diagramid"
+    ))
+    .unwrap_or_default()
+    .into_iter()
+    .map(|r| format!("diagram {} ({} link(s))", r[0], r[1]))
+    .collect()
+}
+
 /// After a write, refreshes the changed diagrams and packages in the user's EA window (in the background, without waiting; does nothing without an EA window).
-fn refresh_user_ea(cfg: &AppConfig, ops: &[Value], result: &Value) {
-    let mut diagrams: Vec<i32> = Vec::new();
+fn refresh_user_ea(cfg: &AppConfig, ops: &[Value], result: &Value, extra: &[i32]) {
+    let mut diagrams: Vec<i32> = extra.to_vec();
     let mut packages: Vec<i32> = Vec::new();
     for op in ops {
         if let Some(id) = op["diagram"].as_i64() {
@@ -2671,6 +2713,20 @@ mod tests {
         assert_eq!(&after[..2], &before[..], "the others stay");
         let r = |x: (i64, i64, i64, i64, i64)| (x.1, x.2, x.3, x.4);
         assert!(!overlaps(r(after[2]), r(after[0]), 0) && !overlaps(r(after[2]), r(after[1]), 0), "{after:?}");
+    }
+
+    /// LC-412: the check for links left on diagrams runs on the model (.qea and SQL Server).
+    /// `LOONAR_TEST_PROPS=… cargo test ghost_links_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a test model"]
+    fn ghost_links_live() {
+        let cfg = AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
+        let diagrams: Vec<i32> = query_rows(&cfg, "select diagram_id from t_diagram").unwrap().iter().take(400).filter_map(|r| r[0].parse().ok()).collect();
+        println!("{:?}", super::ghost_links(&cfg, &diagrams));
+        if let Some(row) = query_rows(&cfg, "select object_id from t_diagramobjects").unwrap().first() {
+            let element: i64 = row[0].parse().unwrap();
+            assert!(!super::diagrams_of_deleted(&cfg, &[json!({"op":"delete","element":element})]).is_empty());
+        }
     }
 
     /// LC-376: a free place next to the anchor, never on top of what is there.

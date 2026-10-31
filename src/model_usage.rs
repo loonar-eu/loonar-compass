@@ -308,6 +308,28 @@ fn find_orphans_rest(input: &Value, cfg: &AppConfig, scope: String, title: Strin
     if rows.len() > 150 {
         out.push_str(&format!("  … and {} more\n", rows.len() - 150));
     }
+    // The other cases, told apart (LC-412): related but on no diagram (fine for requirements and the like), and on
+    // diagrams but without any relationship.
+    let fine_without_diagram = "'Requirement', 'Feature', 'Issue', 'Change', 'Risk', 'TestCase', 'Task', 'Defect', 'Constraint', 'Artifact', 'Enumeration', 'DataType'";
+    let no_diagram = query_rows(cfg, &format!(
+        "select o.object_type, count(*) from t_object o where o.object_type not in ('Note', 'Text', 'Boundary', 'Package', 'ProvidedInterface', 'RequiredInterface', 'Port') {type_filter} {scope} \
+         and not exists (select 1 from t_diagramobjects x where x.object_id = o.object_id) \
+         and exists (select 1 from t_connector c where c.start_object_id = o.object_id or c.end_object_id = o.object_id) group by o.object_type order by 2 desc"
+    ))?;
+    let no_links = query_rows(cfg, &format!(
+        "select o.object_type, count(*) from t_object o where o.object_type not in ('Note', 'Text', 'Boundary', 'Package', 'ProvidedInterface', 'RequiredInterface', 'Port', 'Constraint') {type_filter} {scope} \
+         and exists (select 1 from t_diagramobjects x where x.object_id = o.object_id) \
+         and not exists (select 1 from t_connector c where c.start_object_id = o.object_id or c.end_object_id = o.object_id) group by o.object_type order by 2 desc"
+    ))?;
+    let line = |rows: &[Vec<String>], fine: bool| -> String {
+        rows.iter().map(|r| format!("{} {}{}", r[1], r[0], if fine && fine_without_diagram.contains(&format!("'{}'", r[0])) { " (fine without a diagram)" } else { "" })).collect::<Vec<_>>().join(", ")
+    };
+    if !no_diagram.is_empty() {
+        out.push_str(&format!("\nRelated, but on no diagram: {}\n", line(&no_diagram, true)));
+    }
+    if !no_links.is_empty() {
+        out.push_str(&format!("On diagrams, but without any relationship: {}\n", line(&no_links, false)));
+    }
     out.push_str("Deleting or moving them changes the model: only with the user's approval (ea_write), and a baseline first.");
     Ok(out)
 }
