@@ -340,6 +340,7 @@ pub fn definitions() -> Value {
         items.extend(crate::model_usage::definitions());
         items.push(crate::repo_doctor::definition());
         items.push(crate::changes::definition());
+        items.push(crate::governance::rules_definition());
         items.push(crate::scripts::definition());
         items.push(crate::traceability::definition());
         items.push(crate::code_drift::definition());
@@ -843,6 +844,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "find_duplicates" => crate::model_usage::find_duplicates(input, ctx.cfg).map(Into::into),
         "repo_doctor" => crate::repo_doctor::run(input, ctx.cfg).map(Into::into),
         "what_changed" => crate::changes::run(input, ctx.cfg).map(Into::into),
+        "team_rules" => team_rules(input, ctx).map(Into::into),
         "memory_save" => {
             let name = input["name"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["name".to_string()]))?;
             let content = input["content"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["content".to_string()]))?;
@@ -1021,6 +1023,25 @@ pub fn page_images_dir(attachments_dir: &std::path::Path, stored_page: &str) -> 
 }
 
 /// Confluence page: source (.confluence.md), page code for the source editor (.confluence.xml) and images in a folder next to them.
+/// The team's modelling rules (LC-372): shown, or saved to governance.json after the user approves the whole text.
+fn team_rules(input: &Value, ctx: &ToolContext) -> Result<String> {
+    let file = ctx.cfg.base_dir.join("governance.json");
+    if input["action"].as_str() != Some("save") {
+        let local = std::fs::read_to_string(&file).ok();
+        let rules = crate::governance::load_rules(ctx.cfg, &Value::Null);
+        let source = if local.is_some() { file.display().to_string() } else if rules.as_object().is_some_and(|o| !o.is_empty()) { "the team hub's policy".to_string() } else { "none yet".to_string() };
+        return Ok(format!("Rules in force (from {source}):\n{}", serde_json::to_string_pretty(&rules)?));
+    }
+    let rules = &input["rules"];
+    crate::governance::check_rules(rules)?;
+    let text = serde_json::to_string_pretty(rules)?;
+    ctx.approver.confirm(&crate::i18n::fmt("Save the team's modelling rules to {0}?\n\n{1}", &[file.display().to_string(), text.clone()]))?;
+    let tmp = file.with_extension("json.tmp");
+    std::fs::write(&tmp, &text)?;
+    std::fs::rename(&tmp, &file)?;
+    Ok(format!("Saved the rules to {}. model_lint, the live check in EA and the CI check use them from now on.", file.display()))
+}
+
 /// Undoes the latest saves of the assistant (reverse operations from the journal).
 fn undo_change(input: &Value, ctx: &ToolContext) -> Result<String> {
     if input["action"].as_str() != Some("undo") {

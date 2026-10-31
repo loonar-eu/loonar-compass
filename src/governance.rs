@@ -113,6 +113,59 @@ pub fn selector_matches(selector: &str, object_type: &str, stereotype: &str) -> 
     matches_selector(selector, object_type, stereotype)
 }
 
+/// A forbidden stereotype on an element of the rule's types: the message, else None.
+fn forbidden_stereotype(rule: &Value, otype: &str, stereo: &str) -> Option<String> {
+    let banned = rule["stereotype"].as_str().unwrap_or("").trim().trim_matches(['«', '»']);
+    let applies = matches_selector(rule["applies_to"].as_str().unwrap_or("*"), otype, "");
+    let has = stereo.split(',').map(|s| s.trim()).any(|s| s.eq_ignore_ascii_case(banned) || s.rsplit("::").next().is_some_and(|short| short.eq_ignore_ascii_case(banned)));
+    (!banned.is_empty() && applies && has).then(|| rule["message"].as_str().map(String::from).unwrap_or_else(|| crate::i18n::fmt("the stereotype «{0}» is not used in this team", &[banned.to_string()])))
+}
+
+/// The rule kinds of governance.json (team_rules refuses others: a typo would silently check nothing).
+const RULE_KINDS: &[&str] = &["naming", "required_tags", "allowed_relations", "forbidden_stereotypes", "archimate"];
+
+/// Checks the shape of the team's rules: an object of known kinds, lists of objects with the fields each kind needs.
+pub fn check_rules(rules: &Value) -> Result<()> {
+    let Some(map) = rules.as_object() else { anyhow::bail!("the rules must be a JSON object") };
+    for (kind, value) in map {
+        let needs: &[&str] = match kind.as_str() {
+            "naming" => &["pattern"],
+            "required_tags" => &["tag"],
+            "allowed_relations" => &["connector_type", "source", "target"],
+            "forbidden_stereotypes" => &["stereotype"],
+            "archimate" => {
+                anyhow::ensure!(value.is_boolean(), "\"archimate\" is true or false");
+                continue;
+            }
+            other => anyhow::bail!("unknown rule kind \"{other}\" (known: {})", RULE_KINDS.join(", ")),
+        };
+        let list = value.as_array().with_context(|| format!("\"{kind}\" must be a list"))?;
+        for (i, rule) in list.iter().enumerate() {
+            for field in needs {
+                anyhow::ensure!(rule[*field].as_str().is_some_and(|v| !v.trim().is_empty()), "\"{kind}\" rule {}: missing \"{field}\"", i + 1);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The team rules tool (LC-372): show the rules in force, or save new ones to governance.json (always approved).
+pub fn rules_definition() -> Value {
+    json!({
+        "name": "team_rules",
+        "description": "The team's modelling rules that model_lint, the live check in EA and the CI check use (governance.json next to the \
+settings; without it the rules from the team hub's policy). action show: the rules in force and where they come from. action save: write \
+new rules (the whole object; always shown to the user for approval). Kinds: naming [{applies_to: \"Class\" or \"«stereotype»\", pattern: \
+\"*Service\" (wildcards * ?), message}], required_tags [{applies_to, tag}], allowed_relations [{connector_type, source, target}] (a listed \
+relationship type is allowed only between the listed ends), forbidden_stereotypes [{applies_to, stereotype, message}], archimate (true/false: \
+the ArchiMate 3.2 relationship table). Use it for /validate-model when the team has no rules yet: draft them from the user's words, save after approval.",
+        "input_schema": { "type": "object", "properties": {
+            "action": { "type": "string", "enum": ["show", "save"] },
+            "rules": { "type": "object", "description": "For save: the whole rules object" }
+        }, "required": ["action"] }
+    })
+}
+
 /// The organization's rules: `governance.json` next to the settings, overridden by the rules given in the call.
 pub fn load_rules(cfg: &AppConfig, given: &Value) -> Value {
     if given.is_object() {
@@ -182,6 +235,12 @@ pub fn lint_result(input: &Value, cfg: &AppConfig) -> Result<LintResult> {
             if matches_selector(selector, otype, stereo) && !is_decoration(otype) && !wildcard(pattern, name.trim()) {
                 let message = rule["message"].as_str().map(String::from).unwrap_or_else(|| crate::i18n::fmt("name does not match the pattern {0}", &[pattern.to_string()]));
                 findings.push(base("naming", format!("{message} ({shown})")));
+            }
+        }
+        // Stereotypes the team does not use (LC-372): {"forbidden_stereotypes": [{"applies_to": "Class", "stereotype": "entity", "message": "…"}]}.
+        for rule in rules["forbidden_stereotypes"].as_array().into_iter().flatten() {
+            if let Some(message) = forbidden_stereotype(rule, otype, stereo) {
+                findings.push(base("forbidden_stereotype", format!("{message} ({shown})")));
             }
         }
     }
@@ -301,6 +360,7 @@ pub fn rule_title(rule: &str) -> &'static str {
         "archimate_relation" => crate::i18n::tr("Relationships not allowed in ArchiMate 3.2"),
         "empty_package" => crate::i18n::tr("Empty packages"),
         "empty_diagram" => crate::i18n::tr("Empty diagrams"),
+        "forbidden_stereotype" => crate::i18n::tr("Stereotypes the team does not use"),
         _ => crate::i18n::tr("other operations"),
     }
 }
@@ -309,7 +369,7 @@ pub fn rule_title(rule: &str) -> &'static str {
 pub fn severity(rule: &str) -> &'static str {
     match rule {
         "broken_connector" | "invalid_relation" | "archimate_relation" | "required_tag" => "error",
-        "default_name" | "orphan" | "duplicate_name" | "naming" | "duplicate_relation" | "self_relation" => "warning",
+        "default_name" | "orphan" | "duplicate_name" | "naming" | "duplicate_relation" | "self_relation" | "forbidden_stereotype" => "warning",
         _ => "info",
     }
 }
@@ -586,6 +646,11 @@ pub fn check_object_with(cfg: &AppConfig, kind: &str, id: i64, rules: &Value) ->
                     out.push(crate::i18n::fmt("\"{0}\": {1}", &[name.clone(), message]));
                 }
             }
+            for rule in rules["forbidden_stereotypes"].as_array().into_iter().flatten() {
+                if let Some(message) = forbidden_stereotype(rule, otype, stereo) {
+                    out.push(crate::i18n::fmt("\"{0}\": {1}", &[name.clone(), message]));
+                }
+            }
             let required: Vec<&Value> = rules["required_tags"].as_array().into_iter().flatten().filter(|r| matches_selector(r["applies_to"].as_str().unwrap_or("*"), otype, stereo)).collect();
             if !required.is_empty() {
                 let tags: HashSet<String> = query_rows(cfg, &format!("select lower(property) as c0, coalesce(value,'') as c1 from t_objectproperties where object_id = {id}"))?
@@ -698,5 +763,24 @@ mod tests {
         // Not ArchiMate: nothing to say; a fully qualified stereotype works too.
         assert!(archimate_problem("", "ArchiMate_DataObject", "ArchiMate_BusinessActor").is_none());
         assert!(archimate_problem("ArchiMate3::ArchiMate_Access", "ArchiMate3::ArchiMate_BusinessProcess", "ArchiMate3::ArchiMate_BusinessActor").is_some());
+    }
+}
+
+/// LC-372: forbidden stereotypes and the shape of the team's rules.
+#[cfg(test)]
+mod rules_tests {
+    use serde_json::json;
+
+    #[test]
+    fn forbidden_stereotypes_and_rule_shapes() {
+        let rule = json!({ "applies_to": "Class", "stereotype": "entity" });
+        assert!(super::forbidden_stereotype(&rule, "Class", "entity").is_some());
+        assert!(super::forbidden_stereotype(&rule, "Class", "EAUML::entity").is_some());
+        assert!(super::forbidden_stereotype(&rule, "Class", "boundary").is_none());
+        assert!(super::forbidden_stereotype(&rule, "Component", "entity").is_none());
+        assert!(super::check_rules(&json!({ "naming": [{ "applies_to": "Class", "pattern": "*Service" }], "archimate": true })).is_ok());
+        assert!(super::check_rules(&json!({ "namings": [] })).is_err(), "a typo in a kind");
+        assert!(super::check_rules(&json!({ "required_tags": [{ "applies_to": "Class" }] })).is_err(), "no tag");
+        assert!(super::check_rules(&json!([1])).is_err());
     }
 }
