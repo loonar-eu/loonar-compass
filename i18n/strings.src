@@ -2029,3 +2029,5 @@ event agent {0}: schedule must be hourly, every 4h, every 30m, daily 07:30 or we
 event agent {0}: a scheduled agent advises, it cannot guard ‖ agent zdarzeń {0}: agent z harmonogramu doradza, nie może być strażnikiem ‖ Ereignis-Agent {0}: ein geplanter Agent berät, er kann nicht wachen ‖ agent d'événements {0} : un agent planifié conseille, il ne peut pas garder
 ⏰ {0}: running ({1})… ‖ ⏰ {0}: uruchomiony ({1})… ‖ ⏰ {0}: läuft ({1})… ‖ ⏰ {0} : lancé ({1})…
 ⏰ {0}: no answer ({1}) ‖ ⏰ {0}: brak odpowiedzi ({1}) ‖ ⏰ {0}: keine Antwort ({1}) ‖ ⏰ {0} : pas de réponse ({1})
+diagram "{0}" saved: nothing in it really changed (EA asks to save also after only looking or selecting) ‖ diagram „{0}” zapisany: nic w nim naprawdę się nie zmieniło (EA pyta o zapis także po samym oglądaniu albo zaznaczaniu) ‖ Diagramm „{0}“ gespeichert: darin hat sich nichts wirklich geändert (EA fragt auch nach bloßem Ansehen oder Auswählen) ‖ diagramme « {0} » enregistré : rien n'y a vraiment changé (EA demande aussi après une simple consultation ou sélection)
+diagram "{0}" saved: {1} ‖ diagram „{0}” zapisany: {1} ‖ Diagramm „{0}“ gespeichert: {1} ‖ diagramme « {0} » enregistré : {1}

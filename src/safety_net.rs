@@ -212,6 +212,71 @@ fn prune(folder: &std::path::Path) {
     }
 }
 
+/// What a diagram holds, for telling whether a save really changed it (LC-422): object → place, link → hidden.
+pub(crate) fn diagram_state(cfg: &AppConfig, diagram: i64) -> Value {
+    let objects: serde_json::Map<String, Value> = query_rows(cfg, &format!(
+        "select x.object_id, coalesce(o.name,''), x.rectleft, x.recttop, x.rectright, x.rectbottom from t_diagramobjects x join t_object o on o.object_id = x.object_id where x.diagram_id = {diagram}"
+    ))
+    .unwrap_or_default()
+    .into_iter()
+    .map(|r| (r[0].clone(), json!({ "name": r[1], "rect": [r[2], r[3], r[4], r[5]] })))
+    .collect();
+    let links: serde_json::Map<String, Value> = query_rows(cfg, &format!("select connectorid, coalesce(hidden,0), coalesce(path,'') from t_diagramlinks where diagramid = {diagram}"))
+        .unwrap_or_default()
+        .into_iter()
+        .map(|r| (r[0].clone(), json!({ "hidden": r[1] == "1" || r[1].eq_ignore_ascii_case("true"), "path": r[2] })))
+        .collect();
+    let head = query_rows(cfg, &format!("select name, coalesce(notes,'') from t_diagram where diagram_id = {diagram}")).ok().and_then(|r| r.into_iter().next()).unwrap_or_default();
+    json!({ "name": head.first(), "notes": head.get(1), "objects": objects, "links": links })
+}
+
+/// What changed between two states of a diagram, in words (empty: nothing).
+pub(crate) fn diagram_diff(before: &Value, now: &Value) -> Vec<String> {
+    let mut out = Vec::new();
+    let name = |v: &Value, id: &str| v["objects"][id]["name"].as_str().unwrap_or("").to_string();
+    let (bo, no) = (before["objects"].as_object().cloned().unwrap_or_default(), now["objects"].as_object().cloned().unwrap_or_default());
+    let added: Vec<String> = no.keys().filter(|k| !bo.contains_key(*k)).map(|k| name(now, k)).collect();
+    let removed: Vec<String> = bo.keys().filter(|k| !no.contains_key(*k)).map(|k| name(before, k)).collect();
+    let moved: Vec<String> = no.iter().filter(|(k, v)| bo.get(*k).is_some_and(|b| b["rect"] != v["rect"])).map(|(k, _)| name(now, k)).collect();
+    for (label, list) in [("added", added), ("removed", removed), ("moved or resized", moved)] {
+        if !list.is_empty() {
+            out.push(format!("{} {label}: {}", list.len(), list.iter().take(8).map(|n| format!("\"{n}\"")).collect::<Vec<_>>().join(", ")));
+        }
+    }
+    let (bl, nl) = (before["links"].as_object().cloned().unwrap_or_default(), now["links"].as_object().cloned().unwrap_or_default());
+    let shown = nl.iter().filter(|(k, v)| bl.get(*k).is_some_and(|b| b["hidden"] == true && v["hidden"] == false)).count();
+    let hidden = nl.iter().filter(|(k, v)| bl.get(*k).is_some_and(|b| b["hidden"] == false && v["hidden"] == true)).count();
+    let rerouted = nl.iter().filter(|(k, v)| bl.get(*k).is_some_and(|b| b["path"] != v["path"])).count();
+    for (n, what) in [(shown, "relationships shown"), (hidden, "relationships hidden"), (rerouted, "relationships re-routed")] {
+        if n > 0 {
+            out.push(format!("{n} {what}"));
+        }
+    }
+    if before["name"] != now["name"] || before["notes"] != now["notes"] {
+        out.push("its name or notes".into());
+    }
+    out
+}
+
+/// After EA saved a diagram (the add-in's "diagram_changed"): what really changed since its last save, for the user
+/// who wonders why EA asked (LC-422). The first save of a diagram is only remembered.
+pub fn diagram_saved(cfg: &AppConfig, diagram: i64) -> Option<String> {
+    let folder = dir(cfg).join("diagrams");
+    let _ = std::fs::create_dir_all(&folder);
+    let file = folder.join(format!("{diagram}.json"));
+    let now = diagram_state(cfg, diagram);
+    let before: Option<Value> = std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str(&t).ok());
+    let _ = std::fs::write(&file, now.to_string());
+    let before = before?;
+    let changes = diagram_diff(&before, &now);
+    let name = now["name"].as_str().unwrap_or("").to_string();
+    Some(if changes.is_empty() {
+        crate::i18n::fmt("diagram \"{0}\" saved: nothing in it really changed (EA asks to save also after only looking or selecting)", &[name])
+    } else {
+        crate::i18n::fmt("diagram \"{0}\" saved: {1}", &[name, changes.join("; ")])
+    })
+}
+
 /// A manual change of EA (an event of the add-in) in the day's journal: kind, id and what it was.
 pub fn journal(cfg: &AppConfig, kind: &str, id: i64, described: Option<&str>) {
     let folder = dir(cfg);
@@ -442,6 +507,34 @@ pub fn restore_ops(input: &Value, cfg: &AppConfig) -> Result<Vec<Value>> {
 
 #[cfg(test)]
 mod tests {
+    /// LC-422 on a model: the first save is remembered, the next one without changes says so.
+    #[test]
+    #[ignore = "requires a test model"]
+    fn diagram_saved_live() {
+        let mut cfg = AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
+        cfg.base_dir = std::env::temp_dir().join(format!("loonar-dsave-{}", std::process::id()));
+        let d: i64 = query_rows(&cfg, "select diagramid from t_diagramlinks").unwrap()[0][0].parse().unwrap();
+        assert!(diagram_saved(&cfg, d).is_none());
+        let second = diagram_saved(&cfg, d).unwrap();
+        println!("{second}");
+        assert!(second.contains("nothing in it really changed"));
+        let _ = std::fs::remove_dir_all(&cfg.base_dir);
+    }
+
+    /// LC-422: what changed on a diagram between two saves.
+    #[test]
+    fn diagram_differences() {
+        let before = json!({ "name": "D", "notes": "", "objects": { "1": { "name": "A", "rect": ["0","0","10","-10"] }, "2": { "name": "B", "rect": ["20","0","30","-10"] } },
+            "links": { "7": { "hidden": false, "path": "" } } });
+        let mut now = before.clone();
+        assert!(diagram_diff(&before, &now).is_empty());
+        now["objects"]["1"]["rect"] = json!(["5","0","15","-10"]);
+        now["objects"].as_object_mut().unwrap().remove("2");
+        now["links"]["7"]["hidden"] = json!(true);
+        let d = diagram_diff(&before, &now).join(" | ");
+        assert!(d.contains("1 removed: \"B\"") && d.contains("1 moved or resized: \"A\"") && d.contains("1 relationships hidden"), "{d}");
+    }
+
     use super::*;
 
     /// LC-382 on a model copy: a snapshot of an element and of a package, the operations to restore them.

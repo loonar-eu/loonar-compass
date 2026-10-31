@@ -7714,6 +7714,12 @@ impl eframe::App for App {
                             if cfg.safety_net {
                                 let what = agents::describe(&cfg, &kind, id).or_else(|| given.clone()).map(|d| d.0);
                                 safety_net::journal(&cfg, &kind, id, what.as_deref());
+                                // What a save of a diagram really changed (LC-422).
+                                if kind == "diagram_changed" {
+                                    if let Some(text) = safety_net::diagram_saved(&cfg, id) {
+                                        ea_ui::output(&format!("🛟 {text}"));
+                                    }
+                                }
                             }
                             // Event agents (AI): advice in System Output; the same agent and object at most once a minute.
                             if !agents.is_empty() {
