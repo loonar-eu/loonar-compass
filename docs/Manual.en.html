@@ -1427,6 +1427,15 @@ compass-hub --service-uninstall</pre>
             report.md</pre>
 <p>For a PostgreSQL model, give <code>--model</code> an <code>app.properties</code> without passwords and set <code>LOONAR_DB_PASSWORD</code>: in GitLab as a masked CI/CD variable, in GitHub from a secret (<code>env: LOONAR_DB_PASSWORD: ${{ secrets.EA_DB_PASSWORD }}</code>).</p>
 
+<h3>A conversation without a window (--ask)</h3>
+<pre>LoonarCompass.exe --ask "&lt;message&gt;" [--then "&lt;next message&gt;"]... [--model &lt;file.qea|app.properties&gt;] [--attach &lt;file&gt;]... [--approve yes|no] [--out &lt;folder&gt;] [--lang pl|en|de|fr] [--reasoning] [--code]</pre>
+<p>With <code>--ask</code> Compass holds a conversation with the assistant without a window, as the window would: every <code>--ask</code> and <code>--then</code> is one turn of the same conversation, and <code>/…</code> commands work as typed in the message field. It is useful for regression tests and automation.</p>
+<ul>
+  <li>The <code>--out</code> folder gets <code>transcript.md</code>: the messages, every tool step with its result, the answers, question forms and write approval cards. Files the assistant creates go to the <code>files</code> subfolder.</li>
+  <li>Writes to the model are refused by default; <code>--approve yes</code> approves them all (use it on a copy of the model).</li>
+  <li>A model file given with <code>--model</code> works with its own settings in <code>--out\.compass</code>, so the settings and history of the installation stay untouched. The AI key and the computer policies (e.g. a required hub) apply as in the window.</li>
+  <li>Exit code: 0 when every turn finished; another value on an error. In PowerShell add <code>| Out-Host</code> to wait for the end (Compass is a windowed program).</li>
+</ul>
 <h2 id="s24">24. License, trademarks and contact</h2>
 <p><b>License.</b> Loonar Compass is freeware: you may use it free of charge on any number of computers, also for professional and commercial purposes, without time or territorial limits, and pass on unmodified copies free of charge. Modifying the application is prohibited. The license also sets out rules on AI-generated output (you review it before you approve it or rely on it), on data and on open-source components. The Polish version of the license is binding; the English, German and French versions are translations. The full text is in the <b>About</b> view and in the installation folder: <code>LICENSE.txt</code> in the installation language and, for languages other than Polish, <code>LICENSE.pl.txt</code> with the binding Polish version.</p>
 <p><b>Privacy.</b> Apart from the anonymous usage statistics described in chapter 18 (no conversation content, names from the model or file paths; you can switch them off), the application collects no data. How bug reports and newsletter sign-ups are processed is described in the <a href="https://loonar.eu/privacy/">privacy policy</a>; the owner's details are in the <a href="https://loonar.eu/legal/">legal notice</a>.</p>

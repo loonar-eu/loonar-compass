@@ -1422,6 +1422,15 @@ compass-hub --service-uninstall</pre>
             report.md</pre>
 <p>Pour un modèle PostgreSQL, indiquez à <code>--model</code> un <code>app.properties</code> sans mots de passe et définissez <code>LOONAR_DB_PASSWORD</code> : dans GitLab comme variable CI/CD masquée, dans GitHub à partir d'un secret (<code>env: LOONAR_DB_PASSWORD: ${{ secrets.EA_DB_PASSWORD }}</code>).</p>
 
+<h3>Une conversation sans fenêtre (--ask)</h3>
+<pre>LoonarCompass.exe --ask "&lt;message&gt;" [--then "&lt;message suivant&gt;"]... [--model &lt;fichier.qea|app.properties&gt;] [--attach &lt;fichier&gt;]... [--approve yes|no] [--out &lt;dossier&gt;] [--lang pl|en|de|fr] [--reasoning] [--code]</pre>
+<p>Avec <code>--ask</code>, Compass mène une conversation avec l'assistant sans fenêtre, comme dans la fenêtre : chaque <code>--ask</code> et <code>--then</code> est un tour de la même conversation, et les commandes <code>/…</code> fonctionnent comme tapées dans le champ de message. C'est utile pour les tests de régression et l'automatisation.</p>
+<ul>
+  <li>Le dossier <code>--out</code> reçoit <code>transcript.md</code> : les messages, chaque étape d'outil avec son résultat, les réponses, les formulaires de questions et les cartes d'approbation des écritures. Les fichiers créés par l'assistant vont dans le sous-dossier <code>files</code>.</li>
+  <li>Les écritures dans le modèle sont refusées par défaut ; <code>--approve yes</code> les approuve toutes (utilisez-le sur une copie du modèle).</li>
+  <li>Un fichier de modèle donné avec <code>--model</code> fonctionne avec ses propres paramètres dans <code>--out\.compass</code> : les paramètres et l'historique de l'installation restent intacts. La clé d'IA et les stratégies de l'ordinateur (p. ex. un hub obligatoire) s'appliquent comme dans la fenêtre.</li>
+  <li>Code de sortie : 0 quand tous les tours sont terminés ; une autre valeur en cas d'erreur. Dans PowerShell, ajoutez <code>| Out-Host</code> pour attendre la fin (Compass est un programme à fenêtre).</li>
+</ul>
 <h2 id="s24">24. Licence, marques et contact</h2>
 <p><b>Licence.</b> Loonar Compass est un logiciel gratuit (freeware) : l'utilisation est gratuite, y compris à titre professionnel et commercial, sans limite de durée ni de territoire ; la modification de l'application est interdite. La licence contient aussi des règles concernant les résultats de l'IA, les données et les composants open source. Le texte intégral se trouve dans la vue <b>À propos</b> et dans le fichier <code>LICENSE.txt</code> du dossier d'installation ; seule la version polonaise de la licence fait foi. La liste des fonctionnalités et des limitations connues de cette version se trouve dans la vue <b>Nouveautés</b>.</p>
 <p><b>Confidentialité et mentions légales.</b> Politique de confidentialité : <a href="https://loonar.eu/fr/privacy/">https://loonar.eu/fr/privacy/</a>. Mentions légales : <a href="https://loonar.eu/fr/legal/">https://loonar.eu/fr/legal/</a>.</p>

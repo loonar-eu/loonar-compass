@@ -1431,6 +1431,15 @@ compass-hub --service-uninstall</pre>
             report.md</pre>
 <p>Für ein PostgreSQL-Modell geben Sie bei <code>--model</code> eine <code>app.properties</code> ohne Passwörter an und setzen <code>LOONAR_DB_PASSWORD</code>: in GitLab als maskierte CI/CD-Variable, in GitHub aus einem Secret (<code>env: LOONAR_DB_PASSWORD: ${{ secrets.EA_DB_PASSWORD }}</code>).</p>
 
+<h3>Eine Unterhaltung ohne Fenster (--ask)</h3>
+<pre>LoonarCompass.exe --ask "&lt;Nachricht&gt;" [--then "&lt;nächste Nachricht&gt;"]... [--model &lt;Datei.qea|app.properties&gt;] [--attach &lt;Datei&gt;]... [--approve yes|no] [--out &lt;Ordner&gt;] [--lang pl|en|de|fr] [--reasoning] [--code]</pre>
+<p>Mit <code>--ask</code> führt Compass eine Unterhaltung mit dem Assistenten ohne Fenster, so wie im Fenster: Jedes <code>--ask</code> und <code>--then</code> ist ein Zug derselben Unterhaltung, und <code>/…</code>-Befehle wirken wie im Nachrichtenfeld eingegeben. Das ist nützlich für Regressionstests und Automatisierung.</p>
+<ul>
+  <li>Im Ordner <code>--out</code> entsteht <code>transcript.md</code>: die Nachrichten, jeder Werkzeugschritt mit Ergebnis, die Antworten, Frageformulare und Freigabekarten für Schreibvorgänge. Vom Assistenten erstellte Dateien kommen in den Unterordner <code>files</code>.</li>
+  <li>Schreibvorgänge im Modell werden standardmäßig abgelehnt; <code>--approve yes</code> gibt alle frei (verwenden Sie es mit einer Kopie des Modells).</li>
+  <li>Eine mit <code>--model</code> angegebene Modelldatei arbeitet mit eigenen Einstellungen in <code>--out\.compass</code>, sodass Einstellungen und Verlauf der Installation unberührt bleiben. Der KI-Schlüssel und die Computerrichtlinien (z. B. ein vorgeschriebener Hub) gelten wie im Fenster.</li>
+  <li>Exitcode: 0, wenn alle Züge beendet sind; ein anderer Wert bei einem Fehler. Fügen Sie in PowerShell <code>| Out-Host</code> hinzu, um auf das Ende zu warten (Compass ist ein Fensterprogramm).</li>
+</ul>
 <h2 id="s24">24. Lizenz, Marken und Kontakt</h2>
 <p><b>Lizenz.</b> Loonar Compass ist Freeware. Kurz zusammengefasst:</p>
 <ul>
