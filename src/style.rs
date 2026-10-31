@@ -118,7 +118,7 @@ pub fn plan(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)> {
     }
     let text = format!(
         "{} elements on {} diagrams, by {}:\n{}\nColours are not undone by operations.",
-        ops.len(),
+        ops.iter().filter(|o| o["op"] == "set_color").count(),
         diagrams.len(),
         input["by"].as_str().unwrap_or("stereotype"),
         colours.iter().map(|(v, c)| format!("  - {v}: {c}")).collect::<Vec<_>>().join("\n")
