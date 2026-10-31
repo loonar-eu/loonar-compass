@@ -222,7 +222,12 @@ pub fn check(o: &Options, default_props: &Path) -> Result<(String, String, bool)
     if let Some(doc) = &o.requirements {
         let text = crate::traceability::read_document(doc)?;
         let reqs = crate::traceability::extract(&text);
-        let t = crate::traceability::trace_data(&cfg, &reqs, None)?;
+        // With --package only that package (and its children) is matched, candidates included (LC-432).
+        let package = match o.package.as_deref() {
+            Some(given) => packages(&cfg, Some(given))?.first().map(|p| p.0),
+            None => None,
+        };
+        let t = crate::traceability::trace_data(&cfg, &reqs, package)?;
         let chain = match &o.code {
             Some(code) => Some(crate::traceability::chain(&t, &reqs, code)?),
             None => None,
