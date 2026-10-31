@@ -346,6 +346,7 @@ pub fn definitions() -> Value {
         items.push(crate::bulk::definition());
         items.push(crate::recycle::definition());
         items.push(crate::merge::definition());
+        items.push(crate::visibility::definition());
         items.push(json!({
             "name": "change_connector_type",
             "description": "Give relationships another type (e.g. ArchiMate Composition → Serving, Association → Dependency), also many at once: a new \
@@ -901,6 +902,11 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
                 .collect();
             let findings: Vec<String> = new_ids.iter().flat_map(|id| crate::governance::check_object(ctx.cfg, "connector", *id).unwrap_or_default()).collect();
             Ok(if findings.is_empty() { saved } else { format!("{saved}\nModel check of the new relationship: {}", findings.join("; ")) }.into())
+        }
+        // Visibility policies of diagrams (LC-373): apply is an ordinary save, the rest reads or keeps a local setting.
+        "connector_visibility" => {
+            let (ops, text) = crate::visibility::run(input, ctx.cfg)?;
+            if ops.is_empty() { Ok(text.into()) } else { ea_write(&json!({ "ops": ops }), ctx).map(Into::into) }
         }
         // Merge and replace: preview reads; apply is one save, always asked, with a baseline first.
         "merge_elements" => {

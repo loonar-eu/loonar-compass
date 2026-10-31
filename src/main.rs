@@ -48,6 +48,7 @@ mod ea_help;
 mod bulk;
 mod recycle;
 mod merge;
+mod visibility;
 mod model_usage;
 mod glossary_ui;
 mod relang;
@@ -7601,6 +7602,12 @@ impl eframe::App for App {
                                     if reported.lock().unwrap().insert(format!("spell:{id}:{finding}")) {
                                         ea_ui::output(&crate::i18n::fmt("✎ Spelling: {0}", &[finding]));
                                     }
+                                }
+                            }
+                            // A new relationship on a diagram whose visibility policy is "auto": hidden there at once (LC-373).
+                            if kind == "connector" {
+                                for done in visibility::auto_apply(&cfg, id) {
+                                    ea_ui::output(&format!("👁 {done}"));
                                 }
                             }
                             match governance::check_object(&cfg, &kind, id) {

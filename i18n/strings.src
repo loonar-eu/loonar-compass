@@ -1965,3 +1965,6 @@ attribute id={0} ‖ atrybut id={0} ‖ Attribut id={0} ‖ attribut id={0}
 operation id={0} ‖ operacja id={0} ‖ Operation id={0} ‖ opération id={0}
 parameter of operation id={0} ‖ parametr operacji id={0} ‖ Parameter der Operation id={0} ‖ paramètre de l'opération id={0}
 relationships of another type in place of the old ones ‖ relacje innego typu w miejsce dawnych ‖ Beziehungen eines anderen Typs anstelle der alten ‖ relations d'un autre type à la place des anciennes
+Relationships between elements of a diagram that are hidden there ‖ Relacje między elementami diagramu, które są na nim ukryte ‖ Beziehungen zwischen Elementen eines Diagramms, die dort ausgeblendet sind ‖ Relations entre éléments d'un diagramme qui y sont masquées
+Which relationships a diagram shows – kept automatically ‖ Które relacje pokazuje diagram – pilnowane automatycznie ‖ Welche Beziehungen ein Diagramm zeigt – automatisch eingehalten ‖ Quelles relations un diagramme affiche – tenu automatiquement
+hidden on "{0}" by its visibility policy ‖ ukryta na „{0}” według polityki widoczności ‖ auf „{0}“ nach seiner Sichtbarkeitsregel ausgeblendet ‖ masquée sur « {0} » selon sa règle de visibilité
