@@ -100,6 +100,7 @@ h3 { font-size:14px; margin:16px 0 6px; }
       <button data-tab="audit">Audit trail</button>
       <button data-tab="notes">Team notes</button>
       <button data-tab="changes">Change sets</button>
+      <button data-tab="requests">Review requests</button>
       <button data-tab="users" id="userstab" hidden>Users</button>
       <button data-tab="policy" id="policytab" hidden>Team policy</button>
     </div>
@@ -125,6 +126,7 @@ h3 { font-size:14px; margin:16px 0 6px; }
     <div id="view-audit" hidden><div id="audit"></div></div>
     <div id="view-notes" hidden><div id="notes"></div></div>
     <div id="view-changes" hidden><div id="changes"></div></div>
+    <div id="view-requests" hidden><p class="muted">Elements you own that an architect asked you to look at: confirm them, or say what needs to change.</p><div id="requests"></div></div>
     <div id="view-users" hidden><div id="users"></div></div>
     <div id="view-policy" hidden>
       <p class="muted">The team's rules for every Compass connected to this hub, as JSON: <b>min_approval</b> (plan, ask, auto), <b>governance</b> (model check rules),
@@ -403,6 +405,20 @@ async function post(path, body) {
   if (!r.ok) throw new Error(v.error || r.status);
   return v;
 }
+// Review requests addressed to me (LC-407): confirm, or say what needs to change (optionally as a decision).
+async function loadRequests() {
+  const list = await api('/api/requests');
+  if (!list.length) { $('requests').innerHTML = '<p class="muted">Nothing waits for you.</p>'; return; }
+  $('requests').innerHTML = list.map(r => '<div class="note"><b>' + esc(r.name) + '</b> <span class="muted">(' + esc(r.source) + ', id ' + esc(String(r.element)) + ') asked by ' + esc(r.user) + ' · ' +
+    esc((r.time || '').slice(0, 10)) + '</span><pre>' + esc(r.text) + '</pre><div class="row"><button class="rq" data-id="' + esc(r.id) + '" data-a="confirmed">Still right</button>' +
+    '<input id="rt-' + esc(r.id) + '" placeholder="What needs to change"><label><input type="checkbox" id="rd-' + esc(r.id) + '"> as a decision</label>' +
+    '<button class="rq ghost" data-id="' + esc(r.id) + '" data-a="needs_change">Needs a change</button></div></div>').join('');
+  document.querySelectorAll('.rq').forEach(b => b.onclick = async () => {
+    const id = b.dataset.id;
+    try { await post('/api/comments/' + id + '/answer', { answer: b.dataset.a, text: $('rt-' + id).value, decision: $('rd-' + id).checked }); loadRequests(); }
+    catch (err) { $('requests').insertAdjacentHTML('afterbegin', '<p class="error">' + esc(err.message) + '</p>'); }
+  });
+}
 async function loadChanges() {
   const list = await api('/api/changes');
   if (!list.length) { $('changes').innerHTML = '<p class="muted">No change sets yet. The assistant proposes them with propose_change.</p>'; return; }
@@ -443,7 +459,8 @@ async function ask() {
 }
 function show(tab) {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-  ['ask', 'search', 'lint', 'gap', 'portfolio', 'audit', 'notes', 'changes', 'users', 'policy'].forEach(t => $('view-' + t).hidden = t !== tab);
+  ['ask', 'search', 'lint', 'gap', 'portfolio', 'audit', 'notes', 'changes', 'requests', 'users', 'policy'].forEach(t => $('view-' + t).hidden = t !== tab);
+  if (tab === 'requests') loadRequests().catch(e => $('requests').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
   if (tab === 'policy') api('/api/policy').then(p => { $('policytext').value = JSON.stringify(p, null, 2); $('policystatus').textContent = ''; }).catch(e => $('policystatus').textContent = e.message);
   if (tab === 'users') loadUsers().catch(e => $('users').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
   if (tab === 'changes') loadChanges().catch(e => $('changes').innerHTML = '<p class="error">' + esc(e.message) + '</p>');

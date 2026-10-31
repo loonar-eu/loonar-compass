@@ -450,11 +450,18 @@ or apply (id: an APPROVED change set of this model is saved to the model with th
             "name": "review_comments",
             "description": "Review comments and decisions (ADR) the team left on elements of this model in the hub's web view (LC-392). action list \
 (optionally element = object_id, status open/resolved/proposed/accepted/rejected): who said what about which element; action add (element, text, \
-kind comment or decision); action status (id, status). Use it when the user asks what reviewers said, to answer open comments, or to record a \
-decision about an element.",
+kind comment or decision); action status (id, status). Review requests (LC-407): action request asks the owners (tagged value Owner, else the \
+author; or to = a hub user) to confirm or update elements (element, elements or package; text = the question; architect role); action requests \
+lists the ones waiting for the user (all: true – everybody's, status any for the answered ones too); action answer (id, status confirmed or \
+needs_change, text, kind decision to record the answer as a decision). Use it when the user asks what reviewers said, to answer open comments, to \
+record a decision about an element, or to ask owners to review their elements.",
             "input_schema": { "type": "object", "properties": {
-                "action": { "type": "string", "enum": ["list", "add", "status"] },
+                "action": { "type": "string", "enum": ["list", "add", "status", "request", "requests", "answer"] },
                 "element": { "type": "integer" },
+                "elements": { "type": "array", "items": { "type": "integer" } },
+                "package": { "type": "integer" },
+                "to": { "type": "string" },
+                "all": { "type": "boolean" },
                 "text": { "type": "string" },
                 "kind": { "type": "string", "enum": ["comment", "decision"] },
                 "id": { "type": "string" },
@@ -1652,7 +1659,37 @@ fn review_comments(input: &Value, ctx: &ToolContext) -> Result<String> {
             let c = client.comment_status(input["id"].as_str().unwrap_or(""), input["status"].as_str().unwrap_or(""))?;
             Ok(format!("{} is now {}.", c["id"].as_str().unwrap_or(""), c["status"].as_str().unwrap_or("")))
         }
-        other => bail!("unknown action {other}: list, add or status"),
+        // LC-407: ask the owners to confirm or update elements; see and answer the requests.
+        "request" => {
+            let mut body = json!({ "question": input["text"] });
+            for k in ["elements", "package", "to"] {
+                if !input[k].is_null() {
+                    body[k] = input[k].clone();
+                }
+            }
+            if !input["element"].is_null() && input["elements"].is_null() {
+                body["elements"] = json!([input["element"]]);
+            }
+            let r = client.review_requests(&source, &body)?;
+            let mut out = vec![format!("{} review request(s) sent in the hub:", r["created"].as_array().map_or(0, Vec::len))];
+            out.extend(r["created"].as_array().into_iter().flatten().map(|c| format!("- {} → {}", c["name"].as_str().unwrap_or(""), c["to"].as_str().unwrap_or(""))));
+            out.extend(r["skipped"].as_array().into_iter().flatten().map(|c| format!("- skipped {}: {}", c["name"].as_str().unwrap_or(""), c["why"].as_str().unwrap_or(""))));
+            Ok(out.join("\n"))
+        }
+        "requests" => {
+            let list = client.requests(input["all"] == true, input["status"].as_str())?;
+            if list.is_empty() {
+                return Ok("No review requests.".into());
+            }
+            Ok(list.iter().map(|c| format!("- {} | {} | {} (id {}) asked by {} to {}: {}{}", c["id"].as_str().unwrap_or(""), c["status"].as_str().unwrap_or(""), c["name"].as_str().unwrap_or(""), c["element"],
+                c["user"].as_str().unwrap_or(""), c["to"].as_str().unwrap_or(""), c["text"].as_str().unwrap_or(""),
+                c["answer"].as_str().filter(|a| !a.is_empty()).map(|a| format!(" → {a}")).unwrap_or_default())).collect::<Vec<_>>().join("\n"))
+        }
+        "answer" => {
+            let c = client.answer_request(input["id"].as_str().unwrap_or(""), &json!({ "answer": input["status"], "text": input["text"], "decision": input["kind"] == "decision" }))?;
+            Ok(format!("{} on {}: {}.", c["id"].as_str().unwrap_or(""), c["name"].as_str().unwrap_or(""), c["status"].as_str().unwrap_or("")))
+        }
+        other => bail!("unknown action {other}: list, add, status, request, requests or answer"),
     }
 }
 

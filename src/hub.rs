@@ -1372,6 +1372,20 @@ fn short(value: &Value, max: usize) -> Value {
     }
 }
 
+/// The owner of an element (LC-407): its tagged value Owner (or Właściciel, Eigentümer, Propriétaire), else its author.
+fn owner_of(cfg: &AppConfig, element: i64) -> Option<String> {
+    let tag = crate::tools::query_rows(cfg, &format!(
+        "select value from t_objectproperties where object_id = {element} and lower(property) in ('owner', 'właściciel', 'wlasciciel', 'eigentümer', 'propriétaire') and value is not null"
+    ))
+    .ok()?
+    .into_iter()
+    .map(|r| r[0].trim().to_string())
+    .find(|v| !v.is_empty());
+    tag.or_else(|| {
+        crate::tools::query_rows(cfg, &format!("select coalesce(author,'') from t_object where object_id = {element}")).ok()?.into_iter().map(|r| r[0].trim().to_string()).find(|a| !a.is_empty())
+    })
+}
+
 fn require(role: Role, needed: Role) -> Result<(), HttpError> {
     if role < needed {
         return Err(deny(403, crate::i18n::fmt("this needs the role {0}", &[needed.name().to_string()])));
@@ -1791,10 +1805,99 @@ in the language of the question, short. You can only read the model (db_query an
             let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": source.id, "summary": format!("{kind} on {}: {}", row[0], text.chars().take(200).collect::<String>()), "ok": true }));
             Ok((201, comment))
         }
+        // Review requests to the owners of elements (LC-407): an architect asks the owner (tagged value Owner, else the
+        // author) to confirm or update an element; the owner answers in the hub.
+        ("POST", ["api", "sources", id, "review-requests"]) => {
+            require(role, Role::Architect)?;
+            let (source, scope) = hub.source_for(id, &user, role)?;
+            let b = body()?;
+            let question: String = b["question"].as_str().unwrap_or("").trim().chars().filter(|c| !c.is_control() || *c == '\n').take(2000).collect();
+            if question.chars().count() < 2 {
+                return Err(deny(400, crate::i18n::tr("write the question")));
+            }
+            let mut elements: Vec<i64> = b["elements"].as_array().map(|a| a.iter().filter_map(Value::as_i64).collect()).unwrap_or_default();
+            if let Some(package) = b["package"].as_i64() {
+                package_in(&scope, package)?;
+                let packages = scope_packages(&source.cfg, &[package.to_string()])?;
+                elements.extend(crate::tools::query_rows(&source.cfg, &format!(
+                    "select object_id from t_object where object_type not in ('Package', 'Note', 'Text', 'Boundary') and {}", in_list("package_id", &packages)
+                ))?.into_iter().filter_map(|r| r[0].parse::<i64>().ok()));
+            }
+            elements.dedup();
+            if elements.is_empty() || elements.len() > 500 {
+                return Err(deny(400, crate::i18n::tr("give 1 to 500 elements or a package")));
+            }
+            let to = b["to"].as_str().map(str::trim).filter(|t| !t.is_empty()).map(str::to_string);
+            let _guard = hub.change_lock.lock().unwrap_or_else(|p| p.into_inner());
+            let pending: HashSet<i64> = hub.comments().into_iter()
+                .filter(|c| c["source"] == source.id.as_str() && c["kind"] == "review" && c["status"] == "requested")
+                .filter_map(|c| c["element"].as_i64())
+                .collect();
+            let (mut created, mut skipped) = (Vec::new(), Vec::new());
+            for element in elements {
+                element_in(&source.cfg, &scope, element)?;
+                let row = crate::tools::query_rows(&source.cfg, &format!("select name, ea_guid from t_object where object_id = {element}"))?.into_iter().next().ok_or_else(|| deny(404, "element"))?;
+                if pending.contains(&element) {
+                    skipped.push(json!({ "element": element, "name": row[0], "why": "already asked" }));
+                    continue;
+                }
+                let Some(owner) = to.clone().or_else(|| owner_of(&source.cfg, element)) else {
+                    skipped.push(json!({ "element": element, "name": row[0], "why": "no owner (tagged value Owner or author)" }));
+                    continue;
+                };
+                let request = json!({ "id": format!("C-{}", &uuid::Uuid::new_v4().simple().to_string()[..10]), "time": chrono::Local::now().to_rfc3339(), "user": user, "source": source.id,
+                    "element": element, "guid": row[1], "name": row[0], "kind": "review", "to": owner, "text": question, "status": "requested" });
+                hub.save_comment(&request, None).map_err(|e| deny(500, e.to_string()))?;
+                created.push(request);
+            }
+            let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": source.id, "summary": format!("review requests: {} sent, {} skipped: {}", created.len(), skipped.len(), question.chars().take(200).collect::<String>()), "ok": true }));
+            Ok((201, json!({ "created": created, "skipped": skipped })))
+        }
+        // The review requests waiting for me (all of them for an architect with ?all=1).
+        ("GET", ["api", "requests"]) => {
+            let all = request.query.get("all").is_some_and(|a| a == "1") && role >= Role::Architect;
+            let status = request.query.get("status").cloned().unwrap_or_else(|| "requested".into());
+            let list: Vec<Value> = hub.comments().into_iter()
+                .filter(|c| c["kind"] == "review" && (status == "any" || c["status"].as_str() == Some(status.as_str())))
+                .filter(|c| all || c["to"].as_str().is_some_and(|t| t.eq_ignore_ascii_case(&user)))
+                .collect();
+            Ok((200, json!(list)))
+        }
+        // The owner's answer: confirmed, or needs a change (with what), optionally recorded as a decision on the element.
+        ("POST", ["api", "comments", cid, "answer"]) => {
+            let b = body()?;
+            let answer = b["answer"].as_str().unwrap_or("");
+            if !matches!(answer, "confirmed" | "needs_change") {
+                return Err(deny(400, "answer: confirmed or needs_change"));
+            }
+            let text: String = b["text"].as_str().unwrap_or("").trim().chars().filter(|c| !c.is_control() || *c == '\n').take(4000).collect();
+            if answer == "needs_change" && text.chars().count() < 2 {
+                return Err(deny(400, crate::i18n::tr("say what needs to change")));
+            }
+            let _guard = hub.change_lock.lock().unwrap_or_else(|p| p.into_inner());
+            let mut request = hub.comments().into_iter().find(|c| c["id"] == *cid && c["kind"] == "review").ok_or_else(|| deny(404, crate::i18n::fmt("there is no review request {0}", &[cid.to_string()])))?;
+            if role < Role::Architect && !request["to"].as_str().is_some_and(|t| t.eq_ignore_ascii_case(&user)) {
+                return Err(deny(403, crate::i18n::tr("only the person asked or an architect answers a review request")));
+            }
+            let now = chrono::Local::now().to_rfc3339();
+            request["status"] = json!(answer);
+            request["answer"] = json!(text);
+            request["status_by"] = json!(user);
+            request["status_time"] = json!(now);
+            if b["decision"] == true && !text.is_empty() {
+                let decision = json!({ "id": format!("C-{}", &uuid::Uuid::new_v4().simple().to_string()[..10]), "time": now, "user": user, "source": request["source"],
+                    "element": request["element"], "guid": request["guid"], "name": request["name"], "kind": "decision", "text": text, "status": "proposed", "reply_to": cid });
+                hub.save_comment(&decision, None).map_err(|e| deny(500, e.to_string()))?;
+                request["decision"] = decision["id"].clone();
+            }
+            hub.save_comment(&request, Some(cid)).map_err(|e| deny(500, e.to_string()))?;
+            let _ = hub.append_audit(&json!({ "time": now, "user": user, "source": request["source"], "summary": format!("review of {}: {answer} {}", request["name"].as_str().unwrap_or(""), text.chars().take(200).collect::<String>()), "ok": true }));
+            Ok((200, request))
+        }
         ("POST", ["api", "comments", cid, "status"]) => {
             let status = body()?["status"].as_str().unwrap_or("").to_string();
-            if !matches!(status.as_str(), "open" | "resolved" | "proposed" | "accepted" | "rejected" | "superseded") {
-                return Err(deny(400, "status: open, resolved, proposed, accepted, rejected or superseded"));
+            if !matches!(status.as_str(), "open" | "resolved" | "proposed" | "accepted" | "rejected" | "superseded" | "requested" | "withdrawn") {
+                return Err(deny(400, "status: open, resolved, proposed, accepted, rejected, superseded, requested or withdrawn"));
             }
             let _guard = hub.change_lock.lock().unwrap_or_else(|p| p.into_inner());
             let mut comment = hub.comments().into_iter().find(|c| c["id"] == *cid).ok_or_else(|| deny(404, crate::i18n::fmt("there is no comment {0}", &[cid.to_string()])))?;
@@ -2732,6 +2835,23 @@ impl Client {
         self.call(reqwest::Method::POST, &format!("/api/sources/{}/comments", encode(source)), Some(body))
     }
 
+    pub fn review_requests(&self, source: &str, body: &Value) -> Result<Value> {
+        self.call(reqwest::Method::POST, &format!("/api/sources/{}/review-requests", encode(source)), Some(body))
+    }
+
+    pub fn requests(&self, all: bool, status: Option<&str>) -> Result<Vec<Value>> {
+        let path = format!("/api/requests?all={}&status={}", if all { 1 } else { 0 }, encode(status.unwrap_or("requested")));
+        Ok(self.call(reqwest::Method::GET, &path, None)?.as_array().cloned().unwrap_or_default())
+    }
+
+    pub fn answer_request(&self, id: &str, body: &Value) -> Result<Value> {
+        let id = id.trim();
+        if !id.starts_with("C-") || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            bail!("there is no review request {id}");
+        }
+        self.call(reqwest::Method::POST, &format!("/api/comments/{id}/answer"), Some(body))
+    }
+
     pub fn comment_status(&self, id: &str, status: &str) -> Result<Value> {
         let id = id.trim();
         if !id.starts_with("C-") || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
@@ -2973,6 +3093,52 @@ mod tests {
         assert_eq!(status("arch-token-comments-012", "resolved"), 200);
         let open: Value = http.get(format!("{base}/api/sources/shop/comments?status=open")).bearer_auth("arch-token-comments-012").send().unwrap().json().unwrap();
         assert!(open.as_array().unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// LC-407: review requests to the owner of an element (tagged value Owner or author), answered in the hub.
+    /// `LOONAR_HUB_FILE_PROPS=… cargo test hub_review_requests -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a test model"]
+    fn hub_review_requests() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        let dir = std::env::temp_dir().join(format!("loonar-hub-requests-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let props = std::env::var("LOONAR_HUB_FILE_PROPS").unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0", "sources": [{ "id": "shop", "name": "Shop", "properties": props }],
+            "users": [{ "name": "olek", "token": "viewer-token-requests-01", "role": "viewer" }, { "name": "ada", "token": "arch-token-requests-0123", "role": "architect" }, { "name": "ewa", "token": "viewer2-token-requests-1", "role": "viewer" }] }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let cfg = hub.sources[0].cfg.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let base = format!("http://{}", rx.recv().unwrap());
+        let rows = crate::tools::query_rows(&cfg, "select object_id from t_object where object_type = 'Class' order by object_id").unwrap();
+        let (a, b): (i64, i64) = (rows[0][0].parse().unwrap(), rows[1][0].parse().unwrap());
+        let http = reqwest::blocking::Client::new();
+        let post = |token: &str, path: &str, body: Value| http.post(format!("{base}{path}")).bearer_auth(token).json(&body).send().unwrap();
+        assert_eq!(post("viewer-token-requests-01", "/api/sources/shop/review-requests", json!({ "elements": [a], "question": "Still right?" })).status(), 403, "a viewer may not ask");
+        let sent: Value = post("arch-token-requests-0123", "/api/sources/shop/review-requests", json!({ "elements": [a, b], "question": "Is the description still right?", "to": "olek" })).json().unwrap();
+        assert_eq!(sent["created"].as_array().unwrap().len(), 2, "{sent}");
+        let again: Value = post("arch-token-requests-0123", "/api/sources/shop/review-requests", json!({ "elements": [a], "question": "Again?", "to": "olek" })).json().unwrap();
+        assert_eq!(again["skipped"][0]["why"], "already asked", "{again}");
+        // Without "to" the owner comes from the model: the author when there is no Owner tag.
+        let authored = crate::tools::query_rows(&cfg, "select object_id, author from t_object where author is not null and author <> '' order by object_id").unwrap();
+        assert_eq!(super::owner_of(&cfg, authored[0][0].parse().unwrap()), Some(authored[0][1].trim().to_string()));
+        let mine = |token: &str| http.get(format!("{base}/api/requests")).bearer_auth(token).send().unwrap().json::<Value>().unwrap();
+        assert_eq!(mine("viewer-token-requests-01").as_array().unwrap().len(), 2);
+        assert!(mine("viewer2-token-requests-1").as_array().unwrap().is_empty());
+        let first = sent["created"][0]["id"].as_str().unwrap().to_string();
+        let second = sent["created"][1]["id"].as_str().unwrap().to_string();
+        assert_eq!(post("viewer2-token-requests-1", &format!("/api/comments/{first}/answer"), json!({ "answer": "confirmed" })).status(), 403, "not the person asked");
+        assert_eq!(post("viewer-token-requests-01", &format!("/api/comments/{first}/answer"), json!({ "answer": "needs_change" })).status(), 400, "say what");
+        assert_eq!(post("viewer-token-requests-01", &format!("/api/comments/{first}/answer"), json!({ "answer": "confirmed" })).status(), 200);
+        let changed: Value = post("viewer-token-requests-01", &format!("/api/comments/{second}/answer"), json!({ "answer": "needs_change", "text": "Prices are in EUR now", "decision": true })).json().unwrap();
+        assert_eq!(changed["status"], "needs_change");
+        assert!(mine("viewer-token-requests-01").as_array().unwrap().is_empty(), "nothing waits any more");
+        let on_b: Value = http.get(format!("{base}/api/sources/shop/comments?element={b}")).bearer_auth("arch-token-requests-0123").send().unwrap().json().unwrap();
+        assert!(on_b.as_array().unwrap().iter().any(|c| c["kind"] == "decision" && c["text"] == "Prices are in EUR now" && c["reply_to"] == second.as_str()), "{on_b}");
+        let all: Value = http.get(format!("{base}/api/requests?all=1&status=any")).bearer_auth("arch-token-requests-0123").send().unwrap().json().unwrap();
+        assert_eq!(all.as_array().unwrap().len(), 2);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

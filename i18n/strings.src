@@ -2033,3 +2033,9 @@ diagram "{0}" saved: nothing in it really changed (EA asks to save also after on
 diagram "{0}" saved: {1} ‖ diagram „{0}” zapisany: {1} ‖ Diagramm „{0}“ gespeichert: {1} ‖ diagramme « {0} » enregistré : {1}
 A Mermaid class diagram as classes, relationships and a diagram ‖ Diagram klas Mermaid jako klasy, relacje i diagram ‖ Ein Mermaid-Klassendiagramm als Klassen, Beziehungen und Diagramm ‖ Un diagramme de classes Mermaid en classes, relations et diagramme
 CREATE TABLE statements of the tables of a package in a chosen dialect ‖ Instrukcje CREATE TABLE tabel pakietu w wybranym dialekcie ‖ CREATE-TABLE-Anweisungen der Tabellen eines Pakets im gewählten Dialekt ‖ Instructions CREATE TABLE des tables d'un paquetage dans un dialecte choisi
+file '{0}' ‖ plik '{0}' ‖ Datei '{0}' ‖ fichier '{0}'
+give 1 to 500 elements or a package ‖ podaj od 1 do 500 elementów albo pakiet ‖ geben Sie 1 bis 500 Elemente oder ein Paket an ‖ indiquez de 1 à 500 éléments ou un paquetage
+only the person asked or an architect answers a review request ‖ na prośbę o przegląd odpowiada tylko osoba, której dotyczy, albo architekt ‖ eine Prüfanfrage beantwortet nur die gefragte Person oder ein Architekt ‖ seule la personne sollicitée ou un architecte répond à une demande de revue
+say what needs to change ‖ napisz, co trzeba zmienić ‖ schreiben Sie, was sich ändern muss ‖ indiquez ce qui doit changer
+there is no review request {0} ‖ nie ma prośby o przegląd {0} ‖ es gibt keine Prüfanfrage {0} ‖ il n'y a pas de demande de revue {0}
+write the question ‖ wpisz pytanie ‖ schreiben Sie die Frage ‖ écrivez la question
