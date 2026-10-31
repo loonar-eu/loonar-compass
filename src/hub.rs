@@ -1148,7 +1148,12 @@ impl Hub {
 
     /// Sign-in with a name and a password: a session token for the web view.
     fn login(&self, body: &[u8], peer: Option<IpAddr>) -> (u16, Value) {
-        let b: Value = serde_json::from_slice(body).unwrap_or(Value::Null);
+        // Not a sign-in form at all (no JSON object with a name and a password): a bad request, not a wrong
+        // password, and not counted as a failed sign-in (LC-433).
+        let b: Value = match serde_json::from_slice(body) {
+            Ok(b @ Value::Object(_)) if b["name"].is_string() && b["password"].is_string() => b,
+            _ => return (400, json!({ "error": "expected JSON {\"name\": …, \"password\": …}" })),
+        };
         let name = b["name"].as_str().unwrap_or("").trim().to_string();
         let password = b["password"].as_str().unwrap_or("").to_string();
         if let Some(ip) = peer {
@@ -3066,6 +3071,9 @@ mod tests {
         let (hub, _) = load(&dir.join("hub.json")).unwrap();
         assert!(hub.users.lock().unwrap().is_empty(), "no default account");
         assert_eq!(hub.login(br#"{"name":"admin","password":"passw0rd"}"#, None).0, 401);
+        // LC-433: a malformed body is a bad request.
+        assert_eq!(hub.login(b"{x", None).0, 400);
+        assert_eq!(hub.login(br#"{"name":"admin"}"#, None).0, 400);
     }
 
     #[test]
