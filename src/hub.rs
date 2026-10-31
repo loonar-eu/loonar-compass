@@ -240,11 +240,11 @@ fn portfolio_pptx(view: &Value, title: &str, model: &str) -> Result<Vec<u8>> {
             }
         }
         if bullets.len() >= 14 {
-            slides.push(crate::pptx::Slide { title: title.to_string(), bullets: std::mem::take(&mut bullets), picture: None });
+            slides.push(crate::pptx::Slide { title: title.to_string(), bullets: std::mem::take(&mut bullets), picture: None, notes: String::new() });
         }
     }
     if !bullets.is_empty() || slides.is_empty() {
-        slides.push(crate::pptx::Slide { title: title.to_string(), bullets, picture: None });
+        slides.push(crate::pptx::Slide { title: title.to_string(), bullets, picture: None, notes: String::new() });
     }
     crate::pptx::build(title, &format!("{model} · {} elements · {}", total, chrono::Local::now().format("%Y-%m-%d")), &slides)
 }

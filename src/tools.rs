@@ -601,7 +601,8 @@ Use it when the user asks for slides or a presentation; keep slides short (at mo
                             "properties": {
                                 "title": { "type": "string" },
                                 "bullets": { "type": "array", "items": { "anyOf": [{ "type": "string" }, { "type": "object", "properties": { "text": { "type": "string" }, "level": { "type": "integer" } }, "required": ["text"] }] } },
-                                "image": { "type": "string", "description": "diagram:ID or image:NAME" }
+                                "image": { "type": "string", "description": "diagram:ID or image:NAME" },
+                                "notes": { "type": "string", "description": "Speaker notes: what to say on this slide (lines become paragraphs)" }
                             },
                             "required": ["title"]
                         }
@@ -2294,7 +2295,7 @@ fn create_presentation(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             Some(source) => Some(picture(ctx, source)?),
             None => None,
         };
-        slides.push(crate::pptx::Slide { title: s["title"].as_str().unwrap_or("").to_string(), bullets, picture });
+        slides.push(crate::pptx::Slide { title: s["title"].as_str().unwrap_or("").to_string(), bullets, picture, notes: s["notes"].as_str().unwrap_or("").to_string() });
     }
     let bytes = crate::pptx::build(title, subtitle, &slides)?;
     std::fs::create_dir_all(&ctx.cfg.attachments_dir).context(crate::i18n::tr("attachments folder"))?;
