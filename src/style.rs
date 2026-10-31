@@ -17,14 +17,17 @@ pub fn definition() -> Value {
         "description": "Colour the elements on many diagrams by their stereotype, type or status (one look for a whole package): colors \
 {value: \"#RRGGBB\"} or, without them, a readable palette for the values found. Scope: diagrams (ids) or package (all its diagrams, child \
 packages included). action preview: which value gets which colour and how many elements change (reads only); action apply: one save the user \
-approves. Use it for /apply-style; offer a legend (create_legend) on the main diagram afterwards.",
+approves. Use it for /apply-style; offer a legend (create_legend) on the main diagram afterwards. profile (LC-420) picks a ready look and adds a \
+legend on each diagram: management (by status – done green, in progress yellow, proposed blue, rejected or retired red), technical (by type, \
+the palette), impact (by status as a heat scale for a change: approved/implemented calm, proposed and in progress warm, deprecated hot).",
         "input_schema": { "type": "object", "properties": {
             "action": { "type": "string", "enum": ["preview", "apply"] },
+            "profile": { "type": "string", "enum": ["management", "technical", "impact"] },
             "by": { "type": "string", "enum": ["stereotype", "type", "status"] },
             "colors": { "type": "object" },
             "diagrams": { "type": "array", "items": { "type": "integer" } },
             "package": { "description": "package_id or exact name" }
-        }, "required": ["action", "by"] }
+        }, "required": ["action"] }
     })
 }
 
@@ -44,8 +47,32 @@ pub(crate) fn colours(values: &[String], given: &Value) -> BTreeMap<String, Stri
     out
 }
 
+/// The ready looks (LC-420): what to colour by and the colours of known values (the palette for the rest).
+pub(crate) fn profile(name: &str) -> Option<(&'static str, Value)> {
+    match name {
+        "management" => Some(("status", json!({ "Approved": "#B6D7A8", "Implemented": "#B6D7A8", "Done": "#B6D7A8", "Validated": "#B6D7A8", "Mandatory": "#B6D7A8",
+            "In Progress": "#FFE599", "Under Construction": "#FFE599", "Active": "#FFE599", "Proposed": "#CFE2F3", "Rejected": "#EA9999", "Retired": "#EA9999", "Deprecated": "#EA9999", "Invalidated": "#EA9999" }))),
+        "technical" => Some(("type", json!({}))),
+        "impact" => Some(("status", json!({ "Approved": "#D9EAD3", "Implemented": "#D9EAD3", "Validated": "#D9EAD3", "Proposed": "#FCE5CD", "In Progress": "#F9CB9C",
+            "Under Construction": "#F9CB9C", "Deprecated": "#E06666", "Retired": "#E06666", "Rejected": "#E06666" }))),
+        _ => None,
+    }
+}
+
 /// (operations, description).
 pub fn plan(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)> {
+    // A ready look: its property and colours (the given colours still win), and a legend on each diagram.
+    let chosen = input["profile"].as_str().and_then(profile);
+    let mut input = input.clone();
+    if let Some((by, colors)) = &chosen {
+        input["by"] = json!(by);
+        let mut merged = colors.clone();
+        for (k, v) in input["colors"].as_object().cloned().unwrap_or_default() {
+            merged[k] = v;
+        }
+        input["colors"] = merged;
+    }
+    let input = &input;
     let column = match input["by"].as_str().unwrap_or("stereotype") {
         "type" => "o.object_type",
         "status" => "coalesce(o.status,'')",
@@ -71,10 +98,24 @@ pub fn plan(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)> {
     values.sort();
     values.dedup();
     let colours = colours(&values, &input["colors"]);
-    let ops: Vec<Value> = rows
+    let mut ops: Vec<Value> = rows
         .iter()
         .filter_map(|r| colours.get(&r[2]).map(|c| json!({ "op": "set_color", "diagram": r[0].parse::<i64>().unwrap_or(0), "element": r[1].parse::<i64>().unwrap_or(0), "bgcolor": c })))
         .collect();
+    if chosen.is_some() {
+        // The legend of each diagram lists the values found on it.
+        let filter = match input["by"].as_str().unwrap_or("") { "status" => "Element.Status", "type" => "Element.Type", _ => "Element.Stereotype" };
+        let title = format!("{} view", input["profile"].as_str().unwrap_or("").to_uppercase());
+        for d in &diagrams {
+            let mut here: Vec<&String> = rows.iter().filter(|r| &r[0] == d).map(|r| &r[2]).filter(|v| colours.contains_key(*v)).collect();
+            here.sort();
+            here.dedup();
+            if !here.is_empty() {
+                ops.push(json!({ "op": "create_legend", "diagram": d.parse::<i64>().unwrap_or(0), "title": title, "filter": filter,
+                    "entries": here.iter().map(|v| json!({ "value": v, "color": colours[*v], "label": v })).collect::<Vec<_>>() }));
+            }
+        }
+    }
     let text = format!(
         "{} elements on {} diagrams, by {}:\n{}\nColours are not undone by operations.",
         ops.len(),
@@ -106,5 +147,37 @@ mod tests {
         let (ops, text) = super::plan(&serde_json::json!({ "by": "type", "package": package }), &cfg).unwrap();
         println!("{text}");
         assert!(!ops.is_empty() && ops.iter().all(|o| o["op"] == "set_color"));
+    }
+
+    /// LC-420: the management look in EA – colours by status and a legend on the diagram.
+    /// `LOONAR_TEST_PROPS=… cargo test style_profile_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA and a copy of a test model"]
+    fn style_profile_live() {
+        use serde_json::json;
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).unwrap();
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id")[0][0].parse().unwrap();
+        let created = crate::ea::run_batch(&cfg, &[
+            json!({"op":"create_package","key":"pkg","parent":root,"name":format!("ZZ_look_{}", chrono::Local::now().format("%H%M%S"))}),
+            json!({"op":"create_element","key":"a","package":"#pkg","name":"CRM","type":"Component"}),
+            json!({"op":"update_element","element":"#a","status":"Approved"}),
+            json!({"op":"create_element","key":"b","package":"#pkg","name":"Billing","type":"Component"}),
+            json!({"op":"update_element","element":"#b","status":"Deprecated"}),
+            json!({"op":"create_diagram","key":"d","package":"#pkg","name":"Landscape","type":"Component"}),
+            json!({"op":"place","diagram":"#d","element":"#a","left":40,"top":40,"width":120,"height":60}),
+            json!({"op":"place","diagram":"#d","element":"#b","left":220,"top":40,"width":120,"height":60}),
+        ], &crate::ea::BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).unwrap();
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).unwrap()["id"].as_i64().unwrap();
+        let (pkg, d) = (id_of("pkg"), id_of("d"));
+        let (ops, text) = super::plan(&json!({ "profile": "management", "diagrams": [d] }), &cfg).unwrap();
+        println!("{text}");
+        crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions::default()).unwrap();
+        let legend = q(&format!("select count(*) from t_diagramobjects x join t_object o on o.object_id = x.object_id where x.diagram_id = {d} and o.object_type = 'Text' and o.ntype = 76"));
+        let colours = q(&format!("select objectstyle from t_diagramobjects where diagram_id = {d} and object_id = {}", id_of("b")));
+        crate::ea::run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &crate::ea::BatchOptions::default()).unwrap();
+        crate::ea::shutdown();
+        assert_eq!(legend[0][0], "1");
+        assert!(colours[0][0].contains("BCol="), "{colours:?}");
     }
 }
