@@ -3871,6 +3871,7 @@ impl App {
         }
         // A read-only command typed plainly answers at once without the AI (LC-389); other commands are sent as their
         // precise request (LC-337).
+        commands::update_prefs(|p| p.used(&self.input));
         self.direct = if self.outbox.is_none() { commands::direct(&self.input) } else { None };
         if self.direct.is_none() {
             if let Some(request) = commands::request(&self.input) {
@@ -8411,18 +8412,46 @@ impl eframe::App for App {
                         }
                     }
                     // Typing "/": the commands with a line about each; a click puts the command into the field.
-                    let suggestions = commands::matching(&self.input);
-                    if !suggestions.is_empty() {
+                    // Recently used command lines come first, then the commands with the favourites (★) first (LC-429).
+                    let prefs = commands::prefs();
+                    let recent = prefs.recent_matching(&self.input);
+                    let suggestions = prefs.order(commands::matching(&self.input));
+                    if !suggestions.is_empty() || !recent.is_empty() {
                         egui::Frame::none().fill(theme::SURFACE).stroke(egui::Stroke::new(1.0_f32, theme::BORDER)).rounding(8.0).inner_margin(egui::Margin::same(6.0)).show(ui, |ui| {
+                            let mut picked: Option<String> = None;
+                            if !recent.is_empty() {
+                                ui.label(egui::RichText::new(crate::i18n::tr("Recently used")).small().color(theme::MUTED));
+                                for line in &recent {
+                                    if ui.add(egui::Button::new(egui::RichText::new(format!("↺ {line}"))).frame(false)).clicked() {
+                                        picked = Some(line.clone());
+                                    }
+                                }
+                                ui.separator();
+                            }
                             for c in suggestions {
                                 let text = egui::RichText::new(format!("{} {}", c.name, c.args)).strong();
+                                let favourite = prefs.is_favourite(c.name);
                                 let row = ui.horizontal(|ui| {
+                                    let star = ui
+                                        .add(egui::Button::new(egui::RichText::new(if favourite { "★" } else { "☆" }).color(if favourite { theme::WORKING } else { theme::MUTED })).frame(false))
+                                        .on_hover_text(crate::i18n::tr(if favourite { "Remove from favourites" } else { "Add to favourites (shown first)" }));
+                                    if star.clicked() {
+                                        commands::update_prefs(|p| {
+                                            p.toggle_favourite(c.name);
+                                            true
+                                        });
+                                    }
                                     let pick = ui.add(egui::Button::new(text).frame(false));
                                     ui.label(egui::RichText::new(crate::i18n::tr(c.about)).small().color(theme::MUTED));
                                     pick
                                 });
                                 if row.inner.clicked() {
-                                    self.input = format!("{} ", c.name);
+                                    picked = Some(format!("{} ", c.name));
+                                }
+                            }
+                            if let Some(text) = picked {
+                                {
+                                    self.input = text;
                                     if let Some(mut state) = egui::TextEdit::load_state(ctx, input_id) {
                                         let end = egui::text::CCursor::new(self.input.chars().count());
                                         state.cursor.set_char_range(Some(egui::text::CCursorRange::one(end)));

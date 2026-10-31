@@ -72,6 +72,84 @@ pub fn matching(input: &str) -> Vec<&'static Command> {
     ALL.iter().filter(|c| c.name.starts_with(&typed)).collect()
 }
 
+/// Recently used command lines and favourite commands (LC-429), kept in `commands.json` next to the settings.
+#[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Prefs {
+    #[serde(default)]
+    pub recent: Vec<String>,
+    #[serde(default)]
+    pub favourites: Vec<String>,
+}
+
+const RECENT: usize = 10;
+
+impl Prefs {
+    /// A line that starts with a command of the list goes to the front of the recent lines (once, at most RECENT).
+    pub fn used(&mut self, line: &str) -> bool {
+        let line = line.trim();
+        let name = line.split(char::is_whitespace).next().unwrap_or("").to_lowercase().replace('_', "-");
+        if !ALL.iter().any(|c| c.name == name) {
+            return false;
+        }
+        self.recent.retain(|r| r != line);
+        self.recent.insert(0, line.to_string());
+        self.recent.truncate(RECENT);
+        true
+    }
+
+    pub fn is_favourite(&self, name: &str) -> bool {
+        self.favourites.iter().any(|f| f == name)
+    }
+
+    pub fn toggle_favourite(&mut self, name: &str) {
+        if self.is_favourite(name) {
+            self.favourites.retain(|f| f != name);
+        } else {
+            self.favourites.push(name.to_string());
+        }
+    }
+
+    /// The matching commands with the favourites first (each group in the order of the list).
+    pub fn order(&self, list: Vec<&'static Command>) -> Vec<&'static Command> {
+        let (mut fav, rest): (Vec<_>, Vec<_>) = list.into_iter().partition(|c| self.is_favourite(c.name));
+        fav.extend(rest);
+        fav
+    }
+
+    /// Recent lines that start with what is typed (all of them for "/"), at most five.
+    pub fn recent_matching(&self, input: &str) -> Vec<String> {
+        let typed = input.trim_start().to_lowercase().replace('_', "-");
+        if !typed.starts_with('/') || typed.contains(char::is_whitespace) {
+            return Vec::new();
+        }
+        self.recent.iter().filter(|r| r.to_lowercase().replace('_', "-").starts_with(&typed)).take(5).cloned().collect()
+    }
+}
+
+fn prefs_path() -> std::path::PathBuf {
+    crate::config::user_data_dir().join("commands.json")
+}
+
+fn prefs_cell() -> &'static std::sync::Mutex<Prefs> {
+    static CELL: std::sync::OnceLock<std::sync::Mutex<Prefs>> = std::sync::OnceLock::new();
+    CELL.get_or_init(|| std::sync::Mutex::new(std::fs::read_to_string(prefs_path()).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()))
+}
+
+/// The recent lines and favourites (read from disk once).
+pub fn prefs() -> Prefs {
+    prefs_cell().lock().map(|p| p.clone()).unwrap_or_default()
+}
+
+/// Changes the recent lines or favourites and saves them when something changed.
+pub fn update_prefs(change: impl FnOnce(&mut Prefs) -> bool) {
+    if let Ok(mut p) = prefs_cell().lock() {
+        if change(&mut p) {
+            let _ = std::fs::create_dir_all(crate::config::user_data_dir());
+            let _ = std::fs::write(prefs_path(), serde_json::to_string_pretty(&*p).unwrap_or_default());
+        }
+    }
+}
+
 /// The request for a typed command (None: not a command of this list, sent as it is).
 /// A read-only command typed as it is (with at most a package, a number of days or an id): run the tool at once,
 /// without the AI (LC-389) – the result is shown as it is, and the user can ask the assistant to explain it.
@@ -126,5 +204,30 @@ mod tests {
         assert!(super::direct("/merge-elements A into B").is_none());
         assert!(super::request("/glossary-add x").is_none(), "its own window");
         assert!(super::request("/nonsense").is_none());
+    }
+
+    /// LC-429: recent command lines (newest first, no repeats) and favourites first in the list.
+    #[test]
+    fn recent_and_favourites() {
+        let mut p = super::Prefs::default();
+        assert!(p.used("/find-orphans 12"));
+        assert!(p.used("/repo-doctor"));
+        assert!(p.used(" /find-orphans 12 "));
+        assert!(!p.used("hello"), "not a command");
+        assert!(!p.used("/nonsense"));
+        assert_eq!(p.recent, vec!["/find-orphans 12", "/repo-doctor"]);
+        for i in 0..20 {
+            p.used(&format!("/trace-gaps {i}"));
+        }
+        assert_eq!(p.recent.len(), 10);
+        assert_eq!(p.recent_matching("/trace").len(), 5);
+        assert!(p.recent_matching("/repo").is_empty(), "pushed out by newer lines");
+        assert!(p.recent_matching("/trace-gaps 1").is_empty(), "arguments typed: the list is closed");
+        p.toggle_favourite("/what-if");
+        let order = p.order(super::matching("/"));
+        assert_eq!(order[0].name, "/what-if");
+        assert_eq!(order.len(), super::ALL.len());
+        p.toggle_favourite("/what-if");
+        assert!(!p.is_favourite("/what-if"));
     }
 }

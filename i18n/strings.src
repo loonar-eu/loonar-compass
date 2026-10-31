@@ -2048,3 +2048,6 @@ the name {0} is used twice ‖ nazwa {0} jest użyta dwa razy ‖ der Name {0} w
 Jira allows no transition from the current status to {0} ‖ Jira nie pozwala przejść z obecnego statusu do {0} ‖ Jira erlaubt keinen Übergang vom aktuellen Status zu {0} ‖ Jira n'autorise aucune transition du statut actuel vers {0}
 Change {0} Jira issue(s) to match the model?\n\n{1} ‖ Zmienić {0} zgłoszeń w Jirze zgodnie z modelem?\n\n{1} ‖ {0} Jira-Vorgänge an das Modell anpassen?\n\n{1} ‖ Modifier {0} ticket(s) Jira pour suivre le modèle ?\n\n{1}
 The technology cannot be built yet:\n{0} ‖ Technologii nie da się jeszcze zbudować:\n{0} ‖ Die Technologie kann noch nicht erstellt werden:\n{0} ‖ La technologie ne peut pas encore être créée :\n{0}
+Recently used ‖ Ostatnio użyte ‖ Zuletzt verwendet ‖ Utilisées récemment
+Remove from favourites ‖ Usuń z ulubionych ‖ Aus den Favoriten entfernen ‖ Retirer des favoris
+Add to favourites (shown first) ‖ Dodaj do ulubionych (pokazywane na górze) ‖ Zu den Favoriten hinzufügen (oben angezeigt) ‖ Ajouter aux favoris (affichés en premier)
