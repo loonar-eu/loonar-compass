@@ -232,7 +232,7 @@
 <p>Only the memory and the templates are translated. <b>Conversation history is never translated</b>: conversations stay in the language in which you held them.</p>
 <div class="note"><b>No connection to the AI model.</b> Translation requires a working API key. If there is no connection, an orange <b>“!”</b> appears on the <b>Settings</b>, <b>Assistant memory</b> and <b>Document templates</b> icons, and the tooltip explains that the content has not been translated yet. The translation resumes the next time the application starts, or immediately when you click the <b>Translate now</b> button on the “Language and change approval” card. Saving other cards does not start it.</div>
 
-<p>When you save the language, Compass also switches EA's own spell checker to that language, if EA has a dictionary for it. EA comes with English dictionaries only, so for other languages Compass checks the texts itself (chapter 7, “Spelling in the language of Compass”).</p>
+<p>When you save the language, Compass also switches EA's own spell checker to that language, if EA has a dictionary for it. EA comes with English dictionaries only. For Polish, click <b>Download the Polish dictionary for EA (SJP.pl, about 13 MB)</b> on this tab: the dictionary with every inflected form (licence CC BY 4.0) is added to EA's dictionaries, and EA uses it after a restart; words with “ż” may still be underlined. For other languages Compass checks the texts itself (chapter 7, “Spelling in the language of Compass”).</p>
 <h3>Database connection encryption</h3>
 <p>The <b>Connection encryption</b> field on the “Model” card (PostgreSQL database) decides whether the assistant reads the model over TLS:</p>
 <table>
@@ -342,6 +342,7 @@
   <tr><td><code>/send-to-miro [diagram]</code></td><td>Sends a diagram to a Miro board (chapter 12).</td></tr>
   <tr><td><code>/glossary-add [term]</code></td><td>The window of the project glossary (for Polish with all 14 forms of a noun or the forms of a verb).</td></tr>
 </table>
+<p>Example: duplicates only in the package Shop domain.</p>
 <div class="prompt">/find-duplicates Shop domain</div>
 <p><b>Commands without the AI.</b> <code>/repo-doctor</code>, <code>/stale-pages</code>, <code>/find-orphans [package]</code>, <code>/find-duplicates [package]</code>, <code>/trace-gaps [package]</code>, <code>/what-changed [days or date]</code> and <code>/show-hidden-links &lt;diagram id&gt;</code>, typed on their own (with no other words), run at once and show the result marked “⚡ … (without the AI)”. They use no tokens. If you want the result explained, ask the assistant afterwards. With more words, the command goes to the assistant as before.</p>
 <p>Some of these also exist as tools that the assistant uses on its own (chapter 7), so you do not need to type the command. Changing the type of relationships (for example Composition → Serving, also many at once, keeping the name, notes, tagged values, route and hiding) and aligning or distributing elements on a diagram you ask for in plain words.</p>
@@ -582,7 +583,7 @@
 </ul>
 <div class="prompt">Lay out the diagram “Architecture” automatically to the right and generate a DOCX from the template “Model Report” for the package Shop.</div>
 <h3>Spelling in the language of Compass</h3>
-<p>The assistant tool <code>spell_check</code> checks the notes of elements and diagrams, scenario steps and the project glossary with the Windows spelling dictionary of the Compass language (EA's own spell checker has only English dictionaries). Names of elements and glossary terms count as known words. The assistant gives suggestions and corrects only after your consent. If Windows has no dictionary for the language, add the language in Windows Settings → Time &amp; language → Language. In Compass in EA, the notes of a changed element are checked live (lines “✎ Spelling: …” in System Output, chapter 10).</p>
+<p>The assistant tool <code>spell_check</code> checks the notes of elements and diagrams, scenario steps and the project glossary with the Windows spelling dictionary of the Compass language (EA itself checks Polish once you download the SJP.pl dictionary in Settings → Language). Names of elements and glossary terms count as known words. The assistant gives suggestions and corrects only after your consent. If Windows has no dictionary for the language, add the language in Windows Settings → Time &amp; language → Language. In Compass in EA, the notes of a changed element are checked live (lines “✎ Spelling: …” in System Output, chapter 10).</p>
 <div class="prompt">Check the spelling of the notes in the package Shop.</div>
 <h3>Good to know</h3>
 <ul>
@@ -837,6 +838,7 @@
   <li>Writes go through the same EA window, so changes show at once in the Project Browser and on diagrams. Change approval works as in the separate application (chapter 16).</li>
   <li><b>Show diagram</b> and <b>Edit diagram</b> open the diagram in EA itself instead of showing an image in the chat.</li>
   <li>Right-click an element, package or diagram (in the Project Browser or on a diagram) and choose <b>Specialize</b> → <b>Add to the Compass conversation</b>. A reference to the object goes into the message, for example «Package: Shop (id 5)», so the assistant knows which object you mean. The <b>⌖</b> button in the message card adds the same references by searching the model (chapter 6, “Pick from the model”).</li>
+  <li>On an operation of a class the same menu has <b>Find where it is used on diagrams</b>: Compass asks the assistant on which diagrams (sequence messages, actions) the operation is used. On an element it has <b>Clone as a new version (with trace)</b>: the assistant makes a copy of the element as a new version with a trace relationship to the original, through the usual approval.</li>
 </ul>
 <div class="prompt">Describe «Package: Shop (id 5)» and suggest the missing requirements.</div>
 <h3>Live check</h3>
@@ -914,7 +916,7 @@
 <p>Diagrams can go only to boards of the team the app is installed in; to use another organization, install the app there too (the same button).</p>
 <p><b>Sending:</b></p>
 <ol>
-  <li>Click <b>Send to Miro</b> under a diagram in the chat.</li>
+  <li>Click <b>Send to Miro</b> under a diagram in the chat, or in EA right-click the diagram (on the diagram or in the Project Browser) and choose <b>Specialize</b> → <b>Send to Miro</b>. If elements are selected on the diagram, only the selection is sent.</li>
   <li>Choose the board (the one you used last time is offered first; the search field filters by name).</li>
   <li>The thumbnail shows what is already on the board (grey) and where the diagram will go (a blue frame, red when it would cover something). The application finds a free spot by itself; drag the frame to choose another one.</li>
   <li>Click <b>Send to Miro</b>. When it is done, the conversation gets a message with a link that opens the board at the new frame.</li>
@@ -1227,7 +1229,7 @@ compass-hub --service-uninstall</pre>
 </table>
 <h3>Accounts and sign-in</h3>
 <p>People sign in to the web view (<code>https://&lt;hub&gt;/</code>; <code>http://</code> only on the same computer) with a user name and a password. Compass and MCP clients use an API token.</p>
-<div class="note"><b>Default account.</b> A new hub (a <code>hub.json</code> without users) creates the account <code>admin</code> with the password <code>passw0rd</code> (with a zero). At the first sign-in the hub asks you to change the password and allows nothing else until then. Do it before the hub can be reached from other computers.</div>
+<div class="note"><b>Default account.</b> A new hub (a <code>hub.json</code> without users) creates the account <code>admin</code> with the password <code>passw0rd</code> (with a zero). At the first sign-in the hub asks you to change the password and allows nothing else until then. Do it before the hub can be reached from other computers. With a company sign-in (<code>oidc</code>) in <code>hub.json</code> there is no default account: the admins are the members of the groups in <code>roles.admin</code>. A hub listening on 127.0.0.1 only answers requests whose Host header is <code>localhost</code> or <code>127.0.0.1</code> (protection against DNS rebinding); set a reverse proxy on the same computer to pass such a Host.</div>
 <ul>
   <li>A password has at least 10 characters and may not be the default password or the user name. The hub stores passwords only as PBKDF2 hashes.</li>
   <li>A sign-in lasts 12 hours; <b>Sign out</b> ends it at once.</li>

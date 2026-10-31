@@ -232,7 +232,7 @@
 </ol>
 <p>Übersetzt werden nur das Gedächtnis und die Vorlagen. <b>Der Unterhaltungsverlauf wird nie übersetzt</b>: Unterhaltungen bleiben in der Sprache, in der Sie sie geführt haben.</p>
 <div class="note"><b>Keine Verbindung zum KI-Modell.</b> Die Übersetzung erfordert einen funktionierenden API-Schlüssel. Besteht keine Verbindung, erscheint auf den Symbolen <b>Einstellungen</b>, <b>Gedächtnis des Assistenten</b> und <b>Dokumentvorlagen</b> ein orangefarbenes <b>„!“</b>, und der Tooltip erklärt, dass die Inhalte noch nicht übersetzt sind. Die Übersetzung wird beim nächsten Start der Anwendung fortgesetzt oder sofort nach einem Klick auf <b>Jetzt übersetzen</b> auf der Karte „Sprache und Freigabe von Änderungen“. Das Speichern anderer Karten setzt sie nicht fort.</div>
-<p>Beim Speichern der Sprache stellt Compass auch die Rechtschreibprüfung von EA auf diese Sprache um, wenn EA ein Wörterbuch dafür hat. EA bringt nur englische Wörterbücher mit; für andere Sprachen prüft Compass die Texte selbst (Kapitel 7, „Rechtschreibung in der Sprache von Compass“).</p>
+<p>Beim Speichern der Sprache stellt Compass auch die Rechtschreibprüfung von EA auf diese Sprache um, wenn EA ein Wörterbuch dafür hat. EA bringt nur englische Wörterbücher mit. Für Polnisch klicken Sie auf dieser Registerkarte auf <b>Polnisches Wörterbuch für EA herunterladen (SJP.pl, ca. 13 MB)</b>: Das Wörterbuch mit allen Flexionsformen (Lizenz CC BY 4.0) wird zu den Wörterbüchern von EA hinzugefügt, und EA verwendet es nach einem Neustart; Wörter mit „ż“ können weiterhin unterstrichen sein. Für andere Sprachen prüft Compass die Texte selbst (Kapitel 7, „Rechtschreibung in der Sprache von Compass“).</p>
 <h3>Verschlüsselung der Datenbankverbindung</h3>
 <p>Das Feld <b>Verschlüsselung der Verbindung</b> auf der Karte „Modell“ (Option „PostgreSQL-Datenbank“) legt fest, ob der Assistent das Modell über TLS liest:</p>
 <table>
@@ -343,6 +343,7 @@
   <tr><td><code>/send-to-miro [diagram]</code></td><td>Sendet ein Diagramm an ein Miro-Board (Kapitel 12).</td></tr>
   <tr><td><code>/glossary-add [term]</code></td><td>Das Fenster des Projektglossars (für Polnisch mit allen 14 Formen eines Substantivs oder den Formen eines Verbs).</td></tr>
 </table>
+<p>Beispiel: Duplikate nur im Paket Shop domain.</p>
 <div class="prompt">/find-duplicates Shop domain</div>
 <p><b>Befehle ohne KI.</b> <code>/repo-doctor</code>, <code>/stale-pages</code>, <code>/find-orphans [package]</code>, <code>/find-duplicates [package]</code>, <code>/trace-gaps [package]</code>, <code>/what-changed [days or date]</code> und <code>/show-hidden-links &lt;diagram id&gt;</code>, allein eingegeben (ohne weitere Wörter), laufen sofort und zeigen das Ergebnis mit der Markierung „⚡ … (ohne KI)“. Sie verbrauchen keine Tokens. Wenn Sie eine Erklärung möchten, fragen Sie danach den Assistenten. Mit weiteren Wörtern geht der Befehl wie bisher an den Assistenten.</p>
 <p>Einige dieser Befehle gibt es auch als Werkzeuge, die der Assistent von sich aus verwendet (Kapitel 7); den Befehl müssen Sie dafür nicht eingeben. Um das Ändern des Typs von Beziehungen (zum Beispiel Composition → Serving, auch viele auf einmal, wobei Name, Notizen, Tagged Values, Linienführung und Ausblendung erhalten bleiben) und um das Ausrichten oder Verteilen von Elementen auf einem Diagramm bitten Sie in normalen Worten.</p>
@@ -583,7 +584,7 @@
 </ul>
 <div class="prompt">Ordne das Diagramm „Architektur“ automatisch nach rechts an und erzeuge aus der Vorlage „Model Report“ ein DOCX für das Paket Shop.</div>
 <h3>Rechtschreibung in der Sprache von Compass</h3>
-<p>Das Assistenten-Werkzeug <code>spell_check</code> prüft die Notizen von Elementen und Diagrammen, Szenarioschritte und das Projektglossar mit dem Windows-Rechtschreibwörterbuch der Compass-Sprache (die Rechtschreibprüfung von EA hat nur englische Wörterbücher). Namen von Elementen und Glossarbegriffe gelten als bekannte Wörter. Der Assistent macht Vorschläge und korrigiert erst nach Ihrer Zustimmung. Hat Windows kein Wörterbuch für die Sprache, fügen Sie die Sprache in den Windows-Einstellungen → Zeit und Sprache → Sprache hinzu. In Compass in EA werden die Notizen eines geänderten Elements laufend geprüft (Zeilen „✎ Rechtschreibung: …“ in System Output, Kapitel 10).</p>
+<p>Das Assistenten-Werkzeug <code>spell_check</code> prüft die Notizen von Elementen und Diagrammen, Szenarioschritte und das Projektglossar mit dem Windows-Rechtschreibwörterbuch der Compass-Sprache (EA selbst prüft Polnisch, sobald Sie das Wörterbuch SJP.pl unter Einstellungen → Sprache herunterladen). Namen von Elementen und Glossarbegriffe gelten als bekannte Wörter. Der Assistent macht Vorschläge und korrigiert erst nach Ihrer Zustimmung. Hat Windows kein Wörterbuch für die Sprache, fügen Sie die Sprache in den Windows-Einstellungen → Zeit und Sprache → Sprache hinzu. In Compass in EA werden die Notizen eines geänderten Elements laufend geprüft (Zeilen „✎ Rechtschreibung: …“ in System Output, Kapitel 10).</p>
 <div class="prompt">Prüfe die Rechtschreibung der Notizen im Paket Shop.</div>
 <h3>Gut zu wissen</h3>
 <ul>
@@ -838,6 +839,7 @@
   <li>Speicherungen laufen über dasselbe EA-Fenster, sodass Änderungen sofort im Projekt-Browser und in den Diagrammen sichtbar sind. Die Freigabe von Änderungen funktioniert wie in der eigenständigen Anwendung (Kapitel 16).</li>
   <li><b>Diagramm anzeigen</b> und <b>Diagramm bearbeiten</b> öffnen das Diagramm in EA selbst, statt ein Bild im Chat zu zeigen.</li>
   <li>Klicken Sie mit der rechten Maustaste auf ein Element, ein Paket oder ein Diagramm (im Projekt-Browser oder im Diagramm) und wählen Sie <b>Specialize</b> → <b>Zur Compass-Unterhaltung hinzufügen</b>. In die Nachricht kommt ein Verweis auf das Objekt, zum Beispiel «Paket: Shop (id 5)», und der Assistent weiß, welches Objekt gemeint ist. Die Schaltfläche <b>⌖</b> in der Nachrichtenkarte fügt dieselben Verweise über eine Suche im Modell ein (Kapitel 6, „Aus dem Modell wählen“).</li>
+  <li>Auf einer Operation einer Klasse enthält dasselbe Menü <b>Verwendung in Diagrammen suchen</b>: Compass fragt den Assistenten, in welchen Diagrammen (Sequenznachrichten, Aktionen) die Operation verwendet wird. Auf einem Element enthält es <b>Als neue Version klonen (mit Trace)</b>: Der Assistent legt eine Kopie des Elements als neue Version mit einer Trace-Beziehung zum Original an, über die übliche Freigabe.</li>
 </ul>
 <div class="prompt">Beschreibe «Paket: Shop (id 5)» und schlage fehlende Anforderungen vor.</div>
 <h3>Prüfung während der Arbeit</h3>
@@ -915,7 +917,7 @@
 <p>Diagramme können nur auf Boards des Teams gelangen, in dem die App installiert ist; für eine andere Organisation installieren Sie die App auch dort (mit derselben Schaltfläche).</p>
 <p><b>Senden:</b></p>
 <ol>
-  <li>Klicken Sie unter einem Diagramm im Chat auf <b>An Miro senden</b>.</li>
+  <li>Klicken Sie unter einem Diagramm im Chat auf <b>An Miro senden</b> oder klicken Sie in EA mit der rechten Maustaste auf das Diagramm (im Diagramm oder im Projekt-Browser) und wählen Sie <b>Specialize</b> → <b>An Miro senden</b>. Sind im Diagramm Elemente markiert, wird nur die Auswahl gesendet.</li>
   <li>Wählen Sie das Board (das zuletzt verwendete wird zuerst angeboten; das Suchfeld filtert nach Namen).</li>
   <li>Die Miniatur zeigt, was bereits auf dem Board ist (grau), und wohin das Diagramm kommt (ein blauer Rahmen, rot, wenn er etwas verdecken würde). Die Anwendung findet selbst eine freie Stelle; ziehen Sie den Rahmen, um eine andere zu wählen.</li>
   <li>Klicken Sie auf <b>An Miro senden</b>. Danach erhält die Unterhaltung eine Nachricht mit einem Link, der das Board beim neuen Rahmen öffnet.</li>
@@ -1231,7 +1233,7 @@ compass-hub --service-uninstall</pre>
 </table>
 <h3>Konten und Anmeldung</h3>
 <p>An der Weboberfläche (<code>https://&lt;Hub&gt;/</code>; <code>http://</code> nur auf demselben Computer) melden sich Personen mit Benutzername und Passwort an. Compass und MCP-Clients verwenden ein API-Token.</p>
-<div class="note"><b>Standardkonto.</b> Ein neuer Hub (eine <code>hub.json</code> ohne Benutzer) legt das Konto <code>admin</code> mit dem Passwort <code>passw0rd</code> (mit einer Null) an. Bei der ersten Anmeldung verlangt der Hub eine Passwortänderung und erlaubt bis dahin nichts anderes. Tun Sie das, bevor der Hub von anderen Computern erreichbar ist.</div>
+<div class="note"><b>Standardkonto.</b> Ein neuer Hub (eine <code>hub.json</code> ohne Benutzer) legt das Konto <code>admin</code> mit dem Passwort <code>passw0rd</code> (mit einer Null) an. Bei der ersten Anmeldung verlangt der Hub eine Passwortänderung und erlaubt bis dahin nichts anderes. Tun Sie das, bevor der Hub von anderen Computern erreichbar ist. Mit einer Firmenanmeldung (<code>oidc</code>) in <code>hub.json</code> gibt es kein Standardkonto: Administratoren sind die Mitglieder der Gruppen in <code>roles.admin</code>. Ein Hub, der nur auf 127.0.0.1 lauscht, beantwortet nur Anfragen mit dem Host-Header <code>localhost</code> oder <code>127.0.0.1</code> (Schutz vor DNS-Rebinding); stellen Sie einen Reverse Proxy auf demselben Computer so ein, dass er einen solchen Host weitergibt.</div>
 <ul>
   <li>Ein Passwort hat mindestens 10 Zeichen und darf weder das Standardpasswort noch der Benutzername sein. Der Hub speichert Passwörter nur als PBKDF2-Hashes.</li>
   <li>Eine Anmeldung gilt 12 Stunden; <b>Sign out</b> beendet sie sofort.</li>

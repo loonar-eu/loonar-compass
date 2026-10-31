@@ -177,7 +177,7 @@ Restart-Service CompassHub</pre>
 <pre>C:\CompassHub\compass-hub.exe --service-install C:\CompassHub\hub.json</pre>
   Polecenie tworzy usługę <code>CompassHub</code> („Compass Hub (Loonar Compass team service)”) z automatycznym startem na koncie LocalSystem i ją uruchamia.</li>
   <li>Teraz ustaw sekrety usługi (krok 3) i wykonaj <code>Restart-Service CompassHub</code>.</li>
-  <li>Na serwerze otwórz <code>http://127.0.0.1:8730/</code> i zaloguj się jako <code>admin</code> / <code>passw0rd</code> (z zerem). Hub od razu żąda nowego hasła i do tego czasu nie pozwala na nic innego. Hasło ma co najmniej 10 znaków. Zrób to <b>przed</b> krokiem 5, który udostępni hub w sieci.</li>
+  <li>Na serwerze otwórz <code>http://127.0.0.1:8730/</code> i zaloguj się jako <code>admin</code> / <code>passw0rd</code> (z zerem). Hub od razu żąda nowego hasła i do tego czasu nie pozwala na nic innego. Hasło ma co najmniej 10 znaków. Zrób to <b>przed</b> krokiem 5, który udostępni hub w sieci. Jeśli w <code>hub.json</code> skonfigurowano już logowanie kontem firmowym (<code>oidc</code>), konta <code>admin</code> nie ma: zaloguj się kontem z grupy administratorów (<code>roles.admin</code>).</li>
 </ol>
 <p><b>Konto usługi (zalecane w produkcji).</b> LocalSystem to najprostszy start, ale ktoś, kto przejąłby hub, działałby jako SYSTEM, a uwierzytelnianie Windows do SQL Server używa konta komputera. Lepiej: osobne konto domenowe albo zarządzane konto usługi grupy (gMSA) tylko z uprawnieniami potrzebnymi hubowi – modyfikacja w <code>C:\CompassHub</code>, odczyt modeli, <code>db_datareader</code> w bazach modeli: <code>sc.exe config CompassHub obj= "DOMENA\svc-compasshub$"</code> (gMSA, bez hasła) i <code>Restart-Service CompassHub</code>.</p>
 <p><b>Sprawdzenie:</b></p>

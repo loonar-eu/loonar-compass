@@ -233,7 +233,7 @@
 <p>Seules la mémoire et les modèles de documents sont traduits. <b>L'historique des conversations n'est jamais traduit</b> : les conversations restent dans la langue dans laquelle vous les avez menées.</p>
 <div class="note"><b>Pas de connexion au modèle d'IA.</b> La traduction nécessite une clé API fonctionnelle. En l'absence de connexion, un <b>« ! »</b> orange apparaît sur les icônes <b>Paramètres</b>, <b>Mémoire de l'assistant</b> et <b>Modèles de documents</b>, et l'info-bulle explique que les contenus ne sont pas encore traduits. La traduction reprend au prochain démarrage de l'application, ou immédiatement après un clic sur <b>Traduire maintenant</b> dans la carte « Langue et validation des modifications » ; l'enregistrement des autres cartes ne la relance pas.</div>
 
-<p>Lorsque vous enregistrez la langue, Compass règle aussi le correcteur orthographique d'EA sur cette langue, si EA a un dictionnaire pour elle. EA ne fournit que des dictionnaires anglais ; pour les autres langues, Compass vérifie lui-même les textes (chapitre 7, « Orthographe dans la langue de Compass »).</p>
+<p>Lorsque vous enregistrez la langue, Compass règle aussi le correcteur orthographique d'EA sur cette langue, si EA a un dictionnaire pour elle. EA ne fournit que des dictionnaires anglais. Pour le polonais, cliquez sur <b>Télécharger le dictionnaire polonais pour EA (SJP.pl, env. 13 Mo)</b> dans cet onglet : le dictionnaire avec toutes les formes fléchies (licence CC BY 4.0) est ajouté aux dictionnaires d'EA, qui l'utilise après un redémarrage ; les mots avec « ż » peuvent rester soulignés. Pour les autres langues, Compass vérifie lui-même les textes (chapitre 7, « Orthographe dans la langue de Compass »).</p>
 <h3>Chiffrement de la connexion à la base</h3>
 <p>Le champ <b>Chiffrement de la connexion</b> de la carte « Modèle » (option « Base PostgreSQL ») détermine si la lecture du modèle par l'assistant passe par TLS :</p>
 <table>
@@ -343,6 +343,7 @@
   <tr><td><code>/send-to-miro [diagram]</code></td><td>Envoie un diagramme vers un tableau Miro (chapitre 12).</td></tr>
   <tr><td><code>/glossary-add [term]</code></td><td>La fenêtre du glossaire du projet (pour le polonais avec les 14 formes d'un nom ou les formes d'un verbe).</td></tr>
 </table>
+<p>Exemple : doublons uniquement dans le paquetage Shop domain.</p>
 <div class="prompt">/find-duplicates Shop domain</div>
 <p><b>Commandes sans IA.</b> <code>/repo-doctor</code>, <code>/stale-pages</code>, <code>/find-orphans [package]</code>, <code>/find-duplicates [package]</code>, <code>/trace-gaps [package]</code>, <code>/what-changed [days or date]</code> et <code>/show-hidden-links &lt;diagram id&gt;</code>, saisies seules (sans autres mots), s'exécutent aussitôt et affichent le résultat marqué « ⚡ … (sans IA) ». Elles ne consomment aucun jeton. Si vous voulez une explication, demandez ensuite à l'assistant. Avec d'autres mots, la commande est envoyée à l'assistant comme avant.</p>
 <p>Certaines de ces commandes existent aussi comme outils que l'assistant utilise de lui-même (chapitre 7) : inutile alors de taper la commande. Changer le type de relations (par exemple Composition → Serving, aussi pour de nombreuses relations à la fois, en gardant le nom, les notes, les tagged values, le tracé et le masquage) et aligner ou répartir des éléments sur un diagramme : demandez-le simplement avec vos mots.</p>
@@ -582,7 +583,7 @@
 </ul>
 <div class="prompt">Dispose automatiquement le diagramme « Architecture » vers la droite et génère un DOCX à partir du modèle « Model Report » pour le paquetage Boutique.</div>
 <h3>Orthographe dans la langue de Compass</h3>
-<p>L'outil de l'assistant <code>spell_check</code> vérifie les notes des éléments et des diagrammes, les étapes des scénarios et le glossaire du projet avec le dictionnaire orthographique de Windows dans la langue de Compass (le correcteur d'EA n'a que des dictionnaires anglais). Les noms des éléments et les termes du glossaire comptent comme des mots connus. L'assistant propose des corrections et ne corrige qu'avec votre accord. Si Windows n'a pas de dictionnaire pour la langue, ajoutez la langue dans Paramètres Windows → Heure et langue → Langue. Dans Compass dans EA, les notes d'un élément modifié sont vérifiées en continu (lignes « ✎ Orthographe : … » dans System Output, chapitre 10).</p>
+<p>L'outil de l'assistant <code>spell_check</code> vérifie les notes des éléments et des diagrammes, les étapes des scénarios et le glossaire du projet avec le dictionnaire orthographique de Windows dans la langue de Compass (EA vérifie lui-même le polonais une fois le dictionnaire SJP.pl téléchargé dans Paramètres → Langue). Les noms des éléments et les termes du glossaire comptent comme des mots connus. L'assistant propose des corrections et ne corrige qu'avec votre accord. Si Windows n'a pas de dictionnaire pour la langue, ajoutez la langue dans Paramètres Windows → Heure et langue → Langue. Dans Compass dans EA, les notes d'un élément modifié sont vérifiées en continu (lignes « ✎ Orthographe : … » dans System Output, chapitre 10).</p>
 <div class="prompt">Vérifie l'orthographe des notes du paquetage Boutique.</div>
 <h3>Bon à savoir</h3>
 <ul>
@@ -837,6 +838,7 @@
   <li>Les enregistrements passent par la même fenêtre EA : les modifications apparaissent aussitôt dans le navigateur de projet et sur les diagrammes. La validation des modifications fonctionne comme dans l'application autonome (chapitre 16).</li>
   <li><b>Afficher le diagramme</b> et <b>Modifier le diagramme</b> ouvrent le diagramme dans EA lui-même, au lieu d'afficher une image dans le chat.</li>
   <li>Cliquez avec le bouton droit sur un élément, un paquetage ou un diagramme (dans le navigateur de projet ou sur un diagramme) et choisissez <b>Specialize</b> → <b>Ajouter à la conversation Compass</b>. Une référence à l'objet est ajoutée au message, par exemple «Paquetage: Boutique (id 5)», et l'assistant sait de quel objet il s'agit. Le bouton <b>⌖</b> de la carte de message ajoute les mêmes références en cherchant dans le modèle (chapitre 6, « Choisir dans le modèle »).</li>
+  <li>Sur une opération d'une classe, le même menu propose <b>Trouver son utilisation dans les diagrammes</b> : Compass demande à l'assistant dans quels diagrammes (messages de séquence, actions) l'opération est utilisée. Sur un élément, il propose <b>Cloner comme nouvelle version (avec trace)</b> : l'assistant crée une copie de l'élément comme nouvelle version avec une relation trace vers l'original, via l'approbation habituelle.</li>
 </ul>
 <div class="prompt">Décris «Paquetage: Boutique (id 5)» et propose les exigences manquantes.</div>
 <h3>Contrôle en continu</h3>
@@ -914,7 +916,7 @@
 <p>Les diagrammes ne peuvent aller que sur les tableaux de l'équipe où l'application est installée ; pour une autre organisation, installez-la aussi là-bas (avec le même bouton).</p>
 <p><b>Envoi :</b></p>
 <ol>
-  <li>Cliquez sur <b>Envoyer vers Miro</b> sous un diagramme dans la conversation.</li>
+  <li>Cliquez sur <b>Envoyer vers Miro</b> sous un diagramme dans la conversation, ou dans EA cliquez avec le bouton droit sur le diagramme (sur le diagramme ou dans le navigateur de projet) et choisissez <b>Specialize</b> → <b>Envoyer vers Miro</b>. Si des éléments sont sélectionnés sur le diagramme, seule la sélection est envoyée.</li>
   <li>Choisissez le tableau (celui utilisé la dernière fois est proposé en premier ; le champ de recherche filtre par nom).</li>
   <li>La miniature montre ce qui est déjà sur le tableau (en gris) et où ira le diagramme (un cadre bleu, rouge s'il recouvrait quelque chose). L'application trouve elle-même un emplacement libre ; faites glisser le cadre pour en choisir un autre.</li>
   <li>Cliquez sur <b>Envoyer vers Miro</b>. Une fois l'envoi terminé, la conversation reçoit un message avec un lien qui ouvre le tableau sur le nouveau cadre.</li>
@@ -1222,7 +1224,7 @@ compass-hub --service-uninstall</pre>
 </table>
 <h3>Comptes et connexion</h3>
 <p>Les personnes se connectent à la vue web (<code>https://&lt;hub&gt;/</code> ; <code>http://</code> seulement sur le même ordinateur) avec un nom d'utilisateur et un mot de passe. Compass et les clients MCP utilisent un jeton API.</p>
-<div class="note"><b>Compte par défaut.</b> Un nouveau hub (un <code>hub.json</code> sans utilisateurs) crée le compte <code>admin</code> avec le mot de passe <code>passw0rd</code> (avec un zéro). À la première connexion, le hub demande de changer le mot de passe et n'autorise rien d'autre d'ici là. Faites-le avant que le hub soit accessible depuis d'autres ordinateurs.</div>
+<div class="note"><b>Compte par défaut.</b> Un nouveau hub (un <code>hub.json</code> sans utilisateurs) crée le compte <code>admin</code> avec le mot de passe <code>passw0rd</code> (avec un zéro). À la première connexion, le hub demande de changer le mot de passe et n'autorise rien d'autre d'ici là. Faites-le avant que le hub soit accessible depuis d'autres ordinateurs. Avec une connexion d'entreprise (<code>oidc</code>) dans <code>hub.json</code>, il n'y a pas de compte par défaut : les administrateurs sont les membres des groupes de <code>roles.admin</code>. Un hub qui écoute seulement sur 127.0.0.1 ne répond qu'aux requêtes dont l'en-tête Host est <code>localhost</code> ou <code>127.0.0.1</code> (protection contre le DNS rebinding) ; réglez le reverse proxy sur le même ordinateur pour qu'il transmette un tel Host.</div>
 <ul>
   <li>Un mot de passe compte au moins 10 caractères et ne peut être ni le mot de passe par défaut ni le nom d'utilisateur. Le hub ne conserve les mots de passe que sous forme d'empreintes PBKDF2.</li>
   <li>Une connexion dure 12 heures ; <b>Sign out</b> y met fin immédiatement.</li>

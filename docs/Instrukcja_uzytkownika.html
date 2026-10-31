@@ -233,7 +233,7 @@
 </ol>
 <p>Tłumaczone są tylko pamięć asystenta i szablony. <b>Historia rozmów nigdy nie jest tłumaczona</b>: rozmowy zostają w języku, w którym je prowadziłeś.</p>
 <div class="note"><b>Brak połączenia z modelem AI.</b> Tłumaczenie wymaga działającego klucza API. Jeśli połączenia nie ma, na ikonach <b>Ustawienia</b>, <b>Pamięć asystenta</b> i <b>Szablony dokumentów</b> pojawia się pomarańczowy znak <b>„!”</b>, a podpowiedź po najechaniu myszą wyjaśnia, że treści nie są jeszcze przetłumaczone. Tłumaczenie wznowi się przy następnym uruchomieniu aplikacji albo od razu po kliknięciu <b>Przetłumacz teraz</b> w karcie „Język i zatwierdzanie zmian”. Zapisywanie innych kart go nie wznawia.</div>
-<p>Po zapisaniu języka Compass przełącza też korektę pisowni samego EA na ten język, jeśli EA ma dla niego słownik. EA ma tylko słowniki angielskie, więc dla pozostałych języków teksty sprawdza Compass (rozdział 7, „Pisownia w języku Compassa”).</p>
+<p>Po zapisaniu języka Compass przełącza też korektę pisowni samego EA na ten język, jeśli EA ma dla niego słownik. EA ma wbudowane tylko słowniki angielskie. Dla polskiego kliknij na tej karcie <b>Pobierz polski słownik dla EA (SJP.pl, ok. 13 MB)</b>: słownik ze wszystkimi formami odmiany (licencja CC BY 4.0) zostaje dodany do słowników EA, a EA użyje go po ponownym uruchomieniu; słowa z „ż” mogą być nadal podkreślane. Dla pozostałych języków teksty sprawdza Compass (rozdział 7, „Pisownia w języku Compassa”).</p>
 <h3>Szyfrowanie połączenia z bazą</h3>
 <p>Pole <b>Szyfrowanie połączenia</b> w karcie „Model” (opcja „Baza PostgreSQL”) decyduje, czy odczyt modelu przez asystenta idzie przez TLS:</p>
 <table>
@@ -293,12 +293,12 @@
 <table>
   <tr><th style="width: 34%;">Komenda</th><th>Co robi</th></tr>
   <tr><td><code>/tidy-diagram [diagram]</code></td><td>Porządkuje diagram: układ, odstępy i proste połączenia.</td></tr>
-  <tr><td><code>/where-used &lt;element or relationship&gt;</code></td><td>Każde użycie: diagramy (przy relacji: gdzie jest widoczna, a gdzie ukryta), relacje, typy, wartości tagów i przepływy informacji.</td></tr>
-  <tr><td><code>/find-orphans [package]</code></td><td>Elementy, których nic nie używa (więcej niż własne wyszukiwanie sierot w EA).</td></tr>
-  <tr><td><code>/find-duplicates [package]</code></td><td>Elementy i relacje, które prawdopodobnie są duplikatami, z informacją, jak bardzo każdy z nich jest używany.</td></tr>
-  <tr><td><code>/merge-elements &lt;duplicate&gt; into &lt;element to keep&gt;</code></td><td>Relacje, miejsca na diagramach (z zachowaniem położenia), klasyfikatory, typy i wartości tagów wskazujące na duplikat przechodzą na element, który zostaje, razem z wartościami tagów i notatkami duplikatu; potem duplikat jest usuwany. Zawsze pyta o zgodę, a Compass najpierw robi baseline pakietu.</td></tr>
-  <tr><td><code>/bulk-set &lt;which elements&gt; &lt;what to set&gt;</code></td><td>Zmienia wiele elementów naraz: status, fazę, wersję, autora, stereotyp, wartości tagów albo tekst w nazwach. Najpierw widzisz ponumerowaną tabelę przed → po, potem jeden zapis wierszy, które zostawisz. Można to cofnąć.</td></tr>
-  <tr><td><code>/import-sheet &lt;attached .xlsx or .csv&gt; into &lt;package&gt;</code></td><td>Kolumny są przypisywane po nagłówku: nazwa, typ (albo jeden stały typ), stereotyp, notatki, alias, status, wartości tagów i relacje z komórek, które wskazują inne elementy. Wiersze są dopasowywane do istniejących elementów po GUID, aliasie albo nazwie i typie, więc ponowny import tego samego pliku niczego nie zmienia. Ponumerowany podgląd pokazuje: utworzenie, zmiana albo bez zmian; długie teksty trafiają do notatek w całości. Jeden zapis po Twoim zatwierdzeniu, który można cofnąć.</td></tr>
+  <tr><td><code>/where-used &lt;element albo relacja&gt;</code></td><td>Każde użycie: diagramy (przy relacji: gdzie jest widoczna, a gdzie ukryta), relacje, typy, wartości tagów i przepływy informacji.</td></tr>
+  <tr><td><code>/find-orphans [pakiet]</code></td><td>Elementy, których nic nie używa (więcej niż własne wyszukiwanie sierot w EA).</td></tr>
+  <tr><td><code>/find-duplicates [pakiet]</code></td><td>Elementy i relacje, które prawdopodobnie są duplikatami, z informacją, jak bardzo każdy z nich jest używany.</td></tr>
+  <tr><td><code>/merge-elements &lt;duplikat&gt; into &lt;element do zachowania&gt;</code></td><td>Relacje, miejsca na diagramach (z zachowaniem położenia), klasyfikatory, typy i wartości tagów wskazujące na duplikat przechodzą na element, który zostaje, razem z wartościami tagów i notatkami duplikatu; potem duplikat jest usuwany. Zawsze pyta o zgodę, a Compass najpierw robi baseline pakietu.</td></tr>
+  <tr><td><code>/bulk-set &lt;które elementy&gt; &lt;co ustawić&gt;</code></td><td>Zmienia wiele elementów naraz: status, fazę, wersję, autora, stereotyp, wartości tagów albo tekst w nazwach. Najpierw widzisz ponumerowaną tabelę przed → po, potem jeden zapis wierszy, które zostawisz. Można to cofnąć.</td></tr>
+  <tr><td><code>/import-sheet &lt;attached .xlsx or .csv&gt; into &lt;pakiet&gt;</code></td><td>Kolumny są przypisywane po nagłówku: nazwa, typ (albo jeden stały typ), stereotyp, notatki, alias, status, wartości tagów i relacje z komórek, które wskazują inne elementy. Wiersze są dopasowywane do istniejących elementów po GUID, aliasie albo nazwie i typie, więc ponowny import tego samego pliku niczego nie zmienia. Ponumerowany podgląd pokazuje: utworzenie, zmiana albo bez zmian; długie teksty trafiają do notatek w całości. Jeden zapis po Twoim zatwierdzeniu, który można cofnąć.</td></tr>
   <tr><td><code>/template-doctor &lt;element albo szablon&gt; [pakiet] [dokument]</code></td><td>Dlaczego elementu nie ma w dokumencie wygenerowanym przez EA: z jakiego pakietu powstał dokument, filtry szablonu (pominięte typy elementów, status, faza, elementy bez notatek, daty) i jego sekcje, a z dołączonym DOCX – czy nazwa w nim jest i czy element jest nowszy niż dokument. Wylistuje też szablony modelu, objaśni wybrany prostymi słowami i porówna cały pakiet z DOCX. Tylko czyta.</td></tr>
   <tr><td><code>/safety-net [co przywrócić | today]</code></td><td>Migawki zrobione tuż przed ręcznym usunięciem elementu, pakietu albo diagramu w EA oraz dziennik dzisiejszych ręcznych zmian. Wskaż, co przywrócić, a Compass odtworzy to z migawki (z notatkami, statusem, wartościami tagowanymi, atrybutami, relacjami do elementów, które nadal istnieją, i miejscami na diagramach) jednym zapisem, który zatwierdzasz i który można cofnąć. Włącz w Ustawieniach → Agenci zdarzeń → <b>Siatka bezpieczeństwa</b> i otwórz ponownie Compass w EA; EA czeka wtedy chwilę na Compassa przed każdym usunięciem.</td></tr>
   <tr><td><code>/check-sequence [diagram albo pakiet]</code></td><td>Sprawdza diagramy sekwencji: wiadomości, których odbiorca nie ma takiej operacji (z listą brakujących operacji), luki i powtórzenia w numeracji, odpowiedzi bez wywołania, linie życia bez wiadomości albo klasyfikatora, fragmenty bez żadnej wiadomości w środku. Tylko czyta.</td></tr>
@@ -323,28 +323,29 @@
   <tr><td><b>Ctrl+K w EA</b></td><td>Nawigator modelu w add-inie (także w menu kontekstowym: <b>Find in the model…</b>): wpisz nazwę, alias, stereotyp albo GUID (opcjonalnie także notatki), a wyniki pojawiają się w trakcie pisania, bez AI. Enter pokazuje element w Browserze albo otwiera diagram; lista po prawej pokazuje diagramy, na których jest element – dwuklik otwiera diagram z zaznaczonym elementem. Przy pustym polu widać ostatnio otwierane.</td></tr>
   <tr><td><code>/to-bin &lt;elements&gt;</code></td><td>Przenosi elementy do pakietu „Recycle bin (Compass)” zamiast je usuwać. Możesz je stamtąd przywrócić.</td></tr>
   <tr><td><code>/repo-doctor</code></td><td>Sprawdza spójność repozytorium: relacje do nieistniejących elementów, nieaktualne wiersze diagramów, GUID-y użyte dwa razy, pakiety bez swojego elementu, stare blokady i rozmiar pliku .eap/.eapx. Tylko czyta.</td></tr>
-  <tr><td><code>/what-changed [since a date or days] [author] [package]</code></td><td>Co zostało utworzone albo zmienione, przez kogo i gdzie. Z baseline'em: co dodano, usunięto i zmieniono w porównaniu z nim, bez szumu EA (daty, końce wierszy).</td></tr>
+  <tr><td><code>/what-changed [od daty albo liczba dni] [autor] [pakiet]</code></td><td>Co zostało utworzone albo zmienione, przez kogo i gdzie. Z baseline'em: co dodano, usunięto i zmieniono w porównaniu z nim, bez szumu EA (daty, końce wierszy).</td></tr>
   <tr><td><code>/stale-pages</code></td><td>Strony Confluence i dokumenty Word zrobione z modelu, w których diagramy albo elementy na nich zmieniły się od publikacji; proponuje ponowną publikację. Compass zapisuje każdą publikację w <code>publications.json</code> obok ustawień.</td></tr>
-  <tr><td><code>/validate-model [package]</code></td><td>Sprawdza model według reguł zespołu: nazewnictwo, wymagane wartości tagów, dozwolone relacje, zakazane stereotypy. Reguły możesz napisać na czacie; po Twoim zatwierdzeniu trafiają do <code>governance.json</code>.</td></tr>
-  <tr><td><code>/trace-gaps [package] [steps]</code></td><td>Wymagania, których nic nie realizuje, i elementy projektu, do których nie prowadzi żadne wymaganie, także przez kilka kroków.</td></tr>
-  <tr><td><code>/how-in-ea &lt;what you want to do&gt;</code></td><td>Kroki dla Twojej wersji EA (odczytanej z EA.exe), podręcznik tej wersji i znane problemy EA z obejściami.</td></tr>
-  <tr><td><code>/explain &lt;diagram&gt; [for whom]</code></td><td>Wyjaśnia diagram prostym językiem: dla zarządu, dyrektora finansowego, audytora albo programisty.</td></tr>
+  <tr><td><code>/validate-model [pakiet]</code></td><td>Sprawdza model według reguł zespołu: nazewnictwo, wymagane wartości tagów, dozwolone relacje, zakazane stereotypy. Reguły możesz napisać na czacie; po Twoim zatwierdzeniu trafiają do <code>governance.json</code>.</td></tr>
+  <tr><td><code>/trace-gaps [pakiet] [kroki]</code></td><td>Wymagania, których nic nie realizuje, i elementy projektu, do których nie prowadzi żadne wymaganie, także przez kilka kroków.</td></tr>
+  <tr><td><code>/how-in-ea &lt;co chcesz zrobić&gt;</code></td><td>Kroki dla Twojej wersji EA (odczytanej z EA.exe), podręcznik tej wersji i znane problemy EA z obejściami.</td></tr>
+  <tr><td><code>/explain &lt;diagram&gt; [dla kogo]</code></td><td>Wyjaśnia diagram prostym językiem: dla zarządu, dyrektora finansowego, audytora albo programisty.</td></tr>
   <tr><td><code>/exec-view &lt;diagram&gt;</code></td><td>Kopia do prezentacji obok oryginału: te same elementy i miejsca; atrybuty, operacje, stereotypy i etykiety relacji ukryte; kolory według typu.</td></tr>
   <tr><td><code>/clone-diagram &lt;diagram&gt; view | variant | selection</code></td><td>Nowy <b>widok</b> tych samych elementów (nic nie jest kopiowane), <b>wariant</b> (nowy pakiet z kopiami elementów i relacji między nimi, w tych samych miejscach, na przykład AS-IS → TO-BE) albo kopie tylko <b>wybranych</b> elementów. Podgląd mówi, co jest nowe, a co wspólne; potem jeden zapis po Twoim zatwierdzeniu.</td></tr>
-  <tr><td><code>/apply-style &lt;package or diagrams&gt; by &lt;stereotype|type|status&gt;</code></td><td>Jeden schemat kolorów dla wielu diagramów.</td></tr>
-  <tr><td><code>/context-diagram &lt;element&gt; [steps] [relationship types]</code></td><td>Nowy diagram elementu i tego, co jest z nim powiązane.</td></tr>
-  <tr><td><code>/visibility &lt;diagram&gt; &lt;what to show or hide&gt;</code></td><td>Zasada, które relacje diagram pokazuje. Jest stosowana na żądanie albo automatycznie, gdy w EA powstaje relacja. Jest zapisana w <code>visibility.json</code> obok ustawień.</td></tr>
+  <tr><td><code>/apply-style &lt;pakiet albo diagramy&gt; by &lt;stereotype|type|status&gt;</code></td><td>Jeden schemat kolorów dla wielu diagramów.</td></tr>
+  <tr><td><code>/context-diagram &lt;element&gt; [kroki] [typy relacji]</code></td><td>Nowy diagram elementu i tego, co jest z nim powiązane.</td></tr>
+  <tr><td><code>/visibility &lt;diagram&gt; &lt;co pokazać albo ukryć&gt;</code></td><td>Zasada, które relacje diagram pokazuje. Jest stosowana na żądanie albo automatycznie, gdy w EA powstaje relacja. Jest zapisana w <code>visibility.json</code> obok ustawień.</td></tr>
   <tr><td><code>/show-hidden-links &lt;diagram&gt;</code></td><td>Relacje między elementami diagramu, które są na nim ukryte.</td></tr>
-  <tr><td><code>/fill-notes [package] [types]</code></td><td>Szkice opisów dla elementów bez opisu, zapisywane po Twojej akceptacji.</td></tr>
-  <tr><td><code>/matrix &lt;source package&gt; × &lt;target package&gt; [relationship type]</code></td><td>Macierz relacji, także jako własna macierz EA.</td></tr>
+  <tr><td><code>/fill-notes [pakiet] [typy]</code></td><td>Szkice opisów dla elementów bez opisu, zapisywane po Twojej akceptacji.</td></tr>
+  <tr><td><code>/matrix &lt;pakiet źródłowy&gt; × &lt;pakiet docelowy&gt; [typ relacji]</code></td><td>Macierz relacji, także jako własna macierz EA.</td></tr>
   <tr><td><code>/new-version &lt;element&gt;</code></td><td>Klonuje element jako nową wersję, z relacją trace do oryginału.</td></tr>
-  <tr><td><code>/doc-package &lt;package&gt;</code></td><td>Czytelny dokument Word z pakietu.</td></tr>
-  <tr><td><code>/template-from-doc [name]</code></td><td>Zamienia załączony dokument w szablon raportu EA.</td></tr>
+  <tr><td><code>/doc-package &lt;pakiet&gt;</code></td><td>Czytelny dokument Word z pakietu.</td></tr>
+  <tr><td><code>/template-from-doc [nazwa]</code></td><td>Zamienia załączony dokument w szablon raportu EA.</td></tr>
   <tr><td><code>/send-to-miro [diagram]</code></td><td>Wysyła diagram na tablicę Miro (rozdział 12).</td></tr>
-  <tr><td><code>/glossary-add [term]</code></td><td>Okno słownika projektu (dla polskiego ze wszystkimi 14 formami rzeczownika albo z formami czasownika).</td></tr>
+  <tr><td><code>/glossary-add [pojęcie]</code></td><td>Okno słownika projektu (dla polskiego ze wszystkimi 14 formami rzeczownika albo z formami czasownika).</td></tr>
 </table>
+<p>Przykład: duplikaty tylko w pakiecie Shop domain.</p>
 <div class="prompt">/find-duplicates Shop domain</div>
-<p><b>Komendy bez AI.</b> <code>/repo-doctor</code>, <code>/stale-pages</code>, <code>/find-orphans [package]</code>, <code>/find-duplicates [package]</code>, <code>/trace-gaps [package]</code>, <code>/what-changed [days or date]</code> i <code>/show-hidden-links &lt;diagram id&gt;</code> wpisane same (bez innych słów) działają od razu i pokazują wynik oznaczony „⚡ … (bez AI)”. Nie zużywają tokenów. Jeśli chcesz, żeby asystent wyjaśnił wynik, zapytaj go potem. Z dodatkowymi słowami komenda trafia do asystenta jak dotąd.</p>
+<p><b>Komendy bez AI.</b> <code>/repo-doctor</code>, <code>/stale-pages</code>, <code>/find-orphans [pakiet]</code>, <code>/find-duplicates [pakiet]</code>, <code>/trace-gaps [pakiet]</code>, <code>/what-changed [dni albo data]</code> i <code>/show-hidden-links &lt;id diagramu&gt;</code> wpisane same (bez innych słów) działają od razu i pokazują wynik oznaczony „⚡ … (bez AI)”. Nie zużywają tokenów. Jeśli chcesz, żeby asystent wyjaśnił wynik, zapytaj go potem. Z dodatkowymi słowami komenda trafia do asystenta jak dotąd.</p>
 <p>Część z tych komend istnieje też jako narzędzia, których asystent używa sam (rozdział 7), więc nie musisz wpisywać komendy. O zmianę typu relacji (na przykład Composition → Serving, także wielu naraz, z zachowaniem nazwy, notatek, wartości tagów, przebiegu linii i ukrycia) oraz o wyrównanie albo rozłożenie elementów na diagramie prosisz zwykłymi słowami.</p>
 <h3>Załączniki</h3>
 <p>Do wiadomości możesz dołączyć do 5 plików, każdy do 10 MB. Sposoby: przeciągnij pliki do okna (z Eksploratora albo z przeglądarki), wklej je ze schowka (<span class="key">Ctrl</span> + <span class="key">V</span>) albo użyj przycisku wklejania w karcie wiadomości.</p>
@@ -585,7 +586,7 @@
 </ul>
 <div class="prompt">Ułóż automatycznie diagram „Architektura” w kierunku w prawo i wygeneruj z szablonu „Model Report” dokument DOCX dla pakietu Sklep.</div>
 <h3>Pisownia w języku Compassa</h3>
-<p>Narzędzie asystenta <code>spell_check</code> sprawdza notatki elementów i diagramów, kroki scenariuszy oraz słownik projektu słownikiem pisowni Windows w języku Compassa (korekta pisowni samego EA ma tylko słowniki angielskie). Nazwy elementów i pojęcia ze słownika projektu są uznawane za znane słowa. Asystent podaje podpowiedzi, a poprawia dopiero po Twojej zgodzie. Jeśli Windows nie ma słownika dla tego języka, dodaj język w Ustawieniach Windows → Czas i język → Język. W Compass w EA notatki zmienionego elementu są sprawdzane na bieżąco (linie „✎ Pisownia: …” w System Output, rozdział 10).</p>
+<p>Narzędzie asystenta <code>spell_check</code> sprawdza notatki elementów i diagramów, kroki scenariuszy oraz słownik projektu słownikiem pisowni Windows w języku Compassa (sam EA sprawdza po polsku, gdy pobierzesz słownik SJP.pl w Ustawieniach → Język). Nazwy elementów i pojęcia ze słownika projektu są uznawane za znane słowa. Asystent podaje podpowiedzi, a poprawia dopiero po Twojej zgodzie. Jeśli Windows nie ma słownika dla tego języka, dodaj język w Ustawieniach Windows → Czas i język → Język. W Compass w EA notatki zmienionego elementu są sprawdzane na bieżąco (linie „✎ Pisownia: …” w System Output, rozdział 10).</p>
 <div class="prompt">Sprawdź pisownię w notatkach pakietu Sklep.</div>
 <h3>O czym warto wiedzieć</h3>
 <ul>
@@ -840,6 +841,7 @@
   <li>Zapisy idą przez to samo okno EA, więc zmiany widać od razu w przeglądarce projektu i na diagramach. Zatwierdzanie zmian działa jak w osobnej aplikacji (rozdział 16).</li>
   <li><b>Pokaż diagram</b> i <b>Edytuj diagram</b> otwierają diagram w samym EA, zamiast pokazywać obrazek na czacie.</li>
   <li>Kliknij element, pakiet albo diagram prawym przyciskiem myszy (w przeglądarce projektu albo na diagramie) i wybierz <b>Specialize</b> → <b>Dodaj do rozmowy w Compass</b>. Do wiadomości trafia odwołanie do obiektu, na przykład «Pakiet: Sklep (id 5)», a asystent wie, o który obiekt chodzi. Przycisk <b>⌖</b> w karcie wiadomości dodaje takie same odwołania przez wyszukanie w modelu (rozdział 6, „Wybierz z modelu”).</li>
+  <li>Na operacji klasy w tym samym menu jest <b>Znajdź użycie na diagramach</b>: Compass pyta asystenta, na których diagramach (komunikaty sekwencji, akcje) operacja jest użyta. Na elemencie jest <b>Klonuj jako nową wersję (z relacją trace)</b>: asystent tworzy kopię elementu jako nową wersję z relacją trace do oryginału, przez zwykłe zatwierdzanie.</li>
 </ul>
 <div class="prompt">Opisz «Pakiet: Sklep (id 5)» i zaproponuj brakujące wymagania.</div>
 <h3>Kontrola na bieżąco</h3>
@@ -917,7 +919,7 @@
 <p>Diagramy trafiają tylko na tablice zespołu, w którym aplikacja jest zainstalowana; żeby wysyłać do innej organizacji, zainstaluj aplikację także tam (tym samym przyciskiem).</p>
 <p><b>Wysyłanie:</b></p>
 <ol>
-  <li>Kliknij <b>Wyślij do Miro</b> pod diagramem w rozmowie.</li>
+  <li>Kliknij <b>Wyślij do Miro</b> pod diagramem w rozmowie albo w EA kliknij diagram prawym przyciskiem myszy (na diagramie albo w przeglądarce projektu) i wybierz <b>Specialize</b> → <b>Wyślij do Miro</b>. Jeśli na diagramie są zaznaczone elementy, wysyłany jest tylko zaznaczony fragment.</li>
   <li>Wybierz tablicę (pierwsza jest ta użyta ostatnio; pole wyszukiwania filtruje po nazwie).</li>
   <li>Miniatura pokazuje, co już jest na tablicy (szare), i gdzie trafi diagram (niebieska ramka, czerwona, gdy coś by zasłoniła). Aplikacja sama znajduje wolne miejsce; przeciągnij ramkę, żeby wybrać inne.</li>
   <li>Kliknij <b>Wyślij do Miro</b>. Po wysłaniu w rozmowie pojawia się wiadomość z linkiem, który otwiera tablicę na nowej ramce.</li>
@@ -1240,7 +1242,7 @@ compass-hub --service-uninstall</pre>
 </table>
 <h3>Konta i logowanie</h3>
 <p>Do widoku webowego (<code>https://&lt;hub&gt;/</code>; <code>http://</code> tylko na tym samym komputerze) ludzie logują się nazwą użytkownika i hasłem. Compass i klienci MCP używają tokenu API.</p>
-<div class="note"><b>Konto domyślne.</b> Nowy hub (<code>hub.json</code> bez użytkowników) tworzy konto <code>admin</code> z hasłem <code>passw0rd</code> (z zerem). Przy pierwszym logowaniu hub prosi o zmianę hasła i do tego czasu nie pozwala na nic innego. Zrób to, zanim hub będzie dostępny z innych komputerów.</div>
+<div class="note"><b>Konto domyślne.</b> Nowy hub (<code>hub.json</code> bez użytkowników) tworzy konto <code>admin</code> z hasłem <code>passw0rd</code> (z zerem). Przy pierwszym logowaniu hub prosi o zmianę hasła i do tego czasu nie pozwala na nic innego. Zrób to, zanim hub będzie dostępny z innych komputerów. Gdy w <code>hub.json</code> jest logowanie kontem firmowym (<code>oidc</code>), konta domyślnego nie ma: administratorami są członkowie grup z <code>roles.admin</code>. Hub nasłuchujący tylko na 127.0.0.1 odpowiada wyłącznie na żądania z nagłówkiem Host <code>localhost</code> albo <code>127.0.0.1</code> (ochrona przed DNS rebinding); reverse proxy na tym samym komputerze ustaw tak, by przekazywało taki Host.</div>
 <ul>
   <li>Hasło ma co najmniej 10 znaków i nie może być hasłem domyślnym ani nazwą użytkownika. Hub przechowuje hasła tylko jako skróty PBKDF2.</li>
   <li>Zalogowanie trwa 12 godzin; <b>Sign out</b> kończy je od razu.</li>
