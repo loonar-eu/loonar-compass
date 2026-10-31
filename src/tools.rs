@@ -443,6 +443,21 @@ or apply (id: an APPROVED change set of this model is saved to the model with th
             }, "required": ["action"] }
         }));
         items.push(json!({
+            "name": "review_comments",
+            "description": "Review comments and decisions (ADR) the team left on elements of this model in the hub's web view (LC-392). action list \
+(optionally element = object_id, status open/resolved/proposed/accepted/rejected): who said what about which element; action add (element, text, \
+kind comment or decision); action status (id, status). Use it when the user asks what reviewers said, to answer open comments, or to record a \
+decision about an element.",
+            "input_schema": { "type": "object", "properties": {
+                "action": { "type": "string", "enum": ["list", "add", "status"] },
+                "element": { "type": "integer" },
+                "text": { "type": "string" },
+                "kind": { "type": "string", "enum": ["comment", "decision"] },
+                "id": { "type": "string" },
+                "status": { "type": "string" }
+            }, "required": ["action"] }
+        }));
+        items.push(json!({
             "name": "spell_check",
             "description": "Spelling of the model's texts in the language of the conversation (the language of Compass), with the Windows dictionary: \
 notes of elements and diagrams, scenario steps and the project glossary (EA's own spell checker has only English dictionaries). Names of elements \
@@ -1077,6 +1092,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "undo_change" => undo_change(input, ctx).map(Into::into),
         "estimate_change" => crate::estimate::estimate(ctx.cfg, &input["elements"].as_array().into_iter().flatten().filter_map(|v| v.as_i64()).collect::<Vec<_>>(), input["depth"].as_u64().unwrap_or(2) as usize).map(Into::into),
         "change_sets" => change_sets(input, ctx).map(Into::into),
+        "review_comments" => review_comments(input, ctx).map(Into::into),
         "mdg_technologies" => crate::mdg::run(input, ctx.cfg).map(Into::into),
         "sharepoint" => crate::sharepoint::run(input, ctx).map(Into::into),
         "onedrive" => crate::sharepoint::run_onedrive(input, ctx).map(Into::into),
@@ -1518,6 +1534,45 @@ fn propose_change(input: &Value, ctx: &ToolContext) -> Result<String> {
         "source": hub_source(ctx.cfg), "title": title, "summary": ea::describe(ops), "preview": crate::governance::preview(ctx.cfg, ops), "ops": ops
     }))?;
     Ok(format!("Proposed to the team as change set {id} (\"{title}\"): nothing was changed in the model. Tell the user it waits for review in the hub ({}/), where the team comments and an architect approves it; afterwards it can be applied with change_sets apply.", client.url))
+}
+
+/// Review comments and decisions on elements in the hub (LC-392).
+fn review_comments(input: &Value, ctx: &ToolContext) -> Result<String> {
+    let client = hub_client(ctx.cfg)?;
+    if ctx.cfg.hub_source.trim().is_empty() {
+        bail!("{}", crate::i18n::tr("this model has no id in the team hub: enter it in Settings → Team (Compass Hub) → model id in the hub"));
+    }
+    let source = hub_source(ctx.cfg);
+    match input["action"].as_str().unwrap_or("list") {
+        "list" => {
+            let list = client.comments(&source, input["element"].as_i64(), input["status"].as_str())?;
+            if list.is_empty() {
+                return Ok("No review comments or decisions here.".into());
+            }
+            let mut out = vec![format!("{} comment(s) and decision(s):", list.len())];
+            out.extend(list.iter().map(|c| format!(
+                "- {} | {} | {} on {} (id {}) by {} {}: {}",
+                c["id"].as_str().unwrap_or(""),
+                c["status"].as_str().unwrap_or(""),
+                c["kind"].as_str().unwrap_or(""),
+                c["name"].as_str().unwrap_or(""),
+                c["element"],
+                c["user"].as_str().unwrap_or(""),
+                c["time"].as_str().unwrap_or("").get(..10).unwrap_or(""),
+                c["text"].as_str().unwrap_or("").replace('\n', " ")
+            )));
+            Ok(out.join("\n"))
+        }
+        "add" => {
+            let c = client.add_comment(&source, &json!({ "element": input["element"], "text": input["text"], "kind": input["kind"] }))?;
+            Ok(format!("Added {} {} on {}.", c["kind"].as_str().unwrap_or(""), c["id"].as_str().unwrap_or(""), c["name"].as_str().unwrap_or("")))
+        }
+        "status" => {
+            let c = client.comment_status(input["id"].as_str().unwrap_or(""), input["status"].as_str().unwrap_or(""))?;
+            Ok(format!("{} is now {}.", c["id"].as_str().unwrap_or(""), c["status"].as_str().unwrap_or("")))
+        }
+        other => bail!("unknown action {other}: list, add or status"),
+    }
 }
 
 fn change_sets(input: &Value, ctx: &ToolContext) -> Result<String> {

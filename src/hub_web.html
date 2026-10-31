@@ -322,8 +322,25 @@ $('results').onclick = async e => {
   const name = (details.text.split('\n')[0] || '').split(' (')[0];
   $('results').innerHTML = '<button class="ghost" id="back">← Results</button>' +
     (canWrite() && integrations.jira ? '<div class="actions"><button id="ejira">Create Jira issue</button></div>' : '') +
-    '<h3>Element</h3><pre>' + esc(details.text) + '</pre><h3>Impact</h3>' + table(impact.text);
+    '<h3>Element</h3><pre>' + esc(details.text) + '</pre><h3>Comments and decisions</h3><div id="comments"></div>' +
+    '<textarea id="ctext" rows="3" placeholder="A comment or a question for the architects"></textarea><div class="actions"><button id="cadd">Add a comment</button> <button id="cdec" class="ghost">Record a decision</button></div>' +
+    '<h3>Impact</h3>' + table(impact.text);
   $('back').onclick = search;
+  const loadComments = async () => {
+    const list = await api('/api/sources/' + source() + '/comments?element=' + id);
+    $('comments').innerHTML = list.length ? list.map(c => '<div class="note"><b>' + esc(c.user) + '</b> · ' + esc((c.time || '').slice(0, 16).replace('T', ' ')) + ' · ' + esc(c.kind) + ' · <i>' + esc(c.status) + '</i>' +
+      ((canWrite() || c.user === me.name) ? ' <button class="ghost cst" data-id="' + esc(c.id) + '" data-s="' + (c.kind === 'decision' ? 'accepted' : 'resolved') + '">' + (c.kind === 'decision' ? 'Accept' : 'Resolve') + '</button>' : '') +
+      '<pre>' + esc(c.text) + '</pre></div>').join('') : '<p class="muted">No comments yet.</p>';
+    document.querySelectorAll('.cst').forEach(b => b.onclick = async () => { await post('/api/comments/' + b.dataset.id + '/status', { status: b.dataset.s }); loadComments(); });
+  };
+  const addComment = async kind => {
+    const text = $('ctext').value.trim(); if (!text) return;
+    try { await post('/api/sources/' + source() + '/comments', { element: Number(id), text, kind }); $('ctext').value = ''; loadComments(); }
+    catch (err) { $('comments').insertAdjacentHTML('beforeend', '<p class="error">' + esc(err.message) + '</p>'); }
+  };
+  $('cadd').onclick = () => addComment('comment');
+  $('cdec').onclick = () => addComment('decision');
+  loadComments();
   if ($('ejira')) $('ejira').onclick = () => jiraIssue('/api/sources/' + source() + '/jira', 'Model: ' + name, { element: Number(id) });
 };
 $('gapgo').onclick = async () => {

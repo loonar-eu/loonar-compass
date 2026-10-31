@@ -1053,6 +1053,34 @@ impl Hub {
         Ok(())
     }
 
+    /// The review comments and decisions (comments.json next to hub.json).
+    fn comments(&self) -> Vec<Value> {
+        std::fs::read_to_string(self.dir.join("comments.json")).ok().and_then(|t| serde_json::from_str::<Vec<Value>>(&t).ok()).unwrap_or_default()
+    }
+
+    /// Adds a comment, or replaces the one with this id; written atomically.
+    fn save_comment(&self, comment: &Value, replace: Option<&str>) -> Result<()> {
+        let mut all = self.comments();
+        match replace {
+            Some(id) => {
+                if let Some(c) = all.iter_mut().find(|c| c["id"] == id) {
+                    *c = comment.clone();
+                }
+            }
+            None => {
+                if all.len() >= 50_000 {
+                    bail!("at most 50000 comments");
+                }
+                all.push(comment.clone());
+            }
+        }
+        let file = self.dir.join("comments.json");
+        let temp = file.with_extension("json.tmp");
+        std::fs::write(&temp, serde_json::to_string_pretty(&all)?)?;
+        std::fs::rename(&temp, &file)?;
+        Ok(())
+    }
+
     fn source(&self, id: &str) -> Result<&Source, HttpError> {
         self.sources.iter().find(|s| s.id == id).ok_or_else(|| deny(404, crate::i18n::fmt("there is no source {0}", &[id.to_string()])))
     }
@@ -1504,6 +1532,31 @@ in the language of the question, short. You can only read the model (db_query an
             let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": id, "summary": format!("question: {}", question.chars().take(200).collect::<String>()), "ok": true }));
             Ok((200, json!({ "answer": answer, "seconds": started.elapsed().as_secs() })))
         }
+        ("GET", ["api", "sources", id, "comments"]) => {
+            let (source, scope) = hub.source_for(id, &user, role)?;
+            let element = request.query.get("element").and_then(|e| e.parse::<i64>().ok());
+            if let Some(e) = element {
+                element_in(&source.cfg, &scope, e)?;
+            }
+            let status = request.query.get("status").cloned();
+            let mut list: Vec<Value> = hub.comments().into_iter().filter(|c| c["source"] == source.id.as_str()).collect();
+            if let Some(e) = element {
+                list.retain(|c| c["element"].as_i64() == Some(e));
+            }
+            if let Some(s) = &status {
+                list.retain(|c| c["status"].as_str() == Some(s.as_str()));
+            }
+            if let Some(s) = &scope {
+                // Only comments on elements the person may see.
+                let ids: Vec<String> = list.iter().filter_map(|c| c["element"].as_i64()).map(|e| e.to_string()).collect();
+                if !ids.is_empty() {
+                    let visible: Vec<i64> = crate::tools::query_rows(&source.cfg, &format!("select object_id from t_object where object_id in ({}) and {}", ids.join(","), in_list("package_id", s)))?
+                        .into_iter().filter_map(|r| r[0].parse().ok()).collect();
+                    list.retain(|c| c["element"].as_i64().is_some_and(|e| visible.contains(&e)));
+                }
+            }
+            Ok((200, json!(list)))
+        }
         ("GET", ["api", "sources", id, rest @ ..]) => {
             let (source, scope) = hub.source_for(id, &user, role)?;
             if rest == ["search"] && request.query.get("q").map(|q| q.trim().chars().count()).unwrap_or(0) < 2 {
@@ -1572,6 +1625,41 @@ in the language of the question, short. You can only read the model (db_query an
                 entries.retain(|e| e["user"] == user.as_str() || !e["summary"].as_str().is_some_and(|s| s.starts_with("question: ")));
             }
             Ok((200, json!(entries)))
+        }
+        // Review comments and decisions (ADR) on elements of a model (LC-392): everybody who may read the element may
+        // comment; an architect or the author changes the status.
+        ("POST", ["api", "sources", id, "comments"]) => {
+            let (source, scope) = hub.source_for(id, &user, role)?;
+            let b = body()?;
+            let element = b["element"].as_i64().ok_or_else(|| deny(400, crate::i18n::fmt("missing number '{0}'", &["element".to_string()])))?;
+            element_in(&source.cfg, &scope, element)?;
+            let text: String = b["text"].as_str().unwrap_or("").trim().chars().filter(|c| !c.is_control() || *c == '\n').take(4000).collect();
+            if text.chars().count() < 2 {
+                return Err(deny(400, crate::i18n::tr("write the comment")));
+            }
+            let kind = if b["kind"] == "decision" { "decision" } else { "comment" };
+            let row = crate::tools::query_rows(&source.cfg, &format!("select name, ea_guid from t_object where object_id = {element}"))?.into_iter().next().ok_or_else(|| deny(404, "element"))?;
+            let comment = json!({ "id": format!("C-{}", &uuid::Uuid::new_v4().simple().to_string()[..10]), "time": chrono::Local::now().to_rfc3339(), "user": user, "source": source.id,
+                "element": element, "guid": row[1], "name": row[0], "kind": kind, "text": text, "status": if kind == "decision" { "proposed" } else { "open" } });
+            hub.save_comment(&comment, None).map_err(|e| deny(500, e.to_string()))?;
+            let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": source.id, "summary": format!("{kind} on {}: {}", row[0], text.chars().take(200).collect::<String>()), "ok": true }));
+            Ok((201, comment))
+        }
+        ("POST", ["api", "comments", cid, "status"]) => {
+            let status = body()?["status"].as_str().unwrap_or("").to_string();
+            if !matches!(status.as_str(), "open" | "resolved" | "proposed" | "accepted" | "rejected" | "superseded") {
+                return Err(deny(400, "status: open, resolved, proposed, accepted, rejected or superseded"));
+            }
+            let _guard = hub.change_lock.lock().unwrap_or_else(|p| p.into_inner());
+            let mut comment = hub.comments().into_iter().find(|c| c["id"] == *cid).ok_or_else(|| deny(404, crate::i18n::fmt("there is no comment {0}", &[cid.to_string()])))?;
+            if role < Role::Architect && comment["user"].as_str() != Some(user.as_str()) {
+                return Err(deny(403, crate::i18n::fmt("this needs the role {0}", &[Role::Architect.name().to_string()])));
+            }
+            comment["status"] = json!(status);
+            comment["status_by"] = json!(user);
+            comment["status_time"] = json!(chrono::Local::now().to_rfc3339());
+            hub.save_comment(&comment, Some(cid)).map_err(|e| deny(500, e.to_string()))?;
+            Ok((200, comment))
         }
         ("GET", ["api", "notes"]) => {
             let mut names: Vec<String> = std::fs::read_dir(hub.notes_dir()).into_iter().flatten().flatten().filter_map(|e| e.file_name().to_str().and_then(|n| n.strip_suffix(".md")).map(String::from)).collect();
@@ -2451,6 +2539,29 @@ impl Client {
         self.call(reqwest::Method::POST, &format!("/api/changes/{}/{action}", change_id(id)?), Some(body))
     }
 
+    pub fn comments(&self, source: &str, element: Option<i64>, status: Option<&str>) -> Result<Vec<Value>> {
+        let mut path = format!("/api/sources/{}/comments?", encode(source));
+        if let Some(e) = element {
+            path.push_str(&format!("element={e}&"));
+        }
+        if let Some(s) = status {
+            path.push_str(&format!("status={}", encode(s)));
+        }
+        Ok(self.call(reqwest::Method::GET, path.trim_end_matches(['&', '?']), None)?.as_array().cloned().unwrap_or_default())
+    }
+
+    pub fn add_comment(&self, source: &str, body: &Value) -> Result<Value> {
+        self.call(reqwest::Method::POST, &format!("/api/sources/{}/comments", encode(source)), Some(body))
+    }
+
+    pub fn comment_status(&self, id: &str, status: &str) -> Result<Value> {
+        let id = id.trim();
+        if !id.starts_with("C-") || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            bail!("there is no comment {id}");
+        }
+        self.call(reqwest::Method::POST, &format!("/api/comments/{id}/status"), Some(&json!({ "status": status })))
+    }
+
     pub fn save_note(&self, name: &str, text: &str) -> Result<()> {
         self.call(reqwest::Method::PUT, &format!("/api/notes/{}", encode(name)), Some(&json!({ "text": text }))).map(|_| ())
     }
@@ -2650,6 +2761,40 @@ mod tests {
         assert_eq!(http.post(format!("{base}/proxy/jira/rest/api/3/issue")).bearer_auth("bartek-token-0123456789").json(&json!({})).send().unwrap().status(), 403);
         assert_eq!(http.get(format!("{base}/proxy/jira/secure/Dashboard.jspa")).bearer_auth("anna-token-0123456789").send().unwrap().status(), 403);
         // Compass reads the team's project from the policy.
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// LC-392: review comments and decisions on elements; status by an architect or the author.
+    /// `LOONAR_HUB_FILE_PROPS=… cargo test hub_comments -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a test model"]
+    fn hub_comments() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        let dir = std::env::temp_dir().join(format!("loonar-hub-comments-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let props = std::env::var("LOONAR_HUB_FILE_PROPS").unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0", "sources": [{ "id": "shop", "name": "Shop", "properties": props }],
+            "users": [{ "name": "olek", "token": "viewer-token-comments-01", "role": "viewer" }, { "name": "ada", "token": "arch-token-comments-012", "role": "architect" }, { "name": "ewa", "token": "viewer2-token-comments-1", "role": "viewer" }] }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let cfg = hub.sources[0].cfg.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let base = format!("http://{}", rx.recv().unwrap());
+        let element: i64 = crate::tools::query_rows(&cfg, "select object_id from t_object where object_type = 'Class'").unwrap()[0][0].parse().unwrap();
+        let http = reqwest::blocking::Client::new();
+        let add = |token: &str, body: Value| http.post(format!("{base}/api/sources/shop/comments")).bearer_auth(token).json(&body).send().unwrap();
+        let first = add("viewer-token-comments-01", json!({ "element": element, "text": "Is the date the order date or the delivery date?" }));
+        assert_eq!(first.status(), 201);
+        let first: Value = first.json().unwrap();
+        assert_eq!(first["status"], "open");
+        assert_eq!(add("viewer-token-comments-01", json!({ "element": element, "kind": "decision", "text": "ADR: dates in UTC" })).status(), 201);
+        let list: Value = http.get(format!("{base}/api/sources/shop/comments?element={element}")).bearer_auth("arch-token-comments-012").send().unwrap().json().unwrap();
+        assert_eq!(list.as_array().unwrap().len(), 2);
+        let status = |token: &str, s: &str| http.post(format!("{base}/api/comments/{}/status", first["id"].as_str().unwrap())).bearer_auth(token).json(&json!({ "status": s })).send().unwrap().status();
+        assert_eq!(status("viewer2-token-comments-1", "resolved"), 403, "another viewer may not");
+        assert_eq!(status("arch-token-comments-012", "resolved"), 200);
+        let open: Value = http.get(format!("{base}/api/sources/shop/comments?status=open")).bearer_auth("arch-token-comments-012").send().unwrap().json().unwrap();
+        assert!(open.as_array().unwrap().is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
