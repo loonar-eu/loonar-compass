@@ -346,6 +346,7 @@ pub fn definitions() -> Value {
         items.push(crate::safety_net::definition());
         items.extend(crate::sequence::definitions());
         items.push(crate::api_import::definition());
+        items.push(crate::text_export::definition());
         items.push(crate::ea_help::definition());
         items.push(crate::bulk::definition());
         items.push(crate::recycle::definition());
@@ -916,6 +917,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         }
         "safety_net" => crate::safety_net::run(input, ctx.cfg).map(Into::into),
         "sequence_check" => crate::sequence::check(input, ctx.cfg).map(Into::into),
+        "export_text" => crate::text_export::run(input, ctx.cfg),
         // An API specification as a model (LC-397): preview reads only, apply is one ordinary save.
         "import_api" => {
             let (ops, text) = crate::api_import::run(input, ctx.cfg)?;

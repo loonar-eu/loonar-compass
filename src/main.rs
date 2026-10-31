@@ -48,6 +48,7 @@ mod template_doctor;
 mod safety_net;
 mod sequence;
 mod api_import;
+mod text_export;
 mod ea_help;
 mod bulk;
 mod recycle;
