@@ -251,23 +251,34 @@ fn fields(text: &str) -> BTreeSet<String> {
 /// The stored template's bytes, read as hexadecimal text in pieces (ODBC drivers cut long values).
 fn template_bytes(cfg: &AppConfig, name: &str) -> Result<Vec<u8>> {
     let quoted = crate::model_db::sql_text(cfg.model_source, name);
-    let (length, hex, part) = match cfg.model_source {
-        ModelSource::File => ("length(bincontent)", "hex(bincontent)", "substr"),
-        ModelSource::MySql => ("length(bincontent)", "hex(bincontent)", "substring"),
-        ModelSource::Postgres => ("length(bincontent)", "encode(bincontent, 'hex')", "substr"),
-        ModelSource::SqlServer => ("datalength(bincontent)", "convert(varchar(max), bincontent, 2)", "substring"),
+    let length = match cfg.model_source {
+        ModelSource::SqlServer => "datalength(bincontent)",
         ModelSource::Oracle => bail!("On Oracle the template cannot be read here; open it in EA (Publish → Templates) or export it."),
+        _ => "length(bincontent)",
     };
     let found = query_rows(cfg, &format!("select docid as c0, {length} as c1 from t_document where doctype = 'SSDOCSTYLE' and docname = '{quoted}'"))?;
     let Some(row) = found.first() else {
         let known = query_rows(cfg, "select docname as c0 from t_document where doctype = 'SSDOCSTYLE' order by docname")?;
         bail!("there is no template \"{name}\" in the model; templates: {}", known.iter().map(|r| r[0].as_str()).collect::<Vec<_>>().join(", "));
     };
-    let docid = crate::model_db::sql_text(cfg.model_source, &row[0]);
-    let size: usize = row[1].trim().parse().unwrap_or(0);
-    if size == 0 {
+    if row[1].trim().parse::<usize>().unwrap_or(0) == 0 {
         bail!("the template \"{name}\" is empty");
     }
+    document_blob(cfg, &row[0])
+}
+
+/// The bincontent of a row of t_document (a template, a baseline), read as hexadecimal text in pieces (ODBC drivers
+/// cut long values).
+pub(crate) fn document_blob(cfg: &AppConfig, docid: &str) -> Result<Vec<u8>> {
+    let (length, hex, part) = match cfg.model_source {
+        ModelSource::File => ("length(bincontent)", "hex(bincontent)", "substr"),
+        ModelSource::MySql => ("length(bincontent)", "hex(bincontent)", "substring"),
+        ModelSource::Postgres => ("length(bincontent)", "encode(bincontent, 'hex')", "substr"),
+        ModelSource::SqlServer => ("datalength(bincontent)", "convert(varchar(max), bincontent, 2)", "substring"),
+        ModelSource::Oracle => bail!("On Oracle the stored content cannot be read here; open it in EA."),
+    };
+    let docid = crate::model_db::sql_text(cfg.model_source, docid);
+    let size: usize = query_rows(cfg, &format!("select {length} as c0 from t_document where docid = '{docid}'"))?.first().and_then(|r| r[0].trim().parse().ok()).unwrap_or(0);
     const PIECE: usize = 60_000;
     let mut text = String::new();
     let mut start = 1;

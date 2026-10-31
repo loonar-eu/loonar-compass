@@ -53,6 +53,7 @@ mod notation;
 mod test_results;
 mod translate_model;
 mod migration;
+mod baseline_diff;
 mod ea_help;
 mod bulk;
 mod recycle;
