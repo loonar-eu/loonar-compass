@@ -349,6 +349,7 @@ pub fn definitions() -> Value {
         items.push(crate::text_export::definition());
         items.push(crate::notation::definition());
         items.push(crate::test_results::definition());
+        items.push(crate::translate_model::definition());
         items.push(crate::ea_help::definition());
         items.push(crate::bulk::definition());
         items.push(crate::recycle::definition());
@@ -921,6 +922,11 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "sequence_check" => crate::sequence::check(input, ctx.cfg).map(Into::into),
         "export_text" => crate::text_export::run(input, ctx.cfg),
         "diagram_as_text" => crate::notation::run(input, ctx.cfg).map(Into::into),
+        // Translating the model (LC-400): texts reads only; apply is one ordinary save of the translations.
+        "translate_model" => {
+            let (ops, text) = crate::translate_model::run(input, ctx.cfg)?;
+            if ops.is_empty() { Ok(text.into()) } else { ea_write(&json!({ "ops": ops }), ctx).map(|saved| format!("{text}\n\n{saved}")).map(Into::into) }
+        }
         // Test results (LC-399): the report reads only; apply writes tagged values on the requirements (one save).
         "test_results" => {
             let (ops, text) = crate::test_results::run(input, ctx.cfg)?;
