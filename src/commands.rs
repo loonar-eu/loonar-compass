@@ -180,8 +180,53 @@ pub fn request(input: &str) -> Option<String> {
     let name = name.to_lowercase().replace('_', "-");
     let command = ALL.iter().find(|c| c.name == name && !c.request.is_empty())?;
     let args = args.trim();
-    let target = if args.is_empty() { crate::i18n::tr("(the one open or selected in EA; ask if there is none)").to_string() } else { format!("\"{args}\"") };
+    let target = if args.is_empty() { crate::i18n::tr("(the one open or selected in EA; ask if there is none)").to_string() } else { quoted_args(&name, args) };
     Some(crate::i18n::fmt(command.request, &[target]))
+}
+
+/// The arguments of a command in quotes, with an option the syntax puts after a name (a dialect, a text format, a
+/// relationship type, a style profile) kept outside the quotes: "BB3 Tabele" (postgres). Quoted whole, the option was
+/// taken as part of the package or diagram name (LC-462, LC-457, LC-458).
+fn quoted_args(command: &str, args: &str) -> String {
+    let last_word = |text: &str, options: &dyn Fn(&str) -> bool| -> Option<(String, String)> {
+        let (head, last) = text.trim().rsplit_once(char::is_whitespace)?;
+        options(last.trim_matches(|c: char| c == ',' || c == '.')).then(|| (head.trim().to_string(), last.trim().to_string()))
+    };
+    let lower = |w: &str| w.to_lowercase();
+    let dialect = |w: &str| matches!(lower(w).as_str(), "postgres" | "postgresql" | "sqlserver" | "mssql" | "mysql" | "mariadb" | "oracle" | "sqlite");
+    let format = |w: &str| matches!(lower(w).as_str(), "mermaid" | "plantuml" | "c4");
+    let relationship = |w: &str| {
+        let w = lower(w);
+        w.starts_with("archimate")
+            || matches!(
+                w.as_str(),
+                "dependency" | "association" | "aggregation" | "composition" | "realization" | "realisation" | "generalization" | "usage" | "trace"
+                    | "abstraction" | "informationflow" | "controlflow" | "objectflow" | "include" | "extend" | "assembly" | "delegate" | "substitution"
+                    | "manifestation" | "deployment" | "nesting"
+            )
+    };
+    match command {
+        "/ddl" => last_word(args, &dialect).map(|(name, option)| format!("\"{name}\" ({option})")),
+        "/diagram-as-text" => last_word(args, &format).map(|(name, option)| format!("\"{name}\" ({option})")),
+        "/matrix" => args.split_once(['×', '⨯']).or_else(|| args.split_once(" x ")).or_else(|| args.split_once(" X ")).map(|(source, rest)| {
+            match last_word(rest, &relationship) {
+                Some((target, kind)) => format!("\"{}\" × \"{target}\" ({kind})", source.trim()),
+                None => format!("\"{}\" × \"{}\"", source.trim(), rest.trim()),
+            }
+        }),
+        "/apply-style" => {
+            // The diagram or package ends where the profile or "by …" starts.
+            let words: Vec<&str> = args.split_whitespace().collect();
+            let profile = |w: &str| {
+                let w = lower(w);
+                matches!(w.as_str(), "by" | "wg" | "według" | "nach" | "par" | "profil" | "profile" | "management" | "technical" | "impact")
+                    || ["zarząd", "techniczn", "wpływ"].iter().any(|p| w.starts_with(p))
+            };
+            words.iter().position(|w| profile(w)).filter(|at| *at > 0).map(|at| format!("\"{}\" ({})", words[..at].join(" "), words[at..].join(" ")))
+        }
+        _ => None,
+    }
+    .unwrap_or_else(|| format!("\"{args}\""))
 }
 
 #[cfg(test)]
@@ -203,6 +248,14 @@ mod tests {
         assert!(super::direct("/repo-doctor and explain it").is_none());
         assert!(super::direct("/merge-elements A into B").is_none());
         assert!(super::request("/glossary-add x").is_none(), "its own window");
+        // LC-462: an option after a name stays outside the quoted name.
+        assert_eq!(super::quoted_args("/ddl", "BB3 Tabele postgres"), "\"BB3 Tabele\" (postgres)");
+        assert_eq!(super::quoted_args("/diagram-as-text", "BB3 Sekwencja plantuml"), "\"BB3 Sekwencja\" (plantuml)");
+        assert_eq!(super::quoted_args("/matrix", "BB3 Test × BB3 Test Dependency"), "\"BB3 Test\" × \"BB3 Test\" (Dependency)");
+        assert_eq!(super::quoted_args("/matrix", "A × B"), "\"A\" × \"B\"");
+        assert_eq!(super::quoted_args("/apply-style", "BB3 Logiczny Impact dla Faktura"), "\"BB3 Logiczny\" (Impact dla Faktura)");
+        assert_eq!(super::quoted_args("/apply-style", "BB3 Logiczny profil zarządu"), "\"BB3 Logiczny\" (profil zarządu)");
+        assert_eq!(super::quoted_args("/ddl", "Tabele"), "\"Tabele\"");
         assert!(super::request("/nonsense").is_none());
     }
 
