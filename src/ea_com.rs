@@ -956,6 +956,11 @@ impl Job<'_> {
                 if let Some(n) = int_of(&op["subtype"]) {
                     element.set("Subtype", i(n))?;
                 }
+                // The type of an instance or lifeline (LC-472: a lifeline of a class from a PlantUML sequence).
+                if !op["classifier"].is_null() {
+                    let classifier = self.element(&op["classifier"])?.int("ElementID")?;
+                    element.set("ClassifierID", i(classifier))?;
+                }
                 element.update(&crate::i18n::fmt("element '{0}'", &[title.clone()]))?;
                 if !op["color"].is_null() {
                     element.call("SetAppearance", &[i(1), i(0), i(color(&op["color"])?)])?;

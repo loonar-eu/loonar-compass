@@ -32,7 +32,7 @@ with classes (attributes with types and visibility, operations), abstract classe
 ..|> realisation, *-- composition, o-- aggregation, --> association, ..> dependency; arrows with directions or colours such as -up-> or \
 -[#red]-> too; multiplicities in quotes and labels after a colon) and a class diagram laid out by EA. Aliases (class \"Long name\" as L) \
 and stereotypes <<…>> are kept; packages, notes and skin parameters are left out (the preview says so). action preview shows what would \
-be created; apply saves it (one save the user approves). Sequence diagrams in PlantUML go to sequence_from_text.",
+be created; apply saves it (one save the user approves). A PlantUML sequence diagram is recognised and imported as one: its participants become classes (actors Actors) with lifelines that are instances of them, the messages operations of those classes (with their parameters) and messages of a new sequence diagram; existing elements of the same name are used instead.",
             "input_schema": { "type": "object", "properties": {
                 "text": { "type": "string" }, "file": { "type": "string" },
                 "package": { "description": "package_id or exact name of the parent" }, "name": { "type": "string" },
@@ -221,8 +221,29 @@ pub fn import_mermaid(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, Str
 
 /// A PlantUML class diagram (LC-472): turned into the lines the Mermaid reader knows, then built the same way.
 pub fn import_plantuml(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)> {
-    let (classes, links, left_out) = parse_plantuml(&diagram_text(input, cfg)?)?;
+    let text = diagram_text(input, cfg)?;
+    // A sequence diagram (the most common PlantUML): its participants become classes with lifelines of them, its
+    // messages operations of those classes, and the diagram a sequence of these lifelines.
+    if is_plantuml_sequence(&text) {
+        let name = input["name"].as_str().map(str::trim).filter(|n| !n.is_empty()).unwrap_or("PlantUML sequence");
+        let (ops, report) = crate::sequence::from_text(&json!({ "text": text, "package": input["package"], "name": name, "create_classes": true }), cfg)?;
+        let summary = format!("PlantUML sequence diagram → diagram \"{name}\" with classes, their operations and lifelines:\n{report}");
+        return Ok(if input["action"].as_str() == Some("apply") { (ops, summary) } else { (Vec::new(), format!("{summary}\nNothing saved yet: action apply saves it.")) });
+    }
+    let (classes, links, left_out) = parse_plantuml(&text)?;
     build_import(input, cfg, classes, links, "PlantUML import", "PlantUML class diagram", &left_out)
+}
+
+/// Whether PlantUML text is a sequence diagram: messages (A -> B) and no class declarations or class relationships.
+pub(crate) fn is_plantuml_sequence(text: &str) -> bool {
+    let lines: Vec<String> = text.lines().map(|l| l.trim().to_lowercase()).collect();
+    let classy = lines.iter().any(|l| {
+        ["class ", "abstract ", "interface ", "enum ", "entity ", "annotation "].iter().any(|k| l.starts_with(k)) && !l.contains("->")
+            || ["<|--", "--|>", "..|>", "<|..", "*--", "--*", "o--", "--o"].iter().any(|a| l.contains(a))
+    });
+    let messages = lines.iter().any(|l| (l.contains("->") || l.contains("<-")) && !l.starts_with('\''));
+    let participants = lines.iter().any(|l| ["participant ", "actor ", "boundary ", "control ", "database ", "collections ", "queue "].iter().any(|k| l.starts_with(k)));
+    !classy && messages && (participants || lines.iter().any(|l| l.contains(" : ") && l.contains("->")))
 }
 
 /// The arrow of a PlantUML relationship without its direction (-up->, -l->) and colour (-[#red]->) and with its
@@ -746,5 +767,68 @@ Pozycja ...> Status : używa
         assert!(links.iter().any(|l| l[0] == "Aggregation" && l[2] == "*" && l[3] == "1"), "{links:?}");
         assert!(pg.contains("FOREIGN KEY (customer_id) REFERENCES customer (id)"), "{pg}");
         assert!(pg.contains("id INTEGER NOT NULL") && pg.contains("PRIMARY KEY (id)") && ms.contains("[full name] NVARCHAR(255)"), "{pg}\n{ms}");
+    }
+}
+
+#[cfg(test)]
+mod plantuml_sequence_tests {
+    const TEXT: &str = r#"@startuml
+title Składanie zamówienia
+autonumber
+actor Klient
+participant "Sklep WWW" as UI
+participant SerwisZamowien
+database Magazyn #lightblue
+box "Zaplecze"
+participant Platnosci
+end box
+Klient -> UI : zamow(koszyk: Koszyk)
+activate UI
+UI -> SerwisZamowien : utworz(klient, pozycje)
+SerwisZamowien -> Magazyn : rezerwuj(pozycje)
+Magazyn --> SerwisZamowien : ok
+note right of Magazyn
+  rezerwacja na 15 minut
+end note
+alt płatność online
+  SerwisZamowien -> Platnosci : obciaz(kwota: Money)
+  return potwierdzenie
+else za pobraniem
+  SerwisZamowien -[#red]> SerwisZamowien : oznaczZaPobraniem()
+end
+== Potwierdzenie ==
+UI <-- SerwisZamowien : numer
+deactivate UI
+@enduml"#;
+
+    #[test]
+    fn plantuml_sequence_is_recognised() {
+        assert!(super::is_plantuml_sequence(TEXT));
+        assert!(!super::is_plantuml_sequence("@startuml\nclass A\nA <|-- B\n@enduml"));
+    }
+
+    /// LC-472: a PlantUML sequence imported into EA: classes, their operations with parameters, lifelines of them, messages.
+    /// `LOONAR_TEST_PROPS=E:/livetest/r440/m5.properties LOONAR_TEST_PACKAGE=1116 cargo test plantuml_sequence_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA and a copy of a test model"]
+    fn plantuml_sequence_live() {
+        let mut cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
+        cfg.attachments_dir = std::env::temp_dir();
+        let package: i64 = std::env::var("LOONAR_TEST_PACKAGE").unwrap().parse().unwrap();
+        let name = format!("PU {}", chrono::Local::now().format("%H%M%S"));
+        let (ops, text) = super::import_plantuml(&serde_json::json!({ "text": TEXT, "package": package, "name": name, "action": "apply" }), &cfg).unwrap();
+        println!("{text}");
+        let done = crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions::default()).expect("import");
+        crate::ea::shutdown();
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).unwrap();
+        let d = done["created"].as_array().unwrap().iter().find(|c| c["key"] == "seq").unwrap()["id"].as_i64().unwrap();
+        let ops_of = q("select o.name, op.name, (select count(*) from t_operationparams p where p.operationid = op.operationid) from t_operation op join t_object o on o.object_id = op.object_id where o.name in ('Sklep WWW', 'SerwisZamowien', 'Magazyn', 'Platnosci') order by 1, 2");
+        let lifelines = q(&format!("select c.name from t_diagramobjects x join t_object l on l.object_id = x.object_id join t_object c on c.object_id = l.classifier where x.diagram_id = {d} order by 1"));
+        let messages = q(&format!("select count(*) from t_connector where diagramid = {d} and connector_type = 'Sequence'"));
+        println!("{ops_of:?}\n{lifelines:?}\n{messages:?}");
+        assert!(ops_of.iter().any(|r| r[0] == "Platnosci" && r[1] == "obciaz" && r[2] == "1"), "{ops_of:?}");
+        assert!(ops_of.iter().any(|r| r[0] == "SerwisZamowien" && r[1] == "utworz" && r[2] == "2"), "{ops_of:?}");
+        assert!(lifelines.iter().any(|r| r[0] == "Sklep WWW") && lifelines.iter().any(|r| r[0] == "Magazyn"), "{lifelines:?}");
+        assert_eq!(messages[0][0], "8", "{messages:?}");
     }
 }

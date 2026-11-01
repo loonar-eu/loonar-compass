@@ -31,13 +31,16 @@ message inside; lifelines without a classifier. Reads only. Use it for /check-se
 elements found by name (the package first), messages are matched to the receiver's operations by name. Lines: `participant Name`, \
 `actor Name`, `participant \"Long name\" as L`; `A -> B : call()` (synchronous), `A ->> B : signal` (asynchronous), `B --> A : result` \
 (reply), a time constraint in braces after the message (`A -> B : pay() {< 2s}`, kept as the tagged value \"time constraint\"); `alt condition` / `else condition` / `opt` / `loop` / `par` / `break` … `end` (combined fragments); @startuml, title, \
-autonumber, activate and comments are skipped. Missing participants become lifelines; with create_missing_operations the receivers \
+autonumber, activate, notes, boxes, dividers, delays and comments are skipped; `return x` answers the last open call; group … end is a \
+frame; arrows to the left (<-), with colours or styles count too. Missing participants become lifelines (with create_classes: classes and \
+lifelines of them); with create_missing_operations the receivers \
 get the operations the messages call. Show the user the report (bound / created / missing) after the save.",
             "input_schema": { "type": "object", "properties": {
                 "text": { "type": "string" },
                 "package": { "description": "package_id or exact name: where the diagram (and new lifelines) go" },
                 "name": { "type": "string", "description": "Name of the new diagram" },
                 "create_missing_operations": { "type": "boolean", "description": "Add operations the messages call to receivers that lack them (default false)" },
+                "create_classes": { "type": "boolean", "description": "Participants not in the model become classes (actors Actors) with lifelines that are instances of them, and the classes get the operations the messages call, with their parameters (default false; use it for an imported PlantUML sequence)" },
                 "numbering": { "type": "boolean", "description": "Show sequence numbers (EA numbers hierarchically by activation; default true)" }
             }, "required": ["text", "package", "name"] }
         }),
@@ -219,20 +222,64 @@ fn unquote(text: &str) -> String {
 
 fn parse(text: &str) -> Result<Vec<Line>> {
     let mut out = Vec::new();
+    let mut skip: Option<String> = None;
+    // Calls not yet answered, for "return": (caller, callee).
+    let mut open_calls: Vec<(String, String)> = Vec::new();
     for (n, raw) in text.lines().enumerate() {
         let line = raw.trim();
         let lower = line.to_lowercase();
         let first = lower.split_whitespace().next().unwrap_or("");
-        if line.is_empty() || line.starts_with('\'') || line.starts_with("//") || line.starts_with('@') || matches!(first, "title" | "autonumber" | "activate" | "deactivate" | "skinparam" | "hide" | "note" | "==" | "...") {
+        // Blocks that are not messages (notes, legends, boxes' ends, references) are skipped to their end (LC-472).
+        if let Some(end) = skip.as_ref() {
+            if lower.starts_with(end.as_str()) {
+                skip = None;
+            }
+            continue;
+        }
+        if matches!(first, "note" | "hnote" | "rnote") && !line.contains(':') {
+            skip = Some("end note".into());
+            continue;
+        }
+        if first == "ref" && !line.contains(':') {
+            skip = Some("end ref".into());
+            continue;
+        }
+        if first == "legend" {
+            skip = Some("endlegend".into());
+            continue;
+        }
+        if line.is_empty() || line.starts_with('\'') || line.starts_with("//") || line.starts_with('@') || line.starts_with("==") || line.starts_with("...") || line.starts_with("|||") || line.starts_with("||")
+            || matches!(first, "title" | "autonumber" | "activate" | "deactivate" | "skinparam" | "hide" | "show" | "note" | "hnote" | "rnote" | "ref" | "box" | "create" | "destroy" | "header" | "footer" | "newpage" | "caption" | "scale" | "!pragma" | "!theme" | "delay" | "space")
+            || lower.starts_with("end box") || lower.starts_with("end note") || lower.starts_with("end ref") || lower.starts_with("left to right")
+        {
+            continue;
+        }
+        // "return x": the reply to the caller of the last call still open.
+        if first == "return" {
+            if let Some((caller, callee)) = open_calls.pop() {
+                out.push(Line::Message { from: callee, to: caller, text: line[6..].trim().to_string(), reply: true, asynchronous: false });
+            }
             continue;
         }
         if matches!(first, "participant" | "actor" | "boundary" | "control" | "entity" | "database" | "collections" | "queue") {
-            let rest = line[first.len()..].trim();
+            // Colours and order after the name: participant A as B #red order 10.
+            let mut rest = line[first.len()..].trim().to_string();
+            for cut in [" #", " order ", " <<"] {
+                if let Some(at) = rest.find(cut) {
+                    rest.truncate(at);
+                }
+            }
+            let rest = rest.trim();
             let (name, alias) = match rest.rsplit_once(" as ") {
                 Some((name, alias)) => (unquote(name), unquote(alias)),
                 None => (unquote(rest), unquote(rest)),
             };
             out.push(Line::Participant { alias, name, actor: first == "actor" });
+            continue;
+        }
+        // group is a fragment of its own kind in PlantUML; in EA the nearest is a critical-free "seq" frame.
+        if first == "group" {
+            out.push(Line::Open { kind: "seq".into(), guard: line[5..].trim().to_string() });
             continue;
         }
         if let Some((_, kind)) = FRAGMENTS.iter().map(|(k, _)| (k, *k)).find(|(k, _)| first == **k) {
@@ -249,14 +296,33 @@ fn parse(text: &str) -> Result<Vec<Line>> {
         }
         // A -> B : text (the arrow decides the kind).
         let (head, message) = line.split_once(':').map(|(h, m)| (h, m.trim())).unwrap_or((line, ""));
-        let arrows = ["-->>", "->>", "-->", "->"];
+        // Colours and styles of arrows ([#red], ->x, -\\, o->) do not change the message.
+        let mut head = head.to_string();
+        while let (Some(a), Some(b)) = (head.find("[#"), head.find(']')) {
+            if b < a {
+                break;
+            }
+            head.replace_range(a..=b, "");
+        }
+        let head = head.replace("->x", "->").replace("-\\\\", "->").replace("-//", "->>").replace("o->", "->").replace("->o", "->").replace("<->", "->");
+        let arrows = ["-->>", "->>", "-->", "->", "<<--", "<<-", "<--", "<-"];
         let Some(arrow) = arrows.iter().find(|a| head.contains(**a)) else { bail!("line {}: not understood: {line}", n + 1) };
-        let (from, to) = head.split_once(arrow).unwrap_or(("", ""));
-        let (from, to) = (unquote(from), unquote(to));
-        if from.is_empty() || to.is_empty() {
+        let (left, right) = head.split_once(arrow).unwrap_or(("", ""));
+        let (left, right) = (unquote(left.trim_end_matches(['+', '-', '*', '!'])), unquote(right.trim_start_matches(['+', '-', '*', '!']).trim_end_matches(['+', '-', '*', '!'])));
+        if left.is_empty() || right.is_empty() {
             bail!("line {}: a message needs both ends: {line}", n + 1);
         }
-        out.push(Line::Message { from, to, text: message.to_string(), reply: arrow.starts_with("--"), asynchronous: arrow.ends_with(">>") });
+        // An arrow pointing left goes from the right end to the left one.
+        let (from, to) = if arrow.starts_with('<') { (right, left) } else { (left, right) };
+        let reply = arrow.contains("--");
+        if reply {
+            if let Some(at) = open_calls.iter().rposition(|(caller, callee)| *caller == to && *callee == from) {
+                open_calls.remove(at);
+            }
+        } else if from != to {
+            open_calls.push((from.clone(), to.clone()));
+        }
+        out.push(Line::Message { from, to, text: message.to_string(), reply, asynchronous: arrow.ends_with(">>") || arrow.starts_with("<<") });
     }
     Ok(out)
 }
@@ -291,7 +357,10 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
     let mut ops = vec![json!({ "op": "create_diagram", "key": "seq", "package": package, "name": name, "type": "Sequence" })];
     let mut report = Vec::new();
     // Each participant: an existing element (the package first), or a new lifeline.
-    let mut refs: HashMap<String, (Value, Option<i64>)> = HashMap::new();
+    let mut refs: HashMap<String, (Value, Option<Value>)> = HashMap::new();
+    // LC-472: a sequence from PlantUML builds the structure too – each new participant a class (an actor an Actor) and its
+    // lifeline an instance of it, the operations the messages call in the classes.
+    let create_classes = input["create_classes"].as_bool().unwrap_or(false);
     let height = 120 + 40 * messages as i64;
     for (i, (alias, pname, actor)) in participants.iter().enumerate() {
         let quoted = crate::model_db::sql_text(cfg.model_source, &pname.to_lowercase());
@@ -304,7 +373,19 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
                 let id: i64 = r[0].parse().unwrap_or(0);
                 let classifier: i64 = r[2].parse().unwrap_or(0);
                 report.push(format!("{pname}: existing {} (id {id}){}", r[1], if found.len() > 1 { format!(", {} elements have this name", found.len()) } else { String::new() }));
-                (json!(id), Some(if classifier > 0 { classifier } else { id }))
+                (json!(id), Some(json!(if classifier > 0 { classifier } else { id })))
+            }
+            None if create_classes => {
+                let (class_key, lifeline_key) = (format!("c{i}"), format!("p{i}"));
+                ops.push(json!({ "op": "create_element", "key": class_key, "package": package, "name": pname, "type": if *actor { "Actor" } else { "Class" } }));
+                if *actor {
+                    report.push(format!("{pname}: new actor"));
+                    (json!(format!("#{class_key}")), Some(json!(format!("#{class_key}"))))
+                } else {
+                    ops.push(json!({ "op": "create_element", "key": lifeline_key, "package": package, "name": "", "type": "Sequence", "classifier": format!("#{class_key}") }));
+                    report.push(format!("{pname}: new class with a lifeline of it"));
+                    (json!(format!("#{lifeline_key}")), Some(json!(format!("#{class_key}"))))
+                }
             }
             None => {
                 let key = format!("p{i}");
@@ -317,7 +398,7 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
         refs.insert(alias.clone(), (element, owner));
     }
     // Messages, bound to the receivers' operations by name.
-    let create_missing = input["create_missing_operations"].as_bool().unwrap_or(false);
+    let create_missing = input["create_missing_operations"].as_bool().unwrap_or(false) || create_classes;
     let mut number = 0;
     let mut missing: Vec<String> = Vec::new();
     let mut fragments: Vec<(String, String, usize)> = Vec::new();
@@ -338,12 +419,22 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
                 if !reply {
                     if let (Some(owner), op) = (owner, called(text)) {
                         if !op.is_empty() {
-                            let has = query_rows(cfg, &format!("select 1 from t_operation where object_id = {owner} and lower(name) = '{}'", crate::model_db::sql_text(cfg.model_source, &op)))?;
+                            // A class made in this save has no operations yet.
+                            let has = match owner.as_i64() {
+                                Some(id) => !query_rows(cfg, &format!("select 1 from t_operation where object_id = {id} and lower(name) = '{}'", crate::model_db::sql_text(cfg.model_source, &op)))?.is_empty(),
+                                None => false,
+                            };
                             let short = text.split('(').next().unwrap_or("").trim().to_string();
-                            if has.is_empty() && !missing.contains(&format!("{to}.{short}")) {
+                            if !has && !missing.contains(&format!("{to}.{short}")) {
                                 missing.push(format!("{to}.{short}"));
                                 if create_missing {
-                                    ops.push(json!({ "op": "create_operation", "element": owner, "name": short, "return_type": "void" }));
+                                    // The parameters written in the message: "pay(amount, currency)" or "pay(amount: Money)".
+                                    let inside = text.split_once('(').map(|(_, r)| r.rsplit_once(')').map(|(p, _)| p).unwrap_or(r)).unwrap_or("");
+                                    let parameters: Vec<Value> = inside.split(',').map(str::trim).filter(|p| !p.is_empty()).map(|p| {
+                                        let (n, t) = p.split_once(':').map(|(a, b)| (a.trim(), b.trim())).unwrap_or((p, ""));
+                                        json!({ "name": n, "type": t })
+                                    }).collect();
+                                    ops.push(json!({ "op": "create_operation", "element": owner, "name": short, "return_type": "void", "parameters": parameters }));
                                 }
                             }
                         }
