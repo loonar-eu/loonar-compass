@@ -328,19 +328,19 @@ fn find_orphans_rest(input: &Value, cfg: &AppConfig, scope: String, title: Strin
          and exists (select 1 from t_connector c where c.start_object_id = o.object_id or c.end_object_id = o.object_id) group by o.object_type order by 2 desc"
     ))?;
     let no_links = query_rows(cfg, &format!(
-        "select o.object_type, count(*) from t_object o where o.object_type not in ('Note', 'Text', 'Boundary', 'Package', 'ProvidedInterface', 'RequiredInterface', 'Port', 'Constraint') {type_filter} {scope} \
+        "select o.object_type, count(*) from t_object o where o.object_type not in ('Note', 'Text', 'Boundary', 'Package', 'ProvidedInterface', 'RequiredInterface', 'Port', 'Constraint', 'InteractionFragment', 'ActivityPartition', 'UMLDiagram', 'TimeLine', 'InteractionOccurrence', 'ActionPin', 'ActivityParameter', 'ExpansionNode', 'InterruptibleActivityRegion', 'ExpansionRegion') {type_filter} {scope} \
          and exists (select 1 from t_diagramobjects x where x.object_id = o.object_id) \
          and not exists (select 1 from t_connector c where c.start_object_id = o.object_id or c.end_object_id = o.object_id) group by o.object_type order by 2 desc"
     ))?;
-    let line = |rows: &[Vec<String>], fine: bool| -> String {
-        rows.iter().map(|r| format!("{} {}{}", r[1], r[0], if fine && fine_without_diagram.contains(&format!("'{}'", r[0])) { format!(" {}", crate::i18n::tr("(fine without a diagram)")) } else { String::new() })).collect::<Vec<_>>().join(", ")
+    // Three kinds, each on its own line, also when empty (LC-412: the kind "fine without a diagram" was a remark inside
+    // another line and went unnoticed).
+    let line = |rows: Vec<&Vec<String>>| -> String {
+        if rows.is_empty() { crate::i18n::tr("none").to_string() } else { rows.iter().map(|r| format!("{} {}", r[1], r[0])).collect::<Vec<_>>().join(", ") }
     };
-    if !no_diagram.is_empty() {
-        out.push_str(&format!("\n{}\n", crate::i18n::fmt("Related, but on no diagram: {0}", &[line(&no_diagram, true)])));
-    }
-    if !no_links.is_empty() {
-        out.push_str(&format!("{}\n", crate::i18n::fmt("On diagrams, but without any relationship: {0}", &[line(&no_links, false)])));
-    }
+    let fine = |r: &&Vec<String>| fine_without_diagram.contains(&format!("'{}'", r[0]));
+    out.push_str(&format!("\n{}\n", crate::i18n::fmt("Related, but on no diagram (worth a diagram): {0}", &[line(no_diagram.iter().filter(|r| !fine(r)).collect())])));
+    out.push_str(&format!("{}\n", crate::i18n::fmt("Related and on no diagram, fine for their type (requirements, issues, tests, data types…): {0}", &[line(no_diagram.iter().filter(fine).collect())])));
+    out.push_str(&format!("{}\n", crate::i18n::fmt("On diagrams, but without any relationship: {0}", &[line(no_links.iter().collect())])));
     out.push_str(crate::i18n::tr("Deleting or moving them changes the model: only with the user's approval (ea_write), and a baseline first."));
     Ok(out)
 }
@@ -394,6 +394,17 @@ mod tests {
         let found = super::find_duplicates(&serde_json::json!({}), &cfg).expect("find_duplicates");
         println!("{found}");
         assert!(found.starts_with("Likely duplicates in the whole model"));
+    }
+
+    /// LC-412: the three kinds of unused elements, each on its line (reads only):
+    /// `LOONAR_TEST_PROPS=E:/livetest/r440/m5.properties cargo test find_orphans_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires the model from LOONAR_TEST_PROPS"]
+    fn find_orphans_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("app.properties");
+        let found = super::find_orphans(&serde_json::json!({}), &cfg).expect("find_orphans");
+        println!("{found}");
+        assert!(found.contains("fine for their type") && found.contains("worth a diagram") && found.contains("without any relationship"));
     }
 
     /// LC-365: a relationship's diagrams on any test model:
