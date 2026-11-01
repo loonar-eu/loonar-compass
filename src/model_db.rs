@@ -472,10 +472,16 @@ pub(crate) fn write_word(sql: &str) -> Option<String> {
     let chars: Vec<char> = sql.chars().collect();
     let mut i = 0;
     let mut word = String::new();
-    let check = |word: &mut String| -> Option<String> {
+    // PostgreSQL's DO is a statement only as the first word; elsewhere "do" is a name or an alias (LC-464).
+    let mut first = true;
+    let mut check = |word: &mut String| -> Option<String> {
         let w = word.to_ascii_lowercase();
         word.clear();
-        WRITE_WORDS.contains(&w.as_str()).then_some(w)
+        if w.is_empty() {
+            return None;
+        }
+        let at_start = std::mem::replace(&mut first, false);
+        (WRITE_WORDS.contains(&w.as_str()) && (w != "do" || at_start)).then_some(w)
     };
     while i < chars.len() {
         let c = chars[i];
@@ -615,7 +621,7 @@ fn check_read_only(s: &str) -> Result<()> {
         bail!("{}", crate::i18n::tr("one query at a time (no semicolons inside)"));
     }
     if let Some(f) = FORBIDDEN_FUNCTIONS.iter().find(|f| lower.contains(*f)) {
-        bail!("{}", crate::i18n::fmt("the query uses a server function that is not allowed ({0}); only reading the model is allowed", &[f.trim_end_matches('_').to_string()]));
+        bail!("{}", crate::i18n::fmt("the query uses a server function that is not allowed ({0}); only reading the model is allowed", &[f.trim_end_matches(['_', '(']).to_string()]));
     }
     // Quoting the check could read differently from the database (dollar quotes, backslash escapes, comments,
     // [..] and `..` names) is not needed for reading the model: refused.
@@ -1024,6 +1030,10 @@ mod read_only_tests {
         ] {
             assert!(super::check_read_only(sql).is_err(), "{sql}");
         }
+        // LC-464: "do" as an alias is no DO statement; the message names the function without its bracket.
+        assert!(super::check_read_only("select o.name from t_object do where do.object_id = 1").is_ok());
+        assert!(super::check_read_only("do $$ begin end $$").is_err());
+        assert!(!format!("{:#}", super::check_read_only("select sleep(3)").unwrap_err()).contains("sleep("));
     }
 
     /// The time limit of ODBC queries on a real SQL Server (Windows sign-in):

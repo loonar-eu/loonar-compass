@@ -1552,14 +1552,20 @@ fn undo_change(input: &Value, ctx: &ToolContext) -> Result<String> {
     // The journal is a file: its operations are checked like the assistant's own, and the user sees what undoing does
     // (what is deleted with its current name: colleagues may have added to it since).
     let mut what = Vec::new();
+    let mut before_after = Vec::new();
     for e in &entries {
         let ops = normalize_ops(&e["reverse"].as_array().cloned().unwrap_or_default());
         if let Some(bad) = ops.iter().find(|op| !ea::MODEL_OPS.contains(&op["op"].as_str().unwrap_or(""))) {
             bail!("{}", crate::i18n::fmt("the undo journal contains an operation that is not allowed ({0}); nothing was undone", &[bad["op"].to_string()]));
         }
         what.extend(destructive_details(ctx.cfg, &ops));
+        // Every change undoing makes, before → after, not only the deletions (LC-464: the card named 1 of 3 changes).
+        before_after.push(crate::governance::preview(ctx.cfg, &ops));
     }
-    let details = if what.is_empty() { String::new() } else { format!("\n\n{}", what.join("\n")) };
+    let mut details = if before_after.iter().all(|p| p.trim().is_empty()) { String::new() } else { format!("\n\n{}", before_after.join("\n")) };
+    if !what.is_empty() {
+        details.push_str(&format!("\n\n{}", what.join("\n")));
+    }
     ctx.approver.confirm_risky(&format!("{}{details}", crate::i18n::fmt("Undo the latest saves of the assistant ({0}):\n{1}", &[entries.len().to_string(), summary.join("\n")])))?;
     let mut out = Vec::new();
     let mut undone = Vec::new();
@@ -2634,6 +2640,11 @@ fn ea_write(input: &Value, ctx: &ToolContext) -> Result<String> {
         let name = op["op"].as_str().unwrap_or("");
         if !ea::MODEL_OPS.contains(&name) {
             bail!("{}", crate::i18n::fmt("operation {0} ('{1}') is not allowed. Allowed: {2}", &[(i + 1).to_string(), name.to_string(), ea::MODEL_OPS.join(", ")]));
+        }
+        // An operation on one relationship without it: refused before the approval card, which would name nothing (LC-464).
+        let needs_connector = matches!(name, "change_connector_type" | "reverse_connector" | "update_connector" | "route_connector");
+        if needs_connector && !(op["connector"].is_i64() || op["connector"].as_str().is_some_and(|k| k.starts_with('#') || k.trim().parse::<i64>().is_ok())) {
+            bail!("{}", crate::i18n::fmt("operation {0} ('{1}') needs the field 'connector' (t_connector.connector_id); for several relationships give one operation each", &[(i + 1).to_string(), name.to_string()]));
         }
     }
     let mut normalized = normalize_ops(given);
