@@ -1232,6 +1232,16 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             }
         }
         "memory_read" => memory::read(&ctx.cfg.memory_dir, input["name"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["name".to_string()]))?).map(Into::into),
+        // An operation of ea_write called as if it were a tool (a command's request names it, e.g. save_document_template):
+        // the same write with the same approval, not "unknown tool" (LC-469).
+        other if ea::MODEL_OPS.contains(&other) => {
+            let mut op = input.clone();
+            if !op.is_object() {
+                op = json!({});
+            }
+            op["op"] = json!(other);
+            ea_write(&json!({ "ops": [op] }), ctx).map(Into::into)
+        }
         other => bail!("{}", crate::i18n::fmt("unknown tool: {0}", &[other.to_string()])),
     }
 }
