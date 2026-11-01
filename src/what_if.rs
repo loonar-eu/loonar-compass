@@ -66,7 +66,7 @@ pub fn run(input: &Value, cfg: &AppConfig) -> Result<String> {
         dependants.iter().take(6).map(|l| format!("{}{} \"{}\"", l[0], if l[1].is_empty() { String::new() } else { format!(" «{}»", l[1]) }, l[4])).collect::<Vec<_>>().join(", ")));
     if matches!(change, "delete" | "retire") {
         let impact = crate::model_db::impact_analysis(&json!({ "element": id, "depth": 3, "direction": "in" }), cfg).unwrap_or_default();
-        let lines: Vec<&str> = impact.lines().skip(1).filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with("level |")).collect();
+        let lines: Vec<&str> = impact.lines().skip(1).filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with("level |") && l.trim_start().starts_with(|c: char| c.is_ascii_digit())).collect();
         out.push(format!("What depends on it, up to 3 steps (these elements stay in the model and on their diagrams; only their link to it is affected): {} element(s){}", lines.len(), if lines.is_empty() { String::new() } else { format!("\n  {}", lines.iter().take(12).cloned().collect::<Vec<_>>().join("\n  ")) }));
     }
     // Diagrams and publications.

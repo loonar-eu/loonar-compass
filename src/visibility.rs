@@ -192,7 +192,7 @@ pub fn run(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)> {
                 .filter(|c| c.5)
                 .map(|(id, kind, st, from, to, _)| format!("{kind}{} \"{from}\" → \"{to}\" (connector_id {id})", if st.is_empty() { String::new() } else { format!(" «{st}»") }))
                 .collect();
-            Ok((Vec::new(), format!("Relationships between elements of \"{name}\" that are hidden there ({}):\n{}", hidden.len(), hidden.iter().map(|h| format!("  - {h}")).collect::<Vec<_>>().join("\n"))))
+            Ok((Vec::new(), format!("{}:\n{}", crate::i18n::fmt("Relationships between elements of \"{0}\" that are hidden there ({1})", &[name.clone(), hidden.len().to_string()]),hidden.iter().map(|h| format!("  - {h}")).collect::<Vec<_>>().join("\n"))))
         }
         _ => {
             let all = load(cfg);
