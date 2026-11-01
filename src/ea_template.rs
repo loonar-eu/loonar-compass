@@ -54,7 +54,14 @@ fn inline(text: &str) -> String {
         while let Some(start) = rest.find('{') {
             let Some(len) = rest[start..].find('}') else { break };
             let field = &rest[start + 1..start + len];
-            let is_field = field.split_once('.').is_some_and(|(a, b)| !a.is_empty() && !b.is_empty() && field.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_'));
+            // A field, also one with an argument: {Element.valueOf(Owner)}, the value of a tagged value (LC-467).
+            let (name_part, argument) = match field.split_once('(') {
+                Some((n, rest)) if rest.ends_with(')') => (n, &rest[..rest.len() - 1]),
+                _ => (field, ""),
+            };
+            let is_field = name_part.split_once('.').is_some_and(|(a, b)| !a.is_empty() && !b.is_empty())
+                && name_part.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_')
+                && !argument.contains(['{', '}', '\\']);
             out.push_str(&escape(&rest[..start]));
             if is_field {
                 out.push_str(&format!(r"{{\field{{\*\fldinst MERGEFIELD {field}}}{{\fldrslt \{{{field}\}}}}}}"));
@@ -159,6 +166,8 @@ mod tests {
         assert!(rtf.contains(r"MERGEFIELD Element.Notes") && rtf.contains(r"\{Pkg.Name\}"));
         assert!(rtf.contains(r"\u-") || rtf.contains(r"Opis"));
         assert!(!rtf.contains("Pkg_Diagram"), "no diagram part when none is given");
+        // LC-467: a tagged value by its name is a field too.
+        assert!(super::inline("Owner: {Element.valueOf(Owner)}").contains("MERGEFIELD Element.valueOf(Owner)"));
         let zip = super::document("Specyfikacja usług", &rtf).unwrap();
         assert!(zip.starts_with(b"PK"));
         assert_eq!(super::binary_literal("POSTGRES", &[1, 255]).unwrap(), "decode('01FF', 'hex')");
@@ -188,5 +197,30 @@ mod tests {
         assert!(text.contains("Chief Financial Officer"), "element part for each element");
         assert!(!text.contains("(Note)"), "notes are not described as elements");
         assert!(xml.contains("<w:drawing") || xml.contains("<pic:pic"), "diagram picture");
+    }
+}
+
+#[cfg(test)]
+mod tag_tests {
+    /// LC-467: {Element.valueOf(Owner)} gives the tag's value in EA's report, on a copy of the round 4 model:
+    /// `LOONAR_TEST_PROPS=E:/livetest/r440/m5.properties LOONAR_TEST_PACKAGE=1116 cargo test template_tag_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA, a license and the model from LOONAR_TEST_PROPS"]
+    fn template_tag_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("app.properties");
+        let package: i64 = std::env::var("LOONAR_TEST_PACKAGE").unwrap().parse().unwrap();
+        let file = std::env::temp_dir().join("loonar_template_tag.docx");
+        let ops = [
+            serde_json::json!({"op":"save_document_template","name":"Compass – tagi","package_part":"# {Pkg.Name}","element_part":"## {Element.Name}\n- Owner: {Element.valueOf(Owner)}"}),
+            serde_json::json!({"op":"generate_report","package":package,"file":file.display().to_string(),"template":"Compass – tagi"}),
+        ];
+        crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions::default()).expect("template and report");
+        crate::ea::shutdown();
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(&file).unwrap()).unwrap();
+        let mut xml = String::new();
+        std::io::Read::read_to_string(&mut zip.by_name("word/document.xml").unwrap(), &mut xml).unwrap();
+        let text: String = xml.split("<w:t").skip(1).filter_map(|p| p.split_once('>').map(|(_, r)| r.split("</w:t>").next().unwrap_or(""))).collect::<Vec<_>>().join("|");
+        println!("{}", &text.chars().take(800).collect::<String>());
+        assert!(text.replace('|', "").contains("Zespół A") && !text.contains("valueOf"), "{text}");
     }
 }
