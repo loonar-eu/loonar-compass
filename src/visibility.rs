@@ -102,6 +102,34 @@ pub fn apply_ops(cfg: &AppConfig, diagram: i64, policy: &Value) -> Result<Vec<Va
     Ok(ops)
 }
 
+/// The start of the note with the number of hidden relationships, so applying again updates it instead of adding one.
+const NOTE_MARK: &str = "👁 ";
+
+/// The note on the diagram that says how many relationships its policy hides: updated when it is there, else made
+/// below the lowest element (LC-415). None hidden and no note: nothing.
+fn note_ops(cfg: &AppConfig, diagram: i64, hidden: usize) -> Result<Vec<Value>> {
+    let text = format!("{NOTE_MARK}{}", crate::i18n::fmt("Hidden on this diagram by its visibility policy: {0} relationships (/show-hidden-links lists them).", &[hidden.to_string()]));
+    let existing = query_rows(cfg, &format!(
+        "select o.object_id from t_object o join t_diagramobjects x on x.object_id = o.object_id where x.diagram_id = {diagram} and o.object_type = 'Note' and o.note like '{}%'",
+        crate::model_db::sql_text(cfg.model_source, NOTE_MARK)
+    ))?;
+    if let Some(r) = existing.first() {
+        return Ok(vec![json!({ "op": "update_element", "element": r[0].parse::<i64>().unwrap_or(0), "notes": text })]);
+    }
+    if hidden == 0 {
+        return Ok(Vec::new());
+    }
+    let place = query_rows(cfg, &format!(
+        "select d.package_id, coalesce(min(x.rectleft), 20), coalesce(min(x.rectbottom), -20) from t_diagram d left join t_diagramobjects x on x.diagram_id = d.diagram_id where d.diagram_id = {diagram} group by d.package_id"
+    ))?;
+    let r = place.first().context("the diagram is not there")?;
+    let n = |i: usize| r[i].parse::<i64>().unwrap_or(0);
+    Ok(vec![
+        json!({ "op": "create_element", "key": "hidden_note", "type": "Note", "package": n(0), "name": "", "notes": text }),
+        json!({ "op": "place", "diagram": diagram, "element": "#hidden_note", "left": n(1).max(10), "top": -n(2) + 30, "width": 260, "height": 60 }),
+    ])
+}
+
 /// A policy for a diagram: by diagram id from the action, else None.
 fn policy_of(cfg: &AppConfig, diagram: i64) -> Result<Option<Value>> {
     let (guid, _) = diagram_guid(cfg, diagram)?;
@@ -132,10 +160,15 @@ pub fn run(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)> {
         "apply" => {
             let diagram = diagram.context("give the diagram")?;
             let policy = policy_of(cfg, diagram)?.context("this diagram has no policy yet: action set first")?;
-            let ops = apply_ops(cfg, diagram, &policy)?;
+            let mut ops = apply_ops(cfg, diagram, &policy)?;
             if ops.is_empty() {
                 bail!("the diagram already follows its policy");
             }
+            // The number of hidden relationships on the diagram itself, in a note (LC-415): who opens it in EA sees
+            // that the view hides some, not only the chat.
+            let count = |hidden: bool| ops.iter().filter(|o| o["hidden"].as_bool().unwrap_or(true) == hidden).map(|o| o["connectors"].as_array().map_or(0, Vec::len)).sum::<usize>();
+            let total = (hidden_count(cfg, diagram) + count(true)).saturating_sub(count(false));
+            ops.extend(note_ops(cfg, diagram, total)?);
             Ok((ops, String::new()))
         }
         "hidden" => {
@@ -196,6 +229,13 @@ pub fn auto_apply(cfg: &AppConfig, connector: i64) -> Vec<String> {
         if result.is_ok() {
             // How many relationships the diagram hides now (LC-415): the person sees the count, not only this one.
             let total = hidden_count(cfg, diagram);
+            // The note with the number, when the diagram has one (LC-415).
+            if let Ok(note) = note_ops(cfg, diagram, total) {
+                if note.first().is_some_and(|o| o["op"] == "update_element") {
+                    let updated = crate::ea::run_batch(cfg, &note, &crate::ea::BatchOptions::default());
+                    crate::tools::audit(cfg, &note, &updated);
+                }
+            }
             done.push(crate::i18n::fmt("hidden on \"{0}\" by its visibility policy ({1} relationships hidden there now; /show-hidden-links lists them)", &[r[2].clone(), total.to_string()]));
         }
     }
@@ -246,6 +286,9 @@ mod tests {
         crate::ea::run_batch(&cfg, &apply, &crate::ea::BatchOptions::default()).expect("apply");
         let hidden = super::run(&json!({ "action": "hidden", "diagram": d }), &cfg).unwrap().1;
         println!("{hidden}");
+        // LC-415: the number is on the diagram, in a note.
+        let note = q(&format!("select o.note from t_object o join t_diagramobjects x on x.object_id = o.object_id where x.diagram_id = {d} and o.object_type = 'Note'"));
+        println!("{note:?}");
         // A new association later: the auto policy hides it at once.
         let later = crate::ea::run_batch(&cfg, &[json!({"op":"create_connector","key":"x","source":id_of("b"),"target":id_of("a"),"type":"Dependency"})], &crate::ea::BatchOptions::default()).expect("new");
         let x = later["created"][0]["id"].as_i64().unwrap();
@@ -255,6 +298,7 @@ mod tests {
         crate::ea::shutdown();
         let _ = std::fs::remove_dir_all(&dir);
         assert!(hidden.contains(&format!("connector_id {assoc}")) && !hidden.contains("InformationFlow"), "{hidden}");
+        assert!(note.len() == 1 && note[0][0].contains("1"), "{note:?}");
         assert!(!auto.is_empty() && hidden_after.contains(&format!("connector_id {x}")), "{auto:?} {hidden_after}");
     }
 }
