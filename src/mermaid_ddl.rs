@@ -225,12 +225,41 @@ pub fn import_plantuml(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, St
     // A sequence diagram (the most common PlantUML): its participants become classes with lifelines of them, its
     // messages operations of those classes, and the diagram a sequence of these lifelines.
     if is_plantuml_sequence(&text) {
-        let name = input["name"].as_str().map(str::trim).filter(|n| !n.is_empty()).unwrap_or("PlantUML sequence");
+        let title = text.lines().map(str::trim).find(|l| l.to_lowercase().starts_with("title ")).map(|l| l[6..].trim().to_string());
+        let name = input["name"].as_str().map(str::trim).filter(|n| !n.is_empty()).map(str::to_string).or(title).unwrap_or_else(|| "PlantUML sequence".into());
+        let name = name.as_str();
+        let lower: Vec<String> = text.lines().map(|l| l.trim().to_lowercase()).collect();
+        let mut left_out = Vec::new();
+        let notes = lower.iter().filter(|l| l.starts_with("note ") || l.starts_with("hnote ") || l.starts_with("rnote ")).count();
+        if notes > 0 {
+            left_out.push(format!("notes ({notes})"));
+        }
+        if lower.iter().any(|l| l.contains("[#")) {
+            left_out.push("colours of arrows".to_string());
+        }
+        if lower.iter().any(|l| l.starts_with("== ") || l.starts_with("...") || l.starts_with("|||")) {
+            left_out.push("dividers and delays".to_string());
+        }
+        if lower.iter().any(|l| l.starts_with("database ") || l.starts_with("queue ") || l.starts_with("boundary ") || l.starts_with("control ") || l.starts_with("entity ") || l.starts_with("collections ")) {
+            left_out.push("the shapes of database/queue/boundary/control/entity participants (they are classes)".to_string());
+        }
+        if lower.iter().any(|l| l.starts_with("else")) {
+            left_out.push("separate operands of alt/else (the else conditions are in the fragment's name)".to_string());
+        }
         let (ops, report) = crate::sequence::from_text(&json!({ "text": text, "package": input["package"], "name": name, "create_classes": true }), cfg)?;
-        let summary = format!("PlantUML sequence diagram → diagram \"{name}\" with classes, their operations and lifelines:\n{report}");
+        let mut summary = format!("PlantUML sequence diagram → diagram \"{name}\" with classes, their operations and lifelines:\n{report}");
+        if !left_out.is_empty() {
+            summary.push_str(&format!("\nLeft out: {}.", left_out.join("; ")));
+        }
         return Ok(if input["action"].as_str() == Some("apply") { (ops, summary) } else { (Vec::new(), format!("{summary}\nNothing saved yet: action apply saves it.")) });
     }
     let (classes, links, left_out) = parse_plantuml(&text)?;
+    let packages: Vec<String> = text.lines().map(str::trim).filter(|l| l.to_lowercase().starts_with("package ")).map(|l| l[8..].trim_end_matches('{').trim().trim_matches('"').to_string()).collect();
+    let mut input = input.clone();
+    if input["name"].as_str().is_none_or(|n| n.trim().is_empty()) && packages.len() == 1 {
+        input["name"] = json!(packages[0]);
+    }
+    let input = &input;
     build_import(input, cfg, classes, links, "PlantUML import", "PlantUML class diagram", &left_out)
 }
 

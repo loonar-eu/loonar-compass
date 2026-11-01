@@ -373,7 +373,14 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
                 let id: i64 = r[0].parse().unwrap_or(0);
                 let classifier: i64 = r[2].parse().unwrap_or(0);
                 report.push(format!("{pname}: existing {} (id {id}){}", r[1], if found.len() > 1 { format!(", {} elements have this name", found.len()) } else { String::new() }));
-                (json!(id), Some(json!(if classifier > 0 { classifier } else { id })))
+                if create_classes && matches!(r[1].as_str(), "Class" | "Component" | "Interface") {
+                    // The class itself does not stand on a sequence diagram: a lifeline of it does (LC-472, round 9).
+                    let lifeline_key = format!("p{i}");
+                    ops.push(json!({ "op": "create_element", "key": lifeline_key, "package": package, "name": pname, "type": "Sequence", "classifier": id }));
+                    (json!(format!("#{lifeline_key}")), Some(json!(id)))
+                } else {
+                    (json!(id), Some(json!(if classifier > 0 { classifier } else { id })))
+                }
             }
             None if create_classes => {
                 let (class_key, lifeline_key) = (format!("c{i}"), format!("p{i}"));
@@ -382,7 +389,7 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
                     report.push(format!("{pname}: new actor"));
                     (json!(format!("#{class_key}")), Some(json!(format!("#{class_key}"))))
                 } else {
-                    ops.push(json!({ "op": "create_element", "key": lifeline_key, "package": package, "name": "", "type": "Sequence", "classifier": format!("#{class_key}") }));
+                    ops.push(json!({ "op": "create_element", "key": lifeline_key, "package": package, "name": pname, "type": "Sequence", "classifier": format!("#{class_key}") }));
                     report.push(format!("{pname}: new class with a lifeline of it"));
                     (json!(format!("#{lifeline_key}")), Some(json!(format!("#{class_key}"))))
                 }
@@ -434,7 +441,8 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
                                         let (n, t) = p.split_once(':').map(|(a, b)| (a.trim(), b.trim())).unwrap_or((p, ""));
                                         json!({ "name": n, "type": t })
                                     }).collect();
-                                    ops.push(json!({ "op": "create_operation", "element": owner, "name": short, "return_type": "void", "parameters": parameters }));
+                                    let returns = text.rsplit_once(')').map(|(_, r)| r.trim().trim_start_matches(':').trim()).filter(|r| !r.is_empty()).unwrap_or("void");
+                                    ops.push(json!({ "op": "create_operation", "element": owner, "name": short, "return_type": returns, "parameters": parameters }));
                                 }
                             }
                         }

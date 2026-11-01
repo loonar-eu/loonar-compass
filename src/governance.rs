@@ -742,7 +742,17 @@ pub fn preview(cfg: &AppConfig, ops: &[Value]) -> String {
             "place" => format!("+ {} → {}", target(op, "element"), target(op, "diagram")),
             // LC-442 (round 5): what is added, with its name and type, not only the owner.
             "create_attribute" => format!("+ {} \"{name}{}\" → {}", crate::i18n::tr("attribute"), op["type"].as_str().map(|t| format!(" : {t}")).unwrap_or_default(), target(op, "element")),
-            "create_operation" => format!("+ {} \"{name}(){}\" → {}", crate::i18n::tr("operation"), op["return_type"].as_str().map(|t| format!(" : {t}")).unwrap_or_default(), target(op, "element")),
+            // With its parameters (LC-472: the card showed "pay()" for "pay(amount: Money)").
+            "create_operation" => format!(
+                "+ {} \"{name}({}){}\" → {}",
+                crate::i18n::tr("operation"),
+                op["parameters"].as_array().into_iter().flatten().map(|p| match p["type"].as_str().filter(|t| !t.is_empty()) {
+                    Some(t) => format!("{}: {t}", p["name"].as_str().unwrap_or("")),
+                    None => p["name"].as_str().unwrap_or("").to_string(),
+                }).collect::<Vec<_>>().join(", "),
+                op["return_type"].as_str().map(|t| format!(" : {t}")).unwrap_or_default(),
+                target(op, "element")
+            ),
             "create_baseline" => format!("+ {} \"{}\" → {}", crate::i18n::tr("baseline"), op["version"].as_str().unwrap_or(""), target(op, "package")),
             "update_element" => {
                 const FIELDS: &[&str] = &["name", "stereotype", "alias", "notes", "status", "version", "author", "phase", "complexity"];
