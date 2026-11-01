@@ -125,6 +125,9 @@ pub(crate) fn baseline_diff(xml: &str) -> (Vec<String>, Vec<String>, Vec<String>
                     (_, Some("Links")) => format!("{} \"{name}\" ({} \"{owner}\")", "relationship", "of"),
                     (_, Some(container)) if !container.is_empty() && container != "DGM" && !kind.is_empty() => format!("{container} \"{name}\""),
                     (_, Some(container)) if !container.is_empty() && container != "DGM" => format!("{container} \"{name}\" ({} \"{owner}\")", "of"),
+                    // An item EA types itself (an attribute, an operation) sits right in its element: its "Type" property
+                    // is its data type, not a diagram type.
+                    (_, Some(_)) if matches!(kind.as_str(), "Attribute" | "Operation" | "Parameter" | "Constraint" | "Requirement" | "Scenario" | "Tagged Value") => format!("{kind} \"{name}\" ({} \"{}\")", "of", parent.as_ref().map(|p| p.0.as_str()).unwrap_or_default()),
                     _ if element && !item_type.is_empty() => format!("{item_type} \"{name}\""),
                     _ if !item_type.is_empty() => format!("{} \"{name}\" ({item_type})", "diagram"),
                     _ if !kind.is_empty() => format!("{kind} \"{name}\""),
@@ -325,13 +328,13 @@ mod tests {
     #[test]
     fn baseline_log_as_ea_writes_it() {
         let xml = r#"<EA.CompareLog><ComparePackage name="P"><CompareResults><CompareItem name="P" type="" guid="{1}" status="Identical"><Properties><Property name="Abstract" model="false" baseline="false" status="Identical"/></Properties>
-<CompareItem name="Faktura" type="" guid="{2}" status="Changed"><Properties><Property name="Abstract" model="false" baseline="false" status="Identical"/><Property name="DateModified" model="2" baseline="1" status="Changed"/><Property name="Notes" model="Faktura VAT." status="Model only"/><Property name="Type" model="Class" baseline="Class" status="Identical"/></Properties></CompareItem>
+<CompareItem name="Faktura" type="" guid="{2}" status="Changed"><Properties><Property name="Abstract" model="false" baseline="false" status="Identical"/><Property name="DateModified" model="2" baseline="1" status="Changed"/><Property name="Notes" model="Faktura VAT." status="Model only"/><Property name="Type" model="Class" baseline="Class" status="Identical"/></Properties><CompareItem name="nabywca" type="Attribute" guid="{7}" status="Model only"><Properties><Property name="Type" model="Klient" status="Model only"/></Properties></CompareItem></CompareItem>
 <CompareItem name="Serwis" type="" guid="{3}" status="Changed"><Properties><Property name="Abstract" model="false" baseline="false" status="Identical"/><Property name="Type" model="Class" baseline="Class" status="Identical"/></Properties><CompareItem name="Links" type="Links" guid="{3}Links" status="Identical"><CompareItem name="Sequence (zapisz())" type="" guid="{4}" status="Changed"><Properties><Property name="Type" model="Sequence" baseline="Sequence" status="Identical"/><Property name="Name" model="zapisz()" baseline="zapisz()" status="Identical"/><Property name="Notes" model="nowa" baseline="" status="Changed"/></Properties></CompareItem></CompareItem></CompareItem>
 <CompareItem name="BB3 Sekwencja" type="" guid="{5}" status="Changed"><Properties><Property name="Type" model="Sequence" baseline="Sequence" status="Identical"/></Properties><CompareItem name="Visual Elements" type="Visual Elements" guid="{5}Visual Elements" status="Identical"><CompareItem name="Serwis" type="DGM" guid="DGM-{3}{5}" status="Changed"><Properties><Property name="Top" model="20" baseline="50" status="Changed"/><Property name="Style" baseline="DUID=47E60C04;" status="Baseline only"/></Properties></CompareItem></CompareItem></CompareItem>
 <CompareItem name="Rabat" type="" guid="{6}" status="Model only"><Properties><Property name="Abstract" model="false" status="Model only"/><Property name="Type" model="Class" status="Model only"/></Properties></CompareItem>
 </CompareItem></CompareResults></ComparePackage></EA.CompareLog>"#;
         let (added, deleted, changed, _) = super::baseline_diff(xml);
-        assert_eq!(added, vec!["Class \"Rabat\""]);
+        assert_eq!(added, vec!["Attribute \"nabywca\" (of \"Faktura\")", "Class \"Rabat\""], "LC-440: an attribute, not a diagram");
         assert!(deleted.is_empty());
         assert_eq!(changed, vec![
             "Class \"Faktura\": Notes: \"\" → \"Faktura VAT.\"".to_string(),
