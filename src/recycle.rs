@@ -58,11 +58,19 @@ pub fn plan(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)> {
             let target = match bin_id {
                 Some(id) => json!(id),
                 None => {
-                    let root: i64 = query_rows(cfg, "select package_id from t_package where parent_id = 0 order by package_id")?
-                        .iter()
-                        .filter_map(|r| r[0].parse().ok())
-                        .find_map(|root: i64| query_rows(cfg, &format!("select package_id from t_package where parent_id = {root} order by tpos, package_id")).ok()?.first()?.first()?.parse().ok())
-                        .ok_or_else(|| anyhow::anyhow!("the model has no package to put the recycle bin in"))?;
+                    // The bin goes right under the root of the model the first element is in, as a top-level package, so
+                    // it is always in the same place and easy to find (LC-446: it was put into whichever package came
+                    // first under the root).
+                    let mut root = query_rows(cfg, &format!("select package_id from t_object where object_id = {}", ids[0]))?
+                        .first()
+                        .and_then(|r| r[0].parse::<i64>().ok())
+                        .ok_or_else(|| anyhow::anyhow!("there is no element with id {}", ids[0]))?;
+                    for _ in 0..100 {
+                        match query_rows(cfg, &format!("select parent_id from t_package where package_id = {root}"))?.first().and_then(|r| r[0].parse::<i64>().ok()) {
+                            Some(parent) if parent != 0 => root = parent,
+                            _ => break,
+                        }
+                    }
                     ops.push(json!({ "op": "create_package", "key": "bin", "parent": root, "name": BIN }));
                     json!("#bin")
                 }
