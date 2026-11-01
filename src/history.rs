@@ -371,7 +371,7 @@ pub fn store_bytes(attachments_dir: &Path, original: &str, bytes: &[u8]) -> Resu
 
 /// Original file name from the stored name (without the uuid prefix).
 /// The start of the application's note with the steps of the previous answer (see `messages_for_model`).
-pub const STEPS_NOTE: &str = "[Note from the application, not from the user and not to be repeated in your answer: steps done while making your previous answer:";
+pub const STEPS_NOTE: &str = "[Note from the application, not from the user and not to be repeated in your answer: steps done while making your previous answer, with what the tools got and returned (shortened). They are what really happened: rely on them, do not take back what they show:";
 
 /// What the user wrote in a message prepared for the model: the notes of the application put before it (the steps of
 /// the previous answer, a change of the model, a summary) are left out (found in the 0.9.2 tests: a template named in
