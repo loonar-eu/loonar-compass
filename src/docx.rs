@@ -430,7 +430,11 @@ pub fn build(title: &str, markdown: &str, mut resolve: impl FnMut(&str, &str) ->
     let heading = |id: &str, name: &str, size: usize, color: &str, before: u32| {
         Style::new(id, StyleType::Paragraph).name(name).size(size).bold().color(color).line_spacing(LineSpacing::new().before(before).after(80))
     };
+    // The real time of writing (LC-465: the file said 1970-01-01, so a document could not be told older than the model).
+    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
     let mut doc = Docx::new()
+        .created_at(&now)
+        .updated_at(&now)
         .default_fonts(RunFonts::new().ascii("Calibri").hi_ansi("Calibri").cs("Calibri").east_asia("Calibri"))
         .default_size(22)
         .add_style(Style::new("Title", StyleType::Paragraph).name("Title").size(52).bold().color(NAVY).line_spacing(LineSpacing::new().after(240)))
@@ -558,6 +562,16 @@ mod tests {
     fn builds_document_with_table_list_and_picture() {
         let xml = xml_of("# Description\n\nText with **bold words**.\n\n- item\n- second\n\n| UC | FR |\n|---|---|\n| UC-04 | FR-05 |\n\n![Matrix](image:test)\n");
         assert!(xml.contains("UC-04") && xml.contains("bold words") && xml.contains("Matrix"));
+    }
+
+    /// LC-465: the document has the time it was written, not 1970.
+    #[test]
+    fn document_has_its_date() {
+        let bytes = super::build("T", "x", |_, _| anyhow::bail!("no pictures")).unwrap();
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+        let mut core = String::new();
+        std::io::Read::read_to_string(&mut zip.by_name("docProps/core.xml").unwrap(), &mut core).unwrap();
+        assert!(core.contains(&chrono::Utc::now().format("%Y-%m-%d").to_string()) && !core.contains("1970"), "{core}");
     }
 
     /// LC-360: control characters do not reach document.xml.
