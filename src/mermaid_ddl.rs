@@ -272,6 +272,68 @@ fn quote_name(dialect: &str, name: &str) -> String {
     match dialect { "mysql" => format!("`{}`", name.replace('`', "``")), "sqlserver" => format!("[{}]", name.replace(']', "]]")), _ => format!("\"{}\"", name.replace('"', "\"\"")) }
 }
 
+/// The parameters (columns) of a key operation of a table, in their order.
+fn key_columns(cfg: &AppConfig, operation: &str) -> Result<Vec<String>> {
+    Ok(query_rows(cfg, &format!("select name from t_operationparams where operationid = {operation} order by pos"))?.into_iter().map(|r| r[0].clone()).collect())
+}
+
+/// FOREIGN KEY clauses of a table as EA models them (LC-453): an «FK» operation with the table's columns, and an «FK»
+/// relationship from this table to the referenced one whose StyleEx says FKINFO=SRC=<FK operation>:DST=<PK operation>.
+/// A relationship without FKINFO (drawn by hand) is used when it is the only one left for a single FK operation; the
+/// referenced columns are those of the DST operation, else the referenced table's primary key.
+fn foreign_keys(cfg: &AppConfig, dialect: &str, table: i64) -> Result<Vec<String>> {
+    let fks = query_rows(cfg, &format!("select operationid, name from t_operation where object_id = {table} and upper(coalesce(stereotype,'')) = 'FK' order by pos, name"))?;
+    if fks.is_empty() {
+        return Ok(Vec::new());
+    }
+    let links = query_rows(cfg, &format!(
+        "select c.end_object_id, coalesce(c.styleex,''), o.name from t_connector c join t_object o on o.object_id = c.end_object_id \
+         where c.start_object_id = {table} and upper(coalesce(c.stereotype,'')) = 'FK' order by c.connector_id"
+    ))?;
+    let info = |style: &str, part: &str| -> Option<String> {
+        let at = style.find("FKINFO=")? + "FKINFO=".len();
+        style[at..].split(';').next()?.split(':').find_map(|p| p.strip_prefix(&format!("{part}=")).map(str::to_string))
+    };
+    let mut used = vec![false; links.len()];
+    let mut out = Vec::new();
+    for fk in &fks {
+        let columns = key_columns(cfg, &fk[0])?;
+        let mut found = links.iter().position(|l| info(&l[1], "SRC").is_some_and(|src| src == fk[1]));
+        if found.is_none() && fks.len() == 1 {
+            let free: Vec<usize> = (0..links.len()).filter(|i| !used[*i] && info(&links[*i][1], "SRC").is_none()).collect();
+            if free.len() == 1 {
+                found = Some(free[0]);
+            }
+        }
+        let Some(i) = found else {
+            out.push(format!("  -- {}: the referenced table is not known (no «FK» relationship from this table)", fk[1]));
+            continue;
+        };
+        used[i] = true;
+        let (target, target_name) = (&links[i][0], &links[i][2]);
+        let pk_of = |name: Option<String>| -> Result<Vec<String>> {
+            let condition = match name {
+                Some(n) => format!("name = '{}'", crate::model_db::sql_text(cfg.model_source, &n)),
+                None => "upper(coalesce(stereotype,'')) = 'PK'".to_string(),
+            };
+            match query_rows(cfg, &format!("select operationid from t_operation where object_id = {target} and {condition} order by pos"))?.first() {
+                Some(r) => key_columns(cfg, &r[0]),
+                None => Ok(Vec::new()),
+            }
+        };
+        let mut referenced = pk_of(info(&links[i][1], "DST"))?;
+        if referenced.is_empty() {
+            referenced = pk_of(None)?;
+        }
+        if referenced.len() != columns.len() {
+            referenced = columns.clone();
+        }
+        let q = |list: &[String]| list.iter().map(|c| quote_name(dialect, c)).collect::<Vec<_>>().join(", ");
+        out.push(format!("  CONSTRAINT {} FOREIGN KEY ({}) REFERENCES {} ({})", quote_name(dialect, &fk[1]), q(&columns), quote_name(dialect, target_name), q(&referenced)));
+    }
+    Ok(out)
+}
+
 pub fn table_ddl(input: &Value, cfg: &AppConfig) -> Result<String> {
     let dialect = input["dialect"].as_str().unwrap_or("postgres");
     if !matches!(dialect, "postgres" | "sqlserver" | "mysql" | "oracle" | "sqlite") {
@@ -296,6 +358,7 @@ pub fn table_ddl(input: &Value, cfg: &AppConfig) -> Result<String> {
         if !pk.is_empty() {
             lines.push(format!("  PRIMARY KEY ({})", pk.join(", ")));
         }
+        lines.extend(foreign_keys(cfg, dialect, id)?);
         out.push(format!("CREATE TABLE {} (\n{}\n);", quote_name(dialect, &t[1]), lines.join(",\n")));
     }
     Ok(out.join("\n\n"))
@@ -348,6 +411,11 @@ mod tests {
             json!({"op":"create_attribute","element":"#t","name":"id","type":"integer"}),
             json!({"op":"create_attribute","element":"#t","name":"full name","type":"varchar"}),
             json!({"op":"create_operation","element":"#t","name":"PK_customer","stereotype":"PK","parameters":[{"name":"id","type":"integer"}]}),
+            // LC-453: a foreign key drawn by hand (an «FK» operation and an «FK» relationship without FKINFO).
+            json!({"op":"create_element","key":"o","package":pkg,"name":"orders","type":"Table"}),
+            json!({"op":"create_attribute","element":"#o","name":"customer_id","type":"integer"}),
+            json!({"op":"create_operation","element":"#o","name":"FK_orders_customer","stereotype":"FK","parameters":[{"name":"customer_id","type":"integer"}]}),
+            json!({"op":"create_connector","source":"#o","target":"#t","type":"Association","stereotype":"FK"}),
         ], &crate::ea::BatchOptions::default()).unwrap();
         let pg = table_ddl(&json!({ "package": pkg, "dialect": "postgres" }), &cfg).unwrap();
         let ms = table_ddl(&json!({ "package": pkg, "dialect": "sqlserver" }), &cfg).unwrap();
@@ -358,6 +426,7 @@ mod tests {
         assert!(links.iter().any(|l| l[0] == "Aggregation" && l[1] == "Strong") && links.iter().any(|l| l[0] == "Generalization"), "{links:?}");
         // LC-452: the part Line has "*", the whole Order "1".
         assert!(links.iter().any(|l| l[0] == "Aggregation" && l[2] == "*" && l[3] == "1"), "{links:?}");
+        assert!(pg.contains("FOREIGN KEY (customer_id) REFERENCES customer (id)"), "{pg}");
         assert!(pg.contains("id INTEGER NOT NULL") && pg.contains("PRIMARY KEY (id)") && ms.contains("[full name] NVARCHAR(255)"), "{pg}\n{ms}");
     }
 }
