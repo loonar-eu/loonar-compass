@@ -62,6 +62,22 @@ pub fn run(input: &Value, cfg: &AppConfig) -> Result<String> {
     // Diagrams and publications.
     let diagrams = query_rows(cfg, &format!("select d.diagram_id, d.name from t_diagramobjects x join t_diagram d on d.diagram_id = x.diagram_id where x.object_id = {id} order by d.name"))?;
     out.push(format!("Diagrams that show it (only this element would be gone from them): {}{}", diagrams.len(), if diagrams.is_empty() { String::new() } else { format!(" ({})", diagrams.iter().take(10).map(|d| format!("\"{}\"", d[1])).collect::<Vec<_>>().join(", ")) }));
+    // A ready sentence with the numbers in the user's language and grammar (LC-461: the assistant wrote "zniknie 4
+    // elementy" and that the related elements would vanish from the diagram).
+    if matches!(change, "delete" | "retire") {
+        let (r, d) = (links.len(), diagrams.len());
+        let sentence = if crate::i18n::current() == crate::i18n::Lang::Pl {
+            let few = |n: usize| (2..=4).contains(&(n % 10)) && !(12..=14).contains(&(n % 100));
+            let pl = |n: usize, one: &str, some: &str, many: &str| format!("{n} {}", if n == 1 { one } else if few(n) { some } else { many });
+            format!(
+                "Po usunięciu „{}” {} razem z nim {}; element zniknie z {}; pozostałe elementy zostają w modelu i na diagramach.",
+                el[1], if few(r) { "znikną" } else { "zniknie" }, pl(r, "relacja", "relacje", "relacji"), pl(d, "diagramu", "diagramów", "diagramów")
+            )
+        } else {
+            format!("If \"{}\" is deleted, its {r} relationship(s) go with it; it disappears from {d} diagram(s); the other elements stay in the model and on the diagrams.", el[1])
+        };
+        out.push(format!("Summary to give the user as it is: {sentence}"));
+    }
     let ids: Vec<i64> = diagrams.iter().filter_map(|d| d[0].parse().ok()).collect();
     let published: Vec<String> = std::fs::read_to_string(cfg.base_dir.join("publications.json")).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok())
         .and_then(|v| v.as_array().cloned()).unwrap_or_default().into_iter()
