@@ -543,6 +543,24 @@ impl Job<'_> {
         Ok(())
     }
 
+    /// UML constraints of a connector: [{name, type?}], type Invariant unless given; one already there is not added again.
+    fn add_constraints(&self, connector: &Disp, constraints: &Value, label: &str) -> Result<()> {
+        for constraint in constraints.as_array().into_iter().flatten() {
+            let collection = connector.obj("Constraints")?;
+            collection.call("Refresh", &[])?;
+            let name = text_field(constraint, "name");
+            if name.trim().is_empty() || collection.items()?.iter().any(|c| c.text("Name").ok().as_deref() == Some(name.as_str())) {
+                continue;
+            }
+            let kind = constraint["type"].as_str().unwrap_or("Invariant");
+            if let Some(added) = collection.call("AddNew", &[s(&name), s(kind)])?.object() {
+                added.update(&crate::i18n::fmt("connector '{0}'", &[label.to_string()]))?;
+            }
+            collection.call("Refresh", &[])?;
+        }
+        Ok(())
+    }
+
     fn set_tags(&self, object: &Disp, tags: &Value) -> Result<()> {
         let Some(tags) = tags.as_object() else { return Ok(()) };
         for (name, value) in tags {
@@ -979,15 +997,7 @@ impl Job<'_> {
                 self.set_tags(&connector, &op["tags"])?;
                 // Constraints of the connector (LC-421: a time or duration constraint of a message, a UML constraint on
                 // it): [{name, type?}], type Invariant unless given.
-                for constraint in op["constraints"].as_array().into_iter().flatten() {
-                    let collection = connector.obj("Constraints")?;
-                    let name = text_field(constraint, "name");
-                    let kind = constraint["type"].as_str().unwrap_or("Invariant");
-                    if let Some(added) = collection.call("AddNew", &[s(&name), s(kind)])?.object() {
-                        added.update(&crate::i18n::fmt("connector '{0}'", &[title.clone()]))?;
-                    }
-                    collection.call("Refresh", &[])?;
-                }
+                self.add_constraints(&connector, &op["constraints"], &title)?;
                 let (id, guid, real) = (connector.int("ConnectorID")?, connector.text("ConnectorGUID")?, connector.text("Name")?);
                 self.register(&op["key"], Kind::Connector, &connector, id, guid, real);
             }
@@ -1504,6 +1514,8 @@ impl Job<'_> {
                     end.update(crate::i18n::tr("connector end"))?;
                 }
                 self.set_tags(&connector, &op["tags"])?;
+                // Constraints added to an existing relationship, e.g. a time constraint of a message (LC-421).
+                self.add_constraints(&connector, &op["constraints"], &format!("id={id}"))?;
             }
             "move" => {
                 // Moves an existing object to another package (relationships and positions on diagrams are kept).
@@ -2419,5 +2431,23 @@ mod archimate_type_tests {
         let now = crate::tools::query_rows(&cfg, &format!("select connector_type, stereotype from t_connector where start_object_id = {} and end_object_id = {} and stereotype like '%Serving%'", ends[0], ends[1])).unwrap();
         println!("{now:?}");
         assert_eq!(now.first().map(|r| r[0].as_str()), Some("Association"), "{now:?}");
+    }
+}
+
+#[cfg(test)]
+mod constraint_tests {
+    /// LC-421: a time constraint added to an existing message is a UML constraint of it, on a model copy:
+    /// `LOONAR_TEST_PROPS=E:/livetest/r440/m5.properties LOONAR_TEST_CONNECTOR=<message id> cargo test message_constraint_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA and a copy of a model with a sequence message"]
+    fn message_constraint_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
+        let c: i64 = std::env::var("LOONAR_TEST_CONNECTOR").unwrap().parse().unwrap();
+        let op = serde_json::json!({ "op": "update_connector", "connector": c, "constraints": [{ "name": "{< 3s}" }] });
+        crate::ea::run_batch(&cfg, &[op.clone(), op], &crate::ea::BatchOptions::default()).expect("constraint");
+        crate::ea::shutdown();
+        let rows = crate::tools::query_rows(&cfg, &format!("select \"constraint\", constrainttype from t_connectorconstraint where connectorid = {c}")).unwrap();
+        println!("{rows:?}");
+        assert_eq!(rows.iter().filter(|r| r[0] == "{< 3s}").count(), 1, "added once: {rows:?}");
     }
 }
