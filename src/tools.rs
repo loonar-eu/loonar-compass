@@ -505,7 +505,7 @@ remove_from_diagram {diagram, element} (removes the element from the diagram, th
 reverse_connector {connector} (swaps the source and the target of a relationship); \
 update_package {package, name?, notes?, version?, status?, stereotype?}; \
 version_control {package, action, comment?} (version control of a package that is already under version control in EA: action check_out, check_in, get_latest (replaces the package with the version from version control), put_latest (checks in and keeps it checked out) or resync (reads the version control status of the package again); comment for check_out, check_in and put_latest; always asked; call version_control_status first); \
-generate_report {package, file, template?} (a document from an EA document template, like Publish → Report Builder: file = a full path ending .docx, .pdf or .rtf, by default in the attachments folder; template = the name of an EA template, default \"Model Report\"; use it when the user wants EA's own report format or a company template; for documents you write yourself use create_document); \
+generate_report {package, file, template?} (a document from an EA document template, like Publish → Report Builder: file = a file name ending .docx, .pdf or .rtf (kept with the conversation's files; give only the name unless the user asked for a folder) or a full path the user named; template = the name of an EA template, default \"Model Report\"; use it when the user wants EA's own report format or a company template; for documents you write yourself use create_document); \
 layout_diagram {diagram, direction?, spacing?} (EA's automatic layout of the whole diagram, like Layout → Diagram Layout: direction down (default), right, up or left; spacing in pixels, default 40; use it after creating a diagram with many elements or when the user asks to tidy a diagram; then check the result with ea_show_diagram); \
 export_xmi {package, file} (exports the package with its contents and diagrams to an XMI file; file = a full path ending .xml or .xmi, by default in the attachments folder); \
 import_xmi {package, file, keep_guids?} (imports an XMI file into the package; GUIDs are replaced unless keep_guids is true, so an import never overwrites existing objects; only on the user's request); \
@@ -2640,9 +2640,17 @@ fn ea_write(input: &Value, ctx: &ToolContext) -> Result<String> {
     let mut risky_files = Vec::new();
     for op in normalized.iter_mut() {
         let kind = op["op"].as_str().unwrap_or("").to_string();
+        let file = op["file"].as_str().unwrap_or("").trim().to_string();
+        if matches!(kind.as_str(), "export_xmi" | "generate_report") && !file.is_empty() && !file.contains(['\\', '/', ':']) {
+            // A bare file name: the file goes with the conversation's files, as the documents Compass writes (LC-466: the
+            // assistant picked a public folder itself when a full path was asked for).
+            let _ = std::fs::create_dir_all(&ctx.cfg.attachments_dir);
+            op["file"] = json!(ctx.cfg.attachments_dir.join(&file).display().to_string());
+            continue;
+        }
         if matches!(kind.as_str(), "export_xmi" | "import_xmi" | "generate_report") {
             // Files outside the model are always asked (also in auto), with the real full path in the dialog and for EA.
-            let path = check_file_path(op["file"].as_str().unwrap_or(""))?;
+            let path = check_file_path(&file)?;
             op["file"] = json!(path.display().to_string());
             risky_files.push(path);
         }
