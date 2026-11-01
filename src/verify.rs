@@ -28,6 +28,16 @@ pub fn verify(cfg: &AppConfig, ops: &[Value], result: &Value) -> Verification {
         .flatten()
         .filter_map(|c| Some((c["key"].as_str()?.to_string(), c["id"].as_i64()?)))
         .collect();
+    // Objects created without a key are matched to their operations in order, by kind (LC-449: a relationship written
+    // without a key was reported missing although EA had created it, and the assistant deleted and wrote it again).
+    let mut unkeyed: HashMap<String, std::collections::VecDeque<i64>> = HashMap::new();
+    for c in result["created"].as_array().into_iter().flatten() {
+        if c["key"].as_str().is_none_or(|k| k.is_empty()) {
+            if let (Some(kind), Some(id)) = (c["kind"].as_str(), c["id"].as_i64()) {
+                unkeyed.entry(kind.to_string()).or_default().push_back(id);
+            }
+        }
+    }
     // An id given directly or a "#key" of an object created in the same job.
     let id_of = |v: &Value| -> Option<i64> {
         match v {
@@ -76,7 +86,16 @@ pub fn verify(cfg: &AppConfig, ops: &[Value], result: &Value) -> Verification {
     for op in ops {
         let kind = op["op"].as_str().unwrap_or("");
         let key = op["key"].as_str().unwrap_or("");
-        let created = keys.get(key).copied();
+        let created = keys.get(key).copied().or_else(|| {
+            let made = match kind {
+                "create_package" => "package",
+                "create_diagram" => "diagram",
+                "create_element" => "element",
+                "create_connector" => "connector",
+                _ => return None,
+            };
+            if key.is_empty() { unkeyed.get_mut(made).and_then(|q| q.pop_front()) } else { None }
+        });
         match kind {
             "create_package" => {
                 let ok = created.is_some_and(|id| count(format!("select count(*) as c0 from t_package where package_id = {id}")) == 1);
@@ -214,4 +233,32 @@ pub fn relations_of_deleted(cfg: &AppConfig, ops: &[Value]) -> Vec<String> {
         out.push(crate::i18n::fmt("\"{0}\" (id {1}) has {2} relationships that will be deleted with it: {3}", &[name, id.to_string(), rows.len().to_string(), list.join("; ")]));
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    /// LC-449: a relationship written without a key is found by the check, on a model copy:
+    /// `LOONAR_TEST_PROPS=E:/livetest/r440/m.properties cargo test unkeyed_connector_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA and the model from LOONAR_TEST_PROPS"]
+    fn unkeyed_connector_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("app.properties");
+        let root = crate::tools::query_rows(&cfg, "select package_id from t_package where parent_id = 0").unwrap()[0][0].parse::<i64>().unwrap();
+        let ops = vec![
+            json!({"op":"create_package","key":"pkg","parent":root,"name":"LC-449 check"}),
+            json!({"op":"create_element","key":"a","package":"#pkg","name":"A","type":"Class"}),
+            json!({"op":"create_element","package":"#pkg","name":"B","type":"Class"}),
+            json!({"op":"create_connector","source":"#a","target":"#a","type":"Dependency"}),
+            json!({"op":"create_connector","source":"#a","target":"#a","type":"Association"}),
+        ];
+        let result = crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions::default()).expect("write");
+        let check = super::verify(&cfg, &ops, &result);
+        let pkg = result["created"][0]["id"].as_i64().unwrap();
+        let _ = crate::ea::run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &crate::ea::BatchOptions::default());
+        crate::ea::shutdown();
+        assert!(check.problems.is_empty(), "{:?}", check.problems);
+        assert!(check.passed >= 6, "{}", check.passed);
+    }
 }
