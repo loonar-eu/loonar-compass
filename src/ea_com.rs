@@ -1928,6 +1928,24 @@ impl Job<'_> {
                 }
                 diagram.update(crate::i18n::tr("diagram"))?;
             }
+            "restore_link" => {
+                // Internal (undo of a layout, LC-376): a connector's line on one diagram as it was – its bend points
+                // (Path), geometry and style (colour, width), read before the change.
+                let diagram = self.diagram(&op["diagram"])?;
+                let links = diagram.obj("DiagramLinks")?;
+                let cid = int_of(&op["connector"]).ok_or_else(|| anyhow!("restore_link: connector"))?;
+                let link = self.single_link(&links, cid)?;
+                for (field, property) in [("path", "Path"), ("geometry", "Geometry"), ("style", "Style")] {
+                    if let Some(value) = op[field].as_str() {
+                        link.set(property, s(value))?;
+                    }
+                }
+                if let Some(hidden) = op["hidden"].as_bool() {
+                    link.set("IsHidden", b(hidden))?;
+                }
+                link.update(crate::i18n::tr("connector visibility on the diagram"))?;
+                diagram.update(crate::i18n::tr("diagram"))?;
+            }
             "repair_diagram_links" => {
                 // Connectors not visible on a diagram (LC-303): duplicate links of one connector are removed (a visible
                 // one is kept); with show_hidden also hidden links whose both ends are on the diagram are shown.

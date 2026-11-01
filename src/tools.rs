@@ -2703,6 +2703,15 @@ fn ea_write(input: &Value, ctx: &ToolContext) -> Result<String> {
     if !related.is_empty() {
         text.push_str(&format!("\nDeleted together with relationships (tell the user): {}\n", related.join(" | ")));
     }
+    // A relationship made by this write is hidden on the diagrams whose visibility policy is "auto", as one made in EA
+    // is (LC-373: the policy missed the relationships Compass made itself).
+    for created in done["created"].as_array().into_iter().flatten().filter(|c| c["kind"] == "connector") {
+        if let Some(id) = created["id"].as_i64() {
+            for line in crate::visibility::auto_apply(ctx.cfg, id) {
+                text.push_str(&format!("\nRelationship {id}: {line} (tell the user)\n"));
+            }
+        }
+    }
     // The model is read again: only what is really there may be reported as done.
     let check = crate::verify::verify(ctx.cfg, ops, &done);
     if check.problems.is_empty() && check.passed == 0 {

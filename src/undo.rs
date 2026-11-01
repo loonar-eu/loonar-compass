@@ -115,13 +115,17 @@ fn before_one(cfg: &AppConfig, op: &Value, reverse: &mut Vec<Value>, not_undoabl
                 }
                 reverse.push(back);
             }
-            // LC-376: a layout moves everything; the positions before it are the way back (the connectors without
-            // their own route follow the elements; routed ones are not restored).
+            // LC-376: a layout moves everything; the positions before it are the way back, and the lines of the
+            // connectors as they were (bend points, geometry, colour and width), which a layout redraws.
             "layout_diagram" => {
                 let Some(d) = id("diagram") else { return };
                 for r in query_rows(cfg, &format!("select object_id, rectleft, recttop, rectright, rectbottom from t_diagramobjects where diagram_id = {d}")).unwrap_or_default() {
                     let n = |i: usize| r[i].parse::<i64>().unwrap_or(0);
                     reverse.push(json!({ "op": "set_bounds", "diagram": d, "element": n(0), "left": n(1), "top": -n(2), "width": n(3) - n(1), "height": n(2) - n(4) }));
+                }
+                for r in query_rows(cfg, &format!("select connectorid, coalesce(path,''), coalesce(geometry,''), coalesce(style,''), coalesce(hidden,0) from t_diagramlinks where diagramid = {d}")).unwrap_or_default() {
+                    reverse.push(json!({ "op": "restore_link", "diagram": d, "connector": r[0].parse::<i64>().unwrap_or(0), "path": r[1], "geometry": r[2], "style": r[3],
+                        "hidden": r[4] == "1" || r[4].eq_ignore_ascii_case("true") }));
                 }
             }
             "set_bounds" => {
