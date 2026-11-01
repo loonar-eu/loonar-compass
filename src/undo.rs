@@ -359,3 +359,32 @@ Attributes, operations and packages changed or created and a diagram layout are 
         }, "required": ["action"] }
     })
 }
+
+#[cfg(test)]
+mod layout_tests {
+    use serde_json::json;
+
+    /// LC-376: undoing a layout brings back the line of a connector (bend points, colour, width), on a model copy:
+    /// `LOONAR_TEST_PROPS=E:/livetest/r440/m5.properties LOONAR_TEST_DIAGRAM=1170 LOONAR_TEST_CONNECTOR=5044 cargo test layout_undo_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA and the model from LOONAR_TEST_PROPS"]
+    fn layout_undo_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("app.properties");
+        let d: i64 = std::env::var("LOONAR_TEST_DIAGRAM").unwrap().parse().unwrap();
+        let c: i64 = std::env::var("LOONAR_TEST_CONNECTOR").unwrap().parse().unwrap();
+        let opts = crate::ea::BatchOptions::default();
+        let link = || crate::model_db::query_rows(&cfg, &format!("select coalesce(path,''), coalesce(style,'') from t_diagramlinks where diagramid = {d} and connectorid = {c}")).unwrap()[0].clone();
+        crate::ea::run_batch(&cfg, &[json!({ "op": "restore_link", "diagram": d, "connector": c, "path": "80:-160;230:-160;", "style": "Mode=3;EOID=0;SOID=0;Color=255;LWidth=3;", "hidden": false })], &opts).expect("set line");
+        let set = link();
+        let layout = [json!({ "op": "layout_diagram", "diagram": d })];
+        let (reverse, _) = super::before(&cfg, &layout);
+        crate::ea::run_batch(&cfg, &layout, &opts).expect("layout");
+        println!("before {set:?} after layout {:?}", link());
+        crate::ea::run_batch(&cfg, &reverse, &opts).expect("undo");
+        let back = link();
+        crate::ea::shutdown();
+        println!("undone {back:?}");
+        assert_eq!(back[0], set[0], "bend points");
+        assert!(back[1].contains("Color=255") && back[1].contains("LWidth=3"), "{back:?}");
+    }
+}
