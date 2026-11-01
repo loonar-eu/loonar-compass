@@ -362,15 +362,19 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
     // Fragments around their messages: EA lays the messages out by their number, the first at about y 135 and then
     // about 35 apart (EA 17, lifelines 40 from the top; measured on an exported image).
     for (i, (kind, guard, first, last)) in drawn.iter().enumerate() {
-        if last < first {
-            continue;
+        // An empty fragment is drawn too, small, where it is in the text (LC-456: it was left out while the answer said
+        // it had been made); the report says it is empty, /check-sequence finds it.
+        let empty = last < first;
+        if empty {
+            report.push(format!("{kind} fragment \"{guard}\" has no message inside (drawn empty)"));
         }
+        let last = if empty { first } else { last };
         let ntype = FRAGMENTS.iter().find(|(k, _)| k == kind).map(|(_, n)| *n).unwrap_or(0);
         let key = format!("f{i}");
         let depth = drawn.iter().filter(|(_, _, f, l)| f <= first && l >= last).count() as i64 - 1;
         ops.push(json!({ "op": "create_element", "key": key, "package": package, "name": guard, "type": "InteractionFragment", "subtype": ntype }));
         ops.push(json!({ "op": "place", "diagram": "#seq", "element": format!("#{key}"), "left": 30 + depth * 8, "top": 115 + (*first as i64 - 1) * 35 + depth * 5,
-            "width": 60 + participants.len() as i64 * 200 - depth * 16, "height": (*last as i64 - *first as i64 + 1) * 35 + 5 - depth * 10 }));
+            "width": 60 + participants.len() as i64 * 200 - depth * 16, "height": if empty { 30 } else { (*last as i64 - *first as i64 + 1) * 35 + 5 - depth * 10 } }));
     }
     if !fragments.is_empty() {
         report.push(format!("{} fragment(s) without \"end\" were left out", fragments.len()));
