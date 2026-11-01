@@ -77,7 +77,16 @@ pub fn plan(input: &Value, cfg: &AppConfig) -> Result<(Value, String)> {
         bail!("\"{}\" is a {} and \"{}\" a {}: merge elements of one type (or set allow_other_type when the user wants it)", k[0], k[1], r[0], r[1]);
     }
     let guid = crate::model_db::sql_text(cfg.model_source, &r[2]);
-    let connectors = ids(cfg, format!("select connector_id from t_connector where start_object_id = {remove} or end_object_id = {remove}"))?;
+    // A relationship the kept element already has (same type, stereotype, name and other end, same direction) is not
+    // moved: it goes with the duplicate, so the merge leaves no two identical relationships (LC-455).
+    let same = ids(cfg, format!(
+        "select r.connector_id from t_connector r where (r.start_object_id = {remove} or r.end_object_id = {remove}) and exists (select 1 from t_connector k \
+         where k.connector_id <> r.connector_id and k.connector_type = r.connector_type and coalesce(k.stereotype,'') = coalesce(r.stereotype,'') \
+         and coalesce(k.name,'') = coalesce(r.name,'') \
+         and k.start_object_id = (case when r.start_object_id = {remove} then {keep} else r.start_object_id end) \
+         and k.end_object_id = (case when r.end_object_id = {remove} then {keep} else r.end_object_id end))"
+    ))?;
+    let connectors: Vec<i64> = ids(cfg, format!("select connector_id from t_connector where start_object_id = {remove} or end_object_id = {remove}"))?.into_iter().filter(|c| !same.contains(c)).collect();
     let both = ids(cfg, format!("select a.diagram_id from t_diagramobjects a where a.object_id = {remove} and exists (select 1 from t_diagramobjects b where b.diagram_id = a.diagram_id and b.object_id = {keep})"))?;
     let diagrams = ids(cfg, format!("select distinct diagram_id from t_diagramobjects where object_id = {remove}"))?;
     let instances = ids(cfg, format!("select object_id from t_object where classifier = {remove} or classifier_guid = '{guid}'"))?;
@@ -92,11 +101,11 @@ pub fn plan(input: &Value, cfg: &AppConfig) -> Result<(Value, String)> {
     });
     let text = format!(
         "Merge \"{}\" ({}, id {remove}, package \"{}\") into \"{}\" ({}, id {keep}, package \"{}\"):\n\
-         - {} relationships move to the kept element\n- replaced on {} diagrams (on {} of them both were: the duplicate's place goes)\n\
+         - {} relationships move to the kept element ({} the kept element already has go with the duplicate)\n- replaced on {} diagrams (on {} of them both were: the duplicate's place goes)\n\
          - {} instances/lifelines/actions, {} attributes, {} operation return types, parameters of {} operations re-pointed\n\
          - tagged values pointing at it on {} elements re-pointed; its own tagged values the kept one lacks are added\n- notes: {}\n\
          - then the duplicate is deleted (a baseline of its package is made first)",
-        r[0], r[1], r[4], k[0], k[1], k[4], connectors.len(), diagrams.len(), both.len(), instances.len(), attributes.len(), operations.len(), parameters.len(), tag_owners.len(),
+        r[0], r[1], r[4], k[0], k[1], k[4], connectors.len(), same.len(), diagrams.len(), both.len(), instances.len(), attributes.len(), operations.len(), parameters.len(), tag_owners.len(),
         if input["notes"].as_str() == Some("keep") || r[3].trim().is_empty() || r[3] == k[3] { "the kept element's stay as they are" } else { "the duplicate's are added below the kept element's" }
     );
     Ok((op, text))
@@ -121,6 +130,9 @@ mod tests {
             json!({"op":"create_element","key":"dup","package":"#pkg","name":"Customers","type":"Class","notes":"Duplicate notes.","tags":{"Owner":"Sales"}}),
             json!({"op":"create_element","key":"order","package":"#pkg","name":"Order","type":"Class"}),
             json!({"op":"create_connector","key":"c","source":"#order","target":"#dup","type":"Association"}),
+            // LC-455: the kept element already has the same association; the dependency is new to it.
+            json!({"op":"create_connector","key":"c2","source":"#order","target":"#keep","type":"Association"}),
+            json!({"op":"create_connector","key":"c3","source":"#dup","target":"#order","type":"Dependency"}),
             json!({"op":"create_diagram","key":"d1","package":"#pkg","name":"Only the duplicate","type":"Logical"}),
             json!({"op":"create_diagram","key":"d2","package":"#pkg","name":"Both","type":"Logical"}),
             json!({"op":"place","diagram":"#d1","element":"#dup","left":300,"top":120,"width":120,"height":70}),
@@ -138,7 +150,8 @@ mod tests {
         let check = || -> Vec<String> {
             let mut problems = Vec::new();
             if !q(&format!("select object_id from t_object where object_id = {dup}")).is_empty() { problems.push("the duplicate is still there".to_string()); }
-            if q(&format!("select connector_id from t_connector where end_object_id = {keep} or start_object_id = {keep}")).len() != 1 { problems.push("the relationship did not move".into()); }
+            let kept = q(&format!("select connector_type from t_connector where end_object_id = {keep} or start_object_id = {keep} order by connector_type"));
+            if kept != vec![vec!["Association".to_string()], vec!["Dependency".to_string()]] { problems.push(format!("relationships of the kept element: {kept:?}")); }
             if q(&format!("select rectleft, recttop from t_diagramobjects where diagram_id = {d1} and object_id = {keep}")) != place_before { problems.push("not in the duplicate's place".into()); }
             if q(&format!("select object_id from t_diagramobjects where diagram_id = {d2}")).len() != 1 { problems.push("the diagram with both should have only the kept one".into()); }
             if q(&format!("select value from t_objectproperties where object_id = {keep} and property = 'Owner'")).first().map(|r| r[0].as_str()) != Some("Sales") { problems.push("the tag did not come over".into()); }
