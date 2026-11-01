@@ -975,8 +975,8 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "why_locked" => crate::readonly_why::why_locked(input, ctx.cfg).map(Into::into),
         "what_if" => crate::what_if::run(input, ctx.cfg).map(Into::into),
         "table_ddl" => crate::mermaid_ddl::table_ddl(input, ctx.cfg).map(Into::into),
-        "import_mermaid" => {
-            let (ops, text) = crate::mermaid_ddl::import_mermaid(input, ctx.cfg)?;
+        "import_mermaid" | "import_plantuml" => {
+            let (ops, text) = if name == "import_plantuml" { crate::mermaid_ddl::import_plantuml(input, ctx.cfg)? } else { crate::mermaid_ddl::import_mermaid(input, ctx.cfg)? };
             if ops.is_empty() { Ok(text.into()) } else { ea_write(&json!({ "ops": ops }), ctx).map(|saved| format!("{text}
 
 {saved}")).map(Into::into) }

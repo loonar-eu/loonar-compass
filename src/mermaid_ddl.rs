@@ -1,6 +1,7 @@
 //! Two notation bridges (LC-408):
 //! - import_mermaid: a Mermaid classDiagram as classes (attributes, operations) and relationships (inheritance,
 //!   realisation, composition, aggregation, association, dependency) in a new package with a diagram – one save;
+//!   import_plantuml (LC-472) does the same for a PlantUML class diagram, read through the same model;
 //! - table_ddl: CREATE TABLE statements of the Table elements of a package for PostgreSQL, SQL Server, MySQL, Oracle or
 //!   SQLite – columns with types mapped to the dialect, NOT NULL, primary keys (EA's PK operations). Reads only.
 
@@ -18,6 +19,20 @@ pub fn definitions() -> Vec<Value> {
 visibility, operations), interfaces and enumerations (<<interface>>, <<enumeration>>), relationships (<|-- inheritance, ..|> realisation, \
 *-- composition, o-- aggregation, --> association, ..> dependency, with labels) and a class diagram laid out by EA. action preview shows what \
 would be created; apply saves it (one save the user approves).",
+            "input_schema": { "type": "object", "properties": {
+                "text": { "type": "string" }, "file": { "type": "string" },
+                "package": { "description": "package_id or exact name of the parent" }, "name": { "type": "string" },
+                "action": { "type": "string", "enum": ["preview", "apply"] }
+            }, "required": ["package"] }
+        }),
+        json!({
+            "name": "import_plantuml",
+            "description": "A PlantUML class diagram (text between @startuml and @enduml, or an attached .puml/.plantuml/.txt) as a new package \
+with classes (attributes with types and visibility, operations), abstract classes, interfaces and enums, relationships (<|-- inheritance, \
+..|> realisation, *-- composition, o-- aggregation, --> association, ..> dependency; arrows with directions or colours such as -up-> or \
+-[#red]-> too; multiplicities in quotes and labels after a colon) and a class diagram laid out by EA. Aliases (class \"Long name\" as L) \
+and stereotypes <<…>> are kept; packages, notes and skin parameters are left out (the preview says so). action preview shows what would \
+be created; apply saves it (one save the user approves). Sequence diagrams in PlantUML go to sequence_from_text.",
             "input_schema": { "type": "object", "properties": {
                 "text": { "type": "string" }, "file": { "type": "string" },
                 "package": { "description": "package_id or exact name of the parent" }, "name": { "type": "string" },
@@ -43,6 +58,9 @@ does not generate, or to compare. Reads only; give the SQL to the user in a code
 pub(crate) struct MClass {
     pub name: String,
     pub kind: String,
+    /// A stereotype other than interface or enumeration (PlantUML <<entity>> and the like).
+    pub stereotype: String,
+    pub abstract_: bool,
     pub attributes: Vec<(String, String, String)>, // (visibility, name, type)
     pub operations: Vec<(String, String, String)>, // (visibility, name(params), return)
 }
@@ -67,7 +85,12 @@ fn member(line: &str, class: &mut MClass) {
         return;
     }
     if let Some(stereo) = line.strip_prefix("<<").and_then(|s| s.strip_suffix(">>")) {
-        class.kind = match stereo.trim().to_lowercase().as_str() { "interface" => "Interface", "enumeration" | "enum" => "Enumeration", _ => "Class" }.to_string();
+        match stereo.trim().to_lowercase().as_str() {
+            "interface" => class.kind = "Interface".into(),
+            "enumeration" | "enum" => class.kind = "Enumeration".into(),
+            "abstract" => class.abstract_ = true,
+            _ => class.stereotype = stereo.trim().to_string(),
+        }
         return;
     }
     let (vis, rest) = match line.chars().next() {
@@ -180,21 +203,254 @@ pub(crate) fn parse_mermaid(text: &str) -> Result<(BTreeMap<String, MClass>, Vec
     Ok((classes, links))
 }
 
-pub fn import_mermaid(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)> {
-    let text = match input["file"].as_str().filter(|f| !f.trim().is_empty()) {
+/// The diagram text: the attached file or the text given.
+fn diagram_text(input: &Value, cfg: &AppConfig) -> Result<String> {
+    Ok(match input["file"].as_str().filter(|f| !f.trim().is_empty()) {
         Some(f) => {
             let name = std::path::Path::new(f).file_name().context("file")?.to_string_lossy().to_string();
             std::fs::read_to_string(crate::history::attachment_path(&cfg.attachments_dir, &name)).with_context(|| format!("there is no attachment {name}"))?
         }
         None => input["text"].as_str().unwrap_or("").to_string(),
-    };
-    let (classes, links) = parse_mermaid(&text)?;
+    })
+}
+
+pub fn import_mermaid(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)> {
+    let (classes, links) = parse_mermaid(&diagram_text(input, cfg)?)?;
+    build_import(input, cfg, classes, links, "Mermaid import", "Mermaid classDiagram", &[])
+}
+
+/// A PlantUML class diagram (LC-472): turned into the lines the Mermaid reader knows, then built the same way.
+pub fn import_plantuml(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)> {
+    let (classes, links, left_out) = parse_plantuml(&diagram_text(input, cfg)?)?;
+    build_import(input, cfg, classes, links, "PlantUML import", "PlantUML class diagram", &left_out)
+}
+
+/// The arrow of a PlantUML relationship without its direction (-up->, -l->) and colour (-[#red]->) and with its
+/// length (--->, ...>) shortened, as Mermaid writes it.
+fn plain_arrow(arrow: &str) -> String {
+    let mut a = arrow.to_string();
+    while let (Some(open), Some(close)) = (a.find('['), a.find(']')) {
+        if close < open {
+            break;
+        }
+        a.replace_range(open..=close, "");
+    }
+    for word in ["up", "down", "left", "right", "u", "d", "l", "r"] {
+        for line in ["-", "."] {
+            a = a.replace(&format!("{line}{word}{line}"), &format!("{line}{line}"));
+        }
+    }
+    while a.contains("---") {
+        a = a.replace("---", "--");
+    }
+    while a.contains("...") {
+        a = a.replace("...", "..");
+    }
+    // Ends Mermaid has no word for: a nested class (+--), a hash or a cross end, as an association.
+    a.replace("+--", "--").replace("--+", "--").replace("#--", "--").replace("--#", "--").replace("x--", "--").replace("--x", "--")
+}
+
+/// PlantUML class diagram → (classes, relationships, what was left out). Aliases become the real names.
+pub(crate) fn parse_plantuml(text: &str) -> Result<(BTreeMap<String, MClass>, Vec<MLink>, Vec<String>)> {
+    let mut lines = vec!["classDiagram".to_string()];
+    let mut aliases: BTreeMap<String, String> = BTreeMap::new();
+    let mut left_out: Vec<String> = Vec::new();
+    let mut skip_until: Option<&str> = None;
+    let mut seen = false;
+    let mut depth_packages = 0usize;
+    let mut in_class = false;
+    for raw in text.lines() {
+        let line = raw.trim();
+        if let Some(end) = skip_until {
+            if line.to_lowercase().starts_with(end) {
+                skip_until = None;
+            }
+            continue;
+        }
+        let lower = line.to_lowercase();
+        if line.is_empty() || line.starts_with('\'') || lower.starts_with("@start") || lower.starts_with("@end") || line.starts_with("```") {
+            seen |= lower.starts_with("@startuml");
+            continue;
+        }
+        if line.starts_with("/'") {
+            if !line.contains("'/") {
+                skip_until = Some("'/");
+            }
+            continue;
+        }
+        // Not part of the model: looks, titles, notes, hidden parts.
+        if ["skinparam", "title", "hide ", "show ", "left to right", "top to bottom", "!", "scale", "caption", "legend", "header", "footer", "set "]
+            .iter()
+            .any(|w| lower.starts_with(w))
+        {
+            if lower.starts_with("legend") {
+                skip_until = Some("endlegend");
+            } else if lower.starts_with("skinparam") && line.ends_with('{') {
+                skip_until = Some("}");
+            }
+            continue;
+        }
+        if lower.starts_with("note ") {
+            if !line.contains(':') {
+                skip_until = Some("end note");
+            }
+            if !left_out.contains(&"notes".to_string()) {
+                left_out.push("notes".into());
+            }
+            continue;
+        }
+        if !in_class && ["package ", "namespace ", "together", "rectangle ", "frame ", "folder "].iter().any(|w| lower.starts_with(w)) {
+            if line.ends_with('{') {
+                depth_packages += 1;
+            }
+            if !left_out.contains(&"packages (their classes are imported)".to_string()) {
+                left_out.push("packages (their classes are imported)".into());
+            }
+            continue;
+        }
+        if in_class {
+            if line == "}" {
+                in_class = false;
+                lines.push("}".into());
+                continue;
+            }
+            // Separators of a class body and member modifiers.
+            if ["--", "..", "==", "__"].iter().any(|s| line.starts_with(s) && line.chars().all(|c| "-._= ".contains(c) || c.is_alphanumeric())) && !line.contains('(') && !line.contains(':') {
+                continue;
+            }
+            let member = line.replace("{abstract}", "").replace("{static}", "").replace("{classifier}", "").replace("{field}", "").replace("{method}", "");
+            lines.push(member.trim().to_string());
+            continue;
+        }
+        if line == "}" {
+            depth_packages = depth_packages.saturating_sub(1);
+            continue;
+        }
+        // A declaration: [abstract] class|interface|enum|entity|annotation|abstract Name ["Long name" as Alias] [<<st>>] [{]
+        let kinds = [("abstract class ", "class", true), ("abstract ", "class", true), ("class ", "class", false), ("interface ", "interface", false),
+            ("enum ", "enum", false), ("entity ", "entity", false), ("annotation ", "annotation", false), ("struct ", "class", false), ("protocol ", "interface", false)];
+        if let Some((prefix, kind, abstract_)) = kinds.iter().find(|(p, _, _)| lower.starts_with(p)) {
+            let mut rest = line[prefix.len()..].trim().to_string();
+            let opens = rest.ends_with('{');
+            rest = rest.trim_end_matches('{').trim().to_string();
+            let stereo = rest.find("<<").and_then(|a| rest[a..].find(">>").map(|b| rest[a + 2..a + b].trim().to_string()));
+            if let Some(a) = rest.find("<<") {
+                let b = rest[a..].find(">>").map(|b| a + b + 2).unwrap_or(rest.len());
+                rest.replace_range(a..b, "");
+            }
+            // Generics, colours and extends written on the declaration.
+            for cut in [" #", " extends ", " implements "] {
+                if let Some(at) = rest.find(cut) {
+                    rest.truncate(at);
+                }
+            }
+            let rest = rest.trim();
+            let (name, alias) = match rest.split_once(" as ") {
+                Some((a, b)) => {
+                    let (a, b) = (a.trim().trim_matches('"').to_string(), b.trim().trim_matches('"').to_string());
+                    // Either "Long name" as L or L as "Long name": the quoted one is the name.
+                    if rest.trim_start().starts_with('"') { (a, Some(b)) } else if b.contains(' ') { (b, Some(a)) } else { (a, Some(b)) }
+                }
+                None => (rest.trim_matches('"').to_string(), None),
+            };
+            let name = name.split('<').next().unwrap_or(&name).trim().to_string();
+            if name.is_empty() {
+                continue;
+            }
+            let id = alias.clone().unwrap_or_else(|| name.replace(' ', "_"));
+            aliases.insert(id.clone(), name.clone());
+            // The stereotype lines first: inside an open body they would be read as members.
+            lines.push(format!("class {id}"));
+            match *kind {
+                "interface" => lines.push(format!("<<interface>> {id}")),
+                "enum" => lines.push(format!("<<enumeration>> {id}")),
+                "entity" | "annotation" => lines.push(format!("<<{kind}>> {id}")),
+                _ => {}
+            }
+            if *abstract_ {
+                lines.push(format!("<<abstract>> {id}"));
+            }
+            if let Some(st) = stereo {
+                lines.push(format!("<<{st}>> {id}"));
+            }
+            if opens {
+                lines.push(format!("class {id} {{"));
+            }
+            in_class = opens;
+            continue;
+        }
+        // A relationship: names, an arrow, optional multiplicities in quotes and a label after a colon.
+        let (head, label) = line.split_once(':').map(|(h, l)| (h.trim(), l.trim().trim_start_matches(['<', '>']).trim_end_matches(['<', '>']).trim())).unwrap_or((line, ""));
+        let mut parts: Vec<String> = Vec::new();
+        let mut quoted = false;
+        let mut current = String::new();
+        for c in head.chars() {
+            if c == '"' {
+                quoted = !quoted;
+                current.push(c);
+            } else if c.is_whitespace() && !quoted {
+                if !current.is_empty() {
+                    parts.push(std::mem::take(&mut current));
+                }
+            } else {
+                current.push(c);
+            }
+        }
+        if !current.is_empty() {
+            parts.push(current);
+        }
+        // The arrow: a line of - or . with ends and maybe a direction (*-up-, -[#red]->, <|--).
+        let arrowish = |p: &str| {
+            let ends = |c: char| "<>|*o.-+#x".contains(c);
+            p.contains("--") || p.contains("..") || p.contains("-[") || p.contains(".[") || (p.contains('-') && p.starts_with(ends) && p.ends_with(ends) && p.len() > 2)
+        };
+        let arrow_at = parts.iter().position(|p| !p.starts_with('"') && arrowish(p));
+        if let Some(at) = arrow_at {
+            let arrow = plain_arrow(&parts[at]);
+            let (Some(a), Some(b)) = (parts[..at].iter().find(|p| !p.starts_with('"')), parts[at + 1..].iter().find(|p| !p.starts_with('"'))) else { continue };
+            let card_a = parts[..at].iter().rev().find(|p| p.starts_with('"')).cloned().unwrap_or_default();
+            let card_b = parts[at + 1..].iter().find(|p| p.starts_with('"')).cloned().unwrap_or_default();
+            let (a, b) = (a.trim_matches('"').to_string(), b.trim_matches('"').to_string());
+            for n in [&a, &b] {
+                aliases.entry(n.replace(' ', "_")).or_insert_with(|| n.clone());
+            }
+            lines.push(format!(
+                "{} {card_a} {arrow} {card_b} {}{}",
+                a.replace(' ', "_"),
+                b.replace(' ', "_"),
+                if label.is_empty() { String::new() } else { format!(" : {label}") }
+            ));
+            continue;
+        }
+        // "Class : member"
+        if let Some((n, m)) = line.split_once(" : ") {
+            lines.push(format!("{} : {}", n.trim().trim_matches('"').replace(' ', "_"), m.trim()));
+        }
+    }
+    if !seen && aliases.is_empty() {
+        bail!("not a PlantUML class diagram (no @startuml and no classes)");
+    }
+    let (classes, links) = parse_mermaid(&lines.join("\n"))?;
+    let real = |id: &str| aliases.get(id).cloned().unwrap_or_else(|| id.replace('_', " "));
+    let classes = classes
+        .into_values()
+        .map(|mut c| {
+            c.name = real(&c.name);
+            (c.name.clone(), c)
+        })
+        .collect();
+    let links = links.into_iter().map(|(f, t, k, l, cf, ct)| (real(&f), real(&t), k, l, cf, ct)).collect();
+    Ok((classes, links, left_out))
+}
+
+/// The package, diagram, classes and relationships of an imported class diagram: one save.
+fn build_import(input: &Value, cfg: &AppConfig, classes: BTreeMap<String, MClass>, links: Vec<MLink>, default_name: &str, notation: &str, left_out: &[String]) -> Result<(Vec<Value>, String)> {
     if classes.is_empty() {
         bail!("no classes in the diagram");
     }
     let (scope, _) = crate::model_usage::package_scope(cfg, &input["package"])?;
     let parent: i64 = scope.split('(').nth(1).and_then(|s| s.split([',', ')']).next()).and_then(|p| p.parse().ok()).context("package")?;
-    let name = input["name"].as_str().map(str::trim).filter(|n| !n.is_empty()).unwrap_or("Mermaid import");
+    let name = input["name"].as_str().map(str::trim).filter(|n| !n.is_empty()).unwrap_or(default_name);
     let key = |n: &str| format!("m_{}", n.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect::<String>());
     let mut ops = vec![
         json!({ "op": "create_package", "key": "pkg", "parent": parent, "name": name }),
@@ -202,7 +458,14 @@ pub fn import_mermaid(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, Str
     ];
     for (i, c) in classes.values().enumerate() {
         let k = key(&c.name);
-        ops.push(json!({ "op": "create_element", "key": k, "package": "#pkg", "name": c.name, "type": c.kind }));
+        let mut element = json!({ "op": "create_element", "key": k, "package": "#pkg", "name": c.name, "type": c.kind });
+        if !c.stereotype.is_empty() {
+            element["stereotype"] = json!(c.stereotype);
+        }
+        ops.push(element);
+        if c.abstract_ {
+            ops.push(json!({ "op": "update_element", "element": format!("#{k}"), "abstract": true }));
+        }
         for (vis, n, ty) in &c.attributes {
             ops.push(json!({ "op": "create_attribute", "element": format!("#{k}"), "name": n, "type": ty, "visibility": vis }));
         }
@@ -234,7 +497,10 @@ pub fn import_mermaid(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, Str
         }
     }
     ops.push(json!({ "op": "layout_diagram", "diagram": "#dia", "direction": "down", "spacing": 40 }));
-    let text = format!("Mermaid classDiagram → package \"{name}\": {} classes, {} relationships, a diagram.", classes.len(), links.len());
+    let mut text = format!("{notation} → package \"{name}\": {} classes, {} relationships, a diagram.", classes.len(), links.len());
+    if !left_out.is_empty() {
+        text.push_str(&format!(" Left out: {}.", left_out.join(", ")));
+    }
     Ok(if input["action"].as_str() == Some("apply") { (ops, text) } else { (Vec::new(), format!("{text} Nothing saved yet: action apply saves it.")) })
 }
 
@@ -381,6 +647,58 @@ mod tests {
         let (_, l) = parse_mermaid("classDiagram\n  Magazyn \"1\" o-- \"*\" Towar : przechowuje\n").unwrap();
         assert_eq!(l, vec![(s("Towar"), s("Magazyn"), s("Aggregation"), s("przechowuje"), s("*"), s("1"))]);
         assert_eq!(c["Duck"].operations[0].1, "swim()");
+    }
+
+    /// LC-472: a PlantUML class diagram as PlantUML users write it.
+    #[test]
+    fn plantuml_classes_and_links() {
+        let text = r#"@startuml
+title Zamówienia
+skinparam classAttributeIconSize 0
+package "Sprzedaż" {
+abstract class "Dokument handlowy" as Dok <<entity>> {
+  -numer : String
+  {abstract} +wystaw() : void
+  --
+  +data : Date
+}
+class Zamówienie {
+  +suma() : Money
+}
+}
+interface Płatność
+enum Status {
+  NOWE
+  ZAMKNIĘTE
+}
+note right of Zamówienie : notatka
+note left of Status
+  dłuższa notatka
+end note
+Dok <|-- Zamówienie
+Zamówienie "1" *-up- "1..*" Pozycja : zawiera >
+Zamówienie -[#red]-> Status
+Zamówienie ..|> Płatność
+Pozycja ...> Status : używa
+' komentarz
+@enduml"#;
+        let (c, l, left) = parse_plantuml(text).unwrap();
+        let s = |t: &str| t.to_string();
+        let doc = &c["Dokument handlowy"];
+        assert!(doc.abstract_ && doc.stereotype == "entity", "{doc:?}");
+        assert_eq!(doc.attributes.len(), 2, "the separator is no attribute: {doc:?}");
+        assert_eq!(doc.operations[0].1, "wystaw()");
+        assert_eq!(c["Płatność"].kind, "Interface");
+        assert_eq!(c["Status"].kind, "Enumeration");
+        assert_eq!(c["Status"].attributes.len(), 2);
+        assert!(l.contains(&(s("Zamówienie"), s("Dokument handlowy"), s("Generalization"), String::new(), String::new(), String::new())), "{l:?}");
+        assert!(l.contains(&(s("Pozycja"), s("Zamówienie"), s("Composition"), s("zawiera"), s("1..*"), s("1"))), "{l:?}");
+        assert!(l.iter().any(|x| x.0 == "Zamówienie" && x.1 == "Status" && x.2 == "Association"), "{l:?}");
+        assert!(l.iter().any(|x| x.0 == "Zamówienie" && x.1 == "Płatność" && x.2 == "Realisation"), "{l:?}");
+        assert!(l.iter().any(|x| x.0 == "Pozycja" && x.1 == "Status" && x.2 == "Dependency" && x.3 == "używa"), "{l:?}");
+        assert!(left.iter().any(|x| x == "notes") && left.iter().any(|x| x.starts_with("packages")), "{left:?}");
+        assert!(!c.contains_key("Zamówienia"), "the title is no class");
+        assert!(parse_plantuml("hello").is_err());
     }
 
     #[test]
