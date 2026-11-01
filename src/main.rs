@@ -6500,6 +6500,7 @@ fn ask_from_command_line(args: &[String], default_props: &Path) -> anyhow::Resul
         i += 2;
     }
     anyhow::ensure!(!said.is_empty(), "no message\n{ASK_USAGE}");
+    ea::set_no_window();
     std::fs::create_dir_all(out.join(".compass"))?;
     let props = match model {
         Some(path) if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("qea") || e.eq_ignore_ascii_case("qeax")) => {

@@ -47,8 +47,9 @@ pub(crate) struct MClass {
     pub operations: Vec<(String, String, String)>, // (visibility, name(params), return)
 }
 
-/// (from, to, type, label); for a composition or aggregation from = the part, to = the whole (as EA draws it).
-pub(crate) type MLink = (String, String, String, String);
+/// (from, to, type, label, multiplicity at from, multiplicity at to); for a composition or aggregation from = the part,
+/// to = the whole (as EA draws it).
+pub(crate) type MLink = (String, String, String, String, String, String);
 
 fn visibility(c: char) -> &'static str {
     match c {
@@ -144,7 +145,7 @@ pub(crate) fn parse_mermaid(text: &str) -> Result<(BTreeMap<String, MClass>, Vec
             classes.insert(name, c);
             continue;
         }
-        // "A <|-- B : label" (cardinalities in quotes are skipped).
+        // "A "1" <|-- "*" B : label": the cardinalities in quotes are the multiplicities of the ends (LC-452).
         let (head, label) = line.split_once(" : ").map(|(h, l)| (h, l.trim())).unwrap_or((line, ""));
         let cleaned: String = head.split('"').enumerate().filter(|(i, _)| i % 2 == 0).map(|(_, p)| p).collect::<Vec<_>>().join(" ");
         if let Some((arrow, kind, reversed)) = ARROWS.iter().find(|(a, _, _)| cleaned.contains(a)) {
@@ -155,8 +156,14 @@ pub(crate) fn parse_mermaid(text: &str) -> Result<(BTreeMap<String, MClass>, Vec
             }
             ensure(&mut classes, &a);
             ensure(&mut classes, &b);
-            let (from, to) = if *reversed { (b, a) } else { (a, b) };
-            links.push((from, to, kind.to_string(), label.to_string()));
+            let at = head.find(arrow).unwrap_or(0);
+            let quoted = |part: &str, last: bool| -> String {
+                let pieces: Vec<&str> = part.split('"').skip(1).step_by(2).collect();
+                (if last { pieces.last() } else { pieces.first() }).map(|p| p.trim().to_string()).unwrap_or_default()
+            };
+            let (card_a, card_b) = (quoted(&head[..at], true), quoted(&head[at + arrow.len()..], false));
+            let (from, to, card_from, card_to) = if *reversed { (b, a, card_b, card_a) } else { (a, b, card_a, card_b) };
+            links.push((from, to, kind.to_string(), label.to_string(), card_from, card_to));
             continue;
         }
         // "Class : +member"
@@ -209,7 +216,7 @@ pub fn import_mermaid(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, Str
         }
         ops.push(json!({ "op": "place", "diagram": "#dia", "element": format!("#{k}"), "left": 40 + (i as i64 % 4) * 230, "top": 40 + (i as i64 / 4) * 200, "width": 180, "height": 120 }));
     }
-    for (from, to, kind, label) in &links {
+    for (i, (from, to, kind, label, card_from, card_to)) in links.iter().enumerate() {
         let (kind, subtype) = match kind.as_str() { "Composition" => ("Aggregation", Some("Strong")), "Aggregation" => ("Aggregation", Some("Weak")), k => (k, None) };
         // In EA an aggregation goes from the part to the whole; parse_mermaid already gives (part, whole).
         let (s, t) = (from, to);
@@ -217,7 +224,14 @@ pub fn import_mermaid(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, Str
         if let Some(st) = subtype {
             op["subtype"] = json!(st);
         }
+        let cards = !card_from.is_empty() || !card_to.is_empty();
+        if cards {
+            op["key"] = json!(format!("rel{i}"));
+        }
         ops.push(op);
+        if cards {
+            ops.push(json!({ "op": "update_connector", "connector": format!("#rel{i}"), "source_multiplicity": card_from, "target_multiplicity": card_to }));
+        }
     }
     ops.push(json!({ "op": "layout_diagram", "diagram": "#dia", "direction": "down", "spacing": 40 }));
     let text = format!("Mermaid classDiagram → package \"{name}\": {} classes, {} relationships, a diagram.", classes.len(), links.len());
@@ -297,8 +311,12 @@ mod tests {
         assert_eq!(c["Order"].attributes, vec![("Public".to_string(), "id".to_string(), "String".to_string()), ("Private".to_string(), "date".to_string(), "Date".to_string())]);
         assert_eq!(c["Order"].operations[0], ("Public".to_string(), "total()".to_string(), "Money".to_string()));
         assert_eq!(c["Shape"].kind, "Interface");
-        assert!(l.contains(&("Line".to_string(), "Order".to_string(), "Composition".to_string(), "contains".to_string())), "{l:?}");
-        assert!(l.contains(&("Duck".to_string(), "Animal".to_string(), "Generalization".to_string(), String::new())));
+        let s = |t: &str| t.to_string();
+        assert!(l.contains(&(s("Line"), s("Order"), s("Composition"), s("contains"), s("many"), s("1"))), "{l:?}");
+        assert!(l.contains(&(s("Duck"), s("Animal"), s("Generalization"), String::new(), String::new(), String::new())));
+        // LC-452: the multiplicities of the ends, also of a left-pointing aggregation.
+        let (_, l) = parse_mermaid("classDiagram\n  Magazyn \"1\" o-- \"*\" Towar : przechowuje\n").unwrap();
+        assert_eq!(l, vec![(s("Towar"), s("Magazyn"), s("Aggregation"), s("przechowuje"), s("*"), s("1"))]);
         assert_eq!(c["Duck"].operations[0].1, "swim()");
     }
 
@@ -318,12 +336,12 @@ mod tests {
         let cfg = AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
         let root: i64 = query_rows(&cfg, "select package_id from t_package where parent_id = 0 order by package_id").unwrap()[0][0].parse().unwrap();
         let name = format!("ZZ_mmd_{}", chrono::Local::now().format("%H%M%S"));
-        let (ops, text) = import_mermaid(&json!({ "text": "classDiagram\nclass Order {\n +String id\n +total() Money\n}\nOrder *-- Line : contains\nAnimal <|-- Duck", "package": root, "name": name, "action": "apply" }), &cfg).unwrap();
+        let (ops, text) = import_mermaid(&json!({ "text": "classDiagram\nclass Order {\n +String id\n +total() Money\n}\nOrder \"1\" *-- \"*\" Line : contains\nAnimal <|-- Duck", "package": root, "name": name, "action": "apply" }), &cfg).unwrap();
         println!("{text}");
         let done = crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("import");
         let pkg = done["created"].as_array().unwrap().iter().find(|c| c["key"] == "pkg").unwrap()["id"].as_i64().unwrap();
         let classes = query_rows(&cfg, &format!("select name from t_object where package_id = {pkg} order by name")).unwrap();
-        let links = query_rows(&cfg, &format!("select c.connector_type, coalesce(c.subtype,'') from t_connector c join t_object o on o.object_id = c.start_object_id where o.package_id = {pkg} order by 1")).unwrap();
+        let links = query_rows(&cfg, &format!("select c.connector_type, coalesce(c.subtype,''), coalesce(c.sourcecard,''), coalesce(c.destcard,'') from t_connector c join t_object o on o.object_id = c.start_object_id where o.package_id = {pkg} order by 1")).unwrap();
         // Tables: two columns, the first in a primary key (EA's PK operation).
         crate::ea::run_batch(&cfg, &[
             json!({"op":"create_element","key":"t","package":pkg,"name":"customer","type":"Table"}),
@@ -338,6 +356,8 @@ mod tests {
         crate::ea::shutdown();
         assert_eq!(classes.iter().map(|r| r[0].as_str()).collect::<Vec<_>>(), ["Animal", "Duck", "Line", "Order"]);
         assert!(links.iter().any(|l| l[0] == "Aggregation" && l[1] == "Strong") && links.iter().any(|l| l[0] == "Generalization"), "{links:?}");
+        // LC-452: the part Line has "*", the whole Order "1".
+        assert!(links.iter().any(|l| l[0] == "Aggregation" && l[2] == "*" && l[3] == "1"), "{links:?}");
         assert!(pg.contains("id INTEGER NOT NULL") && pg.contains("PRIMARY KEY (id)") && ms.contains("[full name] NVARCHAR(255)"), "{pg}\n{ms}");
     }
 }

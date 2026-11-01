@@ -46,6 +46,13 @@ pub fn in_ea_tab() -> bool {
     IN_EA_TAB.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+/// Compass works without its window (--ask): there is no window of the user's to point at in messages.
+static NO_WINDOW: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_no_window() {
+    NO_WINDOW.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
 /// What EA opens: the path of an EA file, or the connection string of the model database built from the database
 /// settings (EA needs the database account in it). The port follows a comma (`SRC=server,port@database`), the same way
 /// EA itself writes it.
@@ -242,6 +249,11 @@ pub fn run_batch(cfg: &AppConfig, ops: &[Value], options: &BatchOptions) -> Resu
         let in_window = crate::ea_ui::model_in_window(&target);
         // An EA window that does not answer may have this very file open: a second EA must not write it (E3).
         if in_window.is_none() && cfg.uses_file() {
+            // Without the application's window (--ask) the EA that does not answer is mostly another Compass working in
+            // the background, not the user's window (LC-448).
+            if NO_WINDOW.load(std::sync::atomic::Ordering::Relaxed) {
+                bail!("{}", crate::i18n::tr("An EA running on this computer does not answer (another Compass may be working with it, or a dialog box is open in an EA window), and it may have this file open. Try again when it is done; nothing was written."));
+            }
             bail!("{}", crate::i18n::tr("Your EA window does not answer (a dialog box may be open), and it may have this file open. Close the dialog in EA and try again; nothing was written."));
         }
         if in_window == Some(true) {
