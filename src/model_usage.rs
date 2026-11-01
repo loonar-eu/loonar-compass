@@ -74,16 +74,16 @@ fn element_id(cfg: &AppConfig, value: &Value) -> Result<(i64, String, String, St
     }
 }
 
-fn section(out: &mut String, title: &str, rows: Vec<String>) {
-    out.push_str(&format!("\n{title} ({}):\n", rows.len()));
+fn section(out: &mut String, title: &'static str, rows: Vec<String>) {
+    out.push_str(&format!("\n{} ({}):\n", crate::i18n::tr(title), rows.len()));
     if rows.is_empty() {
-        out.push_str("  none\n");
+        out.push_str(&format!("  {}\n", crate::i18n::tr("none")));
     }
     for r in rows.iter().take(80) {
         out.push_str(&format!("  - {r}\n"));
     }
     if rows.len() > 80 {
-        out.push_str(&format!("  … and {} more\n", rows.len() - 80));
+        out.push_str(&format!("  {}\n", crate::i18n::fmt("… and {0} more", &[(rows.len() - 80).to_string()])));
     }
 }
 
@@ -93,7 +93,7 @@ pub fn where_used(input: &Value, cfg: &AppConfig) -> Result<String> {
     }
     let (id, name, kind, guid) = element_id(cfg, &input["element"])?;
     let guid_q = crate::model_db::sql_text(cfg.model_source, &guid);
-    let mut out = format!("Uses of element \"{name}\" ({kind}, id {id}):\n");
+    let mut out = format!("{}\n", crate::i18n::fmt("Uses of element \"{0}\" ({1}, id {2}):", &[name.clone(), kind.clone(), id.to_string()]));
     let diagrams = query_rows(cfg, &format!(
         "select d.diagram_id, d.name, d.diagram_type, p.name from t_diagramobjects x join t_diagram d on d.diagram_id = x.diagram_id \
          join t_package p on p.package_id = d.package_id where x.object_id = {id} order by d.name"
@@ -109,7 +109,7 @@ pub fn where_used(input: &Value, cfg: &AppConfig) -> Result<String> {
         "select count(*) from t_connector c where c.connector_type in ('Sequence', 'Collaboration') and (c.start_object_id = {id} or c.end_object_id = {id} \
          or c.start_object_id in (select object_id from t_object where classifier = {id}) or c.end_object_id in (select object_id from t_object where classifier = {id}))"
     ))?;
-    out.push_str(&format!("\nMessages on sequence or communication diagrams to or from it or its lifelines: {}\n", messages.first().map(|r| r[0].as_str()).unwrap_or("0")));
+    out.push_str(&format!("\n{}\n", crate::i18n::fmt("Messages on sequence or communication diagrams to or from it or its lifelines: {0}", &[messages.first().map(|r| r[0].as_str()).unwrap_or("0").to_string()])));
     let instances = query_rows(cfg, &format!(
         "select o.name, o.object_type, p.name from t_object o join t_package p on p.package_id = o.package_id where o.classifier = {id} or o.classifier_guid = '{guid_q}' order by 1"
     ))?;
@@ -151,7 +151,7 @@ fn connector_used(cfg: &AppConfig, id: i64) -> Result<String> {
     let Some(c) = c.first() else { bail!("there is no connector with id {id}") };
     let stereotype = if c[1].is_empty() { String::new() } else { format!(" «{}»", c[1]) };
     let label = if c[2].is_empty() { String::new() } else { format!(" \"{}\"", c[2]) };
-    let mut out = format!("Uses of relationship {}{stereotype} \"{}\" → \"{}\" (connector_id {id}){label}:\n", c[0], c[3], c[4]);
+    let mut out = format!("{}\n", crate::i18n::fmt("Uses of relationship {0}{1} \"{2}\" → \"{3}\" (connector_id {4}){5}:", &[c[0].clone(), stereotype, c[3].clone(), c[4].clone(), id.to_string(), label]));
     let diagrams = query_rows(cfg, &format!(
         "select d.diagram_id, d.name, p.name, coalesce((select max(l.hidden) from t_diagramlinks l where l.diagramid = d.diagram_id and l.connectorid = {id}), 0) \
          from t_diagram d join t_package p on p.package_id = d.package_id \
@@ -166,15 +166,24 @@ fn connector_used(cfg: &AppConfig, id: i64) -> Result<String> {
 }
 
 pub fn find_orphans(input: &Value, cfg: &AppConfig) -> Result<String> {
-    let (scope, title) = package_scope(cfg, &input["package"])?;
+    let (scope, title) = package_scope_shown(cfg, &input["package"])?;
     find_orphans_rest(input, cfg, scope, title)
 }
 
 /// " and o.package_id in (…)" for a package (id or exact name) with its child packages, and its title; empty = the
 /// whole model.
 pub(crate) fn package_scope(cfg: &AppConfig, package: &Value) -> Result<(String, String)> {
+    scope_and_title(cfg, package, false)
+}
+
+/// package_scope with the title in the user's language (LC-463), for reports shown to the user as they are.
+pub(crate) fn package_scope_shown(cfg: &AppConfig, package: &Value) -> Result<(String, String)> {
+    scope_and_title(cfg, package, true)
+}
+
+fn scope_and_title(cfg: &AppConfig, package: &Value, translated: bool) -> Result<(String, String)> {
     let mut scope = String::new();
-    let mut title = "the whole model".to_string();
+    let mut title = if translated { crate::i18n::tr("the whole model").to_string() } else { "the whole model".to_string() };
     if !package.is_null() && package.as_str() != Some("") {
         let rows = if let Some(id) = package.as_i64().or_else(|| package.as_str().and_then(|s| s.trim().parse().ok())) {
             query_rows(cfg, &format!("select package_id, name from t_package where package_id = {id}"))?
@@ -190,7 +199,7 @@ pub(crate) fn package_scope(cfg: &AppConfig, package: &Value) -> Result<(String,
             all.extend(level.iter().cloned());
         }
         scope = format!("and o.package_id in ({})", all.join(","));
-        title = format!("package \"{}\" with its child packages", root[1]);
+        title = if translated { crate::i18n::fmt("package \"{0}\" with its child packages", &[root[1].clone()]) } else { format!("package \"{}\" with its child packages", root[1]) };
     }
     Ok((scope, title))
 }
@@ -208,7 +217,7 @@ pub(crate) fn name_key(name: &str) -> String {
 
 /// Likely duplicate elements and relationships (LC-369). Reads only.
 pub fn find_duplicates(input: &Value, cfg: &AppConfig) -> Result<String> {
-    let (scope, title) = package_scope(cfg, &input["package"])?;
+    let (scope, title) = package_scope_shown(cfg, &input["package"])?;
     let types: Vec<String> = input["types"].as_array().into_iter().flatten().filter_map(|t| t.as_str()).map(|t| format!("'{}'", crate::model_db::sql_text(cfg.model_source, t))).collect();
     let type_filter = if types.is_empty() { String::new() } else { format!("and o.object_type in ({})", types.join(",")) };
     let rows = query_rows(cfg, &format!(
@@ -224,15 +233,15 @@ pub fn find_duplicates(input: &Value, cfg: &AppConfig) -> Result<String> {
         groups.entry((r[2].clone(), name_key(&r[1]))).or_default().push(r);
     }
     let groups: Vec<_> = groups.into_iter().filter(|(_, g)| g.len() > 1).collect();
-    let mut out = format!("Likely duplicates in {title}: {} groups of elements.\n", groups.len());
+    let mut out = format!("{}\n", crate::i18n::fmt("Likely duplicates in {0}: {1} groups of elements.", &[title.clone(), groups.len().to_string()]));
     for ((kind, _), members) in groups.iter().take(100) {
         out.push_str(&format!("\n{kind}:\n"));
         for m in members {
-            out.push_str(&format!("  - \"{}\" (object_id {}, package \"{}\") – {} relationships, on {} diagrams\n", m[1], m[0], m[3], m[4], m[5]));
+            out.push_str(&format!("  - {}\n", crate::i18n::fmt("\"{0}\" (object_id {1}, package \"{2}\") – {3} relationships, on {4} diagrams", &[m[1].clone(), m[0].clone(), m[3].clone(), m[4].clone(), m[5].clone()])));
         }
     }
     if groups.len() > 100 {
-        out.push_str(&format!("\n… and {} more groups\n", groups.len() - 100));
+        out.push_str(&format!("\n{}\n", crate::i18n::fmt("… and {0} more groups", &[(groups.len() - 100).to_string()])));
     }
     let connectors = query_rows(cfg, &format!(
         "select c.connector_type, coalesce(c.stereotype,''), s.name, t.name, count(*), min(c.connector_id), max(c.connector_id) from t_connector c \
@@ -241,9 +250,9 @@ pub fn find_duplicates(input: &Value, cfg: &AppConfig) -> Result<String> {
          group by c.connector_type, c.stereotype, s.name, t.name, c.start_object_id, c.end_object_id having count(*) > 1 order by 5 desc"
     ))?;
     section(&mut out, "Repeated relationships (type, stereotype, from → to, how many, connector ids from–to)", connectors.iter().map(|r| {
-        format!("{}{} \"{}\" → \"{}\": {} times (connector_id {}…{})", r[0], if r[1].is_empty() { String::new() } else { format!(" «{}»", r[1]) }, r[2], r[3], r[4], r[5], r[6])
+        crate::i18n::fmt("{0}{1} \"{2}\" → \"{3}\": {4} times (connector_id {5}…{6})", &[r[0].clone(), if r[1].is_empty() { String::new() } else { format!(" «{}»", r[1]) }, r[2].clone(), r[3].clone(), r[4].clone(), r[5].clone(), r[6].clone()])
     }).collect());
-    out.push_str("\nNothing was changed. Keep the element with the most uses; the others can be merged into it (merge_elements, with the user's approval).\n");
+    out.push_str(&format!("\n{}\n", crate::i18n::tr("Nothing was changed. Keep the element with the most uses; the others can be merged into it (merge_elements, with the user's approval).")));
     Ok(out)
 }
 
@@ -303,12 +312,12 @@ fn find_orphans_rest(input: &Value, cfg: &AppConfig, scope: String, title: Strin
          and not exists (select 1 from t_objectproperties t where t.value = o.ea_guid) \
          order by p.name, o.name"
     ))?;
-    let mut out = format!("Elements in {title} that nothing uses: no diagram, no relationship, not a classifier or type, no tagged value pointing at them, no child elements ({}).\n", rows.len());
+    let mut out = format!("{}\n", crate::i18n::fmt("Elements in {0} that nothing uses: no diagram, no relationship, not a classifier or type, no tagged value pointing at them, no child elements ({1}).", &[title.clone(), rows.len().to_string()]));
     for r in rows.iter().take(150) {
-        out.push_str(&format!("  - \"{}\" ({}, package \"{}\", id {})\n", r[1], r[2], r[3], r[0]));
+        out.push_str(&format!("  - {}\n", crate::i18n::fmt("\"{0}\" ({1}, package \"{2}\", id {3})", &[r[1].clone(), r[2].clone(), r[3].clone(), r[0].clone()])));
     }
     if rows.len() > 150 {
-        out.push_str(&format!("  … and {} more\n", rows.len() - 150));
+        out.push_str(&format!("  {}\n", crate::i18n::fmt("… and {0} more", &[(rows.len() - 150).to_string()])));
     }
     // The other cases, told apart (LC-412): related but on no diagram (fine for requirements and the like), and on
     // diagrams but without any relationship.
@@ -324,15 +333,15 @@ fn find_orphans_rest(input: &Value, cfg: &AppConfig, scope: String, title: Strin
          and not exists (select 1 from t_connector c where c.start_object_id = o.object_id or c.end_object_id = o.object_id) group by o.object_type order by 2 desc"
     ))?;
     let line = |rows: &[Vec<String>], fine: bool| -> String {
-        rows.iter().map(|r| format!("{} {}{}", r[1], r[0], if fine && fine_without_diagram.contains(&format!("'{}'", r[0])) { " (fine without a diagram)" } else { "" })).collect::<Vec<_>>().join(", ")
+        rows.iter().map(|r| format!("{} {}{}", r[1], r[0], if fine && fine_without_diagram.contains(&format!("'{}'", r[0])) { format!(" {}", crate::i18n::tr("(fine without a diagram)")) } else { String::new() })).collect::<Vec<_>>().join(", ")
     };
     if !no_diagram.is_empty() {
-        out.push_str(&format!("\nRelated, but on no diagram: {}\n", line(&no_diagram, true)));
+        out.push_str(&format!("\n{}\n", crate::i18n::fmt("Related, but on no diagram: {0}", &[line(&no_diagram, true)])));
     }
     if !no_links.is_empty() {
-        out.push_str(&format!("On diagrams, but without any relationship: {}\n", line(&no_links, false)));
+        out.push_str(&format!("{}\n", crate::i18n::fmt("On diagrams, but without any relationship: {0}", &[line(&no_links, false)])));
     }
-    out.push_str("Deleting or moving them changes the model: only with the user's approval (ea_write), and a baseline first.");
+    out.push_str(crate::i18n::tr("Deleting or moving them changes the model: only with the user's approval (ea_write), and a baseline first."));
     Ok(out)
 }
 

@@ -228,15 +228,22 @@ fn against_baseline(input: &Value, cfg: &AppConfig) -> Result<String> {
     let _ = std::fs::remove_file(format!("{}.baselines.xml", file.display()));
     let (added, deleted, changed, noise) = baseline_diff(&xml);
     let mut out = format!(
-        "Package {package} compared with its baseline {}: {} added, {} deleted, {} changed ({noise} changes that were only EA's noise left out).\n",
-        if wanted.is_empty() { "(the newest)" } else { wanted },
-        added.len(),
-        deleted.len(),
-        changed.len()
+        "{}\n",
+        crate::i18n::fmt(
+            "Package {0} compared with its baseline {1}: {2} added, {3} deleted, {4} changed ({5} changes that were only EA's noise left out).",
+            &[
+                package.to_string(),
+                if wanted.is_empty() { crate::i18n::tr("(the newest)").to_string() } else { wanted.to_string() },
+                added.len().to_string(),
+                deleted.len().to_string(),
+                changed.len().to_string(),
+                noise.to_string(),
+            ]
+        )
     );
     for (title, list) in [("Added", &added), ("Deleted", &deleted), ("Changed", &changed)] {
         if !list.is_empty() {
-            out.push_str(&format!("\n{title}:\n{}\n", list.iter().take(200).map(|l| format!("  - {l}")).collect::<Vec<_>>().join("\n")));
+            out.push_str(&format!("\n{}:\n{}\n", crate::i18n::tr(title), list.iter().take(200).map(|l| format!("  - {l}")).collect::<Vec<_>>().join("\n")));
         }
     }
     Ok(out)
@@ -250,7 +257,7 @@ pub fn run(input: &Value, cfg: &AppConfig) -> Result<String> {
     let from = date_literal(cfg.model_source, since);
     let author = input["author"].as_str().map(str::trim).filter(|a| !a.is_empty());
     let by = author.map(|a| format!("and lower(coalesce(x.author,'')) = lower('{}')", crate::model_db::sql_text(cfg.model_source, a))).unwrap_or_default();
-    let (scope, title) = crate::model_usage::package_scope(cfg, &input["package"])?;
+    let (scope, title) = crate::model_usage::package_scope_shown(cfg, &input["package"])?;
     let scope_of = |alias: &str| scope.replace("o.package_id", &format!("{alias}.package_id"));
     let objects = query_rows(cfg, &format!(
         "select p.name, x.object_type, x.name, coalesce(x.author,''), x.createddate, x.modifieddate from t_object x join t_package p on p.package_id = x.package_id \
@@ -264,10 +271,11 @@ pub fn run(input: &Value, cfg: &AppConfig) -> Result<String> {
     ))?;
     let since_text = since.format("%Y-%m-%d").to_string();
     let mut out = format!(
-        "Changes in {title} since {since_text}{}: {} elements and {} diagrams.\n",
-        author.map(|a| format!(" by {a}")).unwrap_or_default(),
-        objects.len(),
-        diagrams.len()
+        "{}\n",
+        match author {
+            Some(a) => crate::i18n::fmt("Changes in {0} since {1} by {2}: {3} elements and {4} diagrams.", &[title.clone(), since_text.clone(), a.to_string(), objects.len().to_string(), diagrams.len().to_string()]),
+            None => crate::i18n::fmt("Changes in {0} since {1}: {2} elements and {3} diagrams.", &[title.clone(), since_text.clone(), objects.len().to_string(), diagrams.len().to_string()]),
+        }
     );
     let day = |stamp: &str| stamp.get(..16).unwrap_or(stamp).replace('T', " ");
     let mut current = String::new();
@@ -275,24 +283,29 @@ pub fn run(input: &Value, cfg: &AppConfig) -> Result<String> {
         for r in rows.iter().take(300) {
             if r[0] != current {
                 current = r[0].clone();
-                out.push_str(&format!("\nPackage \"{current}\":\n"));
+                out.push_str(&format!("\n{}\n", crate::i18n::fmt("Package \"{0}\":", &[current.clone()])));
             }
             let new = r[4].get(..10).is_some_and(|c| c >= since_text.as_str());
+            let what = match (new, kind) {
+                (true, "element") => crate::i18n::tr("new element"),
+                (false, "element") => crate::i18n::tr("changed element"),
+                (true, _) => crate::i18n::tr("new diagram"),
+                (false, _) => crate::i18n::tr("changed diagram"),
+            };
             out.push_str(&format!(
-                "  - {} {kind} {} \"{}\"{} – {}\n",
-                if new { "new" } else { "changed" },
+                "  - {what} {} \"{}\"{} – {}\n",
                 r[1],
                 r[2],
-                if r[3].is_empty() { String::new() } else { format!(" by {}", r[3]) },
+                if r[3].is_empty() { String::new() } else { format!(" {}", crate::i18n::fmt("by {0}", &[r[3].clone()])) },
                 day(&r[5])
             ));
         }
         current.clear();
     }
     if objects.len() > 300 || diagrams.len() > 300 {
-        out.push_str("\n(Only the first 300 of each are listed.)\n");
+        out.push_str(&format!("\n{}\n", crate::i18n::tr("(Only the first 300 of each are listed.)")));
     }
-    out.push_str("\nRelationships have no dates in EA and deleted objects leave no trace: compare with a baseline in EA for those.\n");
+    out.push_str(&format!("\n{}\n", crate::i18n::tr("Relationships have no dates in EA and deleted objects leave no trace: compare with a baseline in EA for those.")));
     Ok(out)
 }
 

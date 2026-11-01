@@ -99,29 +99,29 @@ const CHECKS: &[Check] = &[
 fn run_check(cfg: &AppConfig, check: &Check, out: &mut String) -> usize {
     match query_rows(cfg, check.sql) {
         Ok(rows) => {
-            out.push_str(&format!("\n{} ({}):\n", check.title, rows.len()));
+            out.push_str(&format!("\n{} ({}):\n", crate::i18n::tr(check.title), rows.len()));
             if rows.is_empty() {
-                out.push_str("  none\n");
+                out.push_str(&format!("  {}\n", crate::i18n::tr("none")));
             } else {
                 for r in rows.iter().take(15) {
                     out.push_str(&format!("  - {}\n", r.join(" | ")));
                 }
                 if rows.len() > 15 {
-                    out.push_str(&format!("  … and {} more\n", rows.len() - 15));
+                    out.push_str(&format!("  {}\n", crate::i18n::fmt("… and {0} more", &[(rows.len() - 15).to_string()])));
                 }
-                out.push_str(&format!("  Repair: {}\n", check.repair));
+                out.push_str(&format!("  {}\n", crate::i18n::fmt("Repair: {0}", &[crate::i18n::tr(check.repair).to_string()])));
             }
             rows.len()
         }
         Err(e) => {
-            out.push_str(&format!("\n{}: could not be checked ({e:#})\n", check.title));
+            out.push_str(&format!("\n{}\n", crate::i18n::fmt("{0}: could not be checked ({1})", &[crate::i18n::tr(check.title).to_string(), format!("{e:#}")])));
             0
         }
     }
 }
 
 pub fn run(_input: &Value, cfg: &AppConfig) -> Result<String> {
-    let mut out = format!("Repository doctor of {}:\n", cfg.model_label());
+    let mut out = format!("{}\n", crate::i18n::fmt("Repository doctor of {0}:", &[cfg.model_label().to_string()]));
     let mut findings = 0;
     for check in CHECKS {
         findings += run_check(cfg, check, &mut out);
@@ -132,16 +132,17 @@ pub fn run(_input: &Value, cfg: &AppConfig) -> Result<String> {
         Ok(rows) => {
             let cutoff = (chrono::Local::now() - chrono::Duration::days(30)).format("%Y-%m-%d").to_string();
             let stale: Vec<&Vec<String>> = rows.iter().filter(|r| r[2].is_empty() || r[3].get(..10).is_some_and(|d| d < cutoff.as_str())).collect();
-            out.push_str(&format!("\nLocks of users that are gone or older than 30 days ({} of {} locks):\n", stale.len(), rows.len()));
+            out.push_str(&format!("\n{}\n", crate::i18n::fmt("Locks of users that are gone or older than 30 days ({0} of {1} locks):", &[stale.len().to_string(), rows.len().to_string()])));
             for r in stale.iter().take(15) {
-                out.push_str(&format!("  - {} {} – {} since {}\n", r[0], r[1], if r[2].is_empty() { "(no such user)" } else { r[2].as_str() }, r[3]));
+                let who = if r[2].is_empty() { crate::i18n::tr("(no such user)").to_string() } else { r[2].clone() };
+                out.push_str(&format!("  - {}\n", crate::i18n::fmt("{0} {1} – {2} since {3}", &[r[0].clone(), r[1].clone(), who, r[3].clone()])));
             }
             if !stale.is_empty() {
-                out.push_str("  Repair: an EA administrator releases them (Security → Manage Locks); locks kept by version control are released there.\n");
+                out.push_str(&format!("  {}\n", crate::i18n::tr("Repair: an EA administrator releases them (Security → Manage Locks); locks kept by version control are released there.")));
             }
             findings += stale.len();
         }
-        Err(_) => out.push_str("\nLocks: the repository has no security tables (security is off)\n"),
+        Err(_) => out.push_str(&format!("\n{}\n", crate::i18n::tr("Locks: the repository has no security tables (security is off)"))),
     }
     // Jet files: 2 GB at most.
     if cfg.uses_file() {
@@ -149,13 +150,18 @@ pub fn run(_input: &Value, cfg: &AppConfig) -> Result<String> {
         if let Ok(meta) = std::fs::metadata(&cfg.model_file) {
             let mb = meta.len() / 1_048_576;
             if ext == "eap" || ext == "eapx" {
-                out.push_str(&format!("\nFile size: {mb} MB of Jet's 2048 MB limit{}\n", if mb > 1500 { " – move it to .qea or a database soon" } else { "" }));
+                let text = if mb > 1500 {
+                    crate::i18n::fmt("File size: {0} MB of Jet's 2048 MB limit – move it to .qea or a database soon", &[mb.to_string()])
+                } else {
+                    crate::i18n::fmt("File size: {0} MB of Jet's 2048 MB limit", &[mb.to_string()])
+                };
+                out.push_str(&format!("\n{text}\n"));
             } else {
-                out.push_str(&format!("\nFile size: {mb} MB\n"));
+                out.push_str(&format!("\n{}\n", crate::i18n::fmt("File size: {0} MB", &[mb.to_string()])));
             }
         }
     }
-    out.push_str(&format!("\n{findings} findings. Nothing was changed.\n"));
+    out.push_str(&format!("\n{}\n", crate::i18n::fmt("{0} findings. Nothing was changed.", &[findings.to_string()])));
     Ok(out)
 }
 

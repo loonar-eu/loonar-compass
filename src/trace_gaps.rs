@@ -61,7 +61,7 @@ fn reachable(start: i64, edges: &HashMap<i64, Vec<i64>>, depth: usize) -> HashSe
 
 pub fn run(input: &Value, cfg: &AppConfig) -> Result<String> {
     let depth = input["depth"].as_u64().unwrap_or(3).clamp(1, 6) as usize;
-    let (scope, title) = crate::model_usage::package_scope(cfg, &input["package"])?;
+    let (scope, title) = crate::model_usage::package_scope_shown(cfg, &input["package"])?;
     // Every element (relationships may lead out of the package), then the ones in scope.
     let all = query_rows(cfg, "select o.object_id, o.object_type, coalesce(o.stereotype,''), o.name, p.name from t_object o join t_package p on p.package_id = o.package_id")?;
     let in_scope: HashSet<i64> = query_rows(cfg, &format!("select o.object_id from t_object o where 1 = 1 {scope}"))?.iter().filter_map(|r| r[0].parse().ok()).collect();
@@ -84,28 +84,28 @@ pub fn run(input: &Value, cfg: &AppConfig) -> Result<String> {
         let reach = reachable(*id, &edges, depth);
         if is_requirement(&r[1], &r[2]) {
             if !reach.iter().any(|o| info.get(o).is_some_and(|x| is_design(&x[1]))) {
-                uncovered.push(format!("\"{}\" ({}, package \"{}\", object_id {id})", r[3], r[1], r[4]));
+                uncovered.push(crate::i18n::fmt("\"{0}\" ({1}, package \"{2}\", object_id {3})", &[r[3].clone(), r[1].clone(), r[4].clone(), id.to_string()]));
             }
         } else if is_design(&r[1]) && !reach.iter().any(|o| info.get(o).is_some_and(|x| is_requirement(&x[1], &x[2]))) {
-            unjustified.push(format!("\"{}\" ({}, package \"{}\", object_id {id})", r[3], r[1], r[4]));
+            unjustified.push(crate::i18n::fmt("\"{0}\" ({1}, package \"{2}\", object_id {3})", &[r[3].clone(), r[1].clone(), r[4].clone(), id.to_string()]));
         }
     }
     uncovered.sort();
     unjustified.sort();
-    let mut out = format!("Traceability gaps in {title} (up to {depth} steps over trace-like relationships):\n");
+    let mut out = format!("{}\n", crate::i18n::fmt("Traceability gaps in {0} (up to {1} steps over trace-like relationships):", &[title.clone(), depth.to_string()]));
     for (heading, list) in [("Requirements no design element realises or traces to", &uncovered), ("Design elements no requirement leads to", &unjustified)] {
-        out.push_str(&format!("\n{heading} ({}):\n", list.len()));
+        out.push_str(&format!("\n{} ({}):\n", crate::i18n::tr(heading), list.len()));
         if list.is_empty() {
-            out.push_str("  none\n");
+            out.push_str(&format!("  {}\n", crate::i18n::tr("none")));
         }
         for line in list.iter().take(150) {
             out.push_str(&format!("  - {line}\n"));
         }
         if list.len() > 150 {
-            out.push_str(&format!("  … and {} more\n", list.len() - 150));
+            out.push_str(&format!("  {}\n", crate::i18n::fmt("… and {0} more", &[(list.len() - 150).to_string()])));
         }
     }
-    out.push_str("\nNothing was changed.\n");
+    out.push_str(&format!("\n{}\n", crate::i18n::tr("Nothing was changed.")));
     Ok(out)
 }
 

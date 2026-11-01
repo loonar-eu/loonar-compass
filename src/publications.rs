@@ -87,16 +87,20 @@ pub fn stale(_input: &Value, cfg: &AppConfig) -> Result<String> {
         }
         stale += 1;
         let names = |rows: &[Vec<String>]| rows.iter().take(8).map(|r| format!("\"{}\"", r[0])).collect::<Vec<_>>().join(", ");
+        // The kinds recorded by tools.rs, shown in the user's language (LC-463).
+        let kind = match e["kind"].as_str().unwrap_or("") {
+            "Confluence page" => crate::i18n::tr("Confluence page").to_string(),
+            "Word document" => crate::i18n::tr("Word document").to_string(),
+            other => other.to_string(),
+        };
         out.push_str(&format!(
-            "\n- {} \"{}\" ({}), published {published}:{}{}\n",
-            e["kind"].as_str().unwrap_or(""),
-            e["title"].as_str().unwrap_or(""),
-            e["target"].as_str().unwrap_or(""),
-            if diagrams.is_empty() { String::new() } else { format!(" diagrams changed since: {}.", names(&diagrams)) },
-            if elements.is_empty() { String::new() } else { format!(" Elements on them changed since: {}{}.", names(&elements), if elements.len() > 8 { ", …" } else { "" }) }
+            "\n- {}{}{}\n",
+            crate::i18n::fmt("{0} \"{1}\" ({2}), published {3}:", &[kind, e["title"].as_str().unwrap_or("").to_string(), e["target"].as_str().unwrap_or("").to_string(), published.to_string()]),
+            if diagrams.is_empty() { String::new() } else { format!(" {}", crate::i18n::fmt("diagrams changed since: {0}.", &[names(&diagrams)])) },
+            if elements.is_empty() { String::new() } else { format!(" {}", crate::i18n::fmt("Elements on them changed since: {0}.", &[format!("{}{}", names(&elements), if elements.len() > 8 { ", …" } else { "" })])) }
         ));
     }
-    Ok(format!("Publications from this model: {}, no longer current: {stale}.{out}", mine.len()))
+    Ok(format!("{}{out}", crate::i18n::fmt("Publications from this model: {0}, no longer current: {1}.", &[mine.len().to_string(), stale.to_string()])))
 }
 
 #[cfg(test)]

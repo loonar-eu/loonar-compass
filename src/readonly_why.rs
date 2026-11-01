@@ -139,7 +139,8 @@ pub fn dead_links(input: &Value, cfg: &AppConfig) -> Result<String> {
     ))? {
         let d: i64 = r[3].trim().parse().unwrap_or(0);
         if d > 0 && one(cfg, &format!("select 1 from t_diagram where diagram_id = {d}")).is_none() {
-            out.push(format!("- {} \"{}\" (id {}) points at diagram {d}, which is gone", if r[2] == "UMLDiagram" { "diagram reference" } else { "composite element" }, r[1], r[0]));
+            let what = if r[2] == "UMLDiagram" { crate::i18n::tr("diagram reference") } else { crate::i18n::tr("composite element") };
+            out.push(format!("- {}", crate::i18n::fmt("{0} \"{1}\" (id {2}) points at diagram {3}, which is gone", &[what.to_string(), r[1].clone(), r[0].clone(), d.to_string()])));
         }
     }
     let mut check = |owner: String, note: &str| {
@@ -147,18 +148,18 @@ pub fn dead_links(input: &Value, cfg: &AppConfig) -> Result<String> {
             let g = crate::model_db::sql_text(cfg.model_source, &guid);
             let table = match kind.as_str() { "element" => "t_object", "diagram" => "t_diagram", _ => "t_package" };
             if one(cfg, &format!("select 1 from {table} where ea_guid = '{g}'")).is_none() {
-                out.push(format!("- {owner}: a ${kind}:// link to {guid}, which is gone"));
+                out.push(format!("- {}", crate::i18n::fmt("{0}: a ${1}:// link to {2}, which is gone", &[owner.clone(), kind.clone(), guid.clone()])));
             }
         }
     };
     for r in query_rows(cfg, &format!("select o.object_id, coalesce(o.name,''), o.note from t_object o where (o.note like '%$element://%' or o.note like '%$diagram://%' or o.note like '%$package://%') {scope}"))? {
-        check(format!("notes of \"{}\" (id {})", r[1], r[0]), &r[2]);
+        check(crate::i18n::fmt("notes of \"{0}\" (id {1})", &[r[1].clone(), r[0].clone()]), &r[2]);
     }
     let dscope = scope.replace("o.package_id", "d.package_id");
     for r in query_rows(cfg, &format!("select d.diagram_id, d.name, d.notes from t_diagram d where (d.notes like '%$element://%' or d.notes like '%$diagram://%' or d.notes like '%$package://%') {dscope}"))? {
-        check(format!("notes of diagram \"{}\" (id {})", r[1], r[0]), &r[2]);
+        check(crate::i18n::fmt("notes of diagram \"{0}\" (id {1})", &[r[1].clone(), r[0].clone()]), &r[2]);
     }
-    Ok(if out.is_empty() { "No dead links found.".into() } else { format!("Dead links ({}):\n{}", out.len(), out.join("\n")) })
+    Ok(if out.is_empty() { crate::i18n::tr("No dead links found.").to_string() } else { format!("{}\n{}", crate::i18n::fmt("Dead links ({0}):", &[out.len().to_string()]), out.join("\n")) })
 }
 
 #[cfg(test)]
