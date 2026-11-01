@@ -323,19 +323,38 @@ fn find_orphans_rest(input: &Value, cfg: &AppConfig, scope: String, title: Strin
     // diagrams but without any relationship.
     let fine_without_diagram = "'Requirement', 'Feature', 'Issue', 'Change', 'Risk', 'TestCase', 'Task', 'Defect', 'Constraint', 'Artifact', 'Enumeration', 'DataType'";
     let no_diagram = query_rows(cfg, &format!(
-        "select o.object_type, count(*) from t_object o where o.object_type not in ('Note', 'Text', 'Boundary', 'Package', 'ProvidedInterface', 'RequiredInterface', 'Port') {type_filter} {scope} \
+        "select o.object_type, coalesce(o.name, '') from t_object o where o.object_type not in ('Note', 'Text', 'Boundary', 'Package', 'ProvidedInterface', 'RequiredInterface', 'Port') {type_filter} {scope} \
          and not exists (select 1 from t_diagramobjects x where x.object_id = o.object_id) \
-         and exists (select 1 from t_connector c where c.start_object_id = o.object_id or c.end_object_id = o.object_id) group by o.object_type order by 2 desc"
+         and exists (select 1 from t_connector c where c.start_object_id = o.object_id or c.end_object_id = o.object_id) order by o.object_type, o.name"
     ))?;
     let no_links = query_rows(cfg, &format!(
-        "select o.object_type, count(*) from t_object o where o.object_type not in ('Note', 'Text', 'Boundary', 'Package', 'ProvidedInterface', 'RequiredInterface', 'Port', 'Constraint', 'InteractionFragment', 'ActivityPartition', 'UMLDiagram', 'TimeLine', 'InteractionOccurrence', 'ActionPin', 'ActivityParameter', 'ExpansionNode', 'InterruptibleActivityRegion', 'ExpansionRegion') {type_filter} {scope} \
+        "select o.object_type, coalesce(o.name, '') from t_object o where o.object_type not in ('Note', 'Text', 'Boundary', 'Package', 'ProvidedInterface', 'RequiredInterface', 'Port', 'Constraint', 'InteractionFragment', 'ActivityPartition', 'UMLDiagram', 'TimeLine', 'InteractionOccurrence', 'ActionPin', 'ActivityParameter', 'ExpansionNode', 'InterruptibleActivityRegion', 'ExpansionRegion') {type_filter} {scope} \
          and exists (select 1 from t_diagramobjects x where x.object_id = o.object_id) \
-         and not exists (select 1 from t_connector c where c.start_object_id = o.object_id or c.end_object_id = o.object_id) group by o.object_type order by 2 desc"
+         and not exists (select 1 from t_connector c where c.start_object_id = o.object_id or c.end_object_id = o.object_id) order by o.object_type, o.name"
     ))?;
     // Three kinds, each on its own line, also when empty (LC-412: the kind "fine without a diagram" was a remark inside
     // another line and went unnoticed).
+    // Per type its number and the first names (LC-412: numbers alone did not say which elements).
     let line = |rows: Vec<&Vec<String>>| -> String {
-        if rows.is_empty() { crate::i18n::tr("none").to_string() } else { rows.iter().map(|r| format!("{} {}", r[1], r[0])).collect::<Vec<_>>().join(", ") }
+        if rows.is_empty() {
+            return crate::i18n::tr("none").to_string();
+        }
+        let mut by_type: Vec<(String, Vec<String>)> = Vec::new();
+        for r in rows {
+            match by_type.iter_mut().find(|(t, _)| *t == r[0]) {
+                Some((_, names)) => names.push(r[1].clone()),
+                None => by_type.push((r[0].clone(), vec![r[1].clone()])),
+            }
+        }
+        by_type.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
+        by_type
+            .iter()
+            .map(|(t, names)| {
+                let shown: Vec<String> = names.iter().filter(|n| !n.trim().is_empty()).take(8).map(|n| format!("\"{n}\"")).collect();
+                format!("{} {t} ({}{})", names.len(), shown.join(", "), if names.len() > 8 { ", …" } else { "" })
+            })
+            .collect::<Vec<_>>()
+            .join("; ")
     };
     let fine = |r: &&Vec<String>| fine_without_diagram.contains(&format!("'{}'", r[0]));
     out.push_str(&format!("\n{}\n", crate::i18n::fmt("Related, but on no diagram (worth a diagram): {0}", &[line(no_diagram.iter().filter(|r| !fine(r)).collect())])));
