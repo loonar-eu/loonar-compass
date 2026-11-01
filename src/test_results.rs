@@ -65,18 +65,25 @@ pub(crate) fn junit(xml: &str) -> Vec<Test> {
 pub(crate) fn csv(name: &str, bytes: &[u8]) -> Result<Vec<Test>> {
     let rows = crate::import_sheet::read_rows(name, bytes)?;
     let Some((header, data)) = rows.split_first() else { bail!("the CSV is empty") };
-    let find = |names: &[&str]| header.iter().position(|h| names.contains(&h.trim().to_lowercase().as_str()));
-    let test = find(&["test", "name", "test name", "testcase", "test case"]).context("the CSV needs a column test (or name)")?;
-    let result = find(&["result", "status", "outcome"]).context("the CSV needs a column result (or status)")?;
-    let requirement = find(&["requirement", "req", "requirement id"]);
+    // Column names also in Polish, German and French (LC-459), compared without case and accents.
+    let fold = |t: &str| crate::import_sheet::fold(t.trim()).to_lowercase();
+    let find = |names: &[&str]| header.iter().position(|h| names.contains(&fold(h).as_str()));
+    let test = find(&["test", "name", "test name", "testcase", "test case", "nazwa", "nazwa testu", "przypadek testowy", "testfall", "cas de test", "nom"])
+        .context("the CSV needs a column test (or name)")?;
+    let result = find(&["result", "status", "outcome", "wynik", "rezultat", "stan", "ergebnis", "resultat", "statut"]).context("the CSV needs a column result (or status)")?;
+    let requirement = find(&["requirement", "req", "requirement id", "wymaganie", "wymagania", "anforderung", "exigence"]);
     Ok(data
         .iter()
         .filter(|r| r.get(test).is_some_and(|t| !t.trim().is_empty()))
         .map(|r| {
-            let outcome = r.get(result).map(|v| v.trim().to_lowercase()).unwrap_or_default();
+            let outcome = r.get(result).map(|v| fold(v)).unwrap_or_default();
             Test {
                 name: r[test].trim().to_string(),
-                passed: matches!(outcome.as_str(), "pass" | "passed" | "ok" | "success" | "succeeded" | "true" | "green"),
+                passed: matches!(
+                    outcome.as_str(),
+                    "pass" | "passed" | "ok" | "success" | "succeeded" | "true" | "green" | "zaliczony" | "zaliczone" | "sukces" | "tak" | "bestanden" | "erfolgreich"
+                        | "reussi" | "succes"
+                ),
                 requirement: requirement.and_then(|i| r.get(i)).map(|v| v.trim().to_string()).unwrap_or_default(),
             }
         })
@@ -248,6 +255,12 @@ mod tests {
         let rows = csv("r.csv", b"Test;Result;Requirement\nlogin works;Passed;Login\nlogout;FAIL;\n").unwrap();
         assert_eq!(rows[0], Test { name: "login works".into(), passed: true, requirement: "Login".into() });
         assert!(!rows[1].passed);
+        // LC-459: Polish headers and values.
+        let rows = csv("r.csv", "test;wymaganie;wynik;komunikat
+rejestracja;REQ-1;Zaliczony;
+raport;REQ-2;błąd;timeout
+".as_bytes()).unwrap();
+        assert!(rows[0].passed && !rows[1].passed && rows[1].requirement == "REQ-2", "{rows:?}");
     }
 
     /// `LOONAR_TEST_PROPS=… cargo test test_results_live -- --ignored --nocapture`: a CSV against the requirements of the model.
