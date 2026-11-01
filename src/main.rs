@@ -155,7 +155,7 @@ fn system_prompt(cfg: &AppConfig) -> String {
                 f => format!(" Source code folders (local repository clones; read them with code_tree, code_search and code_read): {}.", f.join("; ")),
             }
         ),
-        LANGUAGE_RULE = format!("Response language: {} (the language selected in the application). Answer in it unless the user writes to you in a different language; then answer in the user's language. Create documents, pages and images in the response language unless the user asks for a different one. This applies to everything you write, also short notes between tool calls. Agree numbers with nouns and verbs as the language requires (in Polish: 1 relacja znika, 2 relacje znikną, 5 relacji zniknie) (LC-461).", i18n::current().english_name()),
+        LANGUAGE_RULE = format!("Response language: {} (the language selected in the application). Answer in it unless the user writes to you in a different language; then answer in the user's language. Create documents, pages and images in the response language unless the user asks for a different one. This applies to everything you write, also short notes between tool calls. Agree numbers with nouns and verbs as the language requires (in Polish: 1 relacja znika, 2 relacje znikną, 5 relacji zniknie).", i18n::current().english_name()),
         templates = templates::prompt_section(&cfg.templates_dir),
     )
 }
