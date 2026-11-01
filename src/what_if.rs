@@ -57,11 +57,11 @@ pub fn run(input: &Value, cfg: &AppConfig) -> Result<String> {
     if matches!(change, "delete" | "retire") {
         let impact = crate::model_db::impact_analysis(&json!({ "element": id, "depth": 3, "direction": "in" }), cfg).unwrap_or_default();
         let lines: Vec<&str> = impact.lines().skip(1).filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with("level |")).collect();
-        out.push(format!("What depends on it, up to 3 steps: {} element(s){}", lines.len(), if lines.is_empty() { String::new() } else { format!("\n  {}", lines.iter().take(12).cloned().collect::<Vec<_>>().join("\n  ")) }));
+        out.push(format!("What depends on it, up to 3 steps (these elements stay in the model and on their diagrams; only their link to it is affected): {} element(s){}", lines.len(), if lines.is_empty() { String::new() } else { format!("\n  {}", lines.iter().take(12).cloned().collect::<Vec<_>>().join("\n  ")) }));
     }
     // Diagrams and publications.
     let diagrams = query_rows(cfg, &format!("select d.diagram_id, d.name from t_diagramobjects x join t_diagram d on d.diagram_id = x.diagram_id where x.object_id = {id} order by d.name"))?;
-    out.push(format!("Diagrams that show it: {}{}", diagrams.len(), if diagrams.is_empty() { String::new() } else { format!(" ({})", diagrams.iter().take(10).map(|d| format!("\"{}\"", d[1])).collect::<Vec<_>>().join(", ")) }));
+    out.push(format!("Diagrams that show it (only this element would be gone from them): {}{}", diagrams.len(), if diagrams.is_empty() { String::new() } else { format!(" ({})", diagrams.iter().take(10).map(|d| format!("\"{}\"", d[1])).collect::<Vec<_>>().join(", ")) }));
     let ids: Vec<i64> = diagrams.iter().filter_map(|d| d[0].parse().ok()).collect();
     let published: Vec<String> = std::fs::read_to_string(cfg.base_dir.join("publications.json")).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok())
         .and_then(|v| v.as_array().cloned()).unwrap_or_default().into_iter()
