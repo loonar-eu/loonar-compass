@@ -21,7 +21,8 @@ pub fn definition() -> Value {
         "name": "import_sheet",
         "description": "Import rows of an attached Excel (.xlsx, first sheet) or CSV file as elements of a package, matched to existing elements so \
 a repeated import updates instead of duplicating. Columns are named by their header: map name (required), type (a column or a fixed type such as \
-Requirement), stereotype, notes, alias, status, tags {tag: column}, and relationships [{column, type, to_type?}] whose cells name other elements \
+Requirement), stereotype, notes, alias, status, tags {tag: column}, and relationships [{column, type?, type_column?, stereotype?, to_type?}] whose cells name other elements (type_column: a column with each row's \
+relationship type, e.g. Dependency, ArchiMate_Realization or ControlFlow «SequenceFlow») \
 (comma-separated). Matching: guid, alias, or name and type (default) in the package and its child packages; a name that is only nearly the same \
 (case, accents, spaces, a typo) is shown as similar, and similar \"use\" updates that element instead of creating a new one. A stereotype \
 \"Profile::Name\" (or profile in the mapping) of an MDG technology adds the tagged values it defines that are missing; a relationship with a \
@@ -226,7 +227,18 @@ fn plan(input: &Value, cfg: &AppConfig) -> Result<(Vec<Planned>, Vec<Value>, Str
     let mut stereotypes: HashMap<String, Option<crate::mdg::Stereotype>> = HashMap::new();
     let mut mdg = |full: &str| stereotypes.entry(full.to_lowercase()).or_insert_with(|| crate::mdg::stereotype(cfg, full)).clone();
     let profile = mapping["profile"].as_str().map(str::trim).filter(|p| !p.is_empty()).map(str::to_string);
-    let full_name = |s: &str| if s.contains("::") || s.is_empty() { s.to_string() } else { profile.as_ref().map(|p| format!("{p}::{s}")).unwrap_or_else(|| s.to_string()) };
+    let full_name = |s: &str| {
+        if s.contains("::") || s.is_empty() {
+            s.to_string()
+        } else if let Some(p) = profile.as_ref() {
+            format!("{p}::{s}")
+        } else if s.starts_with("ArchiMate_") {
+            // An ArchiMate concept without its profile: the profile is known (LC-424: saved without FQName).
+            format!("ArchiMate3::{s}")
+        } else {
+            s.to_string()
+        }
+    };
     let mut planned: Vec<Planned> = Vec::new();
     let mut keys: HashMap<String, Value> = HashMap::new();
     for (i, row) in data.iter().enumerate() {
@@ -236,7 +248,7 @@ fn plan(input: &Value, cfg: &AppConfig) -> Result<(Vec<Planned>, Vec<Value>, Str
             planned.push((i + 1, "skip", "(no name)".into(), None));
             continue;
         }
-        let kind = mapped("type").map(|c| cell(Some(c))).filter(|t| !t.is_empty()).or_else(|| mapping["type"].as_str().filter(|t| col(t).is_none()).map(str::to_string)).unwrap_or_else(|| "Class".into());
+        let mut kind = mapped("type").map(|c| cell(Some(c))).filter(|t| !t.is_empty()).or_else(|| mapping["type"].as_str().filter(|t| col(t).is_none()).map(str::to_string)).unwrap_or_else(|| "Class".into());
         let mut found = existing.iter().find(|e| match match_by {
             "guid" => mapped("guid").is_some_and(|c| cell(Some(c)) == e[4]),
             "alias" => mapped("alias").is_some_and(|c| !cell(Some(c)).is_empty() && cell(Some(c)) == e[3]),
@@ -263,7 +275,8 @@ fn plan(input: &Value, cfg: &AppConfig) -> Result<(Vec<Planned>, Vec<Value>, Str
         let files: Vec<String> = mapped("file").map(|c| cell(Some(c)).split(['\n', ';']).map(|f| f.trim().to_string()).filter(|f| !f.is_empty()).collect()).unwrap_or_default();
         let mut tags = Map::new();
         for (tag, column) in mapping["tags"].as_object().into_iter().flatten() {
-            if let Some(c) = column.as_str().and_then(col) {
+            // An empty cell is no value (LC-424: empty taskType tags on ArchiMate elements of a mixed sheet).
+            if let Some(c) = column.as_str().and_then(col).filter(|c| !cell(Some(*c)).is_empty()) {
                 tags.insert(tag.clone(), json!(cell(Some(c))));
             }
         }
@@ -272,8 +285,14 @@ fn plan(input: &Value, cfg: &AppConfig) -> Result<(Vec<Planned>, Vec<Value>, Str
         let mut mdg_tags = 0;
         if stereotype.contains("::") {
             match mdg(&stereotype) {
-                // A new element gets them from EA with the stereotype; an existing one only the ones it lacks.
-                Some(def) if found.is_none() => mdg_tags = def.tags.len(),
+                // A new element gets them from EA with the stereotype; an existing one only the ones it lacks. Its type is
+                // the one the technology defines (LC-424: "Service" became a Component).
+                Some(def) if found.is_none() => {
+                    mdg_tags = def.tags.len();
+                    if let Some(base) = def.applies_to.first().filter(|b| !def.applies_to.iter().any(|a| a.eq_ignore_ascii_case(&kind)) && !b.is_empty()) {
+                        kind = base.clone();
+                    }
+                }
                 Some(def) => {
                     let element = found.map(|e| e[0].clone()).unwrap_or_default();
                     for (tag, _, _, default, _) in &def.tags {
@@ -335,18 +354,47 @@ fn plan(input: &Value, cfg: &AppConfig) -> Result<(Vec<Planned>, Vec<Value>, Str
     // Relationships from columns naming other elements (of the sheet or already in the package).
     let mut relations = Vec::new();
     for rel in mapping["relationships"].as_array().into_iter().flatten() {
-        let (Some(c), Some(given)) = (rel["column"].as_str().and_then(col), rel["type"].as_str()) else { continue };
-        // A stereotyped relationship gets the type its MDG technology defines (LC-424): ArchiMate Serving is an Association.
-        let stereotype = rel["stereotype"].as_str().map(&full_name).unwrap_or_default();
-        let mut kind = given.to_string();
-        if stereotype.contains("::") {
-            if let Some(base) = mdg(&stereotype).and_then(|d| d.applies_to.first().cloned()).filter(|b| !b.eq_ignore_ascii_case(given)) {
-                notes.push(format!("{stereotype}: {given} → {base} (the type the MDG technology defines for it)"));
-                kind = base;
-            }
+        let type_column = rel["type_column"].as_str().and_then(col);
+        let Some(c) = rel["column"].as_str().and_then(col) else { continue };
+        if rel["type"].as_str().is_none() && type_column.is_none() {
+            continue;
         }
-        let kind = kind.as_str();
+        // The type and stereotype of one relationship: the given ones, or the row's cell of type_column (LC-424: one type
+        // for the whole column), written as "Dependency", "ArchiMate_Realization", "ArchiMate3::ArchiMate_Serving" or
+        // "ControlFlow «SequenceFlow»". A stereotyped relationship gets the type its MDG technology defines.
+        let mut resolve = |text: &str, stereotype: &str| -> (String, String) {
+            let text = text.trim();
+            let (mut kind, mut stereo) = match text.split_once('«') {
+                Some((k, st)) => (k.trim().to_string(), full_name(st.trim_end_matches('»').trim())),
+                None if text.contains("::") || text.starts_with("ArchiMate_") => (String::new(), full_name(text)),
+                None => (text.to_string(), full_name(stereotype)),
+            };
+            if stereo.is_empty() {
+                stereo = full_name(stereotype);
+            }
+            if stereo.contains("::") {
+                if let Some(base) = mdg(&stereo).and_then(|d| d.applies_to.first().cloned()).filter(|b| !b.eq_ignore_ascii_case(&kind)) {
+                    if !kind.is_empty() {
+                        notes.push(format!("{stereo}: {kind} → {base} (the type the MDG technology defines for it)"));
+                    }
+                    kind = base;
+                }
+            }
+            if kind.is_empty() {
+                kind = "Dependency".into();
+            }
+            (kind, stereo)
+        };
+        let fixed = rel["type"].as_str().map(|t| resolve(t, rel["stereotype"].as_str().unwrap_or("")));
         for row in data {
+            let (kind, stereotype) = match type_column.and_then(|tc| row.get(tc)).map(|v| v.trim()).filter(|v| !v.is_empty()) {
+                Some(v) => resolve(v, rel["stereotype"].as_str().unwrap_or("")),
+                None => match &fixed {
+                    Some(f) => f.clone(),
+                    None => continue,
+                },
+            };
+            let kind = kind.as_str();
             let source = row.get(name_col).map(|n| n.trim().to_lowercase()).unwrap_or_default();
             for target in row.get(c).map(|v| v.split([',', ';']).map(|t| t.trim().to_lowercase()).filter(|t| !t.is_empty()).collect::<Vec<_>>()).unwrap_or_default() {
                 if let (Some(s), Some(t)) = (keys.get(&source), keys.get(&target)) {
@@ -490,7 +538,13 @@ fn fidelity(input: &Value, cfg: &AppConfig) -> Result<String> {
 
 /// columns: headers and samples; preview: the plan as text; apply: the operations.
 pub fn run(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)> {
-    if input["action"].as_str() == Some("fidelity") {
+    // An ArchiMate exchange, BPMN or XMI file is not a sheet: its import is EA's, and Compass checks its fidelity (LC-424:
+    // asked plainly, the assistant said it could not).
+    let exchange = input["file"].as_str().is_some_and(|f| {
+        let f = f.to_lowercase();
+        f.ends_with(".bpmn") || f.ends_with(".xmi") || f.ends_with(".xml")
+    });
+    if input["action"].as_str() == Some("fidelity") || (exchange && input["action"].as_str() != Some("apply")) {
         return Ok((Vec::new(), fidelity(input, cfg)?));
     }
     if input["action"].as_str() == Some("columns") {
@@ -652,6 +706,20 @@ Approve,BPMN2.0::Activity
             let bpmn = super::run(&json!({ "action": "preview", "file": "bpmn.csv", "package": pkg, "mapping": { "name": "Name", "type": "Activity", "stereotype": "Stereo" } }), &cfg).unwrap().1;
             println!("{bpmn}");
             assert!(bpmn.contains("MDG tag(s)"), "{bpmn}");
+            // 6. LC-424 round 6: each row's relationship type from a column, an ArchiMate stereotype without its profile,
+            //    the element type the technology defines, and no empty tags.
+            std::fs::write(dir.join("mixed.csv"), "Name,Type,Stereo,Owner,Next,Kind
+Order handling,Service,ArchiMate_ApplicationService,,Order data,ArchiMate_Realization
+Order data,Class,ArchiMate_DataObject,,,
+").unwrap();
+            let mixed = json!({ "action": "apply", "file": "mixed.csv", "package": pkg, "mapping": { "name": "Name", "type": "Type", "stereotype": "Stereo", "tags": { "Owner": "Owner" },
+                "relationships": [{ "column": "Next", "type_column": "Kind" }] } });
+            batch(&super::run(&mixed, &cfg).unwrap().0);
+            let made = q(&format!("select o.object_type, coalesce(o.stereotype,''), (select count(*) from t_objectproperties p where p.object_id = o.object_id and p.property = 'Owner') from t_object o where o.package_id = {pkg} and o.name = 'Order handling'"));
+            let realized = q(&format!("select c.connector_type, coalesce(c.stereotype,'') from t_connector c join t_object o on o.object_id = c.start_object_id where o.package_id = {pkg} and o.name = 'Order handling'"));
+            println!("{made:?} {realized:?}");
+            assert!(made[0][0] != "Component" && made[0][1] == "ArchiMate_ApplicationService" && made[0][2] == "0", "{made:?}");
+            assert!(realized.iter().any(|r| r[1] == "ArchiMate_Realization"), "{realized:?}");
             let bpmn_input = json!({ "action": "apply", "file": "bpmn.csv", "package": pkg, "mapping": { "name": "Name", "type": "Activity", "stereotype": "Stereo" } });
             batch(&super::run(&bpmn_input, &cfg).unwrap().0);
             let tags = q(&format!("select count(*) from t_objectproperties p join t_object o on o.object_id = p.object_id where o.package_id = {pkg} and o.name = 'Approve'"));
