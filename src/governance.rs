@@ -500,6 +500,8 @@ pub fn write_problems(cfg: &AppConfig, ops: &[Value]) -> Vec<String> {
             }
             _ => continue,
         };
+        // An ArchiMate concept given as the type is the stereotype to check (LC-374).
+        let stereotype = if kind.rsplit("::").next().unwrap_or("").starts_with("ArchiMate_") { kind.clone() } else { stereotype };
         if let Some(problem) = relation_problem(&kind, &stereotype, &source.0, &source.1, &target.0, &target.1) {
             out.push(problem);
         }

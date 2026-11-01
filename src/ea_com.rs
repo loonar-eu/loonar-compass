@@ -10,6 +10,18 @@ use std::collections::HashMap;
 
 /// Base UML type for MDG stereotypes given as the type by mistake (e.g. type = "BPMN2.0::StartEvent").
 const BASE_TYPES: &[(&str, &str)] = &[
+    // ArchiMate 3 relationships and their UML base types, as EA's ArchiMate technology stores them (LC-374).
+    ("ArchiMate_Serving", "Association"),
+    ("ArchiMate_Assignment", "Association"),
+    ("ArchiMate_Association", "Association"),
+    ("ArchiMate_Aggregation", "Association"),
+    ("ArchiMate_Composition", "Association"),
+    ("ArchiMate_Triggering", "ControlFlow"),
+    ("ArchiMate_Influence", "ControlFlow"),
+    ("ArchiMate_Flow", "InformationFlow"),
+    ("ArchiMate_Access", "Dependency"),
+    ("ArchiMate_Realization", "Dependency"),
+    ("ArchiMate_Specialization", "Generalization"),
     ("Activity", "Activity"),
     ("BusinessProcess", "Activity"),
     ("StartEvent", "Event"),
@@ -610,6 +622,10 @@ impl Job<'_> {
     fn new_typed(&self, collection: &Disp, name: &str, kind: &str, stereotype: &str) -> Result<Disp> {
         // An object node of an activity is EA's Object (AddNew rejects "ObjectNode" in a package).
         let mut kind = if kind == "ObjectNode" { "Object".to_string() } else { kind.to_string() };
+        // An ArchiMate concept named without its profile ("ArchiMate_Serving").
+        if kind.starts_with("ArchiMate_") {
+            kind = format!("ArchiMate3::{kind}");
+        }
         let mut stereotype = stereotype.to_string();
         if kind.contains("::") {
             if stereotype.is_empty() {
@@ -1034,7 +1050,16 @@ impl Job<'_> {
                 let source = self.element(&json!(client))?;
                 self.element(&json!(supplier))?;
                 let name = old.text("Name").unwrap_or_default();
-                let stereotype = if op["stereotype"].is_null() { old.text("StereotypeEx").unwrap_or_default() } else { text_field(op, "stereotype") };
+                // A new type given as a concept of a profile (ArchiMate3::ArchiMate_Serving) brings its own stereotype; the
+                // old one (e.g. ArchiMate_Triggering) is not carried over to it (LC-374: the relationship lost ArchiMate).
+                let typed_by_profile = text_field(op, "type").contains("::") || text_field(op, "type").starts_with("ArchiMate_");
+                let stereotype = if !op["stereotype"].is_null() {
+                    text_field(op, "stereotype")
+                } else if typed_by_profile {
+                    String::new()
+                } else {
+                    old.text("StereotypeEx").unwrap_or_default()
+                };
                 let new = self.new_typed(&source.obj("Connectors")?, &name, &text_field(op, "type"), &stereotype)?;
                 new.set("SupplierID", i(supplier))?;
                 for property in ["Notes", "Direction"] {
@@ -2376,5 +2401,23 @@ mod option_tests {
         let keys = serde_json::json!({ "HideAtts": "1", "New": "x" });
         assert_eq!(super::set_option_keys("HideRel=0;HideAtts=0;HideOps=0;", keys.as_object().unwrap()), "HideRel=0;HideAtts=1;HideOps=0;New=x;");
         assert_eq!(super::set_option_keys("", keys.as_object().unwrap()), "HideAtts=1;New=x;");
+    }
+}
+
+#[cfg(test)]
+mod archimate_type_tests {
+    /// LC-374: Triggering changed to Serving becomes EA's Association with the ArchiMate_Serving stereotype, on a model copy:
+    /// `LOONAR_TEST_PROPS=E:/livetest/r440/m5.properties LOONAR_TEST_CONNECTOR=2699 cargo test archimate_type_change_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA and a copy of a model with an ArchiMate Triggering relationship"]
+    fn archimate_type_change_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
+        let c: i64 = std::env::var("LOONAR_TEST_CONNECTOR").unwrap().parse().unwrap();
+        let ends = crate::tools::query_rows(&cfg, &format!("select start_object_id, end_object_id from t_connector where connector_id = {c}")).unwrap()[0].clone();
+        crate::ea::run_batch(&cfg, &[serde_json::json!({ "op": "change_connector_type", "connector": c, "type": "ArchiMate_Serving" })], &crate::ea::BatchOptions::default()).expect("change");
+        crate::ea::shutdown();
+        let now = crate::tools::query_rows(&cfg, &format!("select connector_type, stereotype from t_connector where start_object_id = {} and end_object_id = {} and stereotype like '%Serving%'", ends[0], ends[1])).unwrap();
+        println!("{now:?}");
+        assert_eq!(now.first().map(|r| r[0].as_str()), Some("Association"), "{now:?}");
     }
 }

@@ -408,7 +408,7 @@ is checked by the ArchiMate 3.2 and team rules. Use connector ids from the model
             "input_schema": { "type": "object", "properties": {
                 "connector": { "type": "integer" },
                 "connectors": { "type": "array", "items": { "type": "integer" } },
-                "type": { "type": "string", "description": "EA connector type, e.g. Dependency, Realisation, Association, Aggregation, InformationFlow" },
+                "type": { "type": "string", "description": "EA connector type, e.g. Dependency, Realisation, Association, Aggregation, InformationFlow; for ArchiMate the concept itself, e.g. ArchiMate_Serving or ArchiMate3::ArchiMate_Triggering (Compass picks EA's base type and the stereotype)" },
                 "stereotype": { "type": "string", "description": "e.g. ArchiMate3::ArchiMate_Serving (empty keeps the old one)" }
             }, "required": ["type"] }
         }));
@@ -1023,8 +1023,11 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
                 }
                 let diagrams: Vec<i64> = query_rows(ctx.cfg, &format!("select distinct diagramid from t_diagramlinks where connectorid = {id}"))?.iter().filter_map(|r| r[0].parse().ok()).collect();
                 let mut op = json!({ "op": "change_connector_type", "connector": id, "type": kind, "diagrams": diagrams });
-                if let Some(st) = input["stereotype"].as_str() {
-                    op["stereotype"] = json!(st);
+                match input["stereotype"].as_str() {
+                    // An ArchiMate stereotype decides the type too (LC-374: "Dependency" with ArchiMate_Serving lost it).
+                    Some(st) if st.rsplit("::").next().unwrap_or("").starts_with("ArchiMate_") => op["type"] = json!(st),
+                    Some(st) => op["stereotype"] = json!(st),
+                    None => {}
                 }
                 ops.push(op);
             }
