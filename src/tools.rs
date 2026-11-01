@@ -2657,7 +2657,12 @@ fn ea_write(input: &Value, ctx: &ToolContext) -> Result<String> {
     }
     let ops = &normalized;
     check_unchanged(ctx.cfg, &input["expect_unchanged"])?;
-    let summary = crate::i18n::fmt("Saving to the EA model:\n{0}\n\nBefore → after:\n{1}", &[ea::describe(ops), crate::governance::preview(ctx.cfg, ops)]);
+    let mut summary = crate::i18n::fmt("Saving to the EA model:\n{0}\n\nBefore → after:\n{1}", &[ea::describe(ops), crate::governance::preview(ctx.cfg, ops)]);
+    // Relationships the UML or ArchiMate 3.2 rules do not allow: on the card, so they are not approved unnoticed (LC-374).
+    let rule_problems = crate::governance::write_problems(ctx.cfg, ops);
+    if !rule_problems.is_empty() {
+        summary.push_str(&format!("\n\n⚠ {}", rule_problems.join("\n⚠ ")));
+    }
     let destructive = destructive_details(ctx.cfg, ops);
     // Deleting an element that has relationships, deleting a package, importing XMI and replacing an existing file
     // always ask (also in auto), with what is affected.
@@ -2710,6 +2715,9 @@ fn ea_write(input: &Value, ctx: &ToolContext) -> Result<String> {
     }
     if !related.is_empty() {
         text.push_str(&format!("\nDeleted together with relationships (tell the user): {}\n", related.join(" | ")));
+    }
+    if !rule_problems.is_empty() {
+        text.push_str(&format!("\nAgainst the modelling rules (tell the user and offer an allowed type): {}\n", rule_problems.join(" | ")));
     }
     // A relationship made by this write is hidden on the diagrams whose visibility policy is "auto", as one made in EA
     // is (LC-373: the policy missed the relationships Compass made itself).

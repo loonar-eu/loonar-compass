@@ -468,6 +468,45 @@ pub(crate) fn relation_problem(connector_type: &str, connector_stereotype: &str,
     uml_problem(connector_type, source_type, target_type).or_else(|| archimate_problem(connector_stereotype, source_stereotype, target_stereotype))
 }
 
+/// Relationships a write makes or changes that the UML or ArchiMate 3.2 rules do not allow (LC-374): shown on the
+/// approval card and in the result, so a forbidden type is not saved unnoticed.
+pub fn write_problems(cfg: &AppConfig, ops: &[Value]) -> Vec<String> {
+    let end = |id: &Value| -> Option<(String, String)> {
+        let id = id.as_i64()?;
+        query_rows(cfg, &format!("select object_type, coalesce(stereotype,'') from t_object where object_id = {id}")).ok()?.into_iter().next().map(|r| (r[0].clone(), r[1].clone()))
+    };
+    let mut out = Vec::new();
+    for op in ops {
+        let (kind, stereotype, source, target) = match op["op"].as_str().unwrap_or("") {
+            "create_connector" => {
+                let (Some(s), Some(t)) = (end(&op["source"]), end(&op["target"])) else { continue };
+                (op["type"].as_str().unwrap_or("").to_string(), op["stereotype"].as_str().unwrap_or("").to_string(), s, t)
+            }
+            "change_connector_type" | "update_connector" => {
+                let Some(id) = op["connector"].as_i64() else { continue };
+                if op["op"] == "update_connector" && op["stereotype"].is_null() {
+                    continue;
+                }
+                let Some(c) = query_rows(cfg, &format!(
+                    "select c.connector_type, coalesce(c.stereotype,''), s.object_type, coalesce(s.stereotype,''), t.object_type, coalesce(t.stereotype,'') from t_connector c \
+                     join t_object s on s.object_id = c.start_object_id join t_object t on t.object_id = c.end_object_id where c.connector_id = {id}"
+                )).ok().and_then(|r| r.into_iter().next()) else { continue };
+                (
+                    op["type"].as_str().unwrap_or(&c[0]).to_string(),
+                    op["stereotype"].as_str().unwrap_or(&c[1]).to_string(),
+                    (c[2].clone(), c[3].clone()),
+                    (c[4].clone(), c[5].clone()),
+                )
+            }
+            _ => continue,
+        };
+        if let Some(problem) = relation_problem(&kind, &stereotype, &source.0, &source.1, &target.0, &target.1) {
+            out.push(problem);
+        }
+    }
+    out
+}
+
 /// UML/BPMN sanity of a relationship by the types of its ends (without rules of the organization).
 fn uml_problem(connector_type: &str, source_type: &str, target_type: &str) -> Option<String> {
     let flow = matches!(connector_type, "ControlFlow" | "ObjectFlow");
@@ -487,7 +526,9 @@ enum ArchiCategory {
     Passive,
     /// Stakeholder, driver, assessment, goal, outcome, principle, requirement, constraint, meaning, value.
     Motivation,
-    /// Every other ArchiMate element (active structure, behaviour, strategy, implementation, composite, junction).
+    /// Work package, deliverable, implementation event, plateau, gap (implementation and migration).
+    Implementation,
+    /// Every other ArchiMate element (active structure, behaviour, strategy, composite, junction).
     Other,
 }
 
@@ -503,6 +544,7 @@ fn archimate_category(concept: &str) -> ArchiCategory {
     match concept {
         "BusinessObject" | "Contract" | "Representation" | "DataObject" | "Artifact" | "Material" => ArchiCategory::Passive,
         "Stakeholder" | "Driver" | "Assessment" | "Goal" | "Outcome" | "Principle" | "Requirement" | "Constraint" | "Meaning" | "Value" => ArchiCategory::Motivation,
+        "WorkPackage" | "Deliverable" | "ImplementationEvent" | "Plateau" | "Gap" => ArchiCategory::Implementation,
         _ => ArchiCategory::Other,
     }
 }
@@ -522,7 +564,9 @@ fn archimate_problem(connector_stereotype: &str, source_stereotype: &str, target
         "Access" if t != Passive => "an access relationship ends at a passive structure element (business object, data object, artifact…)",
         "Access" if s != Other => "an access relationship starts at a behaviour or active structure element",
         "Influence" if t != Motivation => "an influence relationship ends at a motivation element",
-        "Triggering" | "Flow" if s != Other || t != Other => "triggering and flow connect behaviour or active structure elements, not passive or motivation elements",
+        "Triggering" | "Flow" if (s == Implementation) != (t == Implementation) || matches!(s, Passive | Motivation) || matches!(t, Passive | Motivation) => "triggering and flow connect behaviour or active structure elements, not passive or motivation elements",
+        // LC-374: implementation and migration elements are not served and serve nothing (ArchiMate 3.2, appendix B).
+        "Serving" | "UsedBy" if s == Implementation || t == Implementation => "a serving relationship does not connect implementation and migration elements (work package, deliverable, plateau, gap)",
         "Serving" | "UsedBy" if s != Other || t != Other => "a serving relationship connects behaviour or active structure elements, not passive or motivation elements",
         "Assignment" if s != Other || t == Motivation || (t == Passive && target != "Artifact") => "an assignment goes from active structure to behaviour (or from a node to an artifact)",
         "Specialization" if source != target => "a specialization connects two elements of the same type",
@@ -983,6 +1027,10 @@ mod tests {
         // Not ArchiMate: nothing to say; a fully qualified stereotype works too.
         assert!(archimate_problem("", "ArchiMate_DataObject", "ArchiMate_BusinessActor").is_none());
         assert!(archimate_problem("ArchiMate3::ArchiMate_Access", "ArchiMate3::ArchiMate_BusinessProcess", "ArchiMate3::ArchiMate_BusinessActor").is_some());
+        // LC-374: implementation and migration elements.
+        assert!(bad("Serving", "WorkPackage", "WorkPackage"));
+        assert!(!bad("Triggering", "WorkPackage", "WorkPackage"));
+        assert!(bad("Triggering", "WorkPackage", "BusinessProcess"));
     }
 }
 
