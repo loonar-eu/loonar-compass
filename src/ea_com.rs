@@ -961,6 +961,17 @@ impl Job<'_> {
                 connector.update(&crate::i18n::fmt("connector '{0}'", &[title.clone()]))?;
                 self.set_reply(&connector, &op["is_return"])?;
                 self.set_tags(&connector, &op["tags"])?;
+                // Constraints of the connector (LC-421: a time or duration constraint of a message, a UML constraint on
+                // it): [{name, type?}], type Invariant unless given.
+                for constraint in op["constraints"].as_array().into_iter().flatten() {
+                    let collection = connector.obj("Constraints")?;
+                    let name = text_field(constraint, "name");
+                    let kind = constraint["type"].as_str().unwrap_or("Invariant");
+                    if let Some(added) = collection.call("AddNew", &[s(&name), s(kind)])?.object() {
+                        added.update(&crate::i18n::fmt("connector '{0}'", &[title.clone()]))?;
+                    }
+                    collection.call("Refresh", &[])?;
+                }
                 let (id, guid, real) = (connector.int("ConnectorID")?, connector.text("ConnectorGUID")?, connector.text("Name")?);
                 self.register(&op["key"], Kind::Connector, &connector, id, guid, real);
             }

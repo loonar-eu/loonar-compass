@@ -342,6 +342,7 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
                     "sequence": number, "message_sort": if *asynchronous { "Asynchronous" } else { "Synchronous" }, "is_return": reply });
                 if let Some(c) = &constraint {
                     message["tags"] = json!({ "time constraint": c });
+                    message["constraints"] = json!([{ "name": format!("{{{c}}}"), "type": "Invariant" }]);
                 }
                 ops.push(message);
             }
@@ -414,13 +415,13 @@ mod tests {
     #[ignore = "requires EA and a copy of a test model"]
     fn sequence_live() {
         let cfg = AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
-        let checked = check(&json!({ "diagram": 111 }), &cfg).unwrap();
-        println!("{checked}");
         let q = |sql: &str| query_rows(&cfg, sql).unwrap();
         let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id")[0][0].parse().unwrap();
         let created = crate::ea::run_batch(&cfg, &[json!({"op":"create_package","key":"pkg","parent":root,"name":format!("ZZ_seq_{}", chrono::Local::now().format("%H%M%S"))})], &crate::ea::BatchOptions::default()).unwrap();
         let pkg = created["created"][0]["id"].as_i64().unwrap();
-        let text = "actor Klient\nKlient -> Book : Book(string) {< 2s}\nloop each item\nBook -> BookDB : AddBook(x)\nBook -> BookDB : Audit()\nend\nBookDB --> Book : done\nBook --> Klient : ok";
+        let text = "actor Klient\nKlient -> Book : Book(string) {< 2s}\nloop each item\nBook -> BookDB : AddBook(x)\nBook -> BookDB : Audit()\nend\nBookDB --> Book : done\nBook --> Klient : ok
+opt empty
+end";
         let (ops, report) = from_text(&json!({ "text": text, "package": pkg, "name": "From text" }), &cfg).unwrap();
         println!("{report}");
         let done = crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions::default()).expect("create");
@@ -430,6 +431,11 @@ mod tests {
         println!("{:?}", q(&format!("select name, seqno, ptstarty, pdata4 from t_connector where diagramid = {diagram} order by seqno")));
         println!("{:?}", q(&format!("select o.name, x.recttop, x.rectbottom from t_diagramobjects x join t_object o on o.object_id = x.object_id where x.diagram_id = {diagram}")));
         assert!(report.contains("Audit"), "{report}");
+        // LC-456: the empty fragment is drawn and found; LC-421: the time constraint is a constraint of the message.
+        assert!(again.contains("\"empty\" has no message inside"), "{again}");
+        let constraints = q(&format!("select c.\"constraint\", c.constrainttype from t_connectorconstraint c join t_connector x on x.connector_id = c.connectorid where x.diagramid = {diagram}"));
+        println!("{constraints:?}");
+        assert_eq!(constraints, vec![vec!["{< 2s}".to_string(), "Invariant".to_string()]]);
         assert!(again.contains("5 message(s)") && again.contains("BookDB.Audit()"), "{again}");
         assert!(again.contains("time constraints: \"Book(string)\" {< 2s}") && !again.contains("sequence numbers are not shown"), "{again}");
         let image = std::env::temp_dir().join("loonar-seq-test.png");
