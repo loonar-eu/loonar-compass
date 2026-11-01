@@ -694,6 +694,10 @@ pub fn preview(cfg: &AppConfig, ops: &[Value]) -> String {
             "create_diagram" => format!("+ {} \"{name}\" ({}) → {}", crate::i18n::tr("diagram"), op["type"].as_str().unwrap_or("?"), target(op, "package")),
             "create_connector" => format!("+ {} {} → {}", op["type"].as_str().unwrap_or("relationship"), target(op, "source"), target(op, "target")),
             "place" => format!("+ {} → {}", target(op, "element"), target(op, "diagram")),
+            // LC-442 (round 5): what is added, with its name and type, not only the owner.
+            "create_attribute" => format!("+ {} \"{name}{}\" → {}", crate::i18n::tr("attribute"), op["type"].as_str().map(|t| format!(" : {t}")).unwrap_or_default(), target(op, "element")),
+            "create_operation" => format!("+ {} \"{name}(){}\" → {}", crate::i18n::tr("operation"), op["return_type"].as_str().map(|t| format!(" : {t}")).unwrap_or_default(), target(op, "element")),
+            "create_baseline" => format!("+ {} \"{}\" → {}", crate::i18n::tr("baseline"), op["version"].as_str().unwrap_or(""), target(op, "package")),
             "update_element" => {
                 const FIELDS: &[&str] = &["name", "stereotype", "alias", "notes", "status", "version", "author", "phase", "complexity"];
                 let id = id_of(op, "element");
@@ -702,7 +706,31 @@ pub fn preview(cfg: &AppConfig, ops: &[Value]) -> String {
                      coalesce(status,'') as c5, coalesce(version,'') as c6, coalesce(author,'') as c7, coalesce(phase,'') as c8, coalesce(complexity,'') as c9 \
                      from t_object where object_id = {id}"
                 ), FIELDS);
-                let other: Vec<&str> = op.as_object().map(|o| o.keys().map(|k| k.as_str()).filter(|k| *k != "op" && *k != "element" && !FIELDS.contains(k)).collect()).unwrap_or_default();
+                // Tagged values with their values before → after; null removes the tag (LC-442, round 5).
+                if let Some(tags) = op["tags"].as_object() {
+                    let now: BTreeMap<String, String> = query_rows(cfg, &format!("select property as c0, coalesce(value,'') as c1 from t_objectproperties where object_id = {id}"))
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|r| (r[0].clone(), r[1].clone()))
+                        .collect();
+                    for (tag, value) in tags {
+                        let was = now.get(tag).cloned();
+                        let after = match value {
+                            Value::Null => None,
+                            Value::String(v) => Some(v.clone()),
+                            v => Some(v.to_string()),
+                        };
+                        if was != after {
+                            changes.push(format!(
+                                "{} {tag}: {} → {}",
+                                crate::i18n::tr("tagged value"),
+                                was.map(|w| format!("\"{}\"", short(&w))).unwrap_or_else(|| "–".into()),
+                                after.map(|a| format!("\"{}\"", short(&a))).unwrap_or_else(|| crate::i18n::tr("removed@@tag removed").to_string())
+                            ));
+                        }
+                    }
+                }
+                let other: Vec<&str> = op.as_object().map(|o| o.keys().map(|k| k.as_str()).filter(|k| *k != "op" && *k != "element" && *k != "tags" && !FIELDS.contains(k)).collect()).unwrap_or_default();
                 if !other.is_empty() {
                     changes.push(other.join(", "));
                 }
@@ -744,7 +772,15 @@ pub fn preview(cfg: &AppConfig, ops: &[Value]) -> String {
             "change_connector_type" => format!("~ {}: {} → {}", target(op, "connector"), crate::i18n::tr("type"), op["type"].as_str().unwrap_or("")),
             "reverse_connector" => format!("~ {}: {}", target(op, "connector"), crate::i18n::tr("direction reversed")),
             "merge_elements" => format!("− {}", crate::i18n::fmt("MERGE {0} into {1} and DELETE {0}", &[target(op, "remove"), target(op, "keep")])),
-            "move" => format!("→ {} → {}", ["element", "package", "diagram"].iter().map(|f| target(op, f)).find(|s| !s.is_empty()).unwrap_or_default(), target(op, "target")),
+            // An element or diagram moves into "package"; a package moves into "target" (LC-442, round 5: the card
+            // showed the destination as the moved object and an empty destination).
+            "move" => {
+                let moved = ["element", "diagram", "child_package"].iter().map(|f| target(op, f)).find(|s| !s.is_empty());
+                match moved {
+                    Some(moved) => format!("→ {moved} → {}", [target(op, "package"), target(op, "target")].into_iter().find(|s| !s.is_empty()).unwrap_or_default()),
+                    None => format!("→ {} → {}", target(op, "package"), target(op, "target")),
+                }
+            }
             "delete" | "delete_package" | "delete_scenario" | "delete_attribute" | "delete_operation" => {
                 let what = ["connector", "attribute", "operation", "scenario", "diagram", "package", "element"].iter().map(|f| target(op, f)).find(|s| !s.is_empty()).unwrap_or_default();
                 format!("− {} {what}", crate::i18n::tr("DELETE"))
@@ -966,5 +1002,29 @@ mod rules_tests {
         assert!(super::check_rules(&json!({ "namings": [] })).is_err(), "a typo in a kind");
         assert!(super::check_rules(&json!({ "required_tags": [{ "applies_to": "Class" }] })).is_err(), "no tag");
         assert!(super::check_rules(&json!([1])).is_err());
+    }
+
+    /// LC-442 (round 5): the cards of the bin, tags, new attributes and a baseline name what changes, with values.
+    /// `LOONAR_TEST_PROPS=E:/livetest/r440/m5.properties cargo test preview_cards_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires the model from LOONAR_TEST_PROPS (a copy of the round 4 test model)"]
+    fn preview_cards_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("app.properties");
+        let ops = vec![
+            json!({ "key": "bin", "name": "Recycle bin (Compass)", "op": "create_package", "parent": 972 }),
+            json!({ "element": 11260, "op": "update_element", "tags": { "CompassBinFrom": "1116" } }),
+            json!({ "element": 11260, "op": "move", "package": "#bin" }),
+            json!({ "element": 11259, "name": "kwota", "op": "create_attribute", "type": "Decimal" }),
+            json!({ "op": "create_baseline", "package": 1116, "version": "Compass 1" }),
+        ];
+        let card = super::preview(&cfg, &ops);
+        println!("{card}
+{}", crate::tools::destructive_details(&cfg, &ops).join("
+"));
+        assert!(card.contains("CompassBinFrom: – → \"1116\""), "{card}");
+        assert!(card.contains("→ \"Sierota\" → \"Recycle bin (Compass)\""), "{card}");
+        assert!(card.contains("\"kwota : Decimal\" → \"Faktura\""), "{card}");
+        assert!(card.contains("\"Compass 1\" → \"BB3 Test\""), "{card}");
+        assert!(!crate::tools::destructive_details(&cfg, &ops).join(" ").contains("#bin"));
     }
 }

@@ -2465,7 +2465,7 @@ fn shorten_for_dialog(text: &str) -> String {
 
 /// Names of the objects that a batch deletes, moves or copies, for the approval dialog (the user must see WHAT
 /// disappears, not just how many). Objects referred to by a key from the same batch (`#key`) are new and not listed.
-fn destructive_details(cfg: &AppConfig, ops: &[Value]) -> Vec<String> {
+pub(crate) fn destructive_details(cfg: &AppConfig, ops: &[Value]) -> Vec<String> {
     let name_of = |table: &str, id_column: &str, id: i64| -> String {
         let sql = format!("select name from {table} where {id_column} = {id}");
         query_rows(cfg, &sql)
@@ -2566,7 +2566,17 @@ fn destructive_details(cfg: &AppConfig, ops: &[Value]) -> Vec<String> {
             "move" => crate::i18n::fmt("MOVE {0} {1} to package {2}", &[
                 what.to_string(),
                 name,
-                op["package"].as_i64().map(|id| name_of("t_package", "package_id", id)).unwrap_or_else(|| op["package"].to_string()),
+                match &op["package"] {
+                    Value::Number(id) => name_of("t_package", "package_id", id.as_i64().unwrap_or(0)),
+                    // A package made earlier in the same write ("#bin"): its name (LC-442, round 5).
+                    Value::String(key) => ops
+                        .iter()
+                        .find(|o| o["key"].as_str().is_some_and(|k| k.trim_start_matches('#') == key.trim_start_matches('#')))
+                        .and_then(|o| o["name"].as_str())
+                        .map(|n| format!("\"{n}\" ({})", crate::i18n::tr("new@@created in this write")))
+                        .unwrap_or_else(|| key.clone()),
+                    other => other.to_string(),
+                },
             ]),
             _ => crate::i18n::fmt("COPY package {0} with all its contents", &[name]),
         });
