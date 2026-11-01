@@ -137,12 +137,13 @@ pub fn tool(input: &Value, cfg: &AppConfig) -> Result<crate::tools::ToolOutput> 
     let strings = |v: &Value| v.as_array().into_iter().flatten().filter_map(|t| t.as_str()).map(str::to_string).filter(|t| !t.trim().is_empty()).collect::<Vec<_>>();
     let (types, kinds) = (strings(&input["types"]), strings(&input["element_types"]));
     let direction = input["direction"].as_str().unwrap_or("both");
-    // When one package lies inside the other, the inner one belongs only to its own side of the matrix.
+    // When one package lies inside the other, the inner one belongs only to its own side of the matrix. The same package
+    // on both sides is a matrix of its elements with each other (LC-444: it was emptied on one side).
     let mut source_packages = packages(cfg, source, deep)?;
     let mut target_packages = packages(cfg, target, deep)?;
-    if source_packages.contains(&target) {
+    if source != target && source_packages.contains(&target) {
         source_packages.retain(|p| !target_packages.contains(p));
-    } else if target_packages.contains(&source) {
+    } else if source != target && target_packages.contains(&source) {
         target_packages.retain(|p| !source_packages.contains(p));
     }
     let rows = elements(cfg, &source_packages, &kinds)?;

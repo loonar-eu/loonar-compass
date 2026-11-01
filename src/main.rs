@@ -6535,7 +6535,10 @@ fn ask_from_command_line(args: &[String], default_props: &Path) -> anyhow::Resul
     let mut session = history::Session::new();
     let mut failed = false;
     for (n, text) in said.iter().enumerate() {
-        session.messages.push(Message { role: "user".into(), text: text.clone(), attachments: if n == 0 { stored.clone() } else { vec![] }, created: chrono::Utc::now().to_rfc3339() });
+        // A typed command goes as its precise request, as in the window (LC-337); found in round 4 of the black-box tests:
+        // without it /clone-diagram asked for the mode it was given and /template-from-doc saved the wrong kind of template.
+        let sent = if commands::direct(text).is_some() { text.clone() } else { commands::request(text).unwrap_or_else(|| text.clone()) };
+        session.messages.push(Message { role: "user".into(), text: sent, attachments: if n == 0 { stored.clone() } else { vec![] }, created: chrono::Utc::now().to_rfc3339() });
         md += &format!("\n## Message {}\n\n> {}\n", n + 1, text.replace('\n', "\n> "));
         if n == 0 && !stored.is_empty() {
             md += &format!("\nAttachments: {}\n", stored.join(", "));

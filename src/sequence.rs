@@ -142,19 +142,30 @@ pub fn check(input: &Value, cfg: &AppConfig) -> Result<String> {
             }
         }
         // Fragments with no message inside (y between the fragment's top and bottom, x within it). Messages made through
-        // EA's API have no position until the diagram is saved in EA: then fragments cannot be checked.
+        // EA's API have no position until the diagram is saved in EA: then their places are the ones EA gives them by
+        // their order – the first at about y 135, then about 35 apart, between the middles of their lifelines (LC-445;
+        // the same measure /sequence-from-text places its fragments by).
         let laid_out = messages.iter().any(|m| m[6].parse::<i64>().unwrap_or(0) != 0);
-        if !laid_out && objects.iter().any(|o| o[2] == "InteractionFragment") {
-            findings.push("the messages have no positions yet (open and save the diagram in EA), so fragments are not checked".into());
+        let middle = |id: &str| objects.iter().find(|o| o[0] == id).map_or(0, |o| (o[5].parse::<i64>().unwrap_or(0) + o[6].parse::<i64>().unwrap_or(0)) / 2);
+        let places: Vec<(i64, i64, i64)> = messages
+            .iter()
+            .enumerate()
+            .map(|(rank, m)| {
+                if laid_out {
+                    (m[6].parse::<i64>().unwrap_or(1), m[7].parse::<i64>().unwrap_or(0), m[8].parse::<i64>().unwrap_or(0))
+                } else {
+                    (-(135 + rank as i64 * 35), middle(&m[3]), middle(&m[4]))
+                }
+            })
+            .collect();
+        let fragments: Vec<&Vec<String>> = objects.iter().filter(|o| o[2] == "InteractionFragment").collect();
+        if !laid_out && !fragments.is_empty() && !messages.is_empty() {
+            findings.push("the diagram was not saved in EA yet: the places of its messages are taken from their order".into());
         }
-        for f in objects.iter().filter(|o| o[2] == "InteractionFragment" && laid_out) {
+        for f in fragments {
             let n = |i: usize| f[i].parse::<i64>().unwrap_or(0);
             let (left, right, top, bottom) = (n(5), n(6), n(7), n(8));
-            let inside = messages.iter().any(|m| {
-                let y = m[6].parse::<i64>().unwrap_or(1);
-                let (x1, x2) = (m[7].parse::<i64>().unwrap_or(0), m[8].parse::<i64>().unwrap_or(0));
-                y <= top && y >= bottom && x1.max(x2) >= left && x1.min(x2) <= right
-            });
+            let inside = places.iter().any(|(y, x1, x2)| *y <= top && *y >= bottom && *x1.max(x2) >= left && *x1.min(x2) <= right);
             if !inside {
                 findings.push(format!("{} fragment \"{}\" has no message inside", fragment_name(&f[4]), f[1]));
             }
@@ -422,5 +433,17 @@ mod tests {
         println!("image: {}", image.display());
         crate::ea::run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &crate::ea::BatchOptions::default()).unwrap();
         crate::ea::shutdown();
+    }
+
+    /// LC-445: an empty fragment is found on a diagram not saved in EA, on a model copy:
+    /// `LOONAR_TEST_PROPS=E:/livetest/r440/m.properties LOONAR_TEST_DIAGRAM=1171 cargo test empty_fragment_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires the model from LOONAR_TEST_PROPS"]
+    fn empty_fragment_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("app.properties");
+        let diagram: i64 = std::env::var("LOONAR_TEST_DIAGRAM").expect("LOONAR_TEST_DIAGRAM").parse().unwrap();
+        let report = super::check(&serde_json::json!({ "diagram": diagram }), &cfg).expect("check");
+        println!("{report}");
+        assert!(report.contains("has no message inside"), "{report}");
     }
 }

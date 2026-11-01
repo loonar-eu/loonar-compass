@@ -25,8 +25,8 @@ the palette), impact (by status as a heat scale for a change: approved/implement
             "profile": { "type": "string", "enum": ["management", "technical", "impact"] },
             "by": { "type": "string", "enum": ["stereotype", "type", "status"] },
             "colors": { "type": "object" },
-            "diagrams": { "type": "array", "items": { "type": "integer" } },
-            "package": { "description": "package_id or exact name" }
+            "diagrams": { "type": "array", "items": { "description": "diagram_id or exact diagram name" } },
+            "package": { "description": "package_id or exact name (a diagram name here is taken as that diagram)" }
         }, "required": ["action"] }
     })
 }
@@ -78,7 +78,29 @@ pub fn plan(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)> {
         "status" => "coalesce(o.status,'')",
         _ => "coalesce(o.stereotype,'')",
     };
-    let mut diagrams: Vec<String> = input["diagrams"].as_array().into_iter().flatten().filter_map(Value::as_i64).map(|d| d.to_string()).collect();
+    // Diagrams by id or by name (LC-447: /apply-style <diagram> by …, as the manual allows).
+    let by_name = |name: &str| -> Result<Vec<String>> {
+        Ok(query_rows(cfg, &format!("select diagram_id from t_diagram where name = '{}'", crate::model_db::sql_text(cfg.model_source, name.trim())))?.into_iter().map(|r| r[0].clone()).collect())
+    };
+    let mut diagrams: Vec<String> = Vec::new();
+    for d in input["diagrams"].as_array().into_iter().flatten() {
+        match d {
+            Value::Number(n) => diagrams.extend(n.as_i64().map(|d| d.to_string())),
+            Value::String(name) => match name.trim().parse::<i64>() {
+                Ok(id) => diagrams.push(id.to_string()),
+                Err(_) => diagrams.extend(by_name(name)?),
+            },
+            _ => {}
+        }
+    }
+    if diagrams.is_empty() {
+        if let Some(name) = input["package"].as_str().filter(|n| n.trim().parse::<i64>().is_err()) {
+            let package = query_rows(cfg, &format!("select count(*) from t_package where name = '{}'", crate::model_db::sql_text(cfg.model_source, name.trim())))?;
+            if package.first().and_then(|r| r.first()).is_some_and(|c| c == "0") {
+                diagrams = by_name(name)?;
+            }
+        }
+    }
     if diagrams.is_empty() {
         let (scope, _) = crate::model_usage::package_scope(cfg, &input["package"])?;
         if scope.is_empty() {
