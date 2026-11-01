@@ -1590,6 +1590,13 @@ impl Job<'_> {
                 for object in objects.items()? {
                     if object.int("ElementID")? == element_id {
                         object.set("BackgroundColor", i(color(&op["bgcolor"])?))?;
+                        // The font of the element on this diagram (LC-420: the profiles change fonts too).
+                        if let Some(bold) = op["bold"].as_bool() {
+                            object.set("FontBold", b(bold))?;
+                        }
+                        if let Some(size) = int_of(&op["font_size"]) {
+                            object.set("FontSize", i(size))?;
+                        }
                         object.update(crate::i18n::tr("color on the diagram"))?;
                         found = true;
                     }

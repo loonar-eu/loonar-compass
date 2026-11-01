@@ -20,7 +20,7 @@ packages included). action preview: which value gets which colour and how many e
 approves. Use it for /apply-style; offer a legend (create_legend) on the main diagram afterwards. profile (LC-420) picks a ready look and adds a \
 legend on each diagram: management (by status – done green, in progress yellow, proposed blue, rejected or retired red), technical (by type, \
 the palette), impact (with element: the changed element red, what it is related to directly orange, in two steps yellow, the rest grey; \
-without element by status as a heat scale). management and impact hide attributes and operations on the diagrams, technical shows them. \
+without element by status as a heat scale). management and impact hide attributes and operations on the diagrams, technical shows them; impact puts the changed element (larger) and what it touches in bold, management the rejected and retired ones. \
 Applying a profile again replaces its legend, which goes to the right of the elements.",
         "input_schema": { "type": "object", "properties": {
             "action": { "type": "string", "enum": ["preview", "apply"] },
@@ -165,6 +165,23 @@ pub fn plan(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)> {
         .iter()
         .filter_map(|r| colours.get(&r[2]).map(|c| json!({ "op": "set_color", "diagram": r[0].parse::<i64>().unwrap_or(0), "element": r[1].parse::<i64>().unwrap_or(0), "bgcolor": c })))
         .collect();
+    // Fonts of the looks (LC-420): what needs attention in bold – the changed element (larger) and what it touches
+    // directly for impact, rejected and retired elements for management; the rest in the normal font.
+    let profile = input["profile"].as_str().unwrap_or("");
+    if !profile.is_empty() {
+        for (op, r) in ops.iter_mut().zip(rows.iter().filter(|r| colours.contains_key(&r[2]))) {
+            let value = r[2].as_str();
+            let bold = match profile {
+                "impact" => matches!(value, "changed" | "directly affected" | "Deprecated" | "Retired" | "Rejected"),
+                "management" => matches!(value, "Rejected" | "Retired" | "Deprecated" | "Invalidated"),
+                _ => false,
+            };
+            op["bold"] = json!(bold);
+            if value == "changed" {
+                op["font_size"] = json!(11);
+            }
+        }
+    }
     if chosen.is_some() {
         // The legend of each diagram lists the values found on it.
         let filter = match input["by"].as_str().unwrap_or("") { "status" => "Element.Status", "type" => "Element.Type", "impact" => "Element.Name", _ => "Element.Stereotype" };
@@ -266,6 +283,7 @@ mod tests {
         assert!(legends.len() == 1 && legends[0][0].parse::<i64>().unwrap() > 340, "{legends:?}");
         assert!(crm[0][0].contains(&format!("BCol={}", 0x6666E0)), "{crm:?}");
         assert!(hidden[0][0].contains("HideAtts=1"), "{hidden:?}");
+        assert!(crm[0][0].contains("bold=1") || crm[0][0].to_lowercase().contains("bold"), "the changed element in bold: {crm:?}");
         assert!(colours[0][0].contains("BCol="), "{colours:?}");
     }
 }
