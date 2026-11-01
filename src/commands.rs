@@ -174,6 +174,20 @@ pub fn direct(input: &str) -> Option<(&'static str, serde_json::Value)> {
     }
 }
 
+/// The command whose request a message is (the text a typed command was expanded to), in any language of Compass.
+pub fn of_request(text: &str) -> Option<&'static str> {
+    let text = text.trim_start();
+    ALL.iter()
+        .filter(|c| !c.request.is_empty())
+        .find(|c| {
+            crate::i18n::Lang::ALL.iter().any(|lang| {
+                let head = crate::i18n::tr_in(*lang, c.request).split("{0}").next().unwrap_or("");
+                head.chars().count() >= 12 && text.starts_with(head)
+            })
+        })
+        .map(|c| c.name)
+}
+
 pub fn request(input: &str) -> Option<String> {
     let typed = input.trim();
     let (name, args) = typed.split_once(char::is_whitespace).unwrap_or((typed, ""));
@@ -248,6 +262,8 @@ mod tests {
         assert!(super::direct("/repo-doctor and explain it").is_none());
         assert!(super::direct("/merge-elements A into B").is_none());
         assert!(super::request("/glossary-add x").is_none(), "its own window");
+        assert_eq!(super::of_request(&super::request("/import-sheet arkusz.csv").unwrap()), Some("/import-sheet"));
+        assert_eq!(super::of_request("Napisz dokument o pakiecie"), None);
         // LC-462: an option after a name stays outside the quoted name.
         assert_eq!(super::quoted_args("/ddl", "BB3 Tabele postgres"), "\"BB3 Tabele\" (postgres)");
         assert_eq!(super::quoted_args("/diagram-as-text", "BB3 Sekwencja plantuml"), "\"BB3 Sekwencja\" (plantuml)");

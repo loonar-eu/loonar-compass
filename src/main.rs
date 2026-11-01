@@ -357,7 +357,10 @@ fn offered_model(cfg: &AppConfig, text: &str) -> Option<String> {
         .map(|(_, meta)| meta)
         .collect();
     if named.is_empty() {
-        return if asks_for_document(text) && !asks_for_ea_report(text) { document_model(cfg) } else { None };
+        // A command that does not write a document (an import, test results) is not offered the document model, though its
+        // request says "create" and "report" (LC-460).
+        let document_command = commands::of_request(text).is_none_or(|c| matches!(c, "/doc-package" | "/fill-notes" | "/explain" | "/translate-model"));
+        return if document_command && asks_for_document(text) && !asks_for_ea_report(text) { document_model(cfg) } else { None };
     }
     let current = if cfg.uses_openai() { &cfg.openai_model } else { &cfg.claude_model };
     named.iter().find_map(|meta| match meta.model.as_str() {
