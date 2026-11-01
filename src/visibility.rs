@@ -138,7 +138,20 @@ fn policy_of(cfg: &AppConfig, diagram: i64) -> Result<Option<Value>> {
 
 /// The text of the read-only actions, or the operations of apply.
 pub fn run(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)> {
-    let diagram = input["diagram"].as_i64();
+    // A diagram by id or by its exact name (LC-471: /show-hidden-links with a name went to the AI).
+    let diagram = match &input["diagram"] {
+        Value::String(name) if name.trim().parse::<i64>().is_err() => query_rows(cfg, &format!(
+            "select diagram_id from t_diagram where name = '{}' order by diagram_id",
+            crate::model_db::sql_text(cfg.model_source, name.trim())
+        ))?
+        .first()
+        .and_then(|r| r[0].parse::<i64>().ok()),
+        Value::String(n) => n.trim().parse().ok(),
+        other => other.as_i64(),
+    };
+    if input["diagram"].is_string() && diagram.is_none() {
+        bail!("there is no diagram {}", input["diagram"]);
+    }
     match input["action"].as_str().unwrap_or("list") {
         "set" => {
             let diagram = diagram.context("give the diagram")?;

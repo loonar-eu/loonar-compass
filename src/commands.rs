@@ -169,7 +169,7 @@ pub fn direct(input: &str) -> Option<(&'static str, serde_json::Value)> {
         "/what-changed" if args.is_empty() || args.trim_end_matches(['d', 'D']).parse::<u32>().is_ok() || chrono::NaiveDate::parse_from_str(args, "%Y-%m-%d").is_ok() => {
             Some(("what_changed", json!({ "since": args })))
         }
-        "/show-hidden-links" => args.parse::<i64>().ok().map(|d| ("connector_visibility", json!({ "action": "hidden", "diagram": d }))),
+        "/show-hidden-links" if !args.is_empty() => Some(("connector_visibility", json!({ "action": "hidden", "diagram": package() }))),
         _ => None,
     }
 }

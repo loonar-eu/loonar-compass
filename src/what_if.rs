@@ -35,7 +35,17 @@ pub fn run(input: &Value, cfg: &AppConfig) -> Result<String> {
     let el = match rows.as_slice() {
         [] => bail!("there is no element {e}"),
         [one] => one.clone(),
-        many => bail!("several elements are named {e}: {} – give the object_id", many.iter().map(|r| format!("{} ({}, id {})", r[1], r[2], r[0])).collect::<Vec<_>>().join("; ")),
+        // Several of that name: each one weighed, so the answer rests on the tool's numbers (LC-461: after an error the
+        // assistant counted itself, in wrong Polish).
+        many => {
+            let mut parts = vec![crate::i18n::fmt("Several elements are named {0}: each one below (ask which one is meant).", &[e.to_string()])];
+            for r in many.iter().take(5) {
+                let mut one = input.clone();
+                one["element"] = serde_json::json!(r[0].parse::<i64>().unwrap_or(0));
+                parts.push(run(&one, cfg)?);
+            }
+            return Ok(parts.join("\n\n---\n\n"));
+        }
     };
     let id: i64 = el[0].parse().unwrap_or(0);
     let change = input["change"].as_str().unwrap_or("delete");
@@ -141,5 +151,22 @@ mod tests {
             }
         }
         assert!(run(&json!({ "element": busy, "change": "delete" }), &cfg).unwrap().contains("Relationships:"));
+    }
+}
+
+#[cfg(test)]
+mod same_name_tests {
+    /// LC-461, LC-471: a name used twice is weighed for each element with the ready summary; a diagram by name lists its
+    /// hidden relationships. `LOONAR_TEST_PROPS=E:/livetest/r440/m5.properties cargo test same_name_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires the model from LOONAR_TEST_PROPS"]
+    fn same_name_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
+        let out = super::run(&serde_json::json!({ "element": "Faktura", "change": "delete" }), &cfg).unwrap();
+        println!("{out}");
+        assert!(out.matches("Summary to give the user").count() >= 2, "{out}");
+        let hidden = crate::visibility::run(&serde_json::json!({ "action": "hidden", "diagram": "BB3 Logiczny" }), &cfg).unwrap().1;
+        println!("{hidden}");
+        assert!(hidden.contains("BB3 Logiczny"));
     }
 }
