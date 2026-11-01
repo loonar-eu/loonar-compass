@@ -641,7 +641,9 @@ pub fn db_query(sql: &str, cfg: &AppConfig) -> Result<String> {
     if selected.rows.is_empty() {
         return Ok("(no rows)".into());
     }
-    let mut out = selected.columns.join(" | ");
+    // A column without a name (SQL Server's count(*)) gets one: an empty header line was not counted as the header and
+    // the step showed "rows: 0" (LC-471).
+    let mut out = selected.columns.iter().enumerate().map(|(i, c)| if c.trim().is_empty() { format!("column{}", i + 1) } else { c.clone() }).collect::<Vec<_>>().join(" | ");
     out.push('\n');
     for row in &selected.rows {
         let cols: Vec<&str> = row.iter().map(|v| v.as_deref().unwrap_or("NULL")).collect();

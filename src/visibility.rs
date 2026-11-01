@@ -125,7 +125,7 @@ fn note_ops(cfg: &AppConfig, diagram: i64, hidden: usize) -> Result<Vec<Value>> 
     let r = place.first().context("the diagram is not there")?;
     let n = |i: usize| r[i].parse::<i64>().unwrap_or(0);
     Ok(vec![
-        json!({ "op": "create_element", "key": "hidden_note", "type": "Note", "package": n(0), "name": "", "notes": text }),
+        json!({ "op": "create_element", "key": "hidden_note", "type": "Note", "package": n(0), "name": crate::i18n::tr("Hidden relationships"), "notes": text }),
         json!({ "op": "place", "diagram": diagram, "element": "#hidden_note", "left": n(1).max(10), "top": -n(2) + 30, "width": 260, "height": 60 }),
     ])
 }

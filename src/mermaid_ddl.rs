@@ -306,7 +306,7 @@ fn foreign_keys(cfg: &AppConfig, dialect: &str, table: i64) -> Result<Vec<String
             }
         }
         let Some(i) = found else {
-            out.push(format!("  -- {}: the referenced table is not known (no «FK» relationship from this table)", fk[1]));
+            out.push(format!("  -- {}", crate::i18n::fmt("{0}: the referenced table is not known (no «FK» relationship from this table)", &[fk[1].clone()])));
             continue;
         };
         used[i] = true;
@@ -339,12 +339,12 @@ pub fn table_ddl(input: &Value, cfg: &AppConfig) -> Result<String> {
     if !matches!(dialect, "postgres" | "sqlserver" | "mysql" | "oracle" | "sqlite") {
         bail!("dialect: postgres, sqlserver, mysql, oracle or sqlite");
     }
-    let (scope, title) = crate::model_usage::package_scope(cfg, &input["package"])?;
+    let (scope, title) = crate::model_usage::package_scope_shown(cfg, &input["package"])?;
     let tables = query_rows(cfg, &format!("select o.object_id, o.name from t_object o where (o.object_type = 'Table' or (o.object_type = 'Class' and lower(coalesce(o.stereotype,'')) = 'table')) {scope} order by o.name"))?;
     if tables.is_empty() {
         bail!("no Table elements in the {title}");
     }
-    let mut out = vec![format!("-- {} table(s) of the {title}, {dialect}", tables.len())];
+    let mut out = vec![format!("-- {}", crate::i18n::fmt("tables: {0} (scope: {1}), dialect {2}", &[tables.len().to_string(), title.clone(), dialect.to_string()]))];
     for t in &tables {
         let id: i64 = t[0].parse().unwrap_or(0);
         let columns = query_rows(cfg, &format!("select name, coalesce(type,''), coalesce(length,''), coalesce(allowduplicates,0) from t_attribute where object_id = {id} order by pos"))?;

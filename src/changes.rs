@@ -38,7 +38,7 @@ pub(crate) fn since_date(given: &str, today: chrono::NaiveDate) -> Result<chrono
     }
     match chrono::NaiveDate::parse_from_str(given, "%Y-%m-%d") {
         Ok(date) => Ok(date),
-        Err(_) => bail!("since: give a date YYYY-MM-DD or a number of days"),
+        Err(_) => bail!("{}", crate::i18n::tr("since: give a date YYYY-MM-DD or a number of days")),
     }
 }
 
@@ -217,7 +217,7 @@ fn against_baseline(input: &Value, cfg: &AppConfig) -> Result<String> {
     let Some(package) = input["package"].as_i64().or_else(|| {
         input["package"].as_str().and_then(|n| query_rows(cfg, &format!("select package_id from t_package where name = '{}'", crate::model_db::sql_text(cfg.model_source, n))).ok()?.first()?.first()?.parse().ok())
     }) else {
-        bail!("a comparison with a baseline needs the package (id or exact name)")
+        bail!("{}", crate::i18n::tr("a comparison with a baseline needs the package (id or exact name)"))
     };
     let wanted = input["baseline"].as_str().unwrap_or("").trim();
     let wanted = if wanted.eq_ignore_ascii_case("latest") { "" } else { wanted };

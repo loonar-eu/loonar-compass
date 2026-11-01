@@ -118,7 +118,18 @@ pub fn check(input: &Value, cfg: &AppConfig) -> Result<String> {
             }
             let Some(o) = objects.iter().find(|o| &o[0] == target) else { continue };
             // The type that should have the operation: the lifeline's classifier, or a class placed directly.
-            let owner = if o[3] != "0" && !o[3].is_empty() { o[3].clone() } else if matches!(o[2].as_str(), "Class" | "Interface" | "Component" | "Actor") { o[0].clone() } else { String::new() };
+            let mut owner = if o[3] != "0" && !o[3].is_empty() { o[3].clone() } else if matches!(o[2].as_str(), "Class" | "Interface" | "Component" | "Actor") { o[0].clone() } else { String::new() };
+            // A lifeline without a classifier: the class of the same name, as /sequence-from-text binds it (LC-471: the
+            // two tools judged the same lifelines differently).
+            if owner.is_empty() && !o[1].trim().is_empty() {
+                owner = query_rows(cfg, &format!(
+                    "select object_id from t_object where lower(name) = '{}' and object_type in ('Class', 'Interface', 'Component') order by object_id",
+                    crate::model_db::sql_text(cfg.model_source, &o[1].trim().to_lowercase())
+                ))?
+                .first()
+                .map(|r| r[0].clone())
+                .unwrap_or_default();
+            }
             if owner.is_empty() {
                 continue;
             }
@@ -160,7 +171,7 @@ pub fn check(input: &Value, cfg: &AppConfig) -> Result<String> {
             .collect();
         let fragments: Vec<&Vec<String>> = objects.iter().filter(|o| o[2] == "InteractionFragment").collect();
         if !laid_out && !fragments.is_empty() && !messages.is_empty() {
-            findings.push("the diagram was not saved in EA yet: the places of its messages are taken from their order".into());
+            findings.push("the messages have no places on the diagram yet (EA sets them when the diagram is opened and saved in EA): their order is taken from their numbers".into());
         }
         for f in fragments {
             let n = |i: usize| f[i].parse::<i64>().unwrap_or(0);
