@@ -406,8 +406,24 @@ fn document(cfg: &AppConfig, input: &Value) -> Result<Option<(String, String, Op
     let path = crate::history::attachment_path(&cfg.attachments_dir, &file);
     let bytes = std::fs::read(&path).with_context(|| format!("there is no attachment {file}"))?;
     let text = crate::documents::text_of(&file, &bytes)?;
-    let time = std::fs::metadata(&path).and_then(|m| m.modified()).ok().map(|t| chrono::DateTime::<chrono::Local>::from(t).naive_local());
+    // The time the document says it was last saved (docProps/core.xml), else the file's own (LC-383: an attached copy
+    // has the time it was attached, so the check could not tell whether an element is newer).
+    let time = saved_at(&bytes).or_else(|| std::fs::metadata(&path).and_then(|m| m.modified()).ok().map(|t| chrono::DateTime::<chrono::Local>::from(t).naive_local()));
     Ok(Some((file, text.to_lowercase(), time)))
+}
+
+/// dcterms:modified (or created) of a DOCX in local time; None without it or with the empty 1970 date.
+pub(crate) fn saved_at(bytes: &[u8]) -> Option<chrono::NaiveDateTime> {
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).ok()?;
+    let mut core = String::new();
+    std::io::Read::read_to_string(&mut zip.by_name("docProps/core.xml").ok()?, &mut core).ok()?;
+    ["dcterms:modified", "dcterms:created"].iter().find_map(|tag| {
+        let start = core.find(&format!("<{tag}"))?;
+        let value = core[start..].split('>').nth(1)?.split('<').next()?.trim();
+        let parsed = chrono::DateTime::parse_from_rfc3339(value).ok().map(|t| t.with_timezone(&chrono::Local).naive_local())
+            .or_else(|| chrono::NaiveDate::parse_from_str(value.get(..10)?, "%Y-%m-%d").ok()?.and_hms_opt(0, 0, 0))?;
+        (parsed.and_utc().timestamp() > 86_400).then_some(parsed)
+    })
 }
 
 /// One element as the checks need it.
@@ -492,6 +508,11 @@ fn element_reasons(e: &Element, doc_time: Option<chrono::NaiveDateTime>) -> Vec<
     if let (Some(doc), Some(created)) = (doc_time, parse_time(&e.created)) {
         if created > doc {
             out.push(format!("the element was created ({}) after the document was saved ({}) – generate the document again", e.created, doc.format("%Y-%m-%d %H:%M")));
+        } else if parse_time(&e.modified).is_some_and(|m| m > doc) {
+            // Changed after the document (LC-383): the document shows an older state of it.
+            out.push(format!("the element was changed ({}) after the document was saved ({}) – the document shows an older state", e.modified, doc.format("%Y-%m-%d %H:%M")));
+        } else {
+            out.push(format!("the document was saved ({}) after the element was last changed ({}): the date is not the reason", doc.format("%Y-%m-%d %H:%M"), e.modified));
         }
     }
     if e.name.trim().is_empty() {

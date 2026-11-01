@@ -543,7 +543,33 @@ pub fn build(title: &str, markdown: &str, mut resolve: impl FnMut(&str, &str) ->
     }
     let mut out = std::io::Cursor::new(Vec::new());
     doc.build().pack(&mut out).context(crate::i18n::tr("saving DOCX"))?;
-    Ok(out.into_inner())
+    with_author(out.into_inner())
+}
+
+/// The document's author: the Windows user and Loonar Compass instead of "unknown" (LC-465), which the DOCX library
+/// writes and cannot be told otherwise.
+fn with_author(bytes: Vec<u8>) -> Result<Vec<u8>> {
+    use std::io::{Read, Write};
+    let user = std::env::var("USERNAME").unwrap_or_default();
+    let escape = |t: &str| t.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+    let creator = if user.trim().is_empty() { "Loonar Compass".to_string() } else { escape(user.trim()) };
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))?;
+    let mut out = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    for i in 0..zip.len() {
+        let mut entry = zip.by_index(i)?;
+        let name = entry.name().to_string();
+        let mut data = Vec::new();
+        entry.read_to_end(&mut data)?;
+        if name == "docProps/core.xml" {
+            let text = String::from_utf8_lossy(&data)
+                .replace("<dc:creator>unknown</dc:creator>", &format!("<dc:creator>{creator}</dc:creator>"))
+                .replace("<cp:lastModifiedBy>unknown</cp:lastModifiedBy>", "<cp:lastModifiedBy>Loonar Compass</cp:lastModifiedBy>");
+            data = text.into_bytes();
+        }
+        out.start_file(name, zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated))?;
+        out.write_all(&data)?;
+    }
+    Ok(out.finish()?.into_inner())
 }
 
 #[cfg(test)]
@@ -572,6 +598,10 @@ mod tests {
         let mut core = String::new();
         std::io::Read::read_to_string(&mut zip.by_name("docProps/core.xml").unwrap(), &mut core).unwrap();
         assert!(core.contains(&chrono::Utc::now().format("%Y-%m-%d").to_string()) && !core.contains("1970"), "{core}");
+        assert!(!core.contains(">unknown<"), "{core}");
+        let bytes = super::build("T", "x", |_, _| anyhow::bail!("no pictures")).unwrap();
+        assert!(crate::template_doctor::saved_at(&bytes).is_some(), "LC-383: the date is read back");
+        assert!(crate::documents::text_of("t.docx", &bytes).unwrap().contains('x'), "still a readable document");
     }
 
     /// LC-360: control characters do not reach document.xml.
