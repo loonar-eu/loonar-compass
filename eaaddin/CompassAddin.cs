@@ -317,11 +317,14 @@ namespace LoonarCompass
         public object EA_GetMenuItems(object repository, string location, string menuName)
         {
             // Right-click on an element, package or diagram: "Loonar Compass" → "Add to the Compass conversation"
-            // (EA shows add-in entries of a context menu under the add-in's own submenu).
+            // EA allows only one item at the root: the header of the add-in's submenu ("-" makes it one), and asks for the
+            // items with that header as menuName (LC-474: a list at the root was an error box on every right-click).
             // On a diagram (on the diagram itself, or the diagram picked in the Browser) also "Send to Miro".
             if (location == "TreeView" || location == "Diagram")
             {
-                if (menuName != "")
+                if (menuName == "")
+                    return Menu;
+                if (menuName != Menu)
                     return "";
                 var items = new System.Collections.Generic.List<string> { L10n.Menu(AddReference), L10n.Menu(Navigate) };
                 int type = ContextType(repository);
