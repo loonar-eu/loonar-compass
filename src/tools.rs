@@ -2910,6 +2910,10 @@ fn check_unchanged(cfg: &AppConfig, expect: &Value) -> Result<()> {
         let rows = query_rows(cfg, &format!("select modifieddate from {table} where {key} = {id}"))?;
         let now = rows.first().and_then(|r| r.first()).with_context(|| crate::i18n::fmt("{0} with id {1} no longer exists", &[what.to_string(), id.to_string()]))?;
         if normalize_stamp(now) != normalize_stamp(seen) {
+            // Not a date at all (e.g. the notes were given): not "changed after you read it" (LC-478, round 10).
+            if is_stamp(now) && !is_stamp(seen) {
+                bail!("{}", crate::i18n::fmt("expect_unchanged: \"modified\" must be the modifieddate read from the model (YYYY-MM-DD HH:MM:SS), not {0}. Read it again with db_query. Nothing was saved.", &[seen.chars().take(60).collect::<String>()]));
+            }
             bail!("{}", crate::i18n::fmt("version conflict: {0} with id {1} was changed after you read it (was {2}, now {3}). Read the model again and plan the change once more. Nothing was saved.", &[what.to_string(), id.to_string(), seen.to_string(), now.to_string()]));
         }
     }
@@ -2921,8 +2925,23 @@ fn normalize_stamp(s: &str) -> String {
     s.trim().replace('T', " ").chars().take(19).collect()
 }
 
+/// Whether a value starts like a date `YYYY-MM-DD`.
+fn is_stamp(s: &str) -> bool {
+    let s: Vec<char> = s.trim().chars().take(10).collect();
+    s.len() == 10 && s.iter().enumerate().all(|(i, c)| if i == 4 || i == 7 { *c == '-' } else { c.is_ascii_digit() })
+}
+
 #[cfg(test)]
 mod tests {
+    /// LC-478: a value that is not a date is told apart from a real change.
+    #[test]
+    fn modified_stamp_or_not() {
+        assert!(super::is_stamp("2026-11-06 07:35:05"));
+        assert!(super::is_stamp("2026-10-17T17:33:05"));
+        assert!(!super::is_stamp("Dokument sprzedaży wystawiany klientowi."));
+        assert!(!super::is_stamp("06.11.2026"));
+    }
+
     /// LC-376 in EA: an element added on top of another goes next to the one it is related to; nothing else moves.
     /// `LOONAR_TEST_PROPS=… cargo test place_new_live -- --ignored --nocapture`
     #[test]
