@@ -8,6 +8,10 @@ use std::path::{Path, PathBuf};
 pub const CLAUDE_MODEL: &str = "claude-haiku-5-5";
 /// Claude models offered in the settings (any other id can still be set in app.properties).
 pub const CLAUDE_MODELS: [&str; 4] = ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-1"];
+/// What the settings let the user pick in 0.9.3 (the owner's decision for this version): only Anthropic with Claude
+/// Haiku 5.5. The other providers and models stay supported; they are only left out of the lists.
+pub const PICKABLE_PROVIDERS: [&str; 1] = ["anthropic"];
+pub const PICKABLE_CLAUDE_MODELS: [&str; 1] = ["claude-haiku-5-5"];
 /// OpenAI models offered in the settings (any other id can be typed in).
 pub const OPENAI_MODELS: [&str; 3] = ["gpt-5.1", "gpt-5", "gpt-5-mini"];
 /// Effort levels of the Claude API (output_config.effort); "" = the model's default.

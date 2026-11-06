@@ -312,7 +312,9 @@ fn document_model(cfg: &AppConfig) -> Option<String> {
         // Through the team hub too (it passes the model on to Anthropic; a hub that does not allow it answers 403 and the
         // answer goes on with the model of the settings, see run_turn_with). Found in the 0.9.2 lab tests: with the AI
         // through the hub, as in most companies, there was no offer at all.
-        (cfg.claude_url.trim().is_empty() && cfg.claude_model.contains("haiku")).then(|| "claude-sonnet-5-5".to_string())
+        // Offered only when the settings let the user pick it (0.9.3: Haiku 5.5 alone).
+        (cfg.claude_url.trim().is_empty() && cfg.claude_model.contains("haiku") && config::PICKABLE_CLAUDE_MODELS.contains(&"claude-sonnet-5-5"))
+            .then(|| "claude-sonnet-5-5".to_string())
     }
 }
 
@@ -4343,7 +4345,7 @@ impl App {
                             .width(settings_field_width(ui))
                             .selected_text(provider_label(&self.form.ai_provider))
                             .show_ui(ui, |ui| {
-                                for p in ["anthropic", "openai"] {
+                                for p in config::PICKABLE_PROVIDERS {
                                     ui.selectable_value(&mut self.form.ai_provider, p.to_string(), provider_label(p));
                                 }
                             });
@@ -4351,8 +4353,9 @@ impl App {
                         let openai = self.form.ai_provider == "openai";
                         label_cell(ui, crate::i18n::tr("Model"));
                         ui.horizontal(|ui| {
-                            let (field, list): (&mut String, &[&str]) = if openai { (&mut self.form.openai_model, &config::OPENAI_MODELS) } else { (&mut self.form.claude_model, &config::CLAUDE_MODELS) };
-                            ui.add(egui::TextEdit::singleline(field).desired_width(settings_field_width(ui) - 44.0));
+                            let (field, list): (&mut String, &[&str]) = if openai { (&mut self.form.openai_model, &config::OPENAI_MODELS) } else { (&mut self.form.claude_model, &config::PICKABLE_CLAUDE_MODELS) };
+                            // Only the models of the list can be chosen (0.9.3): the field is not typed into.
+                            ui.add(egui::TextEdit::singleline(field).desired_width(settings_field_width(ui) - 44.0).interactive(openai));
                             ui.menu_button("▾", |ui| {
                                 for model in list {
                                     if ui.button(*model).clicked() {
@@ -9824,7 +9827,9 @@ mod tests {
         cfg.ai_provider = "anthropic".into();
         cfg.claude_model = "claude-haiku-5-5".into();
         cfg.claude_url = String::new();
-        assert_eq!(document_model(&cfg).as_deref(), Some("claude-sonnet-5-5"));
+        // 0.9.3: Sonnet is offered only when the settings let the user pick it.
+        let offered = config::PICKABLE_CLAUDE_MODELS.contains(&"claude-sonnet-5-5").then_some("claude-sonnet-5-5");
+        assert_eq!(document_model(&cfg).as_deref(), offered);
         cfg.claude_model = "claude-sonnet-5-5".into();
         assert_eq!(document_model(&cfg), None);
         cfg.claude_model = "claude-haiku-5-5".into();

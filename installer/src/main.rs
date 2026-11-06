@@ -1803,14 +1803,23 @@ fn version_key(v: &str) -> Vec<u32> {
     key
 }
 
+/// The headings of the full list of changes of a version, which the setup leaves out.
+const DETAILS_HEADINGS: [&str; 4] = ["Szczegóły", "Details", "Einzelheiten", "Détails"];
+
 /// Changelog sections newer than the installed version up to `current` (on a new installation: only `current`),
 /// as pairs (version heading, content lines).
 fn whats_new(changelog: &str, installed: Option<&str>, current: &str) -> Vec<(String, Vec<String>)> {
     let mut sections: Vec<(String, Vec<String>)> = Vec::new();
+    // The details of a version ("### Details" and the same in the other languages) stay on the website: the setup
+    // shows only the short list above them (0.9.3: the whole list was too long to read).
+    let mut details = false;
     for line in changelog.lines() {
         if let Some(head) = line.strip_prefix("## ") {
             sections.push((head.trim().to_string(), Vec::new()));
-        } else if let Some((_, lines)) = sections.last_mut() {
+            details = false;
+        } else if line.strip_prefix("### ").is_some_and(|t| DETAILS_HEADINGS.contains(&t.trim())) {
+            details = true;
+        } else if let Some((_, lines)) = sections.last_mut().filter(|_| !details) {
             lines.push(line.to_string());
         }
     }
@@ -2780,7 +2789,7 @@ mod tests {
 
     use super::*;
 
-    const LOG: &str = "# Changelog\n\nIntroduction.\n\n## Version 0.3 (2026-11-01)\n\n- three\n\n## Version 0.2 (2026-10-15)\n\nGroup:\n\n- two\n\n## Version 0.1 (2026-10-13)\n\n- one\n";
+    const LOG: &str = "# Changelog\n\nIntroduction.\n\n## Version 0.3 (2026-11-01)\n\n- three\n\n### Details\n\n- three in full\n\n## Version 0.2 (2026-10-15)\n\nGroup:\n\n- two\n\n## Version 0.1 (2026-10-13)\n\n- one\n";
 
     fn heads(installed: Option<&str>, current: &str) -> Vec<String> {
         whats_new(LOG, installed, current).into_iter().map(|(h, _)| h).collect()
@@ -2795,6 +2804,8 @@ mod tests {
         assert!(heads(Some("0.2.0"), "0.2").is_empty());
         assert_eq!(heads(Some("0.1"), "0.3"), vec!["Version 0.3 (2026-11-01)", "Version 0.2 (2026-10-15)"]);
         assert_eq!(whats_new(LOG, None, "0.2")[0].1, vec!["Group:", "", "- two"]);
+        // The details stay on the website.
+        assert_eq!(whats_new(LOG, None, "0.3")[0].1, vec!["- three"]);
     }
 
     #[test]
