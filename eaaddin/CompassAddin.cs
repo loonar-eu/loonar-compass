@@ -170,10 +170,10 @@ namespace LoonarCompass
 
         // Before something new is created EA asks too: the team's rules on what may be created where (LC-391). Compass
         // answers at once from its rules; without such rules it does not list these events and EA does not wait.
-        public bool EA_OnPreNewElement(object repository, object info) { return AskNew("element_creating", info); }
-        public bool EA_OnPreNewDiagram(object repository, object info) { return AskNew("diagram_creating", info); }
+        public bool EA_OnPreNewElement(object repository, object info) { return AskNew(repository, "element_creating", info); }
+        public bool EA_OnPreNewDiagram(object repository, object info) { return AskNew(repository, "diagram_creating", info); }
 
-        static bool AskNew(string kind, object info)
+        static bool AskNew(object repository, string kind, object info)
         {
             if (current == null || current.IsDisposed || !current.Guarded(kind))
                 return true;
@@ -184,8 +184,23 @@ namespace LoonarCompass
                 string type = Convert.ToString(properties.Get("Type").Value);
                 string stereotype = "";
                 try { stereotype = Convert.ToString(properties.Get("Stereotype").Value); } catch { }
+                // The package the new object goes to (round 10: for an element drawn on a diagram EA gives ParentID 0
+                // and no PackageID, so no package rule ever matched): PackageID, else the package of the diagram it
+                // is drawn on, else ParentID.
+                string package = Value(properties, "PackageID");
+                if (package == "" || package == "0")
+                {
+                    string diagram = Value(properties, "DiagramID");
+                    if (diagram != "" && diagram != "0")
+                        package = Convert.ToString(((dynamic)repository).GetDiagramByID(Convert.ToInt32(diagram)).PackageID);
+                }
+                if (package == "" || package == "0")
+                    package = Value(properties, "ParentID");
                 // The line break marks the request complete (Compass does not decide on a half-written type).
-                line = kind + ":" + Convert.ToString(properties.Get("ParentID").Value) + "\t" + type + "\t" + stereotype + "\n";
+                line = kind + ":" + package + "\t" + type + "\t" + stereotype + "\n";
+                string given = "";
+                try { for (int i = 0; i < (int)properties.Count; i++) given += " " + properties.Get(i).Name + "=" + Convert.ToString(properties.Get(i).Value); } catch { }
+                Log.Write(kind + " rules: " + line.Trim() + " (EA gave:" + given + ")");
             }
             catch (Exception e)
             {
@@ -194,6 +209,12 @@ namespace LoonarCompass
                 return true;
             }
             return current.Guard(kind, line);
+        }
+
+        /// <summary>A property of EA's event information as text, "" when the event does not have it.</summary>
+        static string Value(dynamic properties, string name)
+        {
+            try { return Convert.ToString(properties.Get(name).Value); } catch { return ""; }
         }
 
         static bool Ask(object repository, string kind, object info, string property)
@@ -795,7 +816,9 @@ namespace LoonarCompass
                             return true;
                         string reason = answer.Length > 1 ? answer[1] : L10n.Get("No decision of the guard in time: the deletion is stopped.");
                         Cursor.Current = previous;
-                        MessageBox.Show(L10n.Get("Loonar Compass stopped this deletion:") + "\n\n" + reason, "Loonar Compass", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        // A creation stopped by the team's rules says so (round 10: it said "deletion").
+                        string stopped = kind.EndsWith("_creating") ? "Loonar Compass stopped this creation:" : "Loonar Compass stopped this deletion:";
+                        MessageBox.Show(L10n.Get(stopped) + "\n\n" + reason, "Loonar Compass", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         return false;
                     }
                     // A pumping wait, not Sleep: Compass reads the object being deleted from this EA (Repository.SQLQuery)
@@ -1551,6 +1574,7 @@ namespace LoonarCompass
                 case "Loonar Compass is working with the project": return lang == "de" ? "Loonar Compass arbeitet mit dem Projekt" : lang == "fr" ? "Loonar Compass travaille sur le projet" : "Loonar Compass pracuje na projekcie";
                 case "Loonar Compass closed": return lang == "de" ? "Loonar Compass geschlossen" : lang == "fr" ? "Loonar Compass fermé" : "Loonar Compass zamknięty";
                 case "Loonar Compass was closed.": return lang == "de" ? "Loonar Compass wurde geschlossen." : lang == "fr" ? "Loonar Compass a été fermé." : "Loonar Compass został zamknięty.";
+                case "Loonar Compass stopped this creation:": return lang == "de" ? "Loonar Compass hat dieses Anlegen gestoppt:" : lang == "fr" ? "Loonar Compass a arrêté cette création :" : "Loonar Compass zatrzymał to utworzenie:";
                 case "Loonar Compass stopped this deletion:": return lang == "de" ? "Loonar Compass hat dieses Löschen gestoppt:" : lang == "fr" ? "Loonar Compass a arrêté cette suppression :" : "Loonar Compass zatrzymał to usunięcie:";
                 case "No decision of the guard in time: the deletion is stopped.": return lang == "de" ? "Keine Entscheidung des Wächters rechtzeitig: das Löschen wird gestoppt." : lang == "fr" ? "Pas de décision du gardien à temps : la suppression est arrêtée." : "Strażnik nie zdecydował na czas: usunięcie zostaje wstrzymane.";
                 case "Try again in a moment. If it happens again, check Loonar Compass (it must be open in EA).": return lang == "de" ? "Versuchen Sie es gleich noch einmal. Passiert es wieder, prüfen Sie Loonar Compass (es muss in EA geöffnet sein)." : lang == "fr" ? "Réessayez dans un instant. Si cela se reproduit, vérifiez Loonar Compass (il doit être ouvert dans EA)." : "Spróbuj za chwilę. Jeśli to się powtórzy, sprawdź Loonar Compass (musi być otwarty w EA).";
