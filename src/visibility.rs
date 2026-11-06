@@ -221,14 +221,21 @@ pub fn auto_apply(cfg: &AppConfig, connector: i64) -> Vec<String> {
     if !all.values().any(|p| p["auto"] == true) {
         return Vec::new();
     }
-    let Ok(rows) = query_rows(cfg, &format!(
-        "select d.diagram_id, d.ea_guid, d.name, c.connector_type, coalesce(c.stereotype,'') from t_connector c join t_diagram d on 1 = 1 \
-         where c.connector_id = {connector} \
-         and exists (select 1 from t_diagramobjects a where a.diagram_id = d.diagram_id and a.object_id = c.start_object_id) \
-         and exists (select 1 from t_diagramobjects b where b.diagram_id = d.diagram_id and b.object_id = c.end_object_id)"
-    )) else {
-        return Vec::new();
+    // A plain join of the diagrams that show both ends (round 10: the "join … on 1 = 1" form read through EA gave
+    // nothing, and a relationship drawn in EA stayed visible without a word).
+    let rows = match query_rows(cfg, &format!(
+        "select d.diagram_id, d.ea_guid, d.name, c.connector_type, coalesce(c.stereotype,'') \
+         from t_connector c, t_diagramobjects a, t_diagramobjects b, t_diagram d \
+         where c.connector_id = {connector} and a.object_id = c.start_object_id and b.object_id = c.end_object_id \
+         and a.diagram_id = b.diagram_id and d.diagram_id = a.diagram_id"
+    )) {
+        Ok(rows) => rows,
+        Err(e) => {
+            crate::ea_ui::debug(&format!("visibility auto {connector}: {e:#}"));
+            return Vec::new();
+        }
     };
+    crate::ea_ui::debug(&format!("visibility auto {connector}: {} diagrams with both ends", rows.len()));
     let mut done = Vec::new();
     for r in rows {
         let Some(policy) = all.get(&r[1]).filter(|p| p["auto"] == true) else { continue };
@@ -250,6 +257,8 @@ pub fn auto_apply(cfg: &AppConfig, connector: i64) -> Vec<String> {
                 }
             }
             done.push(crate::i18n::fmt("hidden on \"{0}\" by its visibility policy ({1} relationships hidden there now; /show-hidden-links lists them)", &[r[2].clone(), total.to_string()]));
+        } else if let Err(e) = &result {
+            crate::ea_ui::debug(&format!("visibility auto {connector} on diagram {diagram}: {e:#}"));
         }
     }
     done
