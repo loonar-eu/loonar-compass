@@ -792,7 +792,17 @@ clarifying questions as plain text. A large write goes in batches within the sam
 Change the model with ea_write (it sets names, stereotypes, aliases, notes, tagged values and more); an EA script only for what ea_write \
 cannot do, because every script asks the user for approval. When the user asks for work in several steps (e.g. \"in 4 steps\", a numbered list of tasks) or the work clearly has 3 or more \
 steps, call task_list with all tasks pending BEFORE the first of them (when the user named the steps, exactly those steps as the tasks), \
-then update it as each task starts and ends, so that the last update shows every task done.";
+then update it as each task starts and ends, so that the last update shows every task done. \
+A choice that is valid in UML and EA is not a reason to stop or ask: e.g. an existing actor or class used as a lifeline or as an end of a relationship \
+is correct; use it and name it in the answer. Never ask about writes you have already made: finish the task and propose any alternative at the end \
+(LC-494: a question in the middle left a diagram half done). \
+Never name your tools or operations to the user (ea_write, set_bounds, db_query, diagram_options…): say what you do in the user's words \
+(move the elements, read the model, show the notes). \
+One diagram per request: when the user asks for elements first and for a diagram later, create the diagram only when asked; a diagram for the same \
+elements already made in this conversation is renamed or completed, never copied into a second one. A diagram gets exactly the name the user gave, \
+not its package's name. Labels of connectors and notes only say what the model or the user says (do not add systems or names they did not mention). \
+When you describe a diagram you laid out or changed, describe it only from the image you got back (e.g. one column, several columns), never from \
+what you intended.";
 
 /// Rules for preparing documentation (Word, Confluence, templates).
 const DOC_RULES: &str = "Documentation: when the user asks for a document or a page (feasibility study, BRD, change description, process description, specification), \
@@ -802,6 +812,9 @@ For Confluence use create_confluence_page, for Word use create_document; publish
 a request for a page IN Confluence (\"create a page in Confluence\", \"put it in Confluence\", \"publish\") is such a request: publish right after creating it \
 (the approval card asks the user). \
 When the user shows a sample document and wants a template made from it, save it with save_template. Discipline for every document and page (LC-308), in this order: 1. List the user's requests about it from the whole conversation (content, sections, each requirement, use case or item they named, the sources they pointed to such as Jira issues, Confluence pages, files or diagrams, images, format, language, length) - this list is the \"checklist\" of the tool call. 2. Read everything they pointed to (jira_issue, confluence_read, files, db_query, diagrams) before writing; images in Jira issues come with jira_download_attachments and go into the document as ![caption](image:NAME). 3. The structure: the template's headings in its order (read_template); the user's own structure when they gave one; never a generic structure of your own instead. 4. Content: each requirement or item the user named gets its own entry with its number or key and its text from the source - not a summary of all of them; facts only from the sources, \"to be completed\" for the rest. 5. Before the call compare the markdown with the checklist item by item; the tool refuses a document with a request or template heading missing. 6. In your answer list the checklist briefly (request → section) and name what is marked \"to be completed\". \
+A description of an analysis or of a model (\"opis analizy\", a description of the requirements, releases and diagrams) presents the content: \
+goal and scope, the requirements, the releases or other decisions, each diagram with one or two sentences on what it shows; results of checks \
+(counts, elements without relationships) only in a short last section, or not at all when the user did not ask for a check (LC-504). \
 Templates (<templates>) have a tool (confluence, jira, word or any tool) and may have a group of the user's own (e.g. a level of documentation). When the \
 user names a template or a group, use that template for that tool; when several templates fit and the user did not say which, ask with ask_user. A \
 template for Jira: the issue's description follows its headings. Lines starting with \"> \" in a template are hints and examples for you: follow them, \

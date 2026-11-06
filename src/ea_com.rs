@@ -37,7 +37,220 @@ const BASE_TYPES: &[(&str, &str)] = &[
     ("SequenceFlow", "ControlFlow"),
     ("MessageFlow", "ControlFlow"),
     ("Association", "Dependency"),
+    // Mind map topics (MindMapping technology, LC-511): classes with the topic stereotype.
+    ("CentralTopic", "Class"),
+    ("MainTopic", "Class"),
+    ("Topic", "Class"),
+    ("SubTopic", "Class"),
 ];
+
+/// Diagram option keys EA reads from t_diagram.StyleEx; the other keys (HideAtts, ShowTags, ShowSN…) are in the
+/// ExtendedStyle (PDATA). The model often sends them to the wrong string, and EA then ignores them (LC-505).
+const STYLEEX_OPTION_KEYS: &[&str] = &[
+    "ShowNotes", "SuppressBrackets", "SuppressFOC", "SuppConnectorLabels", "ExcludeRTF", "DocAll", "HideQuals",
+    "AttPkg", "ShowTests", "ShowMaint", "MatrixActive", "SwimlanesActive", "KANBANActive", "TConnectorNotation",
+    "TExplicitNavigability", "AdvancedElementProps", "AdvancedFeatureProps", "AdvancedConnectorProps", "ShowAsList",
+];
+
+/// Diagram option keys EA reads from the ExtendedStyle (t_diagram.PDATA).
+const EXTENDED_OPTION_KEYS: &[&str] = &[
+    "HideRel", "ShowTags", "ShowReqs", "ShowCons", "OpParams", "ShowSN", "ScalePI", "PSize", "ShowIcons", "SuppCN",
+    "HideProps", "HideParents", "UseAlias", "HideAtts", "HideOps", "HideStereo", "HideEStereo", "ShowRec", "ShowRes",
+    "ShowShape", "FormName",
+];
+
+/// Option keys of a diagram_options field as an object (LC-507): the model sometimes sends the keys as a JSON text
+/// or as "Key=1;Key=0" instead of an object; such a value used to be skipped without an error.
+fn option_keys(value: &Value) -> Result<Option<serde_json::Map<String, Value>>> {
+    match value {
+        Value::Null => Ok(None),
+        Value::Object(keys) => Ok(Some(keys.clone())),
+        Value::String(text) if text.trim().is_empty() => Ok(None),
+        Value::String(text) => {
+            if let Ok(Value::Object(keys)) = serde_json::from_str::<Value>(text) {
+                return Ok(Some(keys));
+            }
+            let mut keys = serde_json::Map::new();
+            for part in text.split(';').map(str::trim).filter(|p| !p.is_empty()) {
+                let (key, value) = part.split_once('=').ok_or_else(|| anyhow!("{}", crate::i18n::fmt("Diagram options must be keys with the value \"1\" or \"0\" (e.g. ShowNotes); got: {0}", &[text.clone()])))?;
+                keys.insert(key.trim().to_string(), Value::String(value.trim().to_string()));
+            }
+            Ok(Some(keys))
+        }
+        other => bail!("{}", crate::i18n::fmt("Diagram options must be keys with the value \"1\" or \"0\" (e.g. ShowNotes); got: {0}", &[other.to_string()])),
+    }
+}
+
+/// Splits diagram option keys between StyleEx and ExtendedStyle by where EA reads them; a key EA does not
+/// list stays in the string the model chose.
+fn route_option_keys(extended: Option<serde_json::Map<String, Value>>, style: Option<serde_json::Map<String, Value>>) -> (serde_json::Map<String, Value>, serde_json::Map<String, Value>) {
+    let (mut to_extended, mut to_style) = (serde_json::Map::new(), serde_json::Map::new());
+    for (chosen_style, keys) in [(false, extended), (true, style)] {
+        for (key, value) in keys.into_iter().flatten() {
+            let in_style = if STYLEEX_OPTION_KEYS.contains(&key.as_str()) {
+                true
+            } else if EXTENDED_OPTION_KEYS.contains(&key.as_str()) {
+                false
+            } else {
+                chosen_style
+            };
+            if in_style { to_style.insert(key, value); } else { to_extended.insert(key, value); }
+        }
+    }
+    (to_extended, to_style)
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum UseCaseRole {
+    Actor,
+    External,
+    UseCase,
+    Boundary,
+    Other,
+}
+
+/// An object of a use case diagram for the layout: element id, role, size and current top (pixels, y downwards).
+struct UseCaseNode {
+    id: i32,
+    role: UseCaseRole,
+    width: i32,
+    height: i32,
+    top: i32,
+}
+
+/// Positions (left, top, width, height) of a use case diagram (LC-496): people (actors) left, each at the height of its
+/// use cases, external systems (actors with a «system» or «external» stereotype) right, the use cases between them,
+/// grouped by their actor, and a system boundary around them. Up to 7 use cases make one column; up to 14 make two,
+/// and then the later people stand on the right with their use cases in the right column, so no line crosses a use
+/// case of the other column; more make a grid of 7 rows. `links` are (client, supplier) ids of the relationships.
+fn use_case_layout(nodes: &[UseCaseNode], links: &[(i32, i32)]) -> HashMap<i32, (i32, i32, i32, i32)> {
+    let role = |id: i32| nodes.iter().find(|n| n.id == id).map(|n| n.role);
+    let linked = |a: i32| -> Vec<i32> {
+        links.iter().filter_map(|&(c, s)| if c == a { Some(s) } else if s == a { Some(c) } else { None }).filter(|&o| role(o) == Some(UseCaseRole::UseCase)).collect()
+    };
+    let by_top = |role: UseCaseRole| -> Vec<&UseCaseNode> {
+        let mut list: Vec<&UseCaseNode> = nodes.iter().filter(|n| n.role == role).collect();
+        list.sort_by_key(|n| n.top);
+        list
+    };
+    let (mut left_people, mut right_people, cases) = (by_top(UseCaseRole::Actor), by_top(UseCaseRole::External), by_top(UseCaseRole::UseCase));
+    let mut out = HashMap::new();
+    if cases.is_empty() {
+        return out;
+    }
+    // The use cases of a group of actors, each once, in the order of the actors.
+    let cases_of = |people: &[&UseCaseNode], taken: &mut Vec<i32>| -> Vec<i32> {
+        let mut list = Vec::new();
+        for person in people {
+            for case in linked(person.id) {
+                if !taken.contains(&case) {
+                    taken.push(case);
+                    list.push(case);
+                }
+            }
+        }
+        list
+    };
+    let total = cases.len();
+    let mut columns: Vec<Vec<i32>> = if total <= 14 && total > 7 {
+        // Two columns: move people from the end of the left side to the right until the right holds about half.
+        loop {
+            let mut taken = Vec::new();
+            let left = cases_of(&left_people, &mut taken);
+            let right = cases_of(&right_people, &mut taken);
+            if left_people.len() > 1 && right.len() < left.len() && right.len() + 1 < total / 2 + 1 {
+                let person = left_people.pop().unwrap();
+                right_people.insert(0, person);
+                let mut again = Vec::new();
+                let (l2, r2) = (cases_of(&left_people, &mut again), cases_of(&right_people, &mut again));
+                if l2.len().abs_diff(r2.len()) >= left.len().abs_diff(right.len()) {
+                    // Moving did not even them out: back as it was.
+                    let person = right_people.remove(0);
+                    left_people.push(person);
+                    break vec![left, right];
+                }
+                continue;
+            }
+            break vec![left, right];
+        }
+    } else {
+        let mut taken = Vec::new();
+        let mut all = cases_of(&left_people, &mut taken);
+        all.extend(cases_of(&right_people, &mut taken));
+        let count = total.div_ceil(7).max(1);
+        let mut grid = vec![Vec::new(); count];
+        // Row by row for a grid, so the use cases of one actor stay next to each other at the same height.
+        for (n, id) in all.into_iter().enumerate() {
+            if count == 1 { grid[0].push(id) } else { grid[n % count].push(id) }
+        }
+        grid
+    };
+    // Use cases with no actor go to the shortest column.
+    for case in &cases {
+        if !columns.iter().any(|c| c.contains(&case.id)) {
+            let shortest = (0..columns.len()).min_by_key(|&c| columns[c].len()).unwrap_or(0);
+            columns[shortest].push(case.id);
+        }
+    }
+    let size = |id: i32| nodes.iter().find(|n| n.id == id).map(|n| (n.width.max(40), n.height.max(30))).unwrap_or((140, 70));
+    let (cell_w, cell_h) = cases.iter().map(|c| size(c.id)).fold((0, 0), |(w, h), (a, b)| (w.max(a), h.max(b)));
+    let rows = columns.iter().map(Vec::len).max().unwrap_or(1) as i32;
+    let actor_w = left_people.iter().map(|a| a.width).max().unwrap_or(0);
+    let (gap_x, gap_y, top0) = (60, 30, 80);
+    let grid_left = 40 + if left_people.is_empty() { 0 } else { actor_w + 120 };
+    for (column, ids) in columns.iter().enumerate() {
+        for (row, &id) in ids.iter().enumerate() {
+            let (w, h) = size(id);
+            let left = grid_left + column as i32 * (cell_w + gap_x) + (cell_w - w) / 2;
+            let top = top0 + row as i32 * (cell_h + gap_y) + (cell_h - h) / 2;
+            out.insert(id, (left, top, w, h));
+        }
+    }
+    let grid_right = grid_left + columns.len() as i32 * (cell_w + gap_x) - gap_x;
+    let grid_bottom = top0 + rows * (cell_h + gap_y) - gap_y;
+    // Actors at the average height of their use cases, at least their own height apart.
+    let place_column = |people: &[&UseCaseNode], left: i32, out: &mut HashMap<i32, (i32, i32, i32, i32)>| {
+        let mut wanted: Vec<(i32, i32)> = people.iter().map(|a| {
+            let tops: Vec<i32> = linked(a.id).iter().filter_map(|c| out.get(c).map(|p| p.1 + p.3 / 2)).collect();
+            let middle = if tops.is_empty() { top0 } else { tops.iter().sum::<i32>() / tops.len() as i32 };
+            (a.id, middle - a.height / 2)
+        }).collect();
+        wanted.sort_by_key(|w| w.1);
+        let mut next = top0;
+        for (id, top) in wanted {
+            let (w, h) = size(id);
+            let top = top.max(next);
+            out.insert(id, (left, top, w, h));
+            next = top + h + 40;
+        }
+    };
+    place_column(&left_people, 40, &mut out);
+    place_column(&right_people, grid_right + 120, &mut out);
+    for boundary in nodes.iter().filter(|n| n.role == UseCaseRole::Boundary) {
+        out.insert(boundary.id, (grid_left - 30, top0 - 50, grid_right - grid_left + 60, grid_bottom - top0 + 80));
+    }
+    out
+}
+
+/// Line breaks of a note as CR LF (LC-508): EA shows a note with bare LF as a single line.
+fn crlf(text: &str) -> String {
+    text.replace("\r\n", "\n").replace('\r', "\n").replace('\n', "\r\n")
+}
+
+/// The operation with every "notes" text (also in nested lists such as tagged values or scenario steps) in CR LF.
+fn with_crlf_notes(op: &Value) -> Value {
+    match op {
+        Value::Object(fields) => Value::Object(fields.iter().map(|(key, value)| {
+            let value = match value {
+                Value::String(text) if key == "notes" || key == "note" => Value::String(crlf(text)),
+                other => with_crlf_notes(other),
+            };
+            (key.clone(), value)
+        }).collect()),
+        Value::Array(items) => Value::Array(items.iter().map(with_crlf_notes).collect()),
+        other => other.clone(),
+    }
+}
 
 /// Navigation cell icon (list "Navigation Cells (Web EA)") for the target diagram type.
 const NAV_IMAGES: &[(&str, &str)] = &[
@@ -619,6 +832,51 @@ impl Job<'_> {
         Ok(())
     }
 
+    /// Places the objects of a use case diagram by `use_case_layout`; notes and other objects stay where they are.
+    fn layout_use_cases(&self, diagram: &Disp) -> Result<()> {
+        // Objects placed earlier in the same batch are only in the collection after a Refresh.
+        let collection = diagram.obj("DiagramObjects")?;
+        collection.call("Refresh", &[])?;
+        let objects = collection.items()?;
+        let mut nodes = Vec::new();
+        let mut elements = HashMap::new();
+        for object in &objects {
+            let id = object.int("ElementID")?;
+            let Some(element) = self.repo.call("GetElementByID", &[i(id)]).ok().and_then(|v| v.object()) else { continue };
+            let (kind, stereotype) = (element.text("Type").unwrap_or_default(), element.text("Stereotype").unwrap_or_default().to_lowercase());
+            let role = match kind.as_str() {
+                "Actor" if stereotype.contains("system") || stereotype.contains("extern") => UseCaseRole::External,
+                "Actor" => UseCaseRole::Actor,
+                "UseCase" => UseCaseRole::UseCase,
+                "Boundary" => UseCaseRole::Boundary,
+                _ => UseCaseRole::Other,
+            };
+            let (left, right, top, bottom) = (object.int("left")?, object.int("right")?, -object.int("top")?, -object.int("bottom")?);
+            nodes.push(UseCaseNode { id, role, width: right - left, height: bottom - top, top });
+            elements.insert(id, element);
+        }
+        let mut links = Vec::new();
+        for (id, element) in &elements {
+            for connector in element.obj("Connectors").and_then(|c| c.items()).unwrap_or_default() {
+                let (client, supplier) = (connector.int("ClientID").unwrap_or(0), connector.int("SupplierID").unwrap_or(0));
+                if client == *id && elements.contains_key(&supplier) {
+                    links.push((client, supplier));
+                }
+            }
+        }
+        let places = use_case_layout(&nodes, &links);
+        for object in &objects {
+            let id = object.int("ElementID")?;
+            let (Some(&(left, top, width, height)), Some(_)) = (places.get(&id), nodes.iter().find(|n| n.id == id)) else { continue };
+            object.set("left", i(left))?;
+            object.set("right", i(left + width))?;
+            object.set("top", i(-top))?;
+            object.set("bottom", i(-(top + height)))?;
+            object.update(crate::i18n::tr("diagram object"))?;
+        }
+        Ok(())
+    }
+
     /// Activity partition (swimlane, also a BPMN pool/lane): EA draws it vertical (name on top) when the diagram
     /// object's style has VPartition=1, otherwise horizontal (name rotated on the left) whatever its size
     /// (EAExample.qea, 2026-10-20). Set from the box: taller than wide = vertical.
@@ -874,6 +1132,7 @@ impl Job<'_> {
     }
 
     fn op(&mut self, op: &Value) -> Result<()> {
+        let op = &with_crlf_notes(op);
         let name = op["op"].as_str().unwrap_or("");
         match name {
             "create_package" => {
@@ -932,8 +1191,13 @@ impl Job<'_> {
                 self.register(&op["key"], Kind::Element, &element, id, guid, real);
             }
             "create_element" => {
-                let title = text_field(op, "name");
                 let (kind, stereotype) = (text_field(op, "type"), text_field(op, "stereotype"));
+                let mut title = text_field(op, "name");
+                // A pseudostate without a name gets EA's default name "Pseudostate", shown on the diagram (LC-509);
+                // a single space keeps the node without a caption, as EA's own toolbox does.
+                if kind.eq_ignore_ascii_case("StateNode") && (title.trim().is_empty() || title.eq_ignore_ascii_case("Pseudostate")) {
+                    title = " ".to_string();
+                }
                 let element = if op["parent_element"].is_null() {
                     let owner = self.owner(op)?;
                     self.new_typed(&owner.obj("Elements")?, &title, &kind, &stereotype)?
@@ -966,6 +1230,21 @@ impl Job<'_> {
                     element.call("SetAppearance", &[i(1), i(0), i(color(&op["color"])?)])?;
                     element.update(crate::i18n::tr("element color"))?;
                 }
+                // Operands of a combined fragment (LC-498: alt with else drawn as one area): [{guard, size?}] from the
+                // top, size = the operand's height in pixels; EA draws each guard in brackets with a dashed line
+                // between the operands. Stored the way EA stores them (t_xref "Partitions", the bottom operand first):
+                // adding them through Element.Partitions brought the EA process down (RPC 0x800706BE, 2026-11-06).
+                if let Some(operands) = op["operands"].as_array().filter(|o| !o.is_empty()) {
+                    let description: String = operands.iter().rev().map(|operand| {
+                        let guard = text_field(operand, "guard");
+                        let guard = guard.trim().trim_start_matches('[').trim_end_matches(']').trim().replace(';', ",");
+                        format!("@PAR;Name={guard};Size={};GUID={};@ENDPAR;", int_of(&operand["size"]).unwrap_or(70), crate::scripts::new_guid())
+                    }).collect();
+                    let statement = format!(
+                        "INSERT INTO t_xref (XrefID, Name, Type, Visibility, Partition, Description, Client, Supplier) VALUES ('{}', 'Partitions', 'element property', 'Public', '0', '{}', '{}', '<none>')",
+                        crate::scripts::new_guid(), self.sql_text(&description), element.text("ElementGUID")?);
+                    self.repo.call("Execute", &[s(&statement)])?;
+                }
                 self.set_tags(&element, &op["tags"])?;
                 self.add_files(&element, &op["files"])?;
                 self.set_keywords(&element, &op["keywords"])?;
@@ -976,8 +1255,23 @@ impl Job<'_> {
                 let source = self.element(&op["source"])?;
                 let target = self.element(&op["target"])?;
                 let title = text_field(op, "name");
+                // A second line between the same two elements (e.g. a transition there and one back) is drawn over the
+                // first one and hides its label (LC-501): the model is told to route one of them apart. Messages are
+                // laid out by their number, so they do not overlap.
+                let is_message_type = matches!(text_field(op, "type").to_lowercase().as_str(), "sequence" | "collaboration");
+                let (source_id, target_id) = (source.int("ElementID")?, target.int("ElementID")?);
+                if !is_message_type && source_id != target_id {
+                    let parallel = source.obj("Connectors").and_then(|c| c.items()).unwrap_or_default().iter().any(|c| {
+                        let (a, z) = (c.int("ClientID").unwrap_or(0), c.int("SupplierID").unwrap_or(0));
+                        (a, z) == (source_id, target_id) || (a, z) == (target_id, source_id)
+                    });
+                    if parallel {
+                        let names = [source.text("Name").unwrap_or_default(), target.text("Name").unwrap_or_default()];
+                        self.warnings.push(crate::i18n::fmt("There is already a relationship between \"{0}\" and \"{1}\": on a diagram the two lines overlap and hide each other's labels. Route this one apart with route_connector (e.g. start and end points 25 px aside of the centers, or one bend point).", &names));
+                    }
+                }
                 let connector = self.new_typed(&source.obj("Connectors")?, &title, &text_field(op, "type"), &text_field(op, "stereotype"))?;
-                connector.set("SupplierID", i(target.int("ElementID")?))?;
+                connector.set("SupplierID", i(target_id))?;
                 // A message of a sequence (or communication) diagram belongs to that diagram and has its place in the order.
                 // Any other connector keeps DiagramID 0: a diagram id there binds it to that one diagram, and EA then
                 // draws it nowhere else and does not offer it in "Show/Hide Relation" (LC-303).
@@ -1013,6 +1307,22 @@ impl Job<'_> {
                     let whole = connector.obj("SupplierEnd")?;
                     whole.set("Aggregation", i(if text_field(op, "subtype").eq_ignore_ascii_case("Strong") { 2 } else { 1 }))?;
                     whole.update(crate::i18n::tr("connector end"))?;
+                }
+                // Multiplicities and roles of the ends right away (LC-495: asked for "associations with multiplicities",
+                // the model created them without, because only update_connector had these fields).
+                for (end, prefix) in [("ClientEnd", "source"), ("SupplierEnd", "target")] {
+                    let (card, role) = (format!("{prefix}_multiplicity"), format!("{prefix}_role"));
+                    if op[&card].is_null() && op[&role].is_null() {
+                        continue;
+                    }
+                    let end = connector.obj(end)?;
+                    if !op[&card].is_null() {
+                        end.set("Cardinality", s(&text_field(op, &card)))?;
+                    }
+                    if !op[&role].is_null() {
+                        end.set("Role", s(&text_field(op, &role)))?;
+                    }
+                    end.update(crate::i18n::tr("connector end"))?;
                 }
                 self.set_reply(&connector, &op["is_return"])?;
                 self.set_tags(&connector, &op["tags"])?;
@@ -1055,10 +1365,13 @@ impl Job<'_> {
                 // Set keys of the diagram's option strings (LC-377): extended = ExtendedStyle (t_diagram.PDATA:
                 // HideAtts, HideOps, HideStereo, HideEStereo, ShowNotes…), style = StyleEx (SuppConnectorLabels…).
                 let diagram = self.diagram(&op["diagram"])?;
-                for (field, property) in [("extended", "ExtendedStyle"), ("style", "StyleEx")] {
-                    let Some(keys) = op[field].as_object() else { continue };
+                let (extended, style) = route_option_keys(option_keys(&op["extended"])?, option_keys(&op["style"])?);
+                for (keys, property) in [(extended, "ExtendedStyle"), (style, "StyleEx")] {
+                    if keys.is_empty() {
+                        continue;
+                    }
                     let current = diagram.text(property).unwrap_or_default();
-                    diagram.set(property, s(&set_option_keys(&current, keys)))?;
+                    diagram.set(property, s(&set_option_keys(&current, &keys)))?;
                 }
                 diagram.update(crate::i18n::tr("diagram style"))?;
             }
@@ -1334,6 +1647,13 @@ impl Job<'_> {
                     bail!("{}", crate::i18n::fmt("EA did not create the report (template \"{0}\" may not exist)", &[template]));
                 }
                 self.warnings.push(crate::i18n::fmt("Report saved: {0}", &[file.clone()]));
+            }
+            "layout_diagram" if text_field(op, "direction").is_empty() && self.diagram(&op["diagram"])?.text("Type").unwrap_or_default() == "Use Case" => {
+                // A use case diagram: actors left, external systems right, use cases in a grid between them (LC-496: EA's
+                // digraph layout put 6 actors and 11 use cases into one column 2800 px high).
+                let diagram = self.diagram(&op["diagram"])?;
+                self.layout_use_cases(&diagram)?;
+                self.repo.call("ReloadDiagram", &[i(diagram.int("DiagramID")?)]).ok();
             }
             "layout_diagram" => {
                 // EA's own automatic layout (Layout → Diagram Layout → Digraph) with a direction and spacing.
@@ -2453,6 +2773,166 @@ mod option_tests {
         let keys = serde_json::json!({ "HideAtts": "1", "New": "x" });
         assert_eq!(super::set_option_keys("HideRel=0;HideAtts=0;HideOps=0;", keys.as_object().unwrap()), "HideRel=0;HideAtts=1;HideOps=0;New=x;");
         assert_eq!(super::set_option_keys("", keys.as_object().unwrap()), "HideAtts=1;New=x;");
+    }
+
+    /// LC-496: actors left at the height of their use cases, systems right, use cases in a grid, boundary around them.
+    #[test]
+    fn use_case_layout() {
+        use super::{UseCaseNode, UseCaseRole::*};
+        let node = |id, role, top| UseCaseNode { id, role, width: if role == Actor || role == External { 50 } else { 140 }, height: if role == Actor || role == External { 90 } else { 70 }, top };
+        let mut nodes = vec![node(1, Actor, 0), node(2, Actor, 300), node(3, External, 0), node(99, Boundary, 0)];
+        nodes.extend((10..20).map(|id| node(id, UseCase, id * 10)));
+        let mut links: Vec<(i32, i32)> = (10..15).map(|c| (1, c)).collect();
+        links.extend((15..19).map(|c| (2, c)));
+        links.push((19, 3));
+        let places = super::use_case_layout(&nodes, &links);
+        assert_eq!(places.len(), nodes.len());
+        let (a1, a2, ext, bound) = (places[&1], places[&2], places[&3], places[&99]);
+        // 10 use cases: 2 columns of 5 rows, between the actors and the system.
+        let lefts: std::collections::BTreeSet<i32> = (10..20).map(|c| places[&c].0).collect();
+        assert_eq!(lefts.len(), 2);
+        assert!(lefts.iter().all(|&l| l > a1.0 + a1.2 && l + 140 < ext.0));
+        // The first person stands left of the column with its use cases, the second right of the other column, next
+        // to the system, so no line crosses the other column.
+        let (left_col, right_col) = (*lefts.iter().next().unwrap(), *lefts.iter().last().unwrap());
+        assert!((10..15).all(|c| places[&c].0 == left_col), "{places:?}");
+        assert!((15..20).all(|c| places[&c].0 == right_col), "{places:?}");
+        assert!(a2.0 > right_col + 140 && a1.0 + a1.2 < left_col);
+        // The boundary holds every use case.
+        assert!((10..20).all(|c| { let p = places[&c]; p.0 >= bound.0 && p.0 + p.2 <= bound.0 + bound.2 && p.1 >= bound.1 && p.1 + p.3 <= bound.1 + bound.3 }));
+        // Nothing overlaps.
+        let boxes: Vec<_> = places.iter().filter(|(id, _)| **id != 99).map(|(_, p)| *p).collect();
+        for (n, a) in boxes.iter().enumerate() {
+            for b in &boxes[n + 1..] {
+                assert!(a.0 + a.2 <= b.0 || b.0 + b.2 <= a.0 || a.1 + a.3 <= b.1 || b.1 + b.3 <= a.1, "{a:?} {b:?}");
+            }
+        }
+    }
+
+    /// LC-505, LC-506: each key goes where EA reads it, whichever field the model used.
+    #[test]
+    fn keys_go_where_ea_reads_them() {
+        let extended = serde_json::json!({ "ShowNotes": "1", "HideAtts": "1", "Custom": "1" });
+        let style = serde_json::json!({ "ShowTags": "1", "SuppressBrackets": "1" });
+        let (to_extended, to_style) = super::route_option_keys(extended.as_object().cloned(), style.as_object().cloned());
+        let mut e: Vec<_> = to_extended.keys().cloned().collect();
+        let mut s: Vec<_> = to_style.keys().cloned().collect();
+        e.sort();
+        s.sort();
+        assert_eq!(e, ["Custom", "HideAtts", "ShowTags"]);
+        assert_eq!(s, ["ShowNotes", "SuppressBrackets"]);
+    }
+
+    /// LC-507: options sent as a JSON text or as "Key=1;Key=0" are read; anything else is an error, not a silent skip.
+    #[test]
+    fn options_as_text() {
+        let keys = super::option_keys(&serde_json::json!("{\"ShowNotes\": \"1\"}")).unwrap().unwrap();
+        assert_eq!(keys["ShowNotes"], "1");
+        let keys = super::option_keys(&serde_json::json!("ShowNotes=1; ShowTags=0")).unwrap().unwrap();
+        assert_eq!((keys["ShowNotes"].as_str(), keys["ShowTags"].as_str()), (Some("1"), Some("0")));
+        assert!(super::option_keys(&serde_json::json!("ShowNotes")).is_err());
+        assert!(super::option_keys(&serde_json::json!(true)).is_err());
+        assert!(super::option_keys(&serde_json::Value::Null).unwrap().is_none());
+    }
+
+    /// LC-508: line breaks of notes in CR LF, also in nested lists; other fields untouched.
+    #[test]
+    fn notes_in_crlf() {
+        let op = serde_json::json!({ "op": "create_element", "name": "a\nb", "notes": "x\ny\r\nz",
+            "tags": [{ "name": "T", "notes": "p\nq" }] });
+        let op = super::with_crlf_notes(&op);
+        assert_eq!(op["notes"], "x\r\ny\r\nz");
+        assert_eq!(op["tags"][0]["notes"], "p\r\nq");
+        assert_eq!(op["name"], "a\nb");
+    }
+}
+
+#[cfg(test)]
+mod analysis_fixes_tests {
+    /// LC-495, LC-496, LC-498, LC-505, LC-507, LC-508, LC-509: the fixes from the analysis test on a copy of an empty model
+    /// (package 2): `LOONAR_TEST_PROPS=<copy>.properties cargo test analysis_fixes_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA and a copy of an empty model with package 2"]
+    fn analysis_fixes_live() {
+        use serde_json::json;
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
+        let mut ops = vec![
+            json!({ "op": "create_diagram", "key": "uc", "package": 2, "name": "UC", "type": "Use Case" }),
+            json!({ "op": "create_element", "key": "b", "package": 2, "name": "System", "type": "Boundary" }),
+            json!({ "op": "create_element", "key": "a1", "package": 2, "name": "Analityk", "type": "Actor" }),
+            json!({ "op": "create_element", "key": "a2", "package": 2, "name": "Architekt", "type": "Actor" }),
+            json!({ "op": "create_element", "key": "ea", "package": 2, "name": "Enterprise Architect", "type": "Actor", "stereotype": "system" }),
+        ];
+        for n in 0..9 {
+            ops.push(json!({ "op": "create_element", "key": format!("u{n}"), "package": 2, "name": format!("Przypadek {n}"), "type": "UseCase", "notes": "linia 1\nlinia 2" }));
+            let actor = if n < 5 { "#a1" } else if n < 8 { "#a2" } else { "#ea" };
+            ops.push(json!({ "op": "create_connector", "source": actor, "target": format!("#u{n}"), "type": "Association", "source_multiplicity": "1", "target_multiplicity": "0..*" }));
+        }
+        for (n, key) in ["b", "a1", "a2", "ea", "u0", "u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8"].iter().enumerate() {
+            let (width, height) = match key.chars().next() { Some('b') => (300, 300), Some('u') => (150, 70), _ => (50, 90) };
+            ops.push(json!({ "op": "place", "diagram": "#uc", "element": format!("#{key}"), "left": 20, "top": 20 + n as i64 * 100, "width": width, "height": height }));
+        }
+        ops.push(json!({ "op": "layout_diagram", "diagram": "#uc" }));
+        ops.push(json!({ "op": "diagram_options", "diagram": "#uc", "extended": { "ShowNotes": "1" }, "style": "ShowTags=1" }));
+        ops.extend([
+            json!({ "op": "create_diagram", "key": "act", "package": 2, "name": "Act", "type": "Activity" }),
+            json!({ "op": "create_element", "key": "s", "package": 2, "name": "", "type": "StateNode", "subtype": 100 }),
+            json!({ "op": "place", "diagram": "#act", "element": "#s", "left": 40, "top": 40, "width": 20, "height": 20 }),
+            json!({ "op": "create_diagram", "key": "seq", "package": 2, "name": "Seq", "type": "Sequence" }),
+            json!({ "op": "create_element", "key": "f", "package": 2, "name": "", "type": "InteractionFragment", "subtype": 0,
+                "operands": [{ "guard": "[zatwierdzono]", "size": 70 }, { "guard": "odrzucono", "size": 70 }] }),
+            json!({ "op": "place", "diagram": "#seq", "element": "#f", "left": 20, "top": 100, "width": 400, "height": 160 }),
+        ]);
+        let result = crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions::default());
+        crate::ea::shutdown();
+        println!("{result:?}");
+        result.expect("batch");
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).unwrap();
+        let options = q("select coalesce(styleex,''), coalesce(pdata,'') from t_diagram where name = 'UC'");
+        println!("options {options:?}");
+        assert!(options[0][0].contains("ShowNotes=1") && !options[0][1].contains("ShowNotes"), "{options:?}");
+        assert!(options[0][1].contains("ShowTags=1") && !options[0][0].contains("ShowTags"), "{options:?}");
+        let note = q("select note from t_object where name = 'Przypadek 0'");
+        assert!(note[0][0].contains("linia 1\r\nlinia 2"), "{note:?}");
+        let cards = q("select count(*) from t_connector where sourcecard = '1' and destcard = '0..*'");
+        assert_eq!(cards[0][0], "9");
+        let node = q("select quote(name) from t_object where object_type = 'StateNode'");
+        assert_ne!(node[0][0].to_lowercase(), "'pseudostate'", "{node:?}");
+        let parts = q("select description from t_xref where name = 'Partitions'");
+        println!("operands {parts:?}");
+        assert!(parts[0][0].contains("Name=zatwierdzono;") && parts[0][0].contains("Name=odrzucono;"), "{parts:?}");
+        let places = q("select o.name, x.rectleft, x.recttop, x.rectright, x.rectbottom from t_diagramobjects x join t_object o on o.object_id = x.object_id join t_diagram d on d.diagram_id = x.diagram_id where d.name = 'UC' order by x.recttop desc, x.rectleft");
+        for p in &places {
+            println!("{p:?}");
+        }
+        let height = places.iter().map(|p| -p[4].parse::<i32>().unwrap()).max().unwrap();
+        assert!(height < 900, "use case diagram {height} px high");
+    }
+}
+
+#[cfg(test)]
+mod fragment_operand_tests {
+    /// LC-498 on its own: a fragment with two operands on a copy of an empty model (package 2).
+    #[test]
+    #[ignore = "requires EA and a copy of an empty model with package 2"]
+    fn fragment_operands_live() {
+        use serde_json::json;
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
+        let variant = std::env::var("LOONAR_TEST_VARIANT").unwrap_or_default();
+        let mut fragment = json!({ "op": "create_element", "key": "f", "package": 2, "name": "", "type": "InteractionFragment", "subtype": 0 });
+        if variant != "plain" {
+            fragment["operands"] = json!([{ "guard": "[zatwierdzono]", "size": 70 }, { "guard": "odrzucono", "size": 70 }]);
+        }
+        let ops = vec![
+            json!({ "op": "create_diagram", "key": "seq", "package": 2, "name": "Seq", "type": "Sequence" }),
+            fragment,
+            json!({ "op": "place", "diagram": "#seq", "element": "#f", "left": 20, "top": 100, "width": 400, "height": 160 }),
+        ];
+        let result = crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions::default());
+        crate::ea::shutdown();
+        println!("{result:?}");
+        result.expect("batch");
+        println!("{:?}", crate::tools::query_rows(&cfg, "select description from t_xref where name = 'Partitions'").unwrap());
     }
 }
 

@@ -641,7 +641,10 @@ fn check_read_only(s: &str) -> Result<()> {
 pub fn db_query(sql: &str, cfg: &AppConfig) -> Result<String> {
     let s = sql.trim().trim_end_matches(';').trim();
     check_read_only(s)?;
-    let selected = select(cfg, s, MAX_ROWS)?;
+    let selected = match select(cfg, s, MAX_ROWS) {
+        Ok(selected) => selected,
+        Err(error) => return Err(with_table_columns(error, s, cfg)),
+    };
     if selected.rows.is_empty() {
         return Ok("(no rows)".into());
     }
@@ -658,6 +661,45 @@ pub fn db_query(sql: &str, cfg: &AppConfig) -> Result<String> {
         out.push_str(&format!("...(truncated to {MAX_ROWS} rows)\n"));
     }
     Ok(out)
+}
+
+/// Whether a database error is about a column that does not exist (SQLite, PostgreSQL, SQL Server, MySQL, Oracle).
+fn is_unknown_column(error: &str) -> bool {
+    let e = error.to_lowercase();
+    e.contains("no such column") || (e.contains("column") && e.contains("does not exist")) || e.contains("invalid column name")
+        || e.contains("unknown column") || e.contains("ora-00904")
+}
+
+/// EA tables (t_…) named in a query, in order, without repeats.
+fn tables_in(sql: &str) -> Vec<String> {
+    let mut tables: Vec<String> = Vec::new();
+    for word in sql.split(|c: char| !(c.is_alphanumeric() || c == '_')) {
+        let word = word.to_lowercase();
+        if word.starts_with("t_") && word.len() > 2 && !tables.contains(&word) {
+            tables.push(word);
+        }
+    }
+    tables
+}
+
+/// A query with a column that does not exist (LC-512): the error gets the real columns of the EA tables in the query,
+/// so the next query is right the first time instead of guessing again (ExtendedStyle is PDATA, StyleEx is StyleEx…).
+fn with_table_columns(error: anyhow::Error, sql: &str, cfg: &AppConfig) -> anyhow::Error {
+    if !is_unknown_column(&format!("{error:#}")) {
+        return error;
+    }
+    let mut lists = Vec::new();
+    for table in tables_in(sql).into_iter().take(4) {
+        if let Ok(selected) = select(cfg, &format!("select * from {table}"), 1) {
+            if !selected.columns.is_empty() {
+                lists.push(format!("{table}: {}", selected.columns.join(", ")));
+            }
+        }
+    }
+    if lists.is_empty() {
+        return error;
+    }
+    anyhow::anyhow!("{error:#}\n{}\n{}", crate::i18n::tr("Columns of the tables in this query:"), lists.join("\n"))
 }
 
 /// Where the operations (services) of a class, component or interface are used: messages on sequence diagrams addressed

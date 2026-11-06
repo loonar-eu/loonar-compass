@@ -291,14 +291,16 @@ pub fn definition() -> Value {
     json!({
         "name": "ea_script",
         "description": "EA scripts (the Scripting window: groups of JScript, VBScript and JavaScript scripts stored in the model). \
-action list: groups and scripts; read: the code of a script (name = Group.Name or the name); save: creates or replaces a script \
+action list: groups and scripts; read: the code of a script (name = Group.Name or the name); delete: removes a script from the model; save: creates or replaces a script \
 (group is created when missing, language JScript (default), VBScript or JavaScript); run: runs a script in the user's open EA window \
 (EA's Repository object and Session.Output work; the user approves every run; JavaScript scripts run as JScript). \
-Write scripts that change the model only when the user asks for a script; for ordinary changes use ea_write.",
+Write scripts that change the model only when the user asks for a script; for ordinary changes use ea_write (showing notes or tags on a \
+diagram is diagram_options, never a script). A script you saved only to make one change, without the user asking for a script, is deleted \
+with delete right after it ran, so it does not stay in the model.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "action": { "type": "string", "enum": ["list", "read", "save", "run"] },
+                "action": { "type": "string", "enum": ["list", "read", "save", "run", "delete"] },
                 "name": { "type": "string" },
                 "group": { "type": "string", "description": "Script group for save (default \"Compass\")." },
                 "language": { "type": "string", "enum": ["JScript", "VBScript", "JavaScript"] },

@@ -53,6 +53,22 @@ fn called(message: &str) -> String {
     message.split('(').next().unwrap_or("").trim().trim_end_matches(';').to_lowercase()
 }
 
+/// Guards and heights of the operands of a fragment: the first operand from the fragment's guard to the first else,
+/// each further one from its else; EA lays messages out about 35 apart, and the first operand starts under the
+/// fragment's label (about 33 high).
+fn operand_sizes(guard: &str, first: usize, last: usize, elses: &[(String, usize)]) -> Vec<(String, i64)> {
+    let mut starts: Vec<(String, usize)> = vec![(guard.to_string(), first)];
+    starts.extend(elses.iter().cloned());
+    let mut out = Vec::new();
+    for (n, (g, start)) in starts.iter().enumerate() {
+        let end = starts.get(n + 1).map(|(_, next)| *next).unwrap_or(last + 1);
+        let messages = end.saturating_sub(*start).max(1) as i64;
+        let size = if n == 0 { (messages * 35 - 13).max(22) } else { messages * 35 };
+        out.push((g.clone(), size));
+    }
+    out
+}
+
 /// Kinds of combined fragments (t_object.ntype of an InteractionFragment).
 const FRAGMENTS: &[(&str, i64)] = &[("alt", 0), ("opt", 1), ("break", 2), ("par", 3), ("loop", 4), ("critical", 5), ("neg", 6), ("assert", 7), ("strict", 8), ("seq", 9), ("ignore", 10), ("consider", 11)];
 
@@ -444,8 +460,9 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
     let create_missing = input["create_missing_operations"].as_bool().unwrap_or(false) || create_classes;
     let mut number = 0;
     let mut missing: Vec<String> = Vec::new();
-    let mut fragments: Vec<(String, String, usize)> = Vec::new();
-    let mut drawn: Vec<(String, String, usize, usize)> = Vec::new();
+    // Open fragments: (kind, guard, first message, further operands as (guard, first message)).
+    let mut fragments: Vec<(String, String, usize, Vec<(String, usize)>)> = Vec::new();
+    let mut drawn: Vec<(String, String, usize, usize, Vec<(String, usize)>)> = Vec::new();
     // Notes: (participants, text, the number of the message before it).
     let mut notes: Vec<(Vec<String>, String, usize)> = Vec::new();
     for l in &lines {
@@ -498,15 +515,16 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
                 ops.push(message);
             }
             Line::Note { on, text } => notes.push((on.clone(), text.clone(), number)),
-            Line::Open { kind, guard } => fragments.push((kind.clone(), guard.clone(), number + 1)),
+            Line::Open { kind, guard } => fragments.push((kind.clone(), guard.clone(), number + 1, Vec::new())),
+            // Each else is an operand of its own (LC-498: it was added to the fragment's name, drawn as one area).
             Line::Else(guard) => {
                 if let Some(last) = fragments.last_mut() {
-                    last.1 = format!("{} / else {guard}", last.1);
+                    last.3.push((guard.clone(), number + 1));
                 }
             }
             Line::End => {
-                if let Some((kind, guard, first)) = fragments.pop() {
-                    drawn.push((kind, guard, first, number));
+                if let Some((kind, guard, first, elses)) = fragments.pop() {
+                    drawn.push((kind, guard, first, number, elses));
                 }
             }
             Line::Participant { .. } => {}
@@ -514,7 +532,7 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
     }
     // Fragments around their messages: EA lays the messages out by their number, the first at about y 135 and then
     // about 35 apart (EA 17, lifelines 40 from the top; measured on an exported image).
-    for (i, (kind, guard, first, last)) in drawn.iter().enumerate() {
+    for (i, (kind, guard, first, last, elses)) in drawn.iter().enumerate() {
         // An empty fragment is drawn too, small, where it is in the text (LC-456: it was left out while the answer said
         // it had been made); the report says it is empty, /check-sequence finds it.
         let empty = last < first;
@@ -524,8 +542,14 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
         let last = if empty { first } else { last };
         let ntype = FRAGMENTS.iter().find(|(k, _)| k == kind).map(|(_, n)| *n).unwrap_or(0);
         let key = format!("f{i}");
-        let depth = drawn.iter().filter(|(_, _, f, l)| f <= first && l >= last).count() as i64 - 1;
-        ops.push(json!({ "op": "create_element", "key": key, "package": package, "name": guard, "type": "InteractionFragment", "subtype": ntype }));
+        let depth = drawn.iter().filter(|(_, _, f, l, _)| f <= first && l >= last).count() as i64 - 1;
+        let mut fragment = json!({ "op": "create_element", "key": key, "package": package, "name": guard, "type": "InteractionFragment", "subtype": ntype });
+        if !elses.is_empty() {
+            // Operands with their guards; the name stays empty, EA would show it next to the operator as well.
+            fragment["name"] = json!("");
+            fragment["operands"] = json!(operand_sizes(guard, *first, *last, elses).into_iter().map(|(g, size)| json!({ "guard": g, "size": size })).collect::<Vec<_>>());
+        }
+        ops.push(fragment);
         ops.push(json!({ "op": "place", "diagram": "#seq", "element": format!("#{key}"), "left": 30 + depth * 8, "top": 115 + (*first as i64 - 1) * 35 + depth * 5,
             "width": 60 + participants.len() as i64 * 200 - depth * 16, "height": if empty { 30 } else { (*last as i64 - *first as i64 + 1) * 35 + 5 - depth * 10 } }));
     }
@@ -566,6 +590,15 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LC-498: alt with else becomes two operands; each spans its own messages.
+    #[test]
+    fn else_is_an_operand() {
+        let sizes = operand_sizes("ok", 2, 4, &[("error".into(), 3)]);
+        assert_eq!(sizes, vec![("ok".to_string(), 22), ("error".to_string(), 70)]);
+        let sizes = operand_sizes("a", 1, 5, &[("b".into(), 4), ("c".into(), 5)]);
+        assert_eq!(sizes.iter().map(|(g, s)| (g.as_str(), *s)).collect::<Vec<_>>(), vec![("a", 92), ("b", 35), ("c", 35)]);
+    }
 
     #[test]
     fn plantuml_lines() {
