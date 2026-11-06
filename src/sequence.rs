@@ -31,7 +31,8 @@ message inside; lifelines without a classifier. Reads only. Use it for /check-se
 elements found by name (the package first), messages are matched to the receiver's operations by name. Lines: `participant Name`, \
 `actor Name`, `participant \"Long name\" as L`; `A -> B : call()` (synchronous), `A ->> B : signal` (asynchronous), `B --> A : result` \
 (reply), a time constraint in braces after the message (`A -> B : pay() {< 2s}`, kept as the tagged value \"time constraint\"); `alt condition` / `else condition` / `opt` / `loop` / `par` / `break` … `end` (combined fragments); @startuml, title, \
-autonumber, activate, notes, boxes, dividers, delays and comments are skipped; `return x` answers the last open call; group … end is a \
+autonumber, activate, boxes, dividers, delays and comments are skipped; notes (`note right of A : text`, `note over A, B` … `end note`) \
+are drawn right of the lifelines and linked to them, and an arrow's colour (`-[#red]>`) colours the message; `return x` answers the last open call; group … end is a \
 frame; arrows to the left (<-), with colours or styles count too. Missing participants become lifelines (with create_classes: classes and \
 lifelines of them); with create_missing_operations the receivers \
 get the operations the messages call. Show the user the report (bound / created / missing) after the save.",
@@ -210,7 +211,9 @@ pub fn check(input: &Value, cfg: &AppConfig) -> Result<String> {
 #[derive(Debug, PartialEq)]
 enum Line {
     Participant { alias: String, name: String, actor: bool },
-    Message { from: String, to: String, text: String, reply: bool, asynchronous: bool },
+    Message { from: String, to: String, text: String, reply: bool, asynchronous: bool, color: Option<String> },
+    /// A note on lifelines (LC-473): the participants it is over or beside, its text.
+    Note { on: Vec<String>, text: String },
     Open { kind: String, guard: String },
     Else(String),
     End,
@@ -225,10 +228,21 @@ fn parse(text: &str) -> Result<Vec<Line>> {
     let mut skip: Option<String> = None;
     // Calls not yet answered, for "return": (caller, callee).
     let mut open_calls: Vec<(String, String)> = Vec::new();
+    // A note over more lines: its participants and lines so far.
+    let mut open_note: Option<(Vec<String>, Vec<String>)> = None;
     for (n, raw) in text.lines().enumerate() {
         let line = raw.trim();
         let lower = line.to_lowercase();
         let first = lower.split_whitespace().next().unwrap_or("");
+        if let Some((on, body)) = open_note.as_mut() {
+            if ["end note", "endnote", "end hnote", "endhnote", "end rnote", "endrnote"].iter().any(|e| lower.starts_with(e)) {
+                out.push(Line::Note { on: std::mem::take(on), text: body.join("\n") });
+                open_note = None;
+            } else {
+                body.push(line.to_string());
+            }
+            continue;
+        }
         // Blocks that are not messages (notes, legends, boxes' ends, references) are skipped to their end (LC-472).
         if let Some(end) = skip.as_ref() {
             if lower.starts_with(end.as_str()) {
@@ -236,8 +250,22 @@ fn parse(text: &str) -> Result<Vec<Line>> {
             }
             continue;
         }
-        if matches!(first, "note" | "hnote" | "rnote") && !line.contains(':') {
-            skip = Some("end note".into());
+        // Notes (LC-473: they were left out): "note left of A : text", "note over A, B" … "end note".
+        if matches!(first, "note" | "hnote" | "rnote") {
+            let (head, text) = line.split_once(':').map(|(h, t)| (h.trim(), Some(t.trim().replace("\\n", "\n")))).unwrap_or((line, None));
+            let rest = head[first.len()..].trim();
+            let rest_lower = rest.to_lowercase();
+            let names = match (rest_lower.find(" of "), rest_lower.strip_prefix("over ")) {
+                (Some(at), _) => &rest[at + 4..],
+                (None, Some(_)) => &rest[5..],
+                _ => "",
+            };
+            // Colours after the names: note over A #pink.
+            let on: Vec<String> = names.split(" #").next().unwrap_or("").split(',').map(unquote).filter(|n| !n.is_empty()).collect();
+            match text {
+                Some(text) => out.push(Line::Note { on, text }),
+                None => open_note = Some((on, Vec::new())),
+            }
             continue;
         }
         if first == "ref" && !line.contains(':') {
@@ -257,7 +285,7 @@ fn parse(text: &str) -> Result<Vec<Line>> {
         // "return x": the reply to the caller of the last call still open.
         if first == "return" {
             if let Some((caller, callee)) = open_calls.pop() {
-                out.push(Line::Message { from: callee, to: caller, text: line[6..].trim().to_string(), reply: true, asynchronous: false });
+                out.push(Line::Message { from: callee, to: caller, text: line[6..].trim().to_string(), reply: true, asynchronous: false, color: None });
             }
             continue;
         }
@@ -296,7 +324,8 @@ fn parse(text: &str) -> Result<Vec<Line>> {
         }
         // A -> B : text (the arrow decides the kind).
         let (head, message) = line.split_once(':').map(|(h, m)| (h, m.trim())).unwrap_or((line, ""));
-        // Colours and styles of arrows ([#red], ->x, -\\, o->) do not change the message.
+        // Colours and styles of arrows ([#red], ->x, -\\, o->) do not change the message; the colour is the line's (LC-473).
+        let color = head.find("[#").and_then(|a| crate::mermaid_ddl::css_color(head[a + 2..].split([']', ',', ';']).next().unwrap_or("")));
         let mut head = head.to_string();
         while let (Some(a), Some(b)) = (head.find("[#"), head.find(']')) {
             if b < a {
@@ -322,7 +351,7 @@ fn parse(text: &str) -> Result<Vec<Line>> {
         } else if from != to {
             open_calls.push((from.clone(), to.clone()));
         }
-        out.push(Line::Message { from, to, text: message.to_string(), reply, asynchronous: arrow.ends_with(">>") || arrow.starts_with("<<") });
+        out.push(Line::Message { from, to, text: message.to_string(), reply, asynchronous: arrow.ends_with(">>") || arrow.starts_with("<<"), color });
     }
     Ok(out)
 }
@@ -410,9 +439,11 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
     let mut missing: Vec<String> = Vec::new();
     let mut fragments: Vec<(String, String, usize)> = Vec::new();
     let mut drawn: Vec<(String, String, usize, usize)> = Vec::new();
+    // Notes: (participants, text, the number of the message before it).
+    let mut notes: Vec<(Vec<String>, String, usize)> = Vec::new();
     for l in &lines {
         match l {
-            Line::Message { from, to, text, reply, asynchronous } => {
+            Line::Message { from, to, text, reply, asynchronous, color } => {
                 number += 1;
                 let (source, _) = refs[from].clone();
                 let (target, owner) = refs[to].clone();
@@ -454,8 +485,12 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
                     message["tags"] = json!({ "time constraint": c });
                     message["constraints"] = json!([{ "name": format!("{{{c}}}"), "type": "Invariant" }]);
                 }
+                if let Some(c) = color {
+                    message["color"] = json!(c);
+                }
                 ops.push(message);
             }
+            Line::Note { on, text } => notes.push((on.clone(), text.clone(), number)),
             Line::Open { kind, guard } => fragments.push((kind.clone(), guard.clone(), number + 1)),
             Line::Else(guard) => {
                 if let Some(last) = fragments.last_mut() {
@@ -490,6 +525,22 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
     if !fragments.is_empty() {
         report.push(format!("{} fragment(s) without \"end\" were left out", fragments.len()));
     }
+    // Notes right of the lifelines, at the height of the message before them, linked to their participants: drawn
+    // between the lifelines they would cover messages (LC-473).
+    for (n, (on, text, after)) in notes.iter().enumerate() {
+        let key = format!("n{n}");
+        ops.push(json!({ "op": "create_element", "key": key, "package": package, "name": "", "type": "Note", "notes": text }));
+        ops.push(json!({ "op": "place", "diagram": "#seq", "element": format!("#{key}"), "left": 60 + participants.len() as i64 * 200, "top": 115 + *after as i64 * 35 - 15,
+            "width": 180, "height": 30 + 15 * text.lines().count() as i64 }));
+        for name in on {
+            if let Some((element, _)) = refs.get(name) {
+                ops.push(json!({ "op": "create_connector", "source": format!("#{key}"), "target": element, "type": "NoteLink" }));
+            }
+        }
+    }
+    if !notes.is_empty() {
+        report.push(format!("{} note(s), right of the lifelines", notes.len()));
+    }
     // EA numbers the messages itself, hierarchically by activation (1, 1.1, 1.2…), when the diagram shows sequence
     // numbers (LC-421): on unless numbering is false.
     if input["numbering"] != false {
@@ -510,12 +561,17 @@ mod tests {
         let lines = parse("@startuml\ntitle X\nactor Klient\nparticipant \"Order service\" as OS\nKlient -> OS : place(order)\nalt ok\nOS --> Klient : ok\nelse error\nOS ->> Klient : error\nend\n@enduml").unwrap();
         assert_eq!(lines[0], Line::Participant { alias: "Klient".into(), name: "Klient".into(), actor: true });
         assert_eq!(lines[1], Line::Participant { alias: "OS".into(), name: "Order service".into(), actor: false });
-        assert_eq!(lines[2], Line::Message { from: "Klient".into(), to: "OS".into(), text: "place(order)".into(), reply: false, asynchronous: false });
+        assert_eq!(lines[2], Line::Message { from: "Klient".into(), to: "OS".into(), text: "place(order)".into(), reply: false, asynchronous: false, color: None });
         assert_eq!(lines[3], Line::Open { kind: "alt".into(), guard: "ok".into() });
         assert!(matches!(&lines[4], Line::Message { reply: true, .. }));
         assert!(matches!(&lines[6], Line::Message { reply: false, asynchronous: true, .. }));
         assert_eq!(lines[7], Line::End);
         assert!(parse("what is this").is_err());
+        // LC-473: notes and the colour of an arrow.
+        let lines = parse("A -[#red]> B : x\nnote over A, B : razem\nnote right of B\n  dwie\n  linie\nend note").unwrap();
+        assert!(matches!(&lines[0], Line::Message { color: Some(c), .. } if c == "#FF0000"), "{lines:?}");
+        assert_eq!(lines[1], Line::Note { on: vec!["A".into(), "B".into()], text: "razem".into() });
+        assert_eq!(lines[2], Line::Note { on: vec!["B".into()], text: "dwie\nlinie".into() });
         assert_eq!(called("AddBook(string, string)"), "addbook");
     }
 

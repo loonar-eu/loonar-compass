@@ -30,8 +30,9 @@ would be created; apply saves it (one save the user approves).",
             "description": "A PlantUML class diagram (text between @startuml and @enduml, or an attached .puml/.plantuml/.txt) as a new package \
 with classes (attributes with types and visibility, operations), abstract classes, interfaces and enums, relationships (<|-- inheritance, \
 ..|> realisation, *-- composition, o-- aggregation, --> association, ..> dependency; arrows with directions or colours such as -up-> or \
--[#red]-> too; multiplicities in quotes and labels after a colon) and a class diagram laid out by EA. Aliases (class \"Long name\" as L) \
-and stereotypes <<…>> are kept; packages, notes and skin parameters are left out (the preview says so). action preview shows what would \
+-[#red]-> too; multiplicities in quotes and labels after a colon) and a class diagram laid out by EA. Aliases (class \"Long name\" as L, into EA's \
+Alias), {abstract} operations, the navigability of --> and stereotypes <<…>> are kept; notes (linked to their classes), class fills \
+(class A #lightblue) and line colours (-[#red]->) are drawn; packages, notes on relationships and skin parameters are left out (the preview says so). action preview shows what would \
 be created; apply saves it (one save the user approves). A PlantUML sequence diagram is recognised and imported as one: its participants become classes (actors Actors) with lifelines that are instances of them, the messages operations of those classes (with their parameters) and messages of a new sequence diagram; existing elements of the same name are used instead.",
             "input_schema": { "type": "object", "properties": {
                 "text": { "type": "string" }, "file": { "type": "string" },
@@ -61,8 +62,53 @@ pub(crate) struct MClass {
     /// A stereotype other than interface or enumeration (PlantUML <<entity>> and the like).
     pub stereotype: String,
     pub abstract_: bool,
+    /// The short name of a PlantUML `"Long name" as L` (LC-473): EA's Alias.
+    pub alias: String,
     pub attributes: Vec<(String, String, String)>, // (visibility, name, type)
     pub operations: Vec<(String, String, String)>, // (visibility, name(params), return)
+    /// The signatures of the abstract operations (Mermaid `op()*`, PlantUML `{abstract}`; LC-473).
+    pub abstract_operations: Vec<String>,
+}
+
+/// What a PlantUML class diagram draws besides the model (LC-473): notes (text, the classes they are linked to),
+/// class fills and line colours of relationships (from, to, colour), the colours as #RRGGBB.
+#[derive(Debug, Default, Clone, PartialEq)]
+pub(crate) struct Drawing {
+    pub notes: Vec<(String, Vec<String>)>,
+    pub fills: BTreeMap<String, String>,
+    pub line_colors: Vec<(String, String, String)>,
+}
+
+/// A PlantUML colour (#lightblue, #ADD8E6, #ABC, lightblue) as #RRGGBB; None when it is not one.
+pub(crate) fn css_color(text: &str) -> Option<String> {
+    let t = text.trim().trim_start_matches('#').to_lowercase();
+    let hex = |h: &str| h.chars().all(|c| c.is_ascii_hexdigit());
+    if t.len() == 6 && hex(&t) {
+        return Some(format!("#{}", t.to_uppercase()));
+    }
+    if t.len() == 3 && hex(&t) {
+        return Some(format!("#{}", t.chars().flat_map(|c| [c, c]).collect::<String>().to_uppercase()));
+    }
+    const NAMES: &[(&str, &str)] = &[
+        ("red", "FF0000"), ("green", "008000"), ("blue", "0000FF"), ("yellow", "FFFF00"), ("orange", "FFA500"), ("pink", "FFC0CB"),
+        ("purple", "800080"), ("violet", "EE82EE"), ("magenta", "FF00FF"), ("cyan", "00FFFF"), ("aqua", "00FFFF"), ("brown", "A52A2A"),
+        ("black", "000000"), ("white", "FFFFFF"), ("gray", "808080"), ("grey", "808080"), ("silver", "C0C0C0"), ("gold", "FFD700"),
+        ("navy", "000080"), ("teal", "008080"), ("olive", "808000"), ("maroon", "800000"), ("lime", "00FF00"), ("beige", "F5F5DC"),
+        ("lightblue", "ADD8E6"), ("lightgreen", "90EE90"), ("lightgray", "D3D3D3"), ("lightgrey", "D3D3D3"), ("lightyellow", "FFFFE0"),
+        ("lightpink", "FFB6C1"), ("lightcyan", "E0FFFF"), ("lightcoral", "F08080"), ("lightsalmon", "FFA07A"), ("lightskyblue", "87CEFA"),
+        ("skyblue", "87CEEB"), ("darkblue", "00008B"), ("darkgreen", "006400"), ("darkred", "8B0000"), ("darkorange", "FF8C00"),
+        ("darkgray", "A9A9A9"), ("darkgrey", "A9A9A9"), ("palegreen", "98FB98"), ("wheat", "F5DEB3"), ("khaki", "F0E68C"),
+        ("salmon", "FA8072"), ("coral", "FF7F50"), ("tomato", "FF6347"), ("orchid", "DA70D6"), ("plum", "DDA0DD"), ("lavender", "E6E6FA"),
+        ("ivory", "FFFFF0"), ("azure", "F0FFFF"), ("honeydew", "F0FFF0"), ("mistyrose", "FFE4E1"), ("aliceblue", "F0F8FF"), ("steelblue", "4682B4"),
+    ];
+    NAMES.iter().find(|(n, _)| *n == t).map(|(_, h)| format!("#{h}"))
+}
+
+/// The colour in a PlantUML arrow or declaration: "-[#red]->", "-[bold,#00AA00]->", "#back:pink;line:red" (the fill).
+fn color_in(text: &str) -> Option<String> {
+    let at = text.find('#')?;
+    let token: String = text[at + 1..].chars().take_while(|c| c.is_ascii_alphanumeric() || *c == ':').collect();
+    css_color(token.strip_prefix("back:").unwrap_or(&token))
 }
 
 /// (from, to, type, label, multiplicity at from, multiplicity at to); for a composition or aggregation from = the part,
@@ -80,6 +126,7 @@ fn visibility(c: char) -> &'static str {
 
 /// A member line: "+name : Type", "+Type name", "+method(args) Return".
 fn member(line: &str, class: &mut MClass) {
+    let abstract_ = line.trim().trim_end_matches('$').ends_with('*');
     let line = line.trim().trim_end_matches(['$', '*']);
     if line.is_empty() || line.starts_with("%%") {
         return;
@@ -101,7 +148,11 @@ fn member(line: &str, class: &mut MClass) {
         let close = rest.rfind(')').unwrap_or(rest.len());
         let name = rest[..open].trim().to_string();
         let ret = rest[close.min(rest.len())..].trim_start_matches(')').trim().trim_start_matches(':').trim().to_string();
-        class.operations.push((vis.into(), format!("{name}({})", &rest[open + 1..close.max(open + 1)]), ret));
+        let signature = format!("{name}({})", &rest[open + 1..close.max(open + 1)]);
+        if abstract_ {
+            class.abstract_operations.push(signature.clone());
+        }
+        class.operations.push((vis.into(), signature, ret));
     } else if let Some((name, ty)) = rest.split_once(':') {
         class.attributes.push((vis.into(), name.trim().to_string(), ty.trim().to_string()));
     } else if let Some((ty, name)) = rest.rsplit_once(' ') {
@@ -115,7 +166,7 @@ fn member(line: &str, class: &mut MClass) {
 const ARROWS: &[(&str, &str, bool)] = &[
     ("<|--", "Generalization", true), ("--|>", "Generalization", false), ("<|..", "Realisation", true), ("..|>", "Realisation", false),
     ("*--", "Composition", true), ("--*", "Composition", false), ("o--", "Aggregation", true), ("--o", "Aggregation", false),
-    ("<--", "Association", true), ("-->", "Association", false), ("<..", "Dependency", true), ("..>", "Dependency", false), ("--", "Association", false), ("..", "Dependency", false),
+    ("<--", "DirectedAssociation", true), ("-->", "DirectedAssociation", false), ("<..", "Dependency", true), ("..>", "Dependency", false), ("--", "Association", false), ("..", "Dependency", false),
 ];
 
 pub(crate) fn parse_mermaid(text: &str) -> Result<(BTreeMap<String, MClass>, Vec<MLink>)> {
@@ -216,7 +267,7 @@ fn diagram_text(input: &Value, cfg: &AppConfig) -> Result<String> {
 
 pub fn import_mermaid(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)> {
     let (classes, links) = parse_mermaid(&diagram_text(input, cfg)?)?;
-    build_import(input, cfg, classes, links, "Mermaid import", "Mermaid classDiagram", &[])
+    build_import(input, cfg, classes, links, "Mermaid import", "Mermaid classDiagram", &[], &Drawing::default())
 }
 
 /// A PlantUML class diagram (LC-472): turned into the lines the Mermaid reader knows, then built the same way.
@@ -230,13 +281,6 @@ pub fn import_plantuml(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, St
         let name = name.as_str();
         let lower: Vec<String> = text.lines().map(|l| l.trim().to_lowercase()).collect();
         let mut left_out = Vec::new();
-        let notes = lower.iter().filter(|l| l.starts_with("note ") || l.starts_with("hnote ") || l.starts_with("rnote ")).count();
-        if notes > 0 {
-            left_out.push(format!("notes ({notes})"));
-        }
-        if lower.iter().any(|l| l.contains("[#")) {
-            left_out.push("colours of arrows".to_string());
-        }
         if lower.iter().any(|l| l.starts_with("== ") || l.starts_with("...") || l.starts_with("|||")) {
             left_out.push("dividers and delays".to_string());
         }
@@ -258,14 +302,14 @@ pub fn import_plantuml(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, St
         }
         return Ok(if input["action"].as_str() == Some("apply") { (ops, summary) } else { (Vec::new(), format!("{summary}\nNothing saved yet: action apply saves it.")) });
     }
-    let (classes, links, left_out) = parse_plantuml(&text)?;
+    let (classes, links, left_out, drawing) = parse_plantuml(&text)?;
     let packages: Vec<String> = text.lines().map(str::trim).filter(|l| l.to_lowercase().starts_with("package ")).map(|l| l[8..].trim_end_matches('{').trim().trim_matches('"').to_string()).collect();
     let mut input = input.clone();
     if input["name"].as_str().is_none_or(|n| n.trim().is_empty()) && packages.len() == 1 {
         input["name"] = json!(packages[0]);
     }
     let input = &input;
-    build_import(input, cfg, classes, links, "PlantUML import", "PlantUML class diagram", &left_out)
+    build_import(input, cfg, classes, links, "PlantUML import", "PlantUML class diagram", &left_out, &drawing)
 }
 
 /// Whether PlantUML text is a sequence diagram: messages (A -> B) and no class declarations or class relationships.
@@ -305,17 +349,38 @@ fn plain_arrow(arrow: &str) -> String {
     a.replace("+--", "--").replace("--+", "--").replace("#--", "--").replace("--#", "--").replace("x--", "--").replace("--x", "--")
 }
 
-/// PlantUML class diagram → (classes, relationships, what was left out). Aliases become the real names.
-pub(crate) fn parse_plantuml(text: &str) -> Result<(BTreeMap<String, MClass>, Vec<MLink>, Vec<String>)> {
+/// PlantUML class diagram → (classes, relationships, what was left out, notes and colours). Aliases become the real names.
+pub(crate) fn parse_plantuml(text: &str) -> Result<(BTreeMap<String, MClass>, Vec<MLink>, Vec<String>, Drawing)> {
     let mut lines = vec!["classDiagram".to_string()];
     let mut aliases: BTreeMap<String, String> = BTreeMap::new();
+    // Name → the short name written with "as" (LC-473: it goes into EA's Alias).
+    let mut short_names: BTreeMap<String, String> = BTreeMap::new();
     let mut left_out: Vec<String> = Vec::new();
     let mut skip_until: Option<&str> = None;
     let mut seen = false;
     let mut depth_packages = 0usize;
     let mut in_class = false;
+    // Notes and colours by the ids of the text (LC-473); the real names at the end.
+    let mut drawing = Drawing::default();
+    // Floating notes ("note "…" as N1"): id → index in drawing.notes.
+    let mut note_ids: BTreeMap<String, usize> = BTreeMap::new();
+    // A note over more lines: its index, its lines; and whether it is on a relationship (not imported).
+    let mut open_note: Option<(Option<usize>, Vec<String>)> = None;
+    let mut last_class: Option<String> = None;
     for raw in text.lines() {
         let line = raw.trim();
+        if let Some((index, body)) = open_note.as_mut() {
+            let lower = line.to_lowercase();
+            if lower.starts_with("end note") || lower.starts_with("endnote") {
+                if let Some(index) = *index {
+                    drawing.notes[index].0 = body.join("\n");
+                }
+                open_note = None;
+            } else {
+                body.push(line.to_string());
+            }
+            continue;
+        }
         if let Some(end) = skip_until {
             if line.to_lowercase().starts_with(end) {
                 skip_until = None;
@@ -345,12 +410,44 @@ pub(crate) fn parse_plantuml(text: &str) -> Result<(BTreeMap<String, MClass>, Ve
             }
             continue;
         }
+        // Notes (LC-473): "note left of A : text", "note top of A" … "end note", "note "text" as N1" (linked later with
+        // "N1 .. A"), "note right : text" (of the class above). A note on a relationship is left out.
         if lower.starts_with("note ") {
-            if !line.contains(':') {
-                skip_until = Some("end note");
+            let (head, text) = match line.split_once(':') {
+                Some((h, t)) if !h.contains('"') => (h.trim().to_string(), Some(t.trim().to_string())),
+                _ => (line.to_string(), None),
+            };
+            let words: Vec<&str> = head.split_whitespace().collect();
+            if words.get(1).is_some_and(|w| w.eq_ignore_ascii_case("on")) {
+                if text.is_none() {
+                    open_note = Some((None, Vec::new()));
+                }
+                if !left_out.iter().any(|x| x.starts_with("notes on relationships")) {
+                    left_out.push("notes on relationships".into());
+                }
+                continue;
             }
-            if !left_out.contains(&"notes".to_string()) {
-                left_out.push("notes".into());
+            let floating = head.split_once(" as ").filter(|_| words.get(1).is_some_and(|w| w.starts_with('"') || w.eq_ignore_ascii_case("as")));
+            let index = drawing.notes.len();
+            match floating {
+                Some((quoted, id)) => {
+                    let quoted = quoted.trim()[4..].trim().trim_matches('"').to_string();
+                    drawing.notes.push((quoted.clone(), Vec::new()));
+                    note_ids.insert(id.trim().to_string(), index);
+                    if quoted.is_empty() && text.is_none() {
+                        open_note = Some((Some(index), Vec::new()));
+                    }
+                }
+                None => {
+                    let target = match words.iter().position(|w| w.eq_ignore_ascii_case("of")) {
+                        Some(at) => words[at + 1..].join(" ").trim_matches('"').to_string(),
+                        None => last_class.clone().unwrap_or_default(),
+                    };
+                    drawing.notes.push((text.clone().unwrap_or_default(), if target.is_empty() { Vec::new() } else { vec![target] }));
+                    if text.is_none() {
+                        open_note = Some((Some(index), Vec::new()));
+                    }
+                }
             }
             continue;
         }
@@ -374,7 +471,9 @@ pub(crate) fn parse_plantuml(text: &str) -> Result<(BTreeMap<String, MClass>, Ve
                 continue;
             }
             let member = line.replace("{abstract}", "").replace("{static}", "").replace("{classifier}", "").replace("{field}", "").replace("{method}", "");
-            lines.push(member.trim().to_string());
+            // An abstract operation keeps Mermaid's mark (LC-473: it was imported as an ordinary one).
+            let mark = if line.contains("{abstract}") { "*" } else { "" };
+            lines.push(format!("{}{mark}", member.trim()));
             continue;
         }
         if line == "}" {
@@ -393,7 +492,8 @@ pub(crate) fn parse_plantuml(text: &str) -> Result<(BTreeMap<String, MClass>, Ve
                 let b = rest[a..].find(">>").map(|b| a + b + 2).unwrap_or(rest.len());
                 rest.replace_range(a..b, "");
             }
-            // Generics, colours and extends written on the declaration.
+            // Generics, colours and extends written on the declaration (the fill is kept, LC-473).
+            let fill = rest.find(" #").and_then(|at| color_in(&rest[at..]));
             for cut in [" #", " extends ", " implements "] {
                 if let Some(at) = rest.find(cut) {
                     rest.truncate(at);
@@ -414,6 +514,13 @@ pub(crate) fn parse_plantuml(text: &str) -> Result<(BTreeMap<String, MClass>, Ve
             }
             let id = alias.clone().unwrap_or_else(|| name.replace(' ', "_"));
             aliases.insert(id.clone(), name.clone());
+            last_class = Some(id.clone());
+            if let Some(fill) = fill {
+                drawing.fills.insert(id.clone(), fill);
+            }
+            if let Some(short) = alias.filter(|a| *a != name) {
+                short_names.insert(name.clone(), short);
+            }
             // The stereotype lines first: inside an open body they would be read as members.
             lines.push(format!("class {id}"));
             match *kind {
@@ -466,6 +573,14 @@ pub(crate) fn parse_plantuml(text: &str) -> Result<(BTreeMap<String, MClass>, Ve
             let card_a = parts[..at].iter().rev().find(|p| p.starts_with('"')).cloned().unwrap_or_default();
             let card_b = parts[at + 1..].iter().find(|p| p.starts_with('"')).cloned().unwrap_or_default();
             let (a, b) = (a.trim_matches('"').to_string(), b.trim_matches('"').to_string());
+            // A floating note linked to a class: no relationship of the model.
+            if let Some((note, other)) = note_ids.get(&a).map(|n| (*n, &b)).or_else(|| note_ids.get(&b).map(|n| (*n, &a))) {
+                drawing.notes[note].1.push(other.clone());
+                continue;
+            }
+            if let Some(colour) = color_in(&parts[at]) {
+                drawing.line_colors.push((a.replace(' ', "_"), b.replace(' ', "_"), colour));
+            }
             for n in [&a, &b] {
                 aliases.entry(n.replace(' ', "_")).or_insert_with(|| n.clone());
             }
@@ -491,15 +606,21 @@ pub(crate) fn parse_plantuml(text: &str) -> Result<(BTreeMap<String, MClass>, Ve
         .into_values()
         .map(|mut c| {
             c.name = real(&c.name);
+            c.alias = short_names.get(&c.name).cloned().unwrap_or_default();
             (c.name.clone(), c)
         })
         .collect();
     let links = links.into_iter().map(|(f, t, k, l, cf, ct)| (real(&f), real(&t), k, l, cf, ct)).collect();
-    Ok((classes, links, left_out))
+    let drawing = Drawing {
+        notes: drawing.notes.into_iter().filter(|(t, _)| !t.is_empty()).map(|(t, on)| (t, on.iter().map(|o| real(&o.replace(' ', "_"))).collect())).collect(),
+        fills: drawing.fills.into_iter().map(|(id, c)| (real(&id), c)).collect(),
+        line_colors: drawing.line_colors.into_iter().map(|(a, b, c)| (real(&a), real(&b), c)).collect(),
+    };
+    Ok((classes, links, left_out, drawing))
 }
 
 /// The package, diagram, classes and relationships of an imported class diagram: one save.
-fn build_import(input: &Value, cfg: &AppConfig, classes: BTreeMap<String, MClass>, links: Vec<MLink>, default_name: &str, notation: &str, left_out: &[String]) -> Result<(Vec<Value>, String)> {
+fn build_import(input: &Value, cfg: &AppConfig, classes: BTreeMap<String, MClass>, links: Vec<MLink>, default_name: &str, notation: &str, left_out: &[String], drawing: &Drawing) -> Result<(Vec<Value>, String)> {
     if classes.is_empty() {
         bail!("no classes in the diagram");
     }
@@ -518,8 +639,15 @@ fn build_import(input: &Value, cfg: &AppConfig, classes: BTreeMap<String, MClass
             element["stereotype"] = json!(c.stereotype);
         }
         ops.push(element);
-        if c.abstract_ {
-            ops.push(json!({ "op": "update_element", "element": format!("#{k}"), "abstract": true }));
+        if c.abstract_ || !c.alias.is_empty() {
+            let mut update = json!({ "op": "update_element", "element": format!("#{k}") });
+            if c.abstract_ {
+                update["abstract"] = json!(true);
+            }
+            if !c.alias.is_empty() {
+                update["alias"] = json!(c.alias);
+            }
+            ops.push(update);
         }
         for (vis, n, ty) in &c.attributes {
             ops.push(json!({ "op": "create_attribute", "element": format!("#{k}"), "name": n, "type": ty, "visibility": vis }));
@@ -530,17 +658,50 @@ fn build_import(input: &Value, cfg: &AppConfig, classes: BTreeMap<String, MClass
                 let (pn, pt) = p.split_once(':').map(|(a, b)| (a.trim(), b.trim())).or_else(|| p.rsplit_once(' ').map(|(t, n)| (n.trim(), t.trim()))).unwrap_or((p, ""));
                 json!({ "name": pn, "type": pt })
             }).collect();
-            ops.push(json!({ "op": "create_operation", "element": format!("#{k}"), "name": n, "return_type": ret, "visibility": vis, "parameters": params }));
+            let mut operation = json!({ "op": "create_operation", "element": format!("#{k}"), "name": n, "return_type": ret, "visibility": vis, "parameters": params });
+            if c.abstract_operations.contains(sig) {
+                operation["abstract"] = json!(true);
+            }
+            ops.push(operation);
         }
         ops.push(json!({ "op": "place", "diagram": "#dia", "element": format!("#{k}"), "left": 40 + (i as i64 % 4) * 230, "top": 40 + (i as i64 / 4) * 200, "width": 180, "height": 120 }));
+        if let Some(fill) = drawing.fills.get(&c.name) {
+            ops.push(json!({ "op": "set_color", "diagram": "#dia", "element": format!("#{k}"), "bgcolor": fill }));
+        }
     }
+    // Notes, linked to their classes (LC-473: they were left out).
+    let rows = classes.len().div_ceil(4) as i64;
+    for (n, (text, on)) in drawing.notes.iter().enumerate() {
+        let note = format!("note{n}");
+        ops.push(json!({ "op": "create_element", "key": note, "package": "#pkg", "name": "", "type": "Note", "notes": text }));
+        ops.push(json!({ "op": "place", "diagram": "#dia", "element": format!("#{note}"), "left": 40 + (n as i64 % 4) * 230, "top": 40 + rows * 200 + (n as i64 / 4) * 100, "width": 180, "height": 60 }));
+        for target in on.iter().filter(|t| classes.contains_key(*t)) {
+            ops.push(json!({ "op": "create_connector", "source": format!("#{note}"), "target": format!("#{}", key(target)), "type": "NoteLink" }));
+        }
+    }
+    let mut colored: Vec<usize> = Vec::new();
     for (i, (from, to, kind, label, card_from, card_to)) in links.iter().enumerate() {
-        let (kind, subtype) = match kind.as_str() { "Composition" => ("Aggregation", Some("Strong")), "Aggregation" => ("Aggregation", Some("Weak")), k => (k, None) };
+        let (kind, subtype) = match kind.as_str() {
+            "Composition" => ("Aggregation", Some("Strong")),
+            "Aggregation" => ("Aggregation", Some("Weak")),
+            "DirectedAssociation" => ("Association", None),
+            k => (k, None),
+        };
         // In EA an aggregation goes from the part to the whole; parse_mermaid already gives (part, whole).
         let (s, t) = (from, to);
         let mut op = json!({ "op": "create_connector", "source": format!("#{}", key(s)), "target": format!("#{}", key(t)), "type": kind, "name": label });
         if let Some(st) = subtype {
             op["subtype"] = json!(st);
+        }
+        // An arrow (-->) is navigable towards the target (LC-473).
+        if links[i].2 == "DirectedAssociation" {
+            op["direction"] = json!("Source -> Destination");
+        }
+        // The line colour written on the arrow (-[#red]->), each written one used once.
+        let colour = drawing.line_colors.iter().enumerate().find(|(n, (a, b, _))| !colored.contains(n) && ((a == from && b == to) || (a == to && b == from)));
+        if let Some((n, (_, _, c))) = colour {
+            colored.push(n);
+            op["color"] = json!(c);
         }
         let cards = !card_from.is_empty() || !card_to.is_empty();
         if cards {
@@ -553,6 +714,9 @@ fn build_import(input: &Value, cfg: &AppConfig, classes: BTreeMap<String, MClass
     }
     ops.push(json!({ "op": "layout_diagram", "diagram": "#dia", "direction": "down", "spacing": 40 }));
     let mut text = format!("{notation} → package \"{name}\": {} classes, {} relationships, a diagram.", classes.len(), links.len());
+    if !drawing.notes.is_empty() {
+        text.push_str(&format!(" Notes on the diagram: {}.", drawing.notes.len()));
+    }
     if !left_out.is_empty() {
         text.push_str(&format!(" Left out: {}.", left_out.join(", ")));
     }
@@ -737,7 +901,7 @@ Zamówienie ..|> Płatność
 Pozycja ...> Status : używa
 ' komentarz
 @enduml"#;
-        let (c, l, left) = parse_plantuml(text).unwrap();
+        let (c, l, left, drawing) = parse_plantuml(text).unwrap();
         let s = |t: &str| t.to_string();
         let doc = &c["Dokument handlowy"];
         assert!(doc.abstract_ && doc.stereotype == "entity", "{doc:?}");
@@ -748,12 +912,25 @@ Pozycja ...> Status : używa
         assert_eq!(c["Status"].attributes.len(), 2);
         assert!(l.contains(&(s("Zamówienie"), s("Dokument handlowy"), s("Generalization"), String::new(), String::new(), String::new())), "{l:?}");
         assert!(l.contains(&(s("Pozycja"), s("Zamówienie"), s("Composition"), s("zawiera"), s("1..*"), s("1"))), "{l:?}");
-        assert!(l.iter().any(|x| x.0 == "Zamówienie" && x.1 == "Status" && x.2 == "Association"), "{l:?}");
+        assert!(l.iter().any(|x| x.0 == "Zamówienie" && x.1 == "Status" && x.2 == "DirectedAssociation"), "{l:?}");
+        assert_eq!(doc.alias, "Dok");
+        assert_eq!(doc.abstract_operations, ["wystaw()"]);
+        assert!(c["Zamówienie"].alias.is_empty() && c["Zamówienie"].abstract_operations.is_empty());
         assert!(l.iter().any(|x| x.0 == "Zamówienie" && x.1 == "Płatność" && x.2 == "Realisation"), "{l:?}");
         assert!(l.iter().any(|x| x.0 == "Pozycja" && x.1 == "Status" && x.2 == "Dependency" && x.3 == "używa"), "{l:?}");
-        assert!(left.iter().any(|x| x == "notes") && left.iter().any(|x| x.starts_with("packages")), "{left:?}");
+        assert!(!left.iter().any(|x| x.starts_with("notes")) && left.iter().any(|x| x.starts_with("packages")), "{left:?}");
+        // LC-473: notes with their classes, the colour of the arrow.
+        assert_eq!(drawing.notes, [(s("notatka"), vec![s("Zamówienie")]), (s("dłuższa notatka"), vec![s("Status")])]);
+        assert_eq!(drawing.line_colors, [(s("Zamówienie"), s("Status"), s("#FF0000"))]);
         assert!(!c.contains_key("Zamówienia"), "the title is no class");
         assert!(parse_plantuml("hello").is_err());
+        // A floating note linked to a class, a fill, a note on a relationship.
+        let (_, l, left, d) = parse_plantuml("@startuml\nclass A #lightblue\nclass B #back:ABC;line:red\nA --> B\nnote \"zwykła\" as N1\nN1 .. B\nnote on link : o relacji\n@enduml").unwrap();
+        assert_eq!(l.len(), 1, "the note's link is no relationship: {l:?}");
+        assert_eq!(d.notes, [(s("zwykła"), vec![s("B")])]);
+        assert_eq!(d.fills.get("A").map(String::as_str), Some("#ADD8E6"));
+        assert_eq!(d.fills.get("B").map(String::as_str), Some("#AABBCC"));
+        assert!(left.iter().any(|x| x == "notes on relationships"), "{left:?}");
     }
 
     #[test]
@@ -801,6 +978,38 @@ Pozycja ...> Status : używa
         assert!(links.iter().any(|l| l[0] == "Aggregation" && l[2] == "*" && l[3] == "1"), "{links:?}");
         assert!(pg.contains("FOREIGN KEY (customer_id) REFERENCES customer (id)"), "{pg}");
         assert!(pg.contains("id INTEGER NOT NULL") && pg.contains("PRIMARY KEY (id)") && ms.contains("[full name] NVARCHAR(255)"), "{pg}\n{ms}");
+    }
+
+    /// LC-473: the alias, an abstract operation, an arrow's navigability and a composition's diamond reach EA.
+    /// `LOONAR_TEST_PROPS=… cargo test plantuml_details_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA and a copy of a test model"]
+    fn plantuml_details_live() {
+        let cfg = AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
+        let root: i64 = query_rows(&cfg, "select package_id from t_package where parent_id = 0 order by package_id").unwrap()[0][0].parse().unwrap();
+        let name = format!("ZZ_puml_{}", chrono::Local::now().format("%H%M%S"));
+        let text = "@startuml\nabstract class \"Dokument handlowy\" as Dok {\n  {abstract} +wystaw() : void\n  +drukuj() : void\n}\nclass Pozycja\nclass Status #lightblue\nDok *-- Pozycja\nDok o-- Status\nPozycja -[#red]-> Status\nnote right of Pozycja : uwaga\n@enduml";
+        let (ops, text) = import_plantuml(&json!({ "text": text, "package": root, "name": name, "action": "apply" }), &cfg).unwrap();
+        println!("{text}");
+        let done = crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("import");
+        let pkg = done["created"].as_array().unwrap().iter().find(|c| c["key"] == "pkg").unwrap()["id"].as_i64().unwrap();
+        let alias = query_rows(&cfg, &format!("select coalesce(alias,'') from t_object where package_id = {pkg} and name = 'Dokument handlowy'")).unwrap();
+        let methods = query_rows(&cfg, &format!("select m.name, coalesce(m.abstract,'0') from t_operation m join t_object o on o.object_id = m.object_id where o.package_id = {pkg} order by 1")).unwrap();
+        let links = query_rows(&cfg, &format!("select c.connector_type, coalesce(c.subtype,''), coalesce(c.direction,''), c.destisaggregate from t_connector c join t_object o on o.object_id = c.start_object_id where o.package_id = {pkg} order by 1, 2")).unwrap();
+        let colour = query_rows(&cfg, &format!("select c.linecolor from t_connector c join t_object o on o.object_id = c.start_object_id where o.package_id = {pkg} and c.connector_type = 'Association'")).unwrap();
+        let fill = query_rows(&cfg, &format!("select x.objectstyle from t_diagramobjects x join t_object o on o.object_id = x.object_id where o.package_id = {pkg} and o.name = 'Status'")).unwrap();
+        let notes = query_rows(&cfg, &format!("select o.note, t.name from t_object o join t_connector c on c.start_object_id = o.object_id join t_object t on t.object_id = c.end_object_id where o.package_id = {pkg} and o.object_type = 'Note' and c.connector_type = 'NoteLink'")).unwrap();
+        crate::ea::run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &crate::ea::BatchOptions::default()).unwrap();
+        crate::ea::shutdown();
+        println!("{alias:?}\n{methods:?}\n{links:?}\n{colour:?}\n{fill:?}\n{notes:?}");
+        assert_eq!(colour[0][0], "255", "red is 0x0000FF in EA's BGR");
+        assert!(fill[0][0].contains("BCol=15128749"), "{fill:?}");
+        assert_eq!(notes, vec![vec!["uwaga".to_string(), "Pozycja".to_string()]]);
+        assert_eq!(alias[0][0], "Dok");
+        assert!(methods.iter().any(|m| m[0] == "wystaw" && m[1] == "1") && methods.iter().any(|m| m[0] == "drukuj" && m[1] == "0"), "{methods:?}");
+        assert!(links.iter().any(|l| l[0] == "Aggregation" && l[1] == "Strong" && l[3] == "2"), "{links:?}");
+        assert!(links.iter().any(|l| l[0] == "Aggregation" && l[1] == "Weak" && l[3] == "1"), "{links:?}");
+        assert!(links.iter().any(|l| l[0] == "Association" && l[2] == "Source -> Destination"), "{links:?}");
     }
 }
 
@@ -859,7 +1068,12 @@ deactivate UI
         let ops_of = q("select o.name, op.name, (select count(*) from t_operationparams p where p.operationid = op.operationid) from t_operation op join t_object o on o.object_id = op.object_id where o.name in ('Sklep WWW', 'SerwisZamowien', 'Magazyn', 'Platnosci') order by 1, 2");
         let lifelines = q(&format!("select c.name from t_diagramobjects x join t_object l on l.object_id = x.object_id join t_object c on c.object_id = l.classifier where x.diagram_id = {d} order by 1"));
         let messages = q(&format!("select count(*) from t_connector where diagramid = {d} and connector_type = 'Sequence'"));
-        println!("{ops_of:?}\n{lifelines:?}\n{messages:?}");
+        // LC-473: the note linked to its lifeline, the red message.
+        let notes = q(&format!("select o.note, l.name from t_diagramobjects x join t_object o on o.object_id = x.object_id join t_connector c on c.start_object_id = o.object_id join t_object l on l.object_id = c.end_object_id where x.diagram_id = {d} and o.object_type = 'Note'"));
+        let red = q(&format!("select name from t_connector where diagramid = {d} and linecolor = 255"));
+        println!("{ops_of:?}\n{lifelines:?}\n{messages:?}\n{notes:?}\n{red:?}");
+        assert!(notes.len() == 1 && notes[0][0].contains("rezerwacja na 15 minut") && notes[0][1] == "Magazyn", "{notes:?}");
+        assert_eq!(red, vec![vec!["oznaczZaPobraniem()".to_string()]]);
         assert!(ops_of.iter().any(|r| r[0] == "Platnosci" && r[1] == "obciaz" && r[2] == "1"), "{ops_of:?}");
         assert!(ops_of.iter().any(|r| r[0] == "SerwisZamowien" && r[1] == "utworz" && r[2] == "2"), "{ops_of:?}");
         assert!(lifelines.iter().any(|r| r[0] == "Sklep WWW") && lifelines.iter().any(|r| r[0] == "Magazyn"), "{lifelines:?}");

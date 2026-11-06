@@ -991,13 +991,29 @@ impl Job<'_> {
                 if !op["message_sort"].is_null() {
                     connector.set("TransitionEvent", s(&text_field(op, "message_sort")))?;
                 }
+                // Navigability, e.g. "Source -> Destination" (LC-473: an arrow of PlantUML or Mermaid).
+                if !op["direction"].is_null() {
+                    connector.set("Direction", s(&text_field(op, "direction")))?;
+                }
+                // The line colour, #RRGGBB (LC-473: -[#red]-> of PlantUML).
+                if !op["color"].is_null() {
+                    connector.set("Color", i(color(&op["color"])?))?;
+                }
                 // Aggregation: Weak = shared aggregation, Strong = composition.
+                let aggregation = text_field(op, "type").eq_ignore_ascii_case("Aggregation");
                 if !op["subtype"].is_null() {
                     connector.set("Subtype", s(&text_field(op, "subtype")))?;
-                } else if text_field(op, "type").eq_ignore_ascii_case("Aggregation") {
+                } else if aggregation {
                     connector.set("Subtype", s("Weak"))?;
                 }
                 connector.update(&crate::i18n::fmt("connector '{0}'", &[title.clone()]))?;
+                // The diamond is drawn from the whole's end (the target), not from the subtype (LC-473: a composition
+                // showed an empty diamond): 1 shared, 2 composite.
+                if aggregation {
+                    let whole = connector.obj("SupplierEnd")?;
+                    whole.set("Aggregation", i(if text_field(op, "subtype").eq_ignore_ascii_case("Strong") { 2 } else { 1 }))?;
+                    whole.update(crate::i18n::tr("connector end"))?;
+                }
                 self.set_reply(&connector, &op["is_return"])?;
                 self.set_tags(&connector, &op["tags"])?;
                 // Constraints of the connector (LC-421: a time or duration constraint of a message, a UML constraint on
@@ -1634,6 +1650,9 @@ impl Job<'_> {
                     if !op[field].is_null() {
                         operation.set(property, s(&text_field(op, field)))?;
                     }
+                }
+                if let Some(abstract_) = op["abstract"].as_bool() {
+                    operation.set("Abstract", b(abstract_))?;
                 }
                 operation.update(&crate::i18n::fmt("operation '{0}'", &[name.clone()]))?;
                 for parameter in op["parameters"].as_array().into_iter().flatten() {
