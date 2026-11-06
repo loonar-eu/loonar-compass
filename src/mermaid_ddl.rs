@@ -708,11 +708,15 @@ fn build_import(input: &Value, cfg: &AppConfig, classes: BTreeMap<String, MClass
     ops.push(json!({ "op": "layout_diagram", "diagram": "#dia", "direction": "down", "spacing": 40 }));
     // Notes, linked to their classes (LC-473), one under another below the laid-out classes: the layout moves only classes, so
     // notes placed before it ended up on top of them (round 11a).
+    // EA's list of diagram objects does not yet show the notes added in the same save, so each note counts its own
+    // offset under the classes (round 12: all notes got the same place).
+    let mut offset = 0i64;
     for (n, (text, on)) in drawing.notes.iter().enumerate() {
         let note = format!("note{n}");
         ops.push(json!({ "op": "create_element", "key": note, "package": "#pkg", "name": "", "type": "Note", "notes": text }));
         let height = 30 + 15 * text.lines().count() as i64;
-        ops.push(json!({ "op": "place", "diagram": "#dia", "element": format!("#{note}"), "left": 40, "top": 0, "below_all": true, "width": 260, "height": height }));
+        ops.push(json!({ "op": "place", "diagram": "#dia", "element": format!("#{note}"), "left": 40, "top": offset, "below_all": true, "width": 260, "height": height }));
+        offset += height + 20;
         for target in on.iter().filter(|t| classes.contains_key(*t)) {
             ops.push(json!({ "op": "create_connector", "source": format!("#{note}"), "target": format!("#{}", key(target)), "type": "NoteLink" }));
         }
