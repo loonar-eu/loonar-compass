@@ -223,18 +223,31 @@ pub fn auto_apply(cfg: &AppConfig, connector: i64) -> Vec<String> {
     }
     // A plain join of the diagrams that show both ends (round 10: the "join … on 1 = 1" form read through EA gave
     // nothing, and a relationship drawn in EA stayed visible without a word).
-    let rows = match query_rows(cfg, &format!(
+    let sql = format!(
         "select d.diagram_id, d.ea_guid, d.name, c.connector_type, coalesce(c.stereotype,'') \
          from t_connector c, t_diagramobjects a, t_diagramobjects b, t_diagram d \
          where c.connector_id = {connector} and a.object_id = c.start_object_id and b.object_id = c.end_object_id \
          and a.diagram_id = b.diagram_id and d.diagram_id = a.diagram_id"
-    )) {
-        Ok(rows) => rows,
-        Err(e) => {
-            crate::ea_ui::debug(&format!("visibility auto {connector}: {e:#}"));
-            return Vec::new();
+    );
+    // EA tells about the relationship before it has stored it (round 10: "0 diagrams with both ends" for a
+    // relationship that was on the diagram): asked again a few times.
+    let mut rows = Vec::new();
+    for attempt in 0..4 {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(1500));
         }
-    };
+        match query_rows(cfg, &sql) {
+            Ok(found) if !found.is_empty() => {
+                rows = found;
+                break;
+            }
+            Ok(_) => {}
+            Err(e) => {
+                crate::ea_ui::debug(&format!("visibility auto {connector}: {e:#}"));
+                return Vec::new();
+            }
+        }
+    }
     crate::ea_ui::debug(&format!("visibility auto {connector}: {} diagrams with both ends", rows.len()));
     let mut done = Vec::new();
     for r in rows {
