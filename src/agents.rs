@@ -296,8 +296,8 @@ pub fn guard_requests(rot_name: &str) -> Vec<(PathBuf, String, i64, Vec<String>)
         let Ok(text) = std::fs::read_to_string(&path) else { continue };
         // A request the add-in is still writing does not parse yet: it stays for the next round (LC-345).
         if let Some((event, rest)) = text.trim_start().split_once(':') {
-            let creating = event.trim().ends_with("_creating");
-            if creating && !rest.ends_with('\n') {
+            // Both kinds end with a line break once complete (a deletion carries the object's description, LC-345).
+            if !rest.ends_with('\n') {
                 continue;
             }
             let mut parts = rest.trim_end_matches(['\r', '\n']).split('\t');
@@ -379,10 +379,14 @@ mod tests {
         std::fs::write(&path, "element_deleting:").unwrap();
         assert!(super::guard_requests(&rot).is_empty());
         assert!(path.exists(), "a half-written request must not be dropped");
-        std::fs::write(&path, "element_deleting:42").unwrap();
+        // Without its line break the description from EA may still be cut (round 10): it waits.
+        std::fs::write(&path, "element_deleting:42\telement \"Old\" (Class").unwrap();
+        assert!(super::guard_requests(&rot).is_empty());
+        std::fs::write(&path, "element_deleting:42\telement \"Old\" (Class, object_id 42) in package \"P\"\tClass\t\n").unwrap();
         let taken = super::guard_requests(&rot);
         assert_eq!(taken.len(), 1);
         assert_eq!((taken[0].1.as_str(), taken[0].2), ("element_deleting", 42));
+        assert_eq!(taken[0].3, vec!["element \"Old\" (Class, object_id 42) in package \"P\"".to_string(), "Class".to_string(), String::new()]);
         assert!(!path.exists());
         // LC-391: a creation is complete only with its line break (a cut type must not be decided on).
         std::fs::write(&path, "element_creating:7\tCla").unwrap();

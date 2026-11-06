@@ -4955,7 +4955,7 @@ impl App {
                 if c.via_email {
                     ui.checkbox(&mut c.technical, crate::i18n::tr("Include technical information (application version, system, model, approval mode, last message; no passwords or keys)"));
                 } else {
-                    ui.checkbox(&mut c.technical, crate::i18n::tr("Include technical information (public): version, Windows, AI model, approval mode, number of steps, installation id"));
+                    ui.checkbox(&mut c.technical, crate::i18n::tr("Include technical information (public): version, Windows, AI model, approval mode, number of steps; the installation id goes only to the author"));
                 }
             });
         if let Some(i) = remove {
@@ -6556,7 +6556,10 @@ fn guard_requests_once(cfg: &AppConfig, rot: &str, agents: &[agents::Agent]) {
                         }
                     }
                     let mut block = None;
-                    let described = agents::describe(cfg, &event, id);
+                    // EA waits for this answer, so a file open in it often cannot be read through it now: the
+                    // description the add-in took from EA itself is used then (LC-345, round 10).
+                    let from_ea = (extra.len() >= 3 && !extra[0].is_empty()).then(|| (extra[0].clone(), extra[1].clone(), extra[2].clone()));
+                    let described = agents::describe(cfg, &event, id).or(from_ea);
                     // Fail closed (LC-345): the object could not be read, so no guard could decide – the deletion stops.
                     if described.is_none() && agents::guards_event(agents, &event) {
                         let reason = crate::i18n::fmt("the object to delete could not be read ({0} {1}); the deletion is stopped", &[event.clone(), id.to_string()]);
@@ -10097,7 +10100,7 @@ mod tests {
         let dir = std::env::temp_dir();
         let ask = |name: &str| {
             let request = dir.join(format!("loonar-ea-guard-{rot}-{name}.req"));
-            std::fs::write(&request, format!("element_deleting:{}", id_of(name))).unwrap();
+            std::fs::write(&request, format!("element_deleting:{}\n", id_of(name))).unwrap();
             guard_requests_once(&cfg, &rot, &agents);
             let answer = std::fs::read_to_string(request.with_extension("res")).unwrap();
             let _ = std::fs::remove_file(request.with_extension("res"));

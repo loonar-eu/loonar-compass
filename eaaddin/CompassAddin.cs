@@ -212,17 +212,22 @@ namespace LoonarCompass
                 Log.Write(kind + " guard: " + e.Message);
                 return !current.Guarded(kind);
             }
+            string described = "";
             try
             {
                 // The object is gone by the time Compass reads the event: its description goes with the event
                 // ("kind:id<TAB>description<TAB>type<TAB>stereotype"), for the advising agents of deletions.
-                current.Event(line + Describe(repository, kind, Convert.ToInt32(line.Substring(line.IndexOf(':') + 1))));
+                described = Describe(repository, kind, Convert.ToInt32(line.Substring(line.IndexOf(':') + 1)));
+                current.Event(line + described);
             }
             catch (Exception e)
             {
                 Log.Write(kind + " event: " + e.Message);
             }
-            return current.Guard(kind, line);
+            // The guard gets the description too (LC-345, round 10): while EA waits here, Compass could not read the
+            // object through this EA, and every deletion of a file open in EA was stopped. The line break marks the
+            // request complete.
+            return current.Guard(kind, line + described + "\n");
         }
 
         /// <summary>"\tdescription\ttype\tstereotype" of the object about to be deleted (as Compass describes it), or "".</summary>
