@@ -535,6 +535,9 @@ struct Selected {
     truncated: bool,
 }
 
+/// Set while EA waits for Compass's answer to a guard request: a file model is read from the disk then.
+pub static EA_WAITS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// Runs a read-only query on the model (database or file) and returns at most `limit` rows.
 fn select(cfg: &AppConfig, sql: &str, limit: usize) -> Result<Selected> {
     let mut out = Selected { columns: Vec::new(), rows: Vec::new(), truncated: false };
@@ -544,8 +547,9 @@ fn select(cfg: &AppConfig, sql: &str, limit: usize) -> Result<Selected> {
         return Ok(Selected { columns, rows, truncated });
     }
     // An EA file open in an EA window: EA writes it to disk only when it closes the file, so the current model is
-    // read through that window (the file on disk may not have the latest changes yet).
-    if cfg.uses_file() && crate::ea_ui::file_open_in_window(cfg) {
+    // read through that window (the file on disk may not have the latest changes yet). Not while that EA waits for
+    // a guard's answer: its queries then come back empty (round 10: an empty snapshot before a deletion, LC-382).
+    if cfg.uses_file() && !EA_WAITS.load(std::sync::atomic::Ordering::SeqCst) && crate::ea_ui::file_open_in_window(cfg) {
         let (columns, rows, truncated) = crate::ea_ui::sql_query(sql, limit)?;
         return Ok(Selected { columns, rows, truncated });
     }

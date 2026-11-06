@@ -6537,7 +6537,16 @@ fn scheduled_agents_once(cfg: &AppConfig, agents: &[agents::Agent]) {
 
 /// Answers the guard requests EA has made so far (see `start_guards`).
 fn guard_requests_once(cfg: &AppConfig, rot: &str, agents: &[agents::Agent]) {
+    // EA waits for each answer: a file model is read from the disk meanwhile (LC-382, round 10).
+    struct EaWaits;
+    impl Drop for EaWaits {
+        fn drop(&mut self) {
+            crate::model_db::EA_WAITS.store(false, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
                 for (request, event, id, extra) in agents::guard_requests(rot) {
+                    crate::model_db::EA_WAITS.store(true, std::sync::atomic::Ordering::SeqCst);
+                    let _waits = EaWaits;
                     // Creation rules (LC-391): decided at once from the team's rules, without the AI.
                     if governance::CREATION_EVENTS.contains(&event.as_str()) {
                         let (kind, stereotype) = (extra.first().cloned().unwrap_or_default(), extra.get(1).cloned().unwrap_or_default());
