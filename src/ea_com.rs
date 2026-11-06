@@ -1025,7 +1025,13 @@ impl Job<'_> {
             "place" => {
                 let diagram = self.diagram(&op["diagram"])?;
                 let element = self.element(&op["element"])?;
-                let (left, top) = (int_field(op, "left")?, int_field(op, "top")?);
+                let (left, mut top) = (int_field(op, "left")?, int_field(op, "top")?);
+                // "below_all": top counts from under the lowest object already on the diagram (notes of an import,
+                // added after the automatic layout moved the classes, round 11a).
+                if op["below_all"].as_bool() == Some(true) {
+                    let lowest = diagram.obj("DiagramObjects").and_then(|o| o.items()).unwrap_or_default().iter().filter_map(|o| o.int("bottom").ok()).map(|b| -b).max().unwrap_or(0);
+                    top += lowest + 40;
+                }
                 let (right, bottom) = (left + int_field(op, "width")?, top + int_field(op, "height")?);
                 let object = diagram
                     .obj("DiagramObjects")?

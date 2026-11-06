@@ -233,7 +233,16 @@ async function loadUsers() {
     // Cost by model and by role this month (LC-405).
     api('/api/users/ai/groups').then(g => {
       const t = (title, rows) => rows.length ? '<h4>' + title + '</h4><table><tr><th></th><th>Today (USD)</th><th>This month (USD)</th><th>Tokens this month</th></tr>' + rows.map(r => '<tr><td>' + esc(r.name) + '</td><td>' + r.usd_today.toFixed(2) + '</td><td>' + r.usd_month.toFixed(2) + '</td><td>' + r.tokens_month + '</td></tr>').join('') + '</table>' : '';
-      $('aiusage').insertAdjacentHTML('beforeend', t('By model', g.by_source) + t('By role', g.by_role));
+      $('aiusage').insertAdjacentHTML('beforeend', t('By model', g.by_source) + t('By role', g.by_role) +
+        (g.by_source.length || g.by_role.length ? '<div class="actions"><button class="ghost" id="aicsv">Download CSV</button></div>' : ''));
+      // The same sums as a CSV file (LC-405).
+      if ($('aicsv')) $('aicsv').onclick = () => {
+        const q = v => '"' + String(v).replace(/"/g, '""') + '"';
+        const lines = ['group;name;usd_today;usd_month;tokens_month'].concat(
+          g.by_source.map(r => ['model', q(r.name), r.usd_today.toFixed(2), r.usd_month.toFixed(2), r.tokens_month].join(';')),
+          g.by_role.map(r => ['role', q(r.name), r.usd_today.toFixed(2), r.usd_month.toFixed(2), r.tokens_month].join(';')));
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/csv' })); a.download = 'ai-costs.csv'; a.click();
+      };
     }).catch(() => {});
   }).catch(() => {});
   api('/api/users/company').then(list => {

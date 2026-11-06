@@ -287,6 +287,9 @@ pub fn import_plantuml(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, St
         if lower.iter().any(|l| l.starts_with("database ") || l.starts_with("queue ") || l.starts_with("boundary ") || l.starts_with("control ") || l.starts_with("entity ") || l.starts_with("collections ")) {
             left_out.push("the shapes of database/queue/boundary/control/entity participants (they are classes)".to_string());
         }
+        if lower.iter().any(|l| ["note", "hnote", "rnote"].iter().any(|n| l.strip_prefix(n).is_some_and(|r| r.trim_start().starts_with("on link")))) {
+            left_out.push("notes on messages (note on link)".to_string());
+        }
         if lower.iter().any(|l| l.starts_with("else")) {
             // EA's API cannot add operands to a fragment (Partitions.AddNew with Update ended the EA process, LC-477).
             left_out.push("separate operands of alt/else (the else conditions are in the fragment's name)".to_string());
@@ -669,16 +672,6 @@ fn build_import(input: &Value, cfg: &AppConfig, classes: BTreeMap<String, MClass
             ops.push(json!({ "op": "set_color", "diagram": "#dia", "element": format!("#{k}"), "bgcolor": fill }));
         }
     }
-    // Notes, linked to their classes (LC-473: they were left out).
-    let rows = classes.len().div_ceil(4) as i64;
-    for (n, (text, on)) in drawing.notes.iter().enumerate() {
-        let note = format!("note{n}");
-        ops.push(json!({ "op": "create_element", "key": note, "package": "#pkg", "name": "", "type": "Note", "notes": text }));
-        ops.push(json!({ "op": "place", "diagram": "#dia", "element": format!("#{note}"), "left": 40 + (n as i64 % 4) * 230, "top": 40 + rows * 200 + (n as i64 / 4) * 100, "width": 180, "height": 60 }));
-        for target in on.iter().filter(|t| classes.contains_key(*t)) {
-            ops.push(json!({ "op": "create_connector", "source": format!("#{note}"), "target": format!("#{}", key(target)), "type": "NoteLink" }));
-        }
-    }
     let mut colored: Vec<usize> = Vec::new();
     for (i, (from, to, kind, label, card_from, card_to)) in links.iter().enumerate() {
         let (kind, subtype) = match kind.as_str() {
@@ -713,6 +706,17 @@ fn build_import(input: &Value, cfg: &AppConfig, classes: BTreeMap<String, MClass
         }
     }
     ops.push(json!({ "op": "layout_diagram", "diagram": "#dia", "direction": "down", "spacing": 40 }));
+    // Notes, linked to their classes (LC-473), one under another below the laid-out classes: the layout moves only classes, so
+    // notes placed before it ended up on top of them (round 11a).
+    for (n, (text, on)) in drawing.notes.iter().enumerate() {
+        let note = format!("note{n}");
+        ops.push(json!({ "op": "create_element", "key": note, "package": "#pkg", "name": "", "type": "Note", "notes": text }));
+        let height = 30 + 15 * text.lines().count() as i64;
+        ops.push(json!({ "op": "place", "diagram": "#dia", "element": format!("#{note}"), "left": 40, "top": 0, "below_all": true, "width": 260, "height": height }));
+        for target in on.iter().filter(|t| classes.contains_key(*t)) {
+            ops.push(json!({ "op": "create_connector", "source": format!("#{note}"), "target": format!("#{}", key(target)), "type": "NoteLink" }));
+        }
+    }
     let mut text = format!("{notation} → package \"{name}\": {} classes, {} relationships, a diagram.", classes.len(), links.len());
     if !drawing.notes.is_empty() {
         text.push_str(&format!(" Notes on the diagram: {}.", drawing.notes.len()));

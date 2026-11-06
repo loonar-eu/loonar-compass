@@ -18,7 +18,7 @@ before deleting or renaming, and for /where-used. Element = t_object.object_id o
             "input_schema": { "type": "object", "properties": {
                 "element": { "description": "object_id or exact name" },
                 "connector": { "type": "integer", "description": "connector_id (instead of element)" },
-                "thumbnails": { "type": "boolean", "description": "Also pictures of up to 4 diagrams it is on (slower: EA draws them)" }
+                "thumbnails": { "type": "boolean", "description": "Pictures of up to 4 diagrams it is on (default true; false skips them when only the list is needed)" }
             } }
         }),
         json!({

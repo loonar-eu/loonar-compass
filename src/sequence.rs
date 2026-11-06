@@ -252,6 +252,13 @@ fn parse(text: &str) -> Result<Vec<Line>> {
         }
         // Notes (LC-473: they were left out): "note left of A : text", "note over A, B" … "end note".
         if matches!(first, "note" | "hnote" | "rnote") {
+            // A note on a message ("note on link") is left out and listed (round 11a: it became a loose note).
+            if lower[first.len()..].trim_start().starts_with("on link") {
+                if !line.contains(':') {
+                    skip = Some("end note".into());
+                }
+                continue;
+            }
             let (head, text) = line.split_once(':').map(|(h, t)| (h.trim(), Some(t.trim().replace("\\n", "\n")))).unwrap_or((line, None));
             let rest = head[first.len()..].trim();
             let rest_lower = rest.to_lowercase();
@@ -527,11 +534,15 @@ pub fn from_text(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, String)>
     }
     // Notes right of the lifelines, at the height of the message before them, linked to their participants: drawn
     // between the lifelines they would cover messages (LC-473).
+    // The bottom of the note before: a note starts under it (round 11a: notes of near messages overlapped).
+    let mut below = 0i64;
     for (n, (on, text, after)) in notes.iter().enumerate() {
         let key = format!("n{n}");
         ops.push(json!({ "op": "create_element", "key": key, "package": package, "name": "", "type": "Note", "notes": text }));
-        ops.push(json!({ "op": "place", "diagram": "#seq", "element": format!("#{key}"), "left": 60 + participants.len() as i64 * 200, "top": 115 + *after as i64 * 35 - 15,
-            "width": 180, "height": 30 + 15 * text.lines().count() as i64 }));
+        let (top, height) = ((115 + *after as i64 * 35 - 15).max(below + 10), 30 + 15 * text.lines().count() as i64);
+        below = top + height;
+        ops.push(json!({ "op": "place", "diagram": "#seq", "element": format!("#{key}"), "left": 60 + participants.len() as i64 * 200, "top": top,
+            "width": 180, "height": height }));
         for name in on {
             if let Some((element, _)) = refs.get(name) {
                 ops.push(json!({ "op": "create_connector", "source": format!("#{key}"), "target": element, "type": "NoteLink" }));
@@ -572,6 +583,9 @@ mod tests {
         assert!(matches!(&lines[0], Line::Message { color: Some(c), .. } if c == "#FF0000"), "{lines:?}");
         assert_eq!(lines[1], Line::Note { on: vec!["A".into(), "B".into()], text: "razem".into() });
         assert_eq!(lines[2], Line::Note { on: vec!["B".into()], text: "dwie\nlinie".into() });
+        // A note on a message is left out, also over more lines.
+        let lines = parse("A -> B : x\nnote on link : y\nnote on link\n  z\nend note\nB -> A : w").unwrap();
+        assert!(!lines.iter().any(|l| matches!(l, Line::Note { .. })) && lines.len() == 2, "{lines:?}");
         assert_eq!(called("AddBook(string, string)"), "addbook");
     }
 

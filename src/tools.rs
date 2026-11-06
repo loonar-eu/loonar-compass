@@ -939,7 +939,8 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "where_used" => {
             let mut text = crate::model_usage::where_used(input, ctx.cfg)?;
             text.push_str("\n(The user can ask to open a diagram with the element selected – ea_ui open_diagram {diagram, element} – or to show it in the project browser – ea_ui show_element.)");
-            if input["thumbnails"] != true || input["element"].is_null() {
+            // Pictures unless they are refused (round 11a: the model sometimes left "thumbnails" out and the answer had none).
+            if input["thumbnails"] == false || input["element"].is_null() {
                 return Ok(text.into());
             }
             // Pictures of the first diagrams it is on (LC-411).
@@ -948,8 +949,9 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
                 .into_iter().filter_map(|r| r[0].parse().ok()).take(4).collect();
             let mut images = Vec::new();
             for d in diagrams {
-                if let Ok(shown) = ea_show_diagram(&json!({ "diagram_id": d }), ctx) {
-                    images.extend(shown.images);
+                match ea_show_diagram(&json!({ "diagram_id": d }), ctx) {
+                    Ok(shown) => images.extend(shown.images),
+                    Err(e) => text.push_str(&format!("\n(The picture of diagram {d} could not be drawn: {e:#}.)")),
                 }
             }
             Ok(ToolOutput { text, images, files: Vec::new() })
@@ -2967,6 +2969,10 @@ fn check_unchanged(cfg: &AppConfig, expect: &Value) -> Result<()> {
             if is_stamp(now) && !is_stamp(seen) {
                 bail!("{}", crate::i18n::fmt("expect_unchanged: \"modified\" must be the modifieddate read from the model (YYYY-MM-DD HH:MM:SS), not {0}. Read it again with db_query. Nothing was saved.", &[seen.chars().take(60).collect::<String>()]));
             }
+            // A date later than the model's was never read from it: a change only moves the date forward (round 11a).
+            if is_stamp(seen) && normalize_stamp(seen) > normalize_stamp(now) {
+                bail!("{}", crate::i18n::fmt("expect_unchanged: the expected date of {0} with id {1} ({2}) is later than the one in the model ({3}), so it was not read from the model; nobody changed it. Read it with db_query and give that value. Nothing was saved.", &[what.to_string(), id.to_string(), seen.to_string(), now.to_string()]));
+            }
             bail!("{}", crate::i18n::fmt("version conflict: {0} with id {1} was changed after you read it (was {2}, now {3}). Read the model again and plan the change once more. Nothing was saved.", &[what.to_string(), id.to_string(), seen.to_string(), now.to_string()]));
         }
     }
@@ -3231,6 +3237,9 @@ Text.
         let fresh = check_unchanged(&cfg, &json!([{ "kind": "package", "id": id, "modified": row[1] }]));
         println!("stale: {:?} | fresh: {:?}", stale.as_ref().map_err(|e| e.to_string()), fresh.as_ref().map_err(|e| e.to_string()));
         assert!(stale.is_err());
+        // A date later than the model's is not "changed after you read it" (round 11a).
+        let later = check_unchanged(&cfg, &json!([{ "kind": "package", "id": id, "modified": "2999-01-01 00:00:00" }])).unwrap_err().to_string();
+        assert!(later.contains("later than the one in the model") && !later.contains("after you read it"), "{later}");
         assert!(fresh.is_ok());
     }
     /// An EA file model: reads through SQLite give the same output as from a database, and nothing can write to the file.

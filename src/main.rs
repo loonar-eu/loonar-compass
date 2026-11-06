@@ -135,7 +135,7 @@ fn system_prompt(cfg: &AppConfig) -> String {
          You are running inside the {app} application, version {version} (a desktop AI assistant for Enterprise Architect). \
          Application owner: {OWNER}, {OWNER_ADDRESS}, {OWNER_CONTACT}. Language model: {model}. User guide of this version: {docs}. \
          The prerequisites are requirements on the EA model without which the application does not work; the known limitations are \
-         things it cannot do.\n{about}",
+         things it cannot do.\n{COMPASS_SETTINGS}\n{about}",
         app = config::APP_NAME,
         version = app_version(),
         // The model that really answers (LC-362: the prompt always named the default Claude model).
@@ -160,6 +160,16 @@ fn system_prompt(cfg: &AppConfig) -> String {
         templates = templates::prompt_section(&cfg.templates_dir),
     )
 }
+
+/// Where things of Compass itself are set, for the user's questions about them (round 11b: the assistant did not know
+/// the budget setting and said it could not schedule agents).
+const COMPASS_SETTINGS: &str = "Settings of Compass itself, for questions about them: the monthly AI budget of this computer without a team hub is the \
+setting ai.budget_month_usd in app.properties (0 = none; when it is used up, new answers stop until next month); with a team hub, budgets and cost \
+reports per person, model and role are in the hub (tab Users, CSV export). Event agents are listed in event_agents.json next to the settings or, \
+for the whole team, in the hub's form; besides events in EA an agent can run on a schedule: \"event\": \"scheduled\" with \"schedule\" \"hourly\", \
+\"every 4h\", \"every 30m\", \"daily 07:30\" or \"weekly mon 08:00\" (it reads and advises while Compass is open in EA, it never writes). You do not \
+create agents yourself: give the user the JSON entry, e.g. {\"name\": \"Morning review\", \"event\": \"scheduled\", \"schedule\": \"daily 07:00\", \
+\"applies_to\": \"*\", \"prompt\": \"…\"}, and say where to add it.";
 
 /// Rules against instructions hidden in content (prompt injection): documents, issues, pages, MCP results and the
 /// model itself are data. Present in every system prompt.
@@ -7464,7 +7474,11 @@ fn content_blocks(text: &str, attachments: &[String], dir: &Path) -> anyhow::Res
             Err(e) => blocks.push(text_block(&format!("[Attachment: {name} - the file cannot be read ({e}), its content is not available]"))),
         }
     }
-    if !text.trim().is_empty() || blocks.is_empty() {
+    if !text.trim().is_empty() && !blocks.is_empty() {
+        // The end of the attachments is marked: the user's question after a presentation was read as the text of its
+        // last slide (round 11b).
+        blocks.push(text_block(&format!("[End of the attachments. The user's own message:]\n{text}")));
+    } else if !text.trim().is_empty() || blocks.is_empty() {
         blocks.push(text_block(text));
     }
     Ok(Value::Array(blocks))
@@ -10329,7 +10343,7 @@ mod tests {
         let content = content_blocks("how many packages are in the model", &[stored], &std::env::temp_dir().join("loonar-missing-folder")).expect("message despite the missing file");
         let texts: Vec<&str> = content.as_array().unwrap().iter().filter_map(|b| b["text"].as_str()).collect();
         assert!(texts.iter().any(|t| t.contains("screenshot.png") && t.contains("the file cannot be read")), "{texts:?}");
-        assert!(texts.iter().any(|t| *t == "how many packages are in the model"));
+        assert!(texts.iter().any(|t| t.ends_with("The user's own message:]\nhow many packages are in the model")), "{texts:?}");
     }
     /// Summary of a long conversation with the real AI: `LOONAR_TEST_PROPS=… cargo test long_conversation_summary -- --ignored --nocapture`
     #[test]
