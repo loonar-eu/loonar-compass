@@ -423,6 +423,7 @@ is checked by the ArchiMate 3.2 and team rules. Use connector ids from the model
         items.push(crate::gdrive::definition());
         items.push(crate::instructions::definition());
         items.push(crate::documents::definition());
+        items.push(crate::documents::slides_definition());
         items.push(crate::mdg::version_control_definition());
         items.push(crate::ea_api::definition());
         items.push(crate::undo::definition());
@@ -1160,6 +1161,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "onedrive" => crate::sharepoint::run_onedrive(input, ctx).map(Into::into),
         "google_drive" => crate::gdrive::run(input, ctx).map(Into::into),
         "model_instructions" => crate::instructions::run(input, ctx).map(Into::into),
+        "slide_images" => slide_images(input, ctx),
         "read_document" => {
             let path = read_path(ctx, input["file"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["file".to_string()]))?, false)?;
             let size = std::fs::metadata(&path).with_context(|| crate::i18n::fmt("cannot read {0}", &[path.display().to_string()]))?.len();
@@ -2433,6 +2435,57 @@ fn create_spreadsheet(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         text: format!("Workbook \"{file_name}.xlsx\" is ready (sheets: {}, rows: {rows}). The user sees it in the chat with the \"Open\" and \"Save as…\" buttons. It is kept only in Compass: do not name a folder or path for it; the user chooses where to keep it with \"Save as…\".", sheets.len()),
         images: Vec::new(),
         files: vec![stored],
+    })
+}
+
+/// Slides of a presentation as pictures (LC-484): drawn by PowerPoint when it is installed, otherwise the pictures
+/// embedded in each slide. Stored in the attachments folder, so the model gets them as images and the chat shows them.
+fn slide_images(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
+    let path = read_path(ctx, input["file"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["file".to_string()]))?, false)?;
+    let mut slides: Vec<i64> = input["slides"].as_array().into_iter().flatten().filter_map(Value::as_i64).filter(|n| *n >= 1).collect();
+    slides.dedup();
+    if slides.is_empty() {
+        bail!("{}", crate::i18n::tr("give the slide numbers (slides)"));
+    }
+    slides.truncate(6);
+    std::fs::create_dir_all(&ctx.cfg.attachments_dir).context(crate::i18n::tr("attachments folder"))?;
+    let stem = format!("{}_slide", uuid::Uuid::new_v4().simple());
+    let mut images = Vec::new();
+    let mut notes = Vec::new();
+    match crate::office::pptx_slides_png(&path, &slides, &ctx.cfg.attachments_dir, &stem) {
+        Ok(drawn) if !drawn.is_empty() => {
+            for (n, file) in drawn {
+                images.push(file.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default());
+                notes.push(format!("slide {n}"));
+            }
+            notes.insert(0, "drawn by PowerPoint:".to_string());
+        }
+        other => {
+            let why = match other {
+                Err(e) => format!("{e:#}"),
+                Ok(_) => "PowerPoint drew nothing".to_string(),
+            };
+            let bytes = std::fs::read(&path).with_context(|| crate::i18n::fmt("cannot read {0}", &[path.display().to_string()]))?;
+            notes.push(format!("PowerPoint could not draw the slides ({why}); the pictures embedded in them instead:"));
+            for n in &slides {
+                let pictures = crate::documents::slide_pictures(&bytes, *n as usize)?;
+                if pictures.is_empty() {
+                    notes.push(format!("slide {n}: no pictures (text and shapes only)"));
+                }
+                for (k, (name, data)) in pictures.into_iter().take(4).enumerate() {
+                    let ext = name.rsplit('.').next().unwrap_or("png").to_lowercase();
+                    let stored = format!("{stem}-{n}-{k}.{ext}");
+                    std::fs::write(ctx.cfg.attachments_dir.join(&stored), data)?;
+                    images.push(stored);
+                    notes.push(format!("slide {n}: picture {name}"));
+                }
+            }
+        }
+    }
+    Ok(ToolOutput {
+        text: format!("{} – {}. The user sees the same pictures in the chat.", path.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default(), notes.join(", ")),
+        images,
+        files: Vec::new(),
     })
 }
 

@@ -175,7 +175,7 @@ fn external_tool(name: &str) -> bool {
     name.starts_with("mcp__")
         || matches!(
             name,
-            "read_document" | "jira_issue" | "jira_search" | "jira_download_attachments" | "confluence_pages" | "confluence_read" | "web_fetch" | "web_search"
+            "read_document" | "slide_images" | "jira_issue" | "jira_search" | "jira_download_attachments" | "confluence_pages" | "confluence_read" | "web_fetch" | "web_search"
                 | "sharepoint" | "onedrive" | "google_drive" | "read_template" | "trace_requirements" | "cmdb_compare" | "code_drift" | "code_tree"
                 | "code_search" | "code_read" | "change_sets"
         )
@@ -6477,6 +6477,7 @@ fn tool_step(name: &str, input: &Value) -> String {
         }
         "delegate" => crate::i18n::fmt("Sub-agent ({0}): {1}", &[input["role"].as_str().unwrap_or("").to_string(), shorten(input["task"].as_str().unwrap_or(""), 120)]),
         "read_document" => crate::i18n::fmt("Reading the document {0}", &[input["file"].as_str().unwrap_or("").to_string()]),
+        "slide_images" => crate::i18n::fmt("Looking at slides {0} of {1}", &[input["slides"].as_array().map(|a| a.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", ")).unwrap_or_default(), input["file"].as_str().unwrap_or("").to_string()]),
         "mdg_technologies" => crate::i18n::fmt("MDG technologies: {0}", &[input["technology"].as_str().unwrap_or("list").to_string()]),
         "ea_api" => crate::i18n::fmt("EA API: {0}", &[input["class"].as_str().unwrap_or("list").to_string()]),
         "model_instructions" => crate::i18n::fmt("Modelling instructions: {0}", &[input["action"].as_str().unwrap_or("read").to_string()]),
@@ -7510,6 +7511,9 @@ fn file_blocks(name: &str, bytes: &[u8], unpack: bool, blocks: &mut Vec<Value>) 
         },
         // PowerPoint, Visio and Excel: their text (slides with notes, pages with shapes and connections, sheets).
         "pptx" | "pptm" | "vsdx" | "vsdm" | "xlsx" | "xlsm" => match documents::text_of(name, bytes) {
+            // A presentation: only its text comes here; slide_images shows how slides look (LC-484).
+            Ok(body) if ext.starts_with("ppt") => blocks.push(text_block(&format!("[Attachment: {name} – the text of the slides; to see how slides look (layout, charts, pictures, slides without text) use slide_images with file \"{name}\"]
+{}", documents::limited(body)))),
             Ok(body) => blocks.push(text_block(&format!("[Attachment: {name}]
 {}", documents::limited(body)))),
             Err(e) => blocks.push(text_block(&format!("[Attachment: {name} - could not be read: {e:#}]"))),

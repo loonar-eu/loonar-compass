@@ -70,6 +70,37 @@ pub fn pptx_to_pdf(pptx: &Path, pdf: &Path) -> Result<()> {
     })
 }
 
+/// Pictures of slides of a PPTX with PowerPoint (without a window): `slides` numbered from 1, each saved as
+/// `<dir>/<stem>-<n>.png`, 1600 px wide (LC-484: the assistant had only the text of the slides).
+pub fn pptx_slides_png(pptx: &Path, slides: &[i64], dir: &Path, stem: &str) -> Result<Vec<(i64, std::path::PathBuf)>> {
+    let (pptx, slides, dir, stem) = (pptx.display().to_string(), slides.to_vec(), dir.to_path_buf(), stem.to_string());
+    in_com_thread(move || {
+        let powerpoint = office_app("PowerPoint.Application")?;
+        let result = (|| -> Result<Vec<(i64, std::path::PathBuf)>> {
+            let presentation = powerpoint.obj("Presentations")?.call_obj("Open", &[s(&pptx), i(-1), i(0), i(0)])?;
+            let all = presentation.obj("Slides")?;
+            let count = all.int("Count")? as i64;
+            let mut out = Vec::new();
+            for n in slides.iter().copied().filter(|n| *n >= 1 && *n <= count) {
+                let path = dir.join(format!("{stem}-{n}.png"));
+                // Export(FileName, FilterName, ScaleWidth, ScaleHeight)
+                let slide = all.call_obj("Item", &[i(n as i32)])?;
+                slide.call("Export", &[s(&path.display().to_string()), s("PNG"), i(1600), i(900)])?;
+                if path.is_file() {
+                    out.push((n, path));
+                }
+            }
+            let _ = presentation.call("Close", &[]);
+            Ok(out)
+        })();
+        // PowerPoint runs as one instance: when the user has presentations open, it is theirs and stays open (I17).
+        if powerpoint.obj("Presentations").and_then(|p| p.int("Count")).unwrap_or(1) == 0 {
+            let _ = powerpoint.call("Quit", &[]);
+        }
+        result
+    })
+}
+
 #[cfg(test)]
 mod tests {
     /// I17: converting with PowerPoint while the user has a presentation open leaves their PowerPoint open.
@@ -82,5 +113,17 @@ mod tests {
         super::pptx_to_pdf(&pptx, &pdf).unwrap();
         assert!(std::fs::metadata(&pdf).unwrap().len() > 1000);
         let _ = std::fs::remove_file(&pdf);
+    }
+
+    /// LC-484: PowerPoint draws chosen slides as PNG. `LOONAR_TEST_PPTX=… cargo test slides_as_png -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires PowerPoint and a presentation"]
+    fn slides_as_png() {
+        let pptx = std::path::PathBuf::from(std::env::var("LOONAR_TEST_PPTX").unwrap());
+        let dir = std::env::temp_dir().join(format!("loonar-lc484-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let drawn = super::pptx_slides_png(&pptx, &[1, 2, 999], &dir, "deck").unwrap();
+        println!("{drawn:?}");
+        assert!(!drawn.is_empty() && drawn.iter().all(|(n, p)| *n != 999 && std::fs::metadata(p).unwrap().len() > 1000));
     }
 }
