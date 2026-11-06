@@ -2599,6 +2599,23 @@ fn mcp_tools() -> Value {
 }
 
 /// MCP (JSON-RPC 2.0 over HTTP POST): initialize, tools/list, tools/call, ping. A notification gets no reply.
+/// The text of a failed MCP tool: an error of the model's database reaches the client only as an id, the details
+/// (SQL, engine messages) go to hub.log, like the 500s of the REST API (LC-343, round 11c).
+fn mcp_error_text(hub: &Hub, user: &str, e: &anyhow::Error) -> String {
+    if !db_failure(e) {
+        return format!("{e:#}");
+    }
+    let id = uuid::Uuid::new_v4().simple().to_string()[..8].to_string();
+    log(&hub.dir, &format!("MCP ({user}) -> error [{id}] {e:#}"));
+    crate::i18n::fmt("internal error of the hub (id {0}; details in hub.log)", &[id])
+}
+
+/// Whether an error comes from running a query on the model's database.
+fn db_failure(e: &anyhow::Error) -> bool {
+    let running = crate::i18n::tr("running the query");
+    e.chain().any(|c| c.to_string() == running)
+}
+
 fn mcp(hub: &Hub, message: &Value, user: &str, role: Role) -> Result<Option<Value>, HttpError> {
     let id = message.get("id").cloned();
     let Some(id) = id else { return Ok(None) };
@@ -2642,7 +2659,7 @@ fn mcp(hub: &Hub, message: &Value, user: &str, role: Role) -> Result<Option<Valu
             })();
             match result {
                 Ok(text) => ok(json!({ "content": [{ "type": "text", "text": text }], "isError": false })),
-                Err(e) => ok(json!({ "content": [{ "type": "text", "text": format!("{e:#}") }], "isError": true })),
+                Err(e) => ok(json!({ "content": [{ "type": "text", "text": mcp_error_text(hub, user, &e) }], "isError": true })),
             }
         }
         _ => Some(json!({ "jsonrpc": "2.0", "id": id, "error": { "code": -32601, "message": format!("method not found: {method}") } })),
@@ -2946,6 +2963,14 @@ const WEB_PAGE: &str = include_str!("hub_web.html");
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LC-343: an error of the model's database is told apart (the MCP client gets only an id); others stay as they are.
+    #[test]
+    fn database_errors_are_recognised() {
+        let db = anyhow::anyhow!("You have an error in your SQL syntax near '\\''").context(crate::i18n::tr("running the query"));
+        assert!(db_failure(&db));
+        assert!(!db_failure(&anyhow::anyhow!("several elements are named \"Kasa\"")));
+    }
 
     /// Unnamed ends of relationships (e.g. lifelines) get the classifier's name or their type and id.
     #[test]
