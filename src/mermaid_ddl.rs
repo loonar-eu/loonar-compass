@@ -244,12 +244,17 @@ pub fn import_plantuml(input: &Value, cfg: &AppConfig) -> Result<(Vec<Value>, St
             left_out.push("the shapes of database/queue/boundary/control/entity participants (they are classes)".to_string());
         }
         if lower.iter().any(|l| l.starts_with("else")) {
+            // EA's API cannot add operands to a fragment (Partitions.AddNew with Update ended the EA process, LC-477).
             left_out.push("separate operands of alt/else (the else conditions are in the fragment's name)".to_string());
         }
         let (ops, report) = crate::sequence::from_text(&json!({ "text": text, "package": input["package"], "name": name, "create_classes": true }), cfg)?;
         let mut summary = format!("PlantUML sequence diagram → diagram \"{name}\" with classes, their operations and lifelines:\n{report}");
-        if !left_out.is_empty() {
-            summary.push_str(&format!("\nLeft out: {}.", left_out.join("; ")));
+        // The same list every time, said as it is (LC-477: answers named a different part of it each time, and one
+        // described a divider as imported).
+        if left_out.is_empty() {
+            summary.push_str("\nLeft out: nothing.");
+        } else {
+            summary.push_str(&format!("\nLeft out (tell the user every item of this list as it is; nothing else was left out, and these were not imported): {}.", left_out.join("; ")));
         }
         return Ok(if input["action"].as_str() == Some("apply") { (ops, summary) } else { (Vec::new(), format!("{summary}\nNothing saved yet: action apply saves it.")) });
     }
