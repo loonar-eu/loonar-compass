@@ -30,6 +30,10 @@ button.ghost { background:transparent; color:var(--accent); border:1px solid var
 .tree div:hover, .tree div.on { background:var(--bg); color:var(--accent); }
 table { border-collapse:collapse; width:100%; font-size:13px; }
 th, td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--line); vertical-align:top; overflow-wrap:anywhere; }
+/* A cross table of the portfolio: words are not broken letter by letter, wide tables scroll (LC-393, round 10). */
+.scroll-x { overflow-x:auto; }
+table.cross { width:auto; }
+table.cross th, table.cross td { white-space:nowrap; overflow-wrap:normal; }
 th { color:var(--muted); font-weight:600; }
 tr.click { cursor:pointer; } tr.click:hover td { background:var(--bg); }
 .sev-error { color:var(--err); font-weight:600; } .sev-warning { color:var(--warn); font-weight:600; } .sev-info { color:var(--info); }
@@ -378,7 +382,7 @@ $('pfgo').onclick = async () => {
       const total = v.cells.reduce((a, r) => a + r[0], 0) || 1;
       $('portfolio').innerHTML = '<h3>' + esc(v.title) + '</h3><table>' + v.rows.map((r, i) => '<tr><td>' + esc(r) + '</td><td style="width:60%"><div style="background:var(--accent);height:14px;width:' + Math.round(v.cells[i][0] * 100 / max) + '%"></div></td><td>' + v.cells[i][0] + ' (' + Math.round(v.cells[i][0] * 100 / total) + '%)</td></tr>').join('') + '</table>';
     } else {
-      $('portfolio').innerHTML = '<h3>' + esc(v.title) + '</h3><table><tr><th></th>' + v.cols.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr>' + v.rows.map((r, i) => '<tr><td>' + esc(r) + '</td>' + v.cells[i].map(n => '<td style="text-align:center;background:rgba(220,80,40,' + (n ? (0.12 + 0.75 * n / max).toFixed(2) : 0) + ')">' + (n || '') + '</td>').join('') + '</tr>').join('') + '</table>';
+      $('portfolio').innerHTML = '<h3>' + esc(v.title) + '</h3><div class="scroll-x"><table class="cross"><tr><th></th>' + v.cols.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr>' + v.rows.map((r, i) => '<tr><td>' + esc(r) + '</td>' + v.cells[i].map(n => '<td style="text-align:center;background:rgba(220,80,40,' + (n ? (0.12 + 0.75 * n / max).toFixed(2) : 0) + ')">' + (n || '') + '</td>').join('') + '</tr>').join('') + '</table></div>';
     }
   } catch (e) { $('portfolio').innerHTML = '<p class="error">' + esc(e.message) + '</p>'; }
 };
