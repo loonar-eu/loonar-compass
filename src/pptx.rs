@@ -10,6 +10,17 @@ pub struct Slide {
     pub title: String,
     pub bullets: Vec<(String, u8)>,
     pub picture: Option<Vec<u8>>,
+    /// Speaker notes (LC-419); empty = none.
+    pub notes: String,
+}
+
+/// The notes page of a slide: the speaker notes in the body placeholder.
+fn notes_xml(text: &str) -> String {
+    let paragraphs: String = text.lines().map(|l| format!("<a:p><a:r><a:rPr lang=\"en-US\" dirty=\"0\"/><a:t>{}</a:t></a:r></a:p>", esc(l))).collect();
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:notes {NS}><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/><p:sp><p:nvSpPr><p:cNvPr id="2" name="Notes"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="685800" y="4343400"/><a:ext cx="5486400" cy="4114800"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/>{}</p:txBody></p:sp></p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:notes>"#,
+        if paragraphs.is_empty() { "<a:p/>".to_string() } else { paragraphs }
+    )
 }
 
 const W: i64 = 12_192_000;
@@ -79,6 +90,15 @@ pub fn build(title: &str, subtitle: &str, slides: &[Slide]) -> Result<Vec<u8>> {
     for n in 1..=count {
         types.push_str(&format!(r#"<Override PartName="/ppt/slides/slide{n}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>"#));
     }
+    let with_notes = slides.iter().any(|s| !s.notes.trim().is_empty());
+    if with_notes {
+        types.push_str(r#"<Override PartName="/ppt/notesMasters/notesMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml"/><Override PartName="/ppt/theme/theme2.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>"#);
+        for (i, s) in slides.iter().enumerate() {
+            if !s.notes.trim().is_empty() {
+                types.push_str(&format!(r#"<Override PartName="/ppt/notesSlides/notesSlide{}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml"/>"#, i + 2));
+            }
+        }
+    }
     types.push_str("</Types>");
     put("[Content_Types].xml", types.as_bytes())?;
     put("_rels/.rels", br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/></Relationships>"#)?;
@@ -89,13 +109,24 @@ pub fn build(title: &str, subtitle: &str, slides: &[Slide]) -> Result<Vec<u8>> {
         slide_ids.push_str(&format!(r#"<p:sldId id="{}" r:id="rIdS{n}"/>"#, 255 + n));
         pres_rels.push_str(&format!(r#"<Relationship Id="rIdS{n}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide{n}.xml"/>"#));
     }
+    if with_notes {
+        pres_rels.push_str(r#"<Relationship Id="rIdN" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="notesMasters/notesMaster1.xml"/>"#);
+    }
     pres_rels.push_str("</Relationships>");
+    let notes_master_list = if with_notes { r#"<p:notesMasterIdLst><p:notesMasterId r:id="rIdN"/></p:notesMasterIdLst>"# } else { "" };
     put(
         "ppt/presentation.xml",
-        format!(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:presentation {NS} saveSubsetFonts="1"><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rIdM"/></p:sldMasterIdLst><p:sldIdLst>{slide_ids}</p:sldIdLst><p:sldSz cx="{W}" cy="{H}"/><p:notesSz cx="6858000" cy="9144000"/></p:presentation>"#).as_bytes(),
+        format!(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:presentation {NS} saveSubsetFonts="1"><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rIdM"/></p:sldMasterIdLst>{notes_master_list}<p:sldIdLst>{slide_ids}</p:sldIdLst><p:sldSz cx="{W}" cy="{H}"/><p:notesSz cx="6858000" cy="9144000"/></p:presentation>"#).as_bytes(),
     )?;
     put("ppt/_rels/presentation.xml.rels", pres_rels.as_bytes())?;
     put("ppt/theme/theme1.xml", THEME.as_bytes())?;
+    if with_notes {
+        // The notes master: a page with the body placeholder the notes of each slide fill in.
+        put("ppt/notesMasters/notesMaster1.xml", format!(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:notesMaster {NS}><p:cSld><p:bg><p:bgRef idx="1001"><a:schemeClr val="bg1"/></p:bgRef></p:bg><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/><p:sp><p:nvSpPr><p:cNvPr id="2" name="Notes Placeholder"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="685800" y="4343400"/><a:ext cx="5486400" cy="4114800"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody></p:sp></p:spTree></p:cSld><p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/></p:notesMaster>"#).as_bytes())?;
+        // PowerPoint wants the notes master to have its own theme part.
+        put("ppt/theme/theme2.xml", THEME.as_bytes())?;
+        put("ppt/notesMasters/_rels/notesMaster1.xml.rels", br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdT" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme2.xml"/></Relationships>"#)?;
+    }
     put(
         "ppt/slideMasters/slideMaster1.xml",
         format!(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sldMaster {NS}><p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:effectLst/></p:bgPr></p:bg><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/></p:spTree></p:cSld><p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/><p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rIdL"/></p:sldLayoutIdLst></p:sldMaster>"#).as_bytes(),
@@ -105,15 +136,16 @@ pub fn build(title: &str, subtitle: &str, slides: &[Slide]) -> Result<Vec<u8>> {
     put("ppt/slideLayouts/_rels/slideLayout1.xml.rels", br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdM" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/></Relationships>"#)?;
 
     let layout_rel = r#"<Relationship Id="rIdL" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>"#;
-    let rels = |image: Option<usize>| {
+    let rels = |image: Option<usize>, notes: Option<usize>| {
         let img = image.map(|n| format!(r#"<Relationship Id="rIdImg" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image{n}.png"/>"#)).unwrap_or_default();
-        format!(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">{layout_rel}{img}</Relationships>"#)
+        let note = notes.map(|n| format!(r#"<Relationship Id="rIdNotes" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide" Target="../notesSlides/notesSlide{n}.xml"/>"#)).unwrap_or_default();
+        format!(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">{layout_rel}{img}{note}</Relationships>"#)
     };
     // Title slide: a band of colour, the title and the subtitle.
     let band = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Band"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="12192000" cy="228600"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="2F5FA8"/></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr></p:sp>"#;
     let first = format!("{band}{}{}", text_box(3, "Title", 838_200, 2_286_000, W - 1_676_400, 1_371_600, &title_paragraph(title, 4000, true)), text_box(4, "Subtitle", 838_200, 3_771_900, W - 1_676_400, 914_400, &title_paragraph(subtitle, 2000, false)));
     put("ppt/slides/slide1.xml", slide_xml(&first).as_bytes())?;
-    put("ppt/slides/_rels/slide1.xml.rels", rels(None).as_bytes())?;
+    put("ppt/slides/_rels/slide1.xml.rels", rels(None, None).as_bytes())?;
     let mut images = 0;
     for (i, slide) in slides.iter().enumerate() {
         let n = i + 2;
@@ -135,7 +167,12 @@ pub fn build(title: &str, subtitle: &str, slides: &[Slide]) -> Result<Vec<u8>> {
             None => None,
         };
         put(&format!("ppt/slides/slide{n}.xml"), slide_xml(&shapes).as_bytes())?;
-        put(&format!("ppt/slides/_rels/slide{n}.xml.rels"), rels(image).as_bytes())?;
+        let notes = (!slide.notes.trim().is_empty()).then_some(n);
+        if notes.is_some() {
+            put(&format!("ppt/notesSlides/notesSlide{n}.xml"), notes_xml(slide.notes.trim()).as_bytes())?;
+            put(&format!("ppt/notesSlides/_rels/notesSlide{n}.xml.rels"), format!(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdM" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="../notesMasters/notesMaster1.xml"/><Relationship Id="rIdS" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="../slides/slide{n}.xml"/></Relationships>"#).as_bytes())?;
+        }
+        put(&format!("ppt/slides/_rels/slide{n}.xml.rels"), rels(image, notes).as_bytes())?;
     }
     Ok(zip.finish()?.into_inner())
 }
@@ -156,9 +193,9 @@ mod tests {
             "Shop model review",
             "Loonar Compass · 2026",
             &[
-                Slide { title: "Findings".into(), bullets: vec![("Two classes without a description".into(), 0), ("Order & Invoice <linked>".into(), 1)], picture: None },
-                Slide { title: "Domain diagram".into(), bullets: vec![], picture: Some(png()) },
-                Slide { title: "Both".into(), bullets: vec![("Text left".into(), 0)], picture: Some(png()) },
+                Slide { title: "Findings".into(), bullets: vec![("Two classes without a description".into(), 0), ("Order & Invoice <linked>".into(), 1)], picture: None, notes: "Say why it matters.\nThen show the fix & <ask>.".into() },
+                Slide { title: "Domain diagram".into(), bullets: vec![], picture: Some(png()), notes: String::new() },
+                Slide { title: "Both".into(), bullets: vec![("Text left".into(), 0)], picture: Some(png()), notes: String::new() },
             ],
         )
         .unwrap()
@@ -173,6 +210,15 @@ mod tests {
         let mut xml = String::new();
         std::io::Read::read_to_string(&mut zip.by_name("ppt/slides/slide2.xml").unwrap(), &mut xml).unwrap();
         assert!(xml.contains("Order &amp; Invoice &lt;linked&gt;"));
+        // LC-419: notes only where given, linked from the slide.
+        let mut notes = String::new();
+        std::io::Read::read_to_string(&mut zip.by_name("ppt/notesSlides/notesSlide2.xml").unwrap(), &mut notes).unwrap();
+        assert!(notes.contains("Say why it matters.") && notes.contains("the fix &amp; &lt;ask&gt;."), "{notes}");
+        assert!(zip.by_name("ppt/notesSlides/notesSlide3.xml").is_err());
+        assert!(zip.by_name("ppt/notesMasters/notesMaster1.xml").is_ok());
+        let mut rels = String::new();
+        std::io::Read::read_to_string(&mut zip.by_name("ppt/slides/_rels/slide2.xml.rels").unwrap(), &mut rels).unwrap();
+        assert!(rels.contains("notesSlide2.xml"));
     }
 
     /// Opens the presentation in the installed PowerPoint and exports it to PDF (proof the file is valid):

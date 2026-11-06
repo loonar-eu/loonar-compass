@@ -20,7 +20,7 @@ use crate::config::AppConfig;
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{IpAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -81,10 +81,210 @@ struct Source {
     id: String,
     name: String,
     cfg: AppConfig,
+    /// Who may read the source at all ("readers": ["anna", "role:architect", …]; empty = everybody) (LC-385).
+    readers: Vec<String>,
+    /// Package scopes ("scopes": [{"for": "<user>" | "role:<role>" | "eagroup:<EA group>" | "*", "packages": [package_id, GUID or
+    /// "$group_locks:<EA group>", …]}]):
+    /// the first entry for the person, their role or everybody limits them to these packages and their subpackages.
+    scopes: Vec<(String, Vec<String>)>,
+}
+
+/// The packages a person may see in a source (with all their subpackages); None = the whole model (LC-385).
+type Scope = Option<HashSet<i64>>;
+
+/// Who an entry "for" of hub.json means for this person, most specific first.
+fn wanted(user: &str, role: Role) -> [String; 3] {
+    [user.to_lowercase(), format!("role:{}", role.name()), "*".to_string()]
+}
+
+/// `col in (…)` for the packages of a scope, in chunks (Oracle allows at most 1000 values in one list).
+fn in_list(col: &str, ids: &HashSet<i64>) -> String {
+    if ids.is_empty() {
+        return "1 = 0".into();
+    }
+    let mut ids: Vec<i64> = ids.iter().copied().collect();
+    ids.sort_unstable();
+    let parts: Vec<String> = ids.chunks(900).map(|c| format!("{col} in ({})", c.iter().map(i64::to_string).collect::<Vec<_>>().join(","))).collect();
+    format!("({})", parts.join(" or "))
+}
+
+/// " and <col> in (…)" when the person has a scope, otherwise nothing.
+fn within(scope: &Scope, col: &str) -> String {
+    scope.as_ref().map(|s| format!(" and {}", in_list(col, s))).unwrap_or_default()
+}
+
+/// The EA security groups of a person, by their login in the model (LC-425): "eagroup:<name>" entries for wanted().
+fn ea_groups(cfg: &AppConfig, user: &str) -> Vec<String> {
+    let login = crate::model_db::sql_text(cfg.model_source, &user.to_lowercase());
+    crate::tools::query_rows(cfg, &format!(
+        "select g.groupname from t_secuser u join t_secusergroup ug on ug.userid = u.userid join t_secgroup g on g.groupid = ug.groupid where lower(u.userlogin) = '{login}'"
+    ))
+    .unwrap_or_default()
+    .into_iter()
+    .map(|r| format!("eagroup:{}", r[0].trim().to_lowercase()))
+    .collect()
+}
+
+/// The given packages (package_id or GUID) and all their subpackages. "$group_locks:<group>" stands for the packages
+/// that EA group has locked (its area of the model, LC-425).
+fn scope_packages(cfg: &AppConfig, roots: &[String]) -> Result<HashSet<i64>> {
+    let rows = crate::tools::query_rows(cfg, "select package_id as c0, parent_id as c1, ea_guid as c2 from t_package")?;
+    let mut roots: Vec<String> = roots.to_vec();
+    for group in roots.clone().iter().filter_map(|r| r.trim().strip_prefix("$group_locks:")) {
+        let g = crate::model_db::sql_text(cfg.model_source, &group.trim().to_lowercase());
+        roots.extend(crate::tools::query_rows(cfg, &format!(
+            "select l.entityid from t_seclocks l join t_secgroup g on g.groupid = l.groupid where lower(g.groupname) = '{g}'"
+        ))?.into_iter().map(|r| r[0].clone()));
+    }
+    let wanted: HashSet<String> = roots.iter().map(|r| r.trim().trim_matches(['{', '}']).to_lowercase()).collect();
+    let mut found: HashSet<i64> = rows
+        .iter()
+        .filter(|r| wanted.contains(&r[0]) || wanted.contains(&r[2].trim_matches(['{', '}']).to_lowercase()))
+        .filter_map(|r| r[0].parse().ok())
+        .collect();
+    loop {
+        let more: Vec<i64> = rows
+            .iter()
+            .filter_map(|r| Some((r[0].parse::<i64>().ok()?, r[1].parse::<i64>().ok()?)))
+            .filter(|(id, parent)| found.contains(parent) && !found.contains(id))
+            .map(|(id, _)| id)
+            .collect();
+        if more.is_empty() {
+            return Ok(found);
+        }
+        found.extend(more);
+    }
+}
+
+/// One dimension of a portfolio view (LC-393): the SQL of its value and the join it needs.
+fn dimension(cfg: &AppConfig, name: &str, alias: &str) -> Result<(String, String), HttpError> {
+    let simple = |col: &str| Ok((format!("coalesce({col},'')"), String::new()));
+    match name {
+        "type" => simple("o.object_type"),
+        "stereotype" => simple("o.stereotype"),
+        "status" => simple("o.status"),
+        "phase" => simple("o.phase"),
+        "author" => simple("o.author"),
+        "version" => simple("o.version"),
+        "package" => simple("p.name"),
+        _ => match name.strip_prefix("tag:").map(str::trim).filter(|t| !t.is_empty() && t.len() <= 100) {
+            Some(tag) => {
+                let tag = crate::model_db::sql_text(cfg.model_source, tag);
+                Ok((format!("coalesce({alias}.value,'')"), format!(" left join (select object_id, max(value) as value from t_objectproperties where property = '{tag}' group by object_id) {alias} on {alias}.object_id = o.object_id")))
+            }
+            None => Err(deny(400, "dimension: type, stereotype, status, phase, author, version, package or tag:<name>")),
+        },
+    }
+}
+
+/// A portfolio view of a package with its subpackages: elements counted by one or two dimensions.
+fn portfolio(cfg: &AppConfig, packages: &HashSet<i64>, rows: &str, cols: Option<&str>, kind: Option<&str>) -> Result<Value, HttpError> {
+    let (r, rj) = dimension(cfg, rows, "tr")?;
+    let (c, cj) = match cols {
+        Some(c) => dimension(cfg, c, "tc")?,
+        None => ("''".into(), String::new()),
+    };
+    let kind = kind.map(str::trim).filter(|k| !k.is_empty()).map(|k| format!(" and o.object_type = '{}'", crate::model_db::sql_text(cfg.model_source, k))).unwrap_or_default();
+    let sql = format!(
+        "select {r} as c0, {c} as c1, count(*) as c2 from t_object o join t_package p on p.package_id = o.package_id{rj}{cj} \
+         where o.object_type not in ('Package', 'Note', 'Text', 'Boundary') and {}{kind} group by {r}, {c}",
+        in_list("o.package_id", packages)
+    );
+    let found = crate::tools::query_rows(cfg, &sql)?;
+    let mut row_names: Vec<String> = found.iter().map(|x| x[0].clone()).collect();
+    let mut col_names: Vec<String> = found.iter().map(|x| x[1].clone()).collect();
+    for list in [&mut row_names, &mut col_names] {
+        list.sort();
+        list.dedup();
+    }
+    let cells: Vec<Vec<i64>> = row_names
+        .iter()
+        .map(|rn| col_names.iter().map(|cn| found.iter().filter(|x| &x[0] == rn && &x[1] == cn).map(|x| x[2].parse::<i64>().unwrap_or(0)).sum()).collect())
+        .collect();
+    let label = |s: &String| if s.is_empty() { "(none)".to_string() } else { s.clone() };
+    Ok(json!({ "rows": row_names.iter().map(label).collect::<Vec<_>>(), "cols": if cols.is_some() { col_names.iter().map(label).collect::<Vec<_>>() } else { vec![] }, "cells": cells }))
+}
+
+/// The portfolio view of a request: the package (with subpackages, within the person's scope) and the dimensions.
+fn portfolio_of(source: &Source, scope: &Scope, query: &HashMap<String, String>) -> Result<(Value, String), HttpError> {
+    let package: i64 = query.get("package").and_then(|p| p.parse().ok()).ok_or_else(|| deny(400, crate::i18n::tr("give the package (package_id)")))?;
+    package_in(scope, package)?;
+    let mut packages = scope_packages(&source.cfg, &[package.to_string()])?;
+    if let Some(s) = scope {
+        packages.retain(|p| s.contains(p));
+    }
+    let rows = query.get("rows").map(String::as_str).unwrap_or("status");
+    let cols = query.get("cols").map(String::as_str).filter(|c| !c.is_empty());
+    let view = portfolio(&source.cfg, &packages, rows, cols, query.get("type").map(String::as_str))?;
+    let name = crate::tools::query_rows(&source.cfg, &format!("select name from t_package where package_id = {package}"))?.first().map(|r| r[0].clone()).unwrap_or_default();
+    let title = match cols { Some(c) => format!("{name}: {rows} × {c}"), None => format!("{name}: by {rows}") };
+    Ok((view, title))
+}
+
+/// The portfolio view as a presentation: a title slide and the counts (with shares) as bullets.
+fn portfolio_pptx(view: &Value, title: &str, model: &str) -> Result<Vec<u8>> {
+    let rows: Vec<String> = view["rows"].as_array().into_iter().flatten().filter_map(|v| v.as_str().map(String::from)).collect();
+    let cols: Vec<String> = view["cols"].as_array().into_iter().flatten().filter_map(|v| v.as_str().map(String::from)).collect();
+    let cells: Vec<Vec<i64>> = view["cells"].as_array().into_iter().flatten().map(|r| r.as_array().into_iter().flatten().filter_map(Value::as_i64).collect()).collect();
+    let total: i64 = cells.iter().flatten().sum::<i64>().max(1);
+    let mut slides = Vec::new();
+    let mut bullets: Vec<(String, u8)> = Vec::new();
+    for (i, r) in rows.iter().enumerate() {
+        let sum: i64 = cells[i].iter().sum();
+        bullets.push((format!("{r}: {sum} ({}%)", sum * 100 / total), 0));
+        if !cols.is_empty() {
+            for (j, c) in cols.iter().enumerate() {
+                if cells[i][j] > 0 {
+                    bullets.push((format!("{c}: {}", cells[i][j]), 1));
+                }
+            }
+        }
+        if bullets.len() >= 14 {
+            slides.push(crate::pptx::Slide { title: title.to_string(), bullets: std::mem::take(&mut bullets), picture: None, notes: String::new() });
+        }
+    }
+    if !bullets.is_empty() || slides.is_empty() {
+        slides.push(crate::pptx::Slide { title: title.to_string(), bullets, picture: None, notes: String::new() });
+    }
+    crate::pptx::build(title, &format!("{model} · {} elements · {}", total, chrono::Local::now().format("%Y-%m-%d")), &slides)
+}
+
+/// What a person with a package scope cannot use: questions over the whole model (GraphQL, the assistant, impact and
+/// gaps across packages) cannot be limited reliably, so they are refused (LC-385).
+fn scoped_out(what: &str) -> HttpError {
+    deny(403, crate::i18n::fmt("your access to this model is limited to some packages: {0} is not available to you", &[what.to_string()]))
+}
+
+/// The package is within the person's scope.
+fn package_in(scope: &Scope, package: i64) -> Result<(), HttpError> {
+    match scope {
+        Some(s) if !s.contains(&package) => Err(deny(404, crate::i18n::fmt("there is no package with id {0}", &[package.to_string()]))),
+        _ => Ok(()),
+    }
+}
+
+/// The element lies in a package within the person's scope (outside it looks like no element at all).
+fn element_in(cfg: &AppConfig, scope: &Scope, element: i64) -> Result<(), HttpError> {
+    let Some(s) = scope else { return Ok(()) };
+    let package = crate::tools::query_rows(cfg, &format!("select package_id as c0 from t_object where object_id = {element}"))?
+        .into_iter()
+        .next()
+        .and_then(|r| r[0].parse::<i64>().ok());
+    match package {
+        Some(p) if s.contains(&p) => Ok(()),
+        _ => Err(deny(404, crate::i18n::fmt("there is no element with id {0}", &[element.to_string()]))),
+    }
 }
 
 /// State of the running hub.
 pub struct Hub {
+    /// Reverse proxies on other computers whose X-Forwarded-For is trusted ("trusted_proxies" in hub.json).
+    trusted_proxies: Vec<IpAddr>,
+    /// The hub listens only on this computer: requests must name this computer in Host (DNS rebinding, LC-350).
+    local_only: bool,
+    /// Host names of the hub behind a reverse proxy on this computer, also accepted in Host: "allowed_hosts" in
+    /// hub.json and the host of the OIDC redirect_uri (lower case, without a port).
+    allowed_hosts: Vec<String>,
     file: PathBuf,
     dir: PathBuf,
     sources: Vec<Source>,
@@ -181,7 +381,8 @@ pub fn new_token() -> (String, String) {
 /// `properties` is the app.properties of a model (as in Compass), relative to hub.json or absolute.
 pub fn load(file: &Path) -> Result<(Hub, String)> {
     let text = std::fs::read_to_string(file).with_context(|| crate::i18n::fmt("cannot read {0}", &[file.display().to_string()]))?;
-    let value: Value = serde_json::from_str(&text).with_context(|| crate::i18n::fmt("{0} is not valid JSON", &[file.display().to_string()]))?;
+    // hub.json edited in Windows PowerShell may start with a BOM (LC-430).
+    let value: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).with_context(|| crate::i18n::fmt("{0} is not valid JSON", &[file.display().to_string()]))?;
     let dir = file.parent().unwrap_or(Path::new(".")).to_path_buf();
     let mut sources = Vec::new();
     for s in value["sources"].as_array().into_iter().flatten() {
@@ -191,7 +392,17 @@ pub fn load(file: &Path) -> Result<(Hub, String)> {
         }
         let props = dir.join(s["properties"].as_str().unwrap_or(""));
         let cfg = AppConfig::load(&props).with_context(|| crate::i18n::fmt("hub source {0}", &[id.clone()]))?;
-        sources.push(Source { name: s["name"].as_str().unwrap_or(&id).to_string(), id, cfg });
+        let readers = s["readers"].as_array().into_iter().flatten().filter_map(|r| r.as_str()).map(|r| r.trim().to_lowercase()).filter(|r| !r.is_empty()).collect();
+        let mut scopes = Vec::new();
+        for scope in s["scopes"].as_array().into_iter().flatten() {
+            let who = scope["for"].as_str().unwrap_or("").trim().to_lowercase();
+            if who.is_empty() {
+                bail!("{}", crate::i18n::fmt("hub source {0}: every scope needs \"for\" (a user, role:<role> or *)", &[id.clone()]));
+            }
+            let packages = scope["packages"].as_array().into_iter().flatten().filter_map(|p| p.as_i64().map(|n| n.to_string()).or_else(|| p.as_str().map(str::to_string))).collect();
+            scopes.push((who, packages));
+        }
+        sources.push(Source { name: s["name"].as_str().unwrap_or(&id).to_string(), id, cfg, readers, scopes });
     }
     let mut users: Vec<User> = Vec::new();
     for u in value["users"].as_array().into_iter().flatten() {
@@ -217,13 +428,32 @@ pub fn load(file: &Path) -> Result<(Hub, String)> {
         }
         users.push(User { name, role: Role::parse(u["role"].as_str().unwrap_or("viewer")), token, password, must_change: u["must_change"] == true });
     }
-    // A new hub: the default account (its password must be changed at the first sign-in).
-    let default_account = users.is_empty();
+    // A new hub: the default account (its password must be changed at the first sign-in) – not with a company sign-in
+    // (OIDC), where whoever reached /api/login first would set its password and become admin (LC-350); there the
+    // admins are the members of the OIDC admin group.
+    let oidc_configured = crate::oidc::Config::from_json(&value["oidc"])?.is_some();
+    let default_account = users.is_empty() && !oidc_configured;
+    if users.is_empty() && oidc_configured {
+        eprintln!("Compass Hub: no users in hub.json and a company sign-in (OIDC) is configured – no default account; admins come from the OIDC admin group.");
+    }
     if default_account {
         users.push(User { name: DEFAULT_ADMIN.into(), role: Role::Admin, token: None, password: Some(password_hash(DEFAULT_PASSWORD)), must_change: true });
     }
     let listen = value["listen"].as_str().unwrap_or(DEFAULT_LISTEN).to_string();
+    let local_only = listens_on_loopback(&listen);
+    let trusted_proxies: Vec<IpAddr> = value["trusted_proxies"].as_array().into_iter().flatten().filter_map(|v| v.as_str()?.trim().parse().ok()).collect();
+    // Behind IIS/ARR or nginx on this computer the proxy passes the public name in Host: that name is the hub's own
+    // (the address of the OIDC callback, or listed), so it is not a rebinding page.
+    let mut allowed_hosts: Vec<String> = value["allowed_hosts"].as_array().into_iter().flatten().filter_map(|v| v.as_str()).map(host_name).filter(|h| !h.is_empty()).collect();
+    if let Some(callback) = value["oidc"]["redirect_uri"].as_str().and_then(|u| reqwest::Url::parse(u).ok()) {
+        if let Some(h) = callback.host_str() {
+            allowed_hosts.push(host_name(h));
+        }
+    }
     let hub = Hub {
+        trusted_proxies,
+        local_only,
+        allowed_hosts,
         file: file.to_path_buf(), dir, sources, users: Mutex::new(users), sessions: Mutex::new(HashMap::new()), policy: Mutex::new(value["policy"].clone()),
         audit_lock: Mutex::new(()), ask_lock: Mutex::new(()), change_lock: Mutex::new(()), failures: Mutex::new(HashMap::new()), asks: Mutex::new(HashMap::new()),
         integrations: value["integrations"].clone(),
@@ -280,12 +510,50 @@ pub fn serve(hub: Hub, listen: &str, ready: impl FnOnce(String)) -> Result<()> {
     Ok(())
 }
 
+/// What one request of the AI gateway cost in USD at the model's prices (0 for a model without a price) (LC-390).
+fn cost_of(entry: &Value) -> f64 {
+    let n = |k: &str| entry[k].as_u64().unwrap_or(0);
+    crate::usage::Call {
+        model: entry["model"].as_str().unwrap_or("").to_string(),
+        input: n("input_tokens"),
+        cache_write_5m: n("cache_creation_input_tokens"),
+        cache_read: n("cache_read_input_tokens"),
+        output: n("output_tokens"),
+        ..Default::default()
+    }
+    .usd()
+    .unwrap_or(0.0)
+}
+
+/// A trailing " (address)" of a failed sign-in left out (for people who are not admins).
+fn hide_address(text: &str) -> String {
+    match text.rfind(" (") {
+        Some(at) if text.ends_with(')') && text[at + 2..text.len() - 1].parse::<IpAddr>().is_ok() => text[..at].to_string(),
+        _ => text.to_string(),
+    }
+}
+
 /// Renames a file with the date when it gets too big (audit.jsonl, hub.log).
 fn rotate(path: &Path) {
     if std::fs::metadata(path).map(|m| m.len() > ROTATE_BYTES).unwrap_or(false) {
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
         let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("txt");
         let _ = std::fs::rename(path, path.with_file_name(format!("{stem}-{}.{ext}", chrono::Local::now().format("%Y%m%d-%H%M%S"))));
+        // Only the newest 20 rotated files are kept (LC-354: the disk filled up without end).
+        if let Some(dir) = path.parent() {
+            let mut old: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with(&format!("{stem}-")) && n.ends_with(&format!(".{ext}"))))
+                .collect();
+            old.sort();
+            let extra = old.len().saturating_sub(20);
+            for p in old.into_iter().take(extra) {
+                let _ = std::fs::remove_file(p);
+            }
+        }
     }
 }
 
@@ -339,6 +607,83 @@ struct Head {
     /// The last address of X-Forwarded-For (the one the proxy in front of the hub added).
     forwarded: Option<IpAddr>,
     content_type: String,
+    /// The Host header ("" when missing).
+    host: String,
+    /// The cookie "lc_signin" that binds a company sign-in to the browser that started it (H9).
+    signin: String,
+    /// X-Compass-Source: the hub id of the model a request of the AI gateway is about (LC-405).
+    client_source: String,
+}
+
+/// The REST calls Compass makes to the team's Jira and Confluence through the hub (LC-351); everything else, DELETE
+/// included, is refused. With a project (Jira) or a space (Confluence) in hub.json, calls naming another one are refused
+/// too. Pages by id are checked by the service account's own permissions.
+fn proxy_allowed(kind: &str, method: &str, rest: &str, project: &str, space: &str, body: &[u8]) -> Result<(), String> {
+    let refused = || Err(format!("{kind}: {method} {rest} does not go through the hub"));
+    let same = |a: &str, b: &str| b.is_empty() || a.eq_ignore_ascii_case(b);
+    let issue_ok = |key: &str| project.is_empty() || key.to_ascii_uppercase().starts_with(&format!("{}-", project.to_ascii_uppercase()));
+    let body_value: Value = serde_json::from_slice(body).unwrap_or(Value::Null);
+    if kind == "jira" {
+        let Some(path) = rest.strip_prefix("/rest/api/2/").or_else(|| rest.strip_prefix("/rest/api/3/")) else { return refused() };
+        let parts: Vec<&str> = path.trim_end_matches('/').split('/').collect();
+        let ok = match (method, parts.as_slice()) {
+            ("GET", ["myself"] | ["serverInfo"] | ["issuetype"] | ["field"] | ["search"] | ["search", "jql"]) => true,
+            ("GET", ["project", p]) => same(p, project),
+            ("GET", ["issue", key]) | ("GET", ["issue", key, "remotelink"]) => issue_ok(key),
+            ("GET", ["attachment", "content", _]) | ("GET", ["attachment", _]) => true,
+            ("POST", ["issue"]) => same(body_value["fields"]["project"]["key"].as_str().unwrap_or(""), project),
+            ("POST", ["issue", key, "comment" | "remotelink" | "attachments"]) => issue_ok(key),
+            ("PUT", ["issue", key]) => issue_ok(key),
+            _ => false,
+        };
+        return if ok { Ok(()) } else { refused() };
+    }
+    let Some(path) = rest.strip_prefix("/rest/api/") else { return refused() };
+    let parts: Vec<&str> = path.trim_end_matches('/').split('/').collect();
+    let ok = match (method, parts.as_slice()) {
+        ("GET", ["content"]) | ("GET", ["content", _]) | ("GET", ["content", _, "child", "attachment"]) => true,
+        ("GET", ["space", s]) => same(s, space),
+        ("POST", ["content"]) => same(body_value["space"]["key"].as_str().unwrap_or(""), space),
+        ("POST", ["content", _, "child", "attachment"]) | ("POST", ["content", _, "child", "attachment", _, "data"]) => true,
+        ("PUT", ["content", _]) => true,
+        _ => false,
+    };
+    if ok { Ok(()) } else { refused() }
+}
+
+/// A Jira search limited to the team's project: `project = "P" AND (jql)`, ORDER BY kept at the end.
+fn jql_in_project(jql: &str, project: &str) -> String {
+    let lower = jql.to_ascii_lowercase();
+    let (filter, order) = match lower.rfind("order by") {
+        Some(at) => (jql[..at].trim(), jql[at..].trim()),
+        None => (jql.trim(), ""),
+    };
+    let project = project.replace('"', "");
+    let limited = if filter.is_empty() { format!("project = \"{project}\"") } else { format!("project = \"{project}\" AND ({filter})") };
+    if order.is_empty() { limited } else { format!("{limited} {order}") }
+}
+
+/// Whether the listen address is this computer only (127.0.0.1, ::1, localhost).
+fn listens_on_loopback(listen: &str) -> bool {
+    let host = listen.rsplit_once(':').map_or(listen, |(h, _)| h).trim_matches(['[', ']']);
+    host.eq_ignore_ascii_case("localhost") || host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback())
+}
+
+/// Whether a Host header names this computer (any port); an empty one (HTTP/1.0) passes.
+/// The name in a Host header, without the port and the brackets of an IPv6 address, in lower case.
+fn host_name(host: &str) -> String {
+    let host = host.trim();
+    let name = if let Some(rest) = host.strip_prefix('[') { rest.split(']').next().unwrap_or("") } else if host.matches(':').count() > 1 { host } else { host.rsplit_once(':').map_or(host, |(h, _)| h) };
+    name.trim_end_matches('.').to_ascii_lowercase()
+}
+
+/// Host names this computer, or one of the hub's own public names (`allowed`).
+fn host_is_local(host: &str, allowed: &[String]) -> bool {
+    if host.trim().is_empty() {
+        return true;
+    }
+    let name = host_name(host);
+    name == "localhost" || name.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback()) || allowed.iter().any(|a| *a == name)
 }
 
 fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Head, HttpError> {
@@ -374,7 +719,7 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
     let mut parts = first.split_whitespace();
     let method = parts.next().unwrap_or("").to_string();
     let target = parts.next().unwrap_or("/").to_string();
-    let (mut length, mut token, mut forwarded, mut content_type) = (0usize, String::new(), None, String::new());
+    let (mut length, mut token, mut forwarded, mut content_type, mut host, mut signin, mut client_source) = (0usize, String::new(), None, String::new(), String::new(), String::new(), String::new());
     for count in 0.. {
         if count > MAX_HEADERS {
             return Err(deny(431, "too many headers"));
@@ -391,6 +736,13 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
                 // Compass talking to the hub's AI gateway sends the hub token as an Anthropic key.
                 "x-api-key" if token.is_empty() => token = value.trim().to_string(),
                 "content-type" => content_type = value.trim().to_string(),
+                "host" => host = value.trim().to_string(),
+                "x-compass-source" => client_source = value.trim().chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').take(64).collect(),
+                "cookie" => {
+                    if let Some(v) = value.split(';').filter_map(|c| c.trim().strip_prefix("lc_signin=")).next() {
+                        signin = v.trim().to_string();
+                    }
+                }
                 "x-forwarded-for" => forwarded = value.split(',').next_back().and_then(|a| forwarded_address(a.trim())),
                 _ => {}
             }
@@ -399,7 +751,7 @@ fn read_head(reader: &mut BufReader<&TcpStream>, started: Instant) -> Result<Hea
     if length > MAX_AI_BODY || (length > MAX_BODY && !target.starts_with("/ai/")) {
         return Err(deny(413, "request body too large"));
     }
-    Ok(Head { method, target, length, token, forwarded, content_type })
+    Ok(Head { method, target, length, token, forwarded, content_type, host, signin, client_source })
 }
 
 /// An address of X-Forwarded-For: "10.1.2.3", "2001:db8::1", or with a port as IIS/ARR sends it by default
@@ -490,15 +842,24 @@ fn compass_return(url: &str) -> bool {
 }
 
 /// A redirect (the company sign-in): to the provider, or back to the page.
-fn redirect(mut stream: &TcpStream, location: &str) -> Result<()> {
+fn redirect(stream: &TcpStream, location: &str) -> Result<()> {
+    redirect_with_cookie(stream, location, None)
+}
+
+fn redirect_with_cookie(mut stream: &TcpStream, location: &str, cookie: Option<&str>) -> Result<()> {
+    let cookie = cookie.map(|c| format!("Set-Cookie: {c}\r\n")).unwrap_or_default();
     write!(
         stream,
         "HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n\
-         X-Frame-Options: DENY\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\n\r\n"
+         X-Frame-Options: DENY\r\nReferrer-Policy: no-referrer\r\n{cookie}Connection: close\r\n\r\n"
     )?;
     stream.flush()?;
     Ok(())
 }
+
+/// The cookie that binds a company sign-in to this browser for 10 minutes (sent back by the provider's redirect, which
+/// is a top-level navigation, so SameSite=Lax lets it through).
+const SIGNIN_COOKIE: &str = "lc_signin={0}; Path=/auth; Max-Age=600; HttpOnly; SameSite=Lax";
 
 /// A small page when the company sign-in did not work, with the way back.
 fn sign_in_problem(stream: &TcpStream, message: &str) -> Result<()> {
@@ -545,10 +906,17 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
     };
     // Behind a proxy on this computer (IIS/ARR, nginx) every request comes from the loopback address: the client is
     // the address the proxy added to X-Forwarded-For. From any other address the header is not trusted.
+    // A proxy on another computer is trusted when hub.json lists it ("trusted_proxies"): otherwise every client
+    // behind it shares its address and 20 wrong passwords lock everybody out (LC-354).
     let peer = match (peer, head.forwarded) {
-        (Some(ip), Some(client)) if ip.is_loopback() => Some(client),
+        (Some(ip), Some(client)) if ip.is_loopback() || hub.trusted_proxies.contains(&ip) => Some(client),
         (peer, _) => peer,
     };
+    // A hub on this computer only answers requests addressed to this computer: a web page of another site whose name
+    // resolves to 127.0.0.1 (DNS rebinding) is refused (LC-350).
+    if hub.local_only && !host_is_local(&head.host, &hub.allowed_hosts) {
+        return respond(&stream, 421, "application/json; charset=utf-8", json!({ "error": "this hub answers only requests to localhost" }).to_string().as_bytes());
+    }
     let (path, query) = split_target(&head.target);
     if head.method == "GET" {
         match path.as_str() {
@@ -571,8 +939,9 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
                     Some(_) => return sign_in_problem(&stream, &crate::i18n::tr("The return address of the sign-in is not allowed.")),
                     None => None,
                 };
-                return match provider.start(return_to) {
-                    Ok(url) => redirect(&stream, &url),
+                let browser = format!("{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
+                return match provider.start(return_to, &browser) {
+                    Ok(url) => redirect_with_cookie(&stream, &url, Some(&SIGNIN_COOKIE.replace("{0}", &browser))),
                     Err(e) => {
                         log(&hub.dir, &format!("company sign-in could not start: {e:#}"));
                         sign_in_problem(&stream, &crate::i18n::tr("The company sign-in is not available right now. Try again later or ask the administrator of the hub."))
@@ -582,13 +951,16 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
             "/auth/callback" => {
                 let Some(provider) = &hub.oidc else { return respond(&stream, 404, "text/plain", b"not found") };
                 if let Some(error) = query.get("error") {
-                    let detail = query.get("error_description").cloned().unwrap_or_default();
+                    // Anybody can call this address: what it says goes to the log and the audit trail short and printable (LC-354).
+                    let printable = |t: &str| t.chars().filter(|c| !c.is_control()).take(120).collect::<String>();
+                    let error = &printable(error);
+                    let detail = printable(&query.get("error_description").cloned().unwrap_or_default());
                     log(&hub.dir, &format!("company sign-in refused by the provider: {error} {detail}"));
                     hub.audit_sign_in("", &crate::i18n::fmt("company sign-in refused by the provider: {0}", &[format!("{error} {detail}").trim().to_string()]), peer);
                     return sign_in_problem(&stream, &crate::i18n::fmt("The sign-in was refused: {0}", &[if detail.is_empty() { error.clone() } else { detail }]));
                 }
                 let (code, state) = (query.get("code").cloned().unwrap_or_default(), query.get("state").cloned().unwrap_or_default());
-                return match provider.finish(&code, &state) {
+                return match provider.finish(&code, &state, &head.signin) {
                     Ok(who) => {
                         if hub.users.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|u| u.name.eq_ignore_ascii_case(&who.name)) {
                             log(&hub.dir, &format!("company sign-in of {} refused: a local user has the same name", who.name));
@@ -671,6 +1043,7 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
         Err(HttpError(status, message)) => return respond(&stream, status, "application/json; charset=utf-8", json!({ "error": message }).to_string().as_bytes()),
     };
     let content_type = head.content_type.clone();
+    let client_source = head.client_source.clone();
     let request = Request { method: head.method, path, query, token: head.token, body };
     // An account with a password set by someone else (the default one, a reset) can only change it or sign out.
     if must_change && !matches!((request.method.as_str(), request.path.as_str()), ("GET", "/api/me") | ("POST", "/api/password") | ("POST", "/api/logout")) {
@@ -679,10 +1052,22 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
     // A Word or Excel report of a package: a file, not JSON.
     if request.method == "GET" {
         let parts: Vec<&str> = request.path.trim_matches('/').split('/').collect();
+        if let ["api", "sources", id, "portfolio.pptx"] = parts.as_slice() {
+            let result = (|| -> Result<(Vec<u8>, String), HttpError> {
+                let (source, scope) = hub.source_for(id, &user, role)?;
+                let (view, title) = portfolio_of(source, &scope, &request.query)?;
+                Ok((portfolio_pptx(&view, &title, &source.name).map_err(|e| deny(500, e.to_string()))?, format!("{title}.pptx")))
+            })();
+            return match result {
+                Ok((bytes, name)) => respond_file(&stream, "application/vnd.openxmlformats-officedocument.presentationml.presentation", &name, &bytes),
+                Err(HttpError(status, message)) => respond(&stream, status, "application/json; charset=utf-8", json!({ "error": message }).to_string().as_bytes()),
+            };
+        }
         if let ["api", "sources", id, "report"] = parts.as_slice() {
             let result = (|| -> Result<(Vec<u8>, &'static str, String), HttpError> {
-                let source = hub.source(id)?;
+                let (source, scope) = hub.source_for(id, &user, role)?;
                 let package: i64 = request.query.get("package").and_then(|p| p.parse().ok()).ok_or_else(|| deny(400, crate::i18n::tr("give the package (package_id)")))?;
+                package_in(&scope, package)?;
                 let format = request.query.get("format").map(String::as_str).unwrap_or("docx");
                 package_report(&source.cfg, &source.name, package, format)
             })();
@@ -697,7 +1082,9 @@ fn handle(hub: &Hub, stream: TcpStream) -> Result<()> {
     }
     // The team's services for Compass: Claude with the team's key, Jira and Confluence with the team's account.
     let gateway = if request.method == "POST" && request.path == "/ai/v1/messages" {
-        Some(hub.ai_gateway(&user, role, &request.body))
+        Some(hub.ai_gateway(&user, role, &request.body, &client_source))
+    } else if request.method == "POST" && request.path == "/ai/openai/v1/chat/completions" {
+        Some(hub.ai_gateway_openai(&user, role, &request.body, &client_source))
     } else if let Some(rest) = request.path.strip_prefix("/proxy/jira") {
         Some(hub.service_proxy("jira", &user, role, &request.method, rest, &request.query, &request.body, &content_type))
     } else if let Some(rest) = request.path.strip_prefix("/proxy/confluence") {
@@ -761,7 +1148,12 @@ impl Hub {
 
     /// Sign-in with a name and a password: a session token for the web view.
     fn login(&self, body: &[u8], peer: Option<IpAddr>) -> (u16, Value) {
-        let b: Value = serde_json::from_slice(body).unwrap_or(Value::Null);
+        // Not a sign-in form at all (no JSON object with a name and a password): a bad request, not a wrong
+        // password, and not counted as a failed sign-in (LC-433).
+        let b: Value = match serde_json::from_slice(body) {
+            Ok(b @ Value::Object(_)) if b["name"].is_string() && b["password"].is_string() => b,
+            _ => return (400, json!({ "error": "expected JSON {\"name\": …, \"password\": …}" })),
+        };
         let name = b["name"].as_str().unwrap_or("").trim().to_string();
         let password = b["password"].as_str().unwrap_or("").to_string();
         if let Some(ip) = peer {
@@ -807,7 +1199,7 @@ impl Hub {
             }
             v
         }).collect();
-        let mut file: Value = serde_json::from_str(&std::fs::read_to_string(&self.file)?)?;
+        let mut file: Value = serde_json::from_str(std::fs::read_to_string(&self.file)?.trim_start_matches('\u{feff}'))?;
         file["users"] = json!(users);
         let temp = self.file.with_extension("json.tmp");
         std::fs::write(&temp, serde_json::to_string_pretty(&file)?)?;
@@ -815,8 +1207,77 @@ impl Hub {
         Ok(())
     }
 
+    /// Writes the team policy into hub.json (atomically) and takes it into use; the change goes to the audit trail.
+    fn write_policy(&self, policy: Value, user: &str, summary: String) -> Result<()> {
+        let mut file: Value = serde_json::from_str(std::fs::read_to_string(&self.file)?.trim_start_matches('\u{feff}'))?;
+        file["policy"] = policy.clone();
+        let temp = self.file.with_extension("json.tmp");
+        std::fs::write(&temp, serde_json::to_string_pretty(&file).unwrap_or_default())?;
+        std::fs::rename(&temp, &self.file)?;
+        *self.policy.lock().unwrap() = policy;
+        let _ = self.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": "", "summary": summary, "ok": true }));
+        Ok(())
+    }
+
+    /// The review comments and decisions (comments.json next to hub.json).
+    fn comments(&self) -> Vec<Value> {
+        std::fs::read_to_string(self.dir.join("comments.json")).ok().and_then(|t| serde_json::from_str::<Vec<Value>>(&t).ok()).unwrap_or_default()
+    }
+
+    /// Adds a comment, or replaces the one with this id; written atomically.
+    fn save_comment(&self, comment: &Value, replace: Option<&str>) -> Result<()> {
+        let mut all = self.comments();
+        match replace {
+            Some(id) => {
+                if let Some(c) = all.iter_mut().find(|c| c["id"] == id) {
+                    *c = comment.clone();
+                }
+            }
+            None => {
+                if all.len() >= 50_000 {
+                    bail!("at most 50000 comments");
+                }
+                all.push(comment.clone());
+            }
+        }
+        let file = self.dir.join("comments.json");
+        let temp = file.with_extension("json.tmp");
+        std::fs::write(&temp, serde_json::to_string_pretty(&all)?)?;
+        std::fs::rename(&temp, &file)?;
+        Ok(())
+    }
+
     fn source(&self, id: &str) -> Result<&Source, HttpError> {
         self.sources.iter().find(|s| s.id == id).ok_or_else(|| deny(404, crate::i18n::fmt("there is no source {0}", &[id.to_string()])))
+    }
+
+    /// The person may read the source ("readers"; admins always) (LC-385).
+    fn can_read(source: &Source, user: &str, role: Role) -> bool {
+        role == Role::Admin || source.readers.is_empty() || wanted(user, role).iter().any(|w| source.readers.contains(w))
+    }
+
+    /// The source as this person may read it: a source they may not read looks like no source; with a package scope,
+    /// the packages they see (LC-385).
+    fn source_for(&self, id: &str, user: &str, role: Role) -> Result<(&Source, Scope), HttpError> {
+        let source = self.source(id)?;
+        if !Self::can_read(source, user, role) {
+            return Err(deny(404, crate::i18n::fmt("there is no source {0}", &[id.to_string()])));
+        }
+        if role == Role::Admin {
+            return Ok((source, None));
+        }
+        // The person, their role, their EA security groups (by their login in this model, LC-425), everybody.
+        let mut who: Vec<String> = wanted(user, role).to_vec();
+        if source.scopes.iter().any(|(w, _)| w.starts_with("eagroup:")) {
+            let star = who.pop();
+            who.extend(ea_groups(&source.cfg, user));
+            who.extend(star);
+        }
+        let roots = who.iter().find_map(|w| source.scopes.iter().find(|(s, _)| s == w).map(|(_, p)| p.clone()));
+        match roots {
+            None => Ok((source, None)),
+            Some(roots) => Ok((source, Some(scope_packages(&source.cfg, &roots)?))),
+        }
     }
 
     fn rules(&self) -> Value {
@@ -948,6 +1409,20 @@ fn short(value: &Value, max: usize) -> Value {
     }
 }
 
+/// The owner of an element (LC-407): its tagged value Owner (or Właściciel, Eigentümer, Propriétaire), else its author.
+fn owner_of(cfg: &AppConfig, element: i64) -> Option<String> {
+    let tag = crate::tools::query_rows(cfg, &format!(
+        "select value from t_objectproperties where object_id = {element} and lower(property) in ('owner', 'właściciel', 'wlasciciel', 'eigentümer', 'propriétaire') and value is not null"
+    ))
+    .ok()?
+    .into_iter()
+    .map(|r| r[0].trim().to_string())
+    .find(|v| !v.is_empty());
+    tag.or_else(|| {
+        crate::tools::query_rows(cfg, &format!("select coalesce(author,'') from t_object where object_id = {element}")).ok()?.into_iter().map(|r| r[0].trim().to_string()).find(|a| !a.is_empty())
+    })
+}
+
 fn require(role: Role, needed: Role) -> Result<(), HttpError> {
     if role < needed {
         return Err(deny(403, crate::i18n::fmt("this needs the role {0}", &[needed.name().to_string()])));
@@ -992,6 +1467,10 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
         ("GET", ["api", "users", "ai"]) => {
             require(role, Role::Admin)?;
             Ok((200, json!(hub.ai_usage_all())))
+        }
+        ("GET", ["api", "users", "ai", "groups"]) => {
+            require(role, Role::Admin)?;
+            Ok((200, hub.ai_usage_groups()))
         }
         ("GET", ["api", "users", "company"]) => {
             require(role, Role::Admin)?;
@@ -1052,6 +1531,15 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
             if *name == user {
                 return Err(deny(400, crate::i18n::tr("you cannot remove yourself")));
             }
+            // A company account (OIDC): its remembered role and sessions end now, not after 12 hours (LC-353); the next
+            // sign-in takes the role from the groups again.
+            let local = hub.users.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|u| u.name == *name);
+            if !local && hub.external.lock().unwrap_or_else(|p| p.into_inner()).remove(*name).is_some() {
+                hub.sessions.lock().unwrap_or_else(|p| p.into_inner()).retain(|_, (n, _)| n != *name);
+                hub.save_sessions();
+                let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": "", "summary": format!("company account {name}: role and sessions removed"), "ok": true }));
+                return Ok((200, json!({ "ok": true })));
+            }
             {
                 let mut users = hub.users.lock().unwrap_or_else(|p| p.into_inner());
                 let admins = users.iter().filter(|u| u.role == Role::Admin).count();
@@ -1086,12 +1574,13 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
         // Jira and Confluence of the team, as actions of an architect (never of the assistant): the hub's service account.
         ("POST", ["api", "sources", id, "jira"]) => {
             require(role, Role::Architect)?;
-            let source = hub.source(id)?;
+            let (source, scope) = hub.source_for(id, &user, role)?;
             let b = body()?;
             let (summary, description) = issue_text(&b)?;
             let mut text = description;
             if let Some(element) = b["element"].as_i64() {
-                text.push_str(&format!("\n\n{}\n{}", crate::i18n::fmt("Element of the model {0} (id {1}):", &[source.name.clone(), element.to_string()]), element_details(&source.cfg, element).map_err(|e| deny(400, e.to_string()))?.chars().take(4000).collect::<String>()));
+                element_in(&source.cfg, &scope, element)?;
+                text.push_str(&format!("\n\n{}\n{}", crate::i18n::fmt("Element of the model {0} (id {1}):", &[source.name.clone(), element.to_string()]), element_details(&source.cfg, element, &scope).map_err(|e| deny(400, e.to_string()))?.chars().take(4000).collect::<String>()));
             }
             let (key, url) = hub.create_issue(&summary, &text)?;
             let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": id, "summary": format!("Jira {key}: {summary}"), "ok": true }));
@@ -1116,9 +1605,10 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
         }
         ("POST", ["api", "sources", id, "confluence"]) => {
             require(role, Role::Architect)?;
-            let source = hub.source(id)?;
+            let (source, scope) = hub.source_for(id, &user, role)?;
             let b = body()?;
             let package = b["package"].as_i64().ok_or_else(|| deny(400, crate::i18n::fmt("missing number '{0}'", &["package".to_string()])))?;
+            package_in(&scope, package)?;
             let (title, storage) = package_page(&source.cfg, &source.name, package)?;
             let title = b["title"].as_str().map(str::trim).filter(|t| !t.is_empty()).map(|t| t.chars().take(200).collect::<String>()).unwrap_or(title);
             let (connection, space, parent) = hub.confluence()?;
@@ -1143,32 +1633,63 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
             if !policy.is_object() {
                 return Err(deny(400, crate::i18n::tr("the policy is a JSON object")));
             }
-            let mut file: Value = serde_json::from_str(&std::fs::read_to_string(&hub.file).map_err(|e| deny(500, e.to_string()))?).map_err(|e| deny(500, e.to_string()))?;
-            file["policy"] = policy.clone();
-            let temp = hub.file.with_extension("json.tmp");
-            std::fs::write(&temp, serde_json::to_string_pretty(&file).unwrap_or_default()).and_then(|_| std::fs::rename(&temp, &hub.file)).map_err(|e| deny(500, e.to_string()))?;
-            *hub.policy.lock().unwrap() = policy;
-            let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": "", "summary": crate::i18n::tr("team policy changed"), "ok": true }));
+            hub.write_policy(policy, &user, crate::i18n::tr("team policy changed").to_string()).map_err(|e| deny(500, e.to_string()))?;
             Ok((200, json!({ "ok": true })))
         }
-        ("GET", ["api", "sources"]) => Ok((200, json!(hub.sources.iter().map(|s| json!({ "id": s.id, "name": s.name, "kind": if s.cfg.uses_file() { "file" } else { "database" } })).collect::<Vec<_>>()))),
+        // The team's event agents as a form (LC-406): the events to choose from, a check with each agent in plain words,
+        // and saving them into the policy (only when every agent is valid).
+        ("GET", ["api", "agents"]) => {
+            require(role, Role::Admin)?;
+            let mut events: Vec<&str> = crate::agents::EVENTS.to_vec();
+            events.push("scheduled");
+            Ok((200, json!({ "agents": hub.policy.lock().unwrap()["event_agents"].as_array().cloned().unwrap_or_default(), "events": events })))
+        }
+        ("POST", ["api", "agents", "check"]) | ("PUT", ["api", "agents"]) => {
+            require(role, Role::Admin)?;
+            let list = body()?["agents"].as_array().cloned().ok_or_else(|| deny(400, crate::i18n::tr("agents: a list")))?;
+            if list.len() > 100 {
+                return Err(deny(400, crate::i18n::tr("at most 100 team agents")));
+            }
+            let checked: Vec<Value> = crate::agents::check_each(&list).into_iter().map(|(name, problem, plain)| json!({ "name": name, "problem": problem, "means": plain })).collect();
+            let valid = checked.iter().all(|c| c["problem"].is_null());
+            if request.method == "PUT" {
+                if !valid {
+                    return Ok((400, json!({ "error": crate::i18n::tr("fix the agents marked before saving"), "checked": checked })));
+                }
+                let mut policy = hub.policy.lock().unwrap().clone();
+                if !policy.is_object() {
+                    policy = json!({});
+                }
+                policy["event_agents"] = json!(list);
+                hub.write_policy(policy, &user, crate::i18n::fmt("team event agents changed ({0})", &[list.len().to_string()])).map_err(|e| deny(500, e.to_string()))?;
+            }
+            Ok((200, json!({ "valid": valid, "checked": checked })))
+        }
+        ("GET", ["api", "sources"]) => Ok((200, json!(hub.sources.iter().filter(|s| Hub::can_read(s, &user, role)).map(|s| json!({ "id": s.id, "name": s.name, "kind": if s.cfg.uses_file() { "file" } else { "database" } })).collect::<Vec<_>>()))),
         // Questions of people without EA: the assistant reads the source and answers (it cannot change the model).
         // Read-only GraphQL over a model (any role).
         ("POST", ["api", "sources", id, "graphql"]) => {
-            let source = hub.source(id)?;
+            let (source, scope) = hub.source_for(id, &user, role)?;
+            if scope.is_some() {
+                return Err(scoped_out("GraphQL"));
+            }
             Ok((200, crate::graphql::execute(&source.cfg, &body()?)))
         }
         ("GET", ["api", "graphql", "schema"]) => Ok((200, json!({ "sdl": crate::graphql::sdl() }))),
         // Flat tables of a model for Power BI, Excel and other tools (Get Data → Web, with the Authorization header).
         ("GET", ["api", "sources", id, "table", table]) => {
-            let source = hub.source(id)?;
+            let (source, scope) = hub.source_for(id, &user, role)?;
+            // With a package scope only the rows of those packages (a relationship: both ends inside) (LC-385).
+            let only = |cols: &[&str]| -> String {
+                scope.as_ref().map(|s| format!(" where {}", cols.iter().map(|c| in_list(c, s)).collect::<Vec<_>>().join(" and "))).unwrap_or_default()
+            };
             let sql = match *table {
-                "elements" => "select o.object_id, o.name, o.object_type, o.stereotype, o.status, o.package_id, p.name as package, o.author, o.version, o.phase, o.createddate, o.modifieddate from t_object o left join t_package p on p.package_id = o.package_id where o.object_type <> 'Package'",
-                "connectors" => "select c.connector_id, c.connector_type, c.stereotype, c.name, c.start_object_id, s.name as source, c.end_object_id, t.name as target from t_connector c left join t_object s on s.object_id = c.start_object_id left join t_object t on t.object_id = c.end_object_id",
-                "packages" => "select package_id, name, parent_id, version, createddate, modifieddate from t_package",
-                "diagrams" => "select diagram_id, name, diagram_type, package_id, author, createddate, modifieddate from t_diagram",
-                "attributes" => "select a.id, a.object_id, o.name as element, a.name, a.type from t_attribute a left join t_object o on o.object_id = a.object_id",
-                "tagged_values" => "select v.propertyid, v.object_id, o.name as element, v.property, v.value from t_objectproperties v left join t_object o on o.object_id = v.object_id",
+                "elements" => format!("select o.object_id, o.name, o.object_type, o.stereotype, o.status, o.package_id, p.name as package, o.author, o.version, o.phase, o.createddate, o.modifieddate from t_object o left join t_package p on p.package_id = o.package_id where o.object_type <> 'Package'{}", within(&scope, "o.package_id")),
+                "connectors" => format!("select c.connector_id, c.connector_type, c.stereotype, c.name, c.start_object_id, s.name as source, c.end_object_id, t.name as target from t_connector c left join t_object s on s.object_id = c.start_object_id left join t_object t on t.object_id = c.end_object_id{}", only(&["s.package_id", "t.package_id"])),
+                "packages" => format!("select package_id, name, parent_id, version, createddate, modifieddate from t_package{}", only(&["package_id"])),
+                "diagrams" => format!("select diagram_id, name, diagram_type, package_id, author, createddate, modifieddate from t_diagram{}", only(&["package_id"])),
+                "attributes" => format!("select a.id, a.object_id, o.name as element, a.name, a.type from t_attribute a left join t_object o on o.object_id = a.object_id{}", only(&["o.package_id"])),
+                "tagged_values" => format!("select v.propertyid, v.object_id, o.name as element, v.property, v.value from t_objectproperties v left join t_object o on o.object_id = v.object_id{}", only(&["o.package_id"])),
                 _ => return Err(deny(404, crate::i18n::tr("tables: elements, connectors, packages, diagrams, attributes, tagged_values"))),
             };
             let sql = crate::model_db::portable_sql(source.cfg.model_source, &format!("{sql} limit 100000"));
@@ -1185,7 +1706,10 @@ fn route(hub: &Hub, request: &Request, user: String, role: Role) -> Result<(u16,
             Ok((200, Value::Array(rows.into_iter().map(|r| Value::Object(names.iter().cloned().zip(r.into_iter().map(Value::String)).collect())).collect())))
         }
         ("POST", ["api", "sources", id, "ask"]) => {
-            let source = hub.source(id)?;
+            let (source, scope) = hub.source_for(id, &user, role)?;
+            if scope.is_some() {
+                return Err(scoped_out(&crate::i18n::tr("the assistant")));
+            }
             let question = body()?["question"].as_str().unwrap_or("").trim().to_string();
             if question.chars().count() < 3 {
                 return Err(deny(400, crate::i18n::tr("type a question")));
@@ -1223,17 +1747,57 @@ in the language of the question, short. You can only read the model (db_query an
             let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": id, "summary": format!("question: {}", question.chars().take(200).collect::<String>()), "ok": true }));
             Ok((200, json!({ "answer": answer, "seconds": started.elapsed().as_secs() })))
         }
+        ("GET", ["api", "sources", id, "comments"]) => {
+            let (source, scope) = hub.source_for(id, &user, role)?;
+            let element = request.query.get("element").and_then(|e| e.parse::<i64>().ok());
+            if let Some(e) = element {
+                element_in(&source.cfg, &scope, e)?;
+            }
+            let status = request.query.get("status").cloned();
+            let mut list: Vec<Value> = hub.comments().into_iter().filter(|c| c["source"] == source.id.as_str()).collect();
+            if let Some(e) = element {
+                list.retain(|c| c["element"].as_i64() == Some(e));
+            }
+            if let Some(s) = &status {
+                list.retain(|c| c["status"].as_str() == Some(s.as_str()));
+            }
+            if let Some(s) = &scope {
+                // Only comments on elements the person may see.
+                let ids: Vec<String> = list.iter().filter_map(|c| c["element"].as_i64()).map(|e| e.to_string()).collect();
+                if !ids.is_empty() {
+                    let visible: Vec<i64> = crate::tools::query_rows(&source.cfg, &format!("select object_id from t_object where object_id in ({}) and {}", ids.join(","), in_list("package_id", s)))?
+                        .into_iter().filter_map(|r| r[0].parse().ok()).collect();
+                    list.retain(|c| c["element"].as_i64().is_some_and(|e| visible.contains(&e)));
+                }
+            }
+            Ok((200, json!(list)))
+        }
+        ("GET", ["api", "sources", id, "portfolio"]) => {
+            let (source, scope) = hub.source_for(id, &user, role)?;
+            let (mut view, title) = portfolio_of(source, &scope, &request.query)?;
+            view["title"] = json!(title);
+            Ok((200, view))
+        }
         ("GET", ["api", "sources", id, rest @ ..]) => {
-            let source = hub.source(id)?;
+            let (source, scope) = hub.source_for(id, &user, role)?;
             if rest == ["search"] && request.query.get("q").map(|q| q.trim().chars().count()).unwrap_or(0) < 2 {
                 return Err(deny(400, crate::i18n::tr("type at least 2 characters")));
             }
             let text = match rest {
-                ["packages"] => packages(&source.cfg)?,
-                ["search"] => search(&source.cfg, request.query.get("q").map(String::as_str).unwrap_or(""))?,
-                ["elements", element] => element_details(&source.cfg, element.parse().map_err(|_| deny(400, "element id"))?)?,
+                ["packages"] => packages(&source.cfg, &scope)?,
+                ["search"] => search(&source.cfg, request.query.get("q").map(String::as_str).unwrap_or(""), &scope)?,
+                ["elements", element] => {
+                    let element = element.parse().map_err(|_| deny(400, "element id"))?;
+                    element_in(&source.cfg, &scope, element)?;
+                    element_details(&source.cfg, element, &scope)?
+                }
+                ["impact", _] | ["gap"] if scope.is_some() => return Err(scoped_out(&crate::i18n::tr("an analysis across packages"))),
                 ["impact", element] => crate::tools::impact_analysis(&json!({ "element": element.parse::<i64>().map_err(|_| deny(400, "element id"))?, "depth": request.query.get("depth").and_then(|d| d.parse::<i64>().ok()).unwrap_or(3), "direction": request.query.get("direction").map(String::as_str).unwrap_or("both") }), &source.cfg)?,
-                ["lint", package] => crate::governance::lint(&json!({ "package": package.parse::<i64>().map_err(|_| deny(400, "package id"))?, "rules": hub.rules() }), &source.cfg)?,
+                ["lint", package] => {
+                    let package = package.parse::<i64>().map_err(|_| deny(400, "package id"))?;
+                    package_in(&scope, package)?;
+                    crate::governance::lint(&json!({ "package": package, "rules": hub.rules() }), &source.cfg)?
+                }
                 ["gap"] => crate::governance::gap(&json!({ "as_is": int_param(request, "as_is")?, "to_be": int_param(request, "to_be")? }), &source.cfg)?,
                 _ => return Err(deny(404, "not found")),
             };
@@ -1265,16 +1829,147 @@ in the language of the question, short. You can only read the model (db_query an
         ("GET", ["api", "audit"]) => {
             let limit = request.query.get("limit").and_then(|l| l.parse().ok()).unwrap_or(100usize).min(1000);
             let mut entries = hub.read_audit(request.query.get("source").map(String::as_str), limit);
-            // Connection details of the workstations are for the admin only.
+            // Connection details of the workstations are for the admin only; below an architect, the questions other
+            // people asked (Ask) and the addresses of failed sign-ins are left out (LC-354).
             if role < Role::Admin {
                 for e in entries.iter_mut() {
                     if let Some(o) = e.as_object_mut() {
                         o.remove("database");
                         o.remove("ea_user");
+                        if let Some(error) = o.get("error").and_then(|v| v.as_str()).map(hide_address) {
+                            o.insert("error".into(), json!(error));
+                        }
                     }
                 }
             }
+            if role < Role::Architect {
+                entries.retain(|e| e["user"] == user.as_str() || !e["summary"].as_str().is_some_and(|s| s.starts_with("question: ")));
+            }
             Ok((200, json!(entries)))
+        }
+        // Review comments and decisions (ADR) on elements of a model (LC-392): everybody who may read the element may
+        // comment; an architect or the author changes the status.
+        ("POST", ["api", "sources", id, "comments"]) => {
+            let (source, scope) = hub.source_for(id, &user, role)?;
+            let b = body()?;
+            let element = b["element"].as_i64().ok_or_else(|| deny(400, crate::i18n::fmt("missing number '{0}'", &["element".to_string()])))?;
+            element_in(&source.cfg, &scope, element)?;
+            let text: String = b["text"].as_str().unwrap_or("").trim().chars().filter(|c| !c.is_control() || *c == '\n').take(4000).collect();
+            if text.chars().count() < 2 {
+                return Err(deny(400, crate::i18n::tr("write the comment")));
+            }
+            let kind = if b["kind"] == "decision" { "decision" } else { "comment" };
+            let row = crate::tools::query_rows(&source.cfg, &format!("select name, ea_guid from t_object where object_id = {element}"))?.into_iter().next().ok_or_else(|| deny(404, "element"))?;
+            let comment = json!({ "id": format!("C-{}", &uuid::Uuid::new_v4().simple().to_string()[..10]), "time": chrono::Local::now().to_rfc3339(), "user": user, "source": source.id,
+                "element": element, "guid": row[1], "name": row[0], "kind": kind, "text": text, "status": if kind == "decision" { "proposed" } else { "open" } });
+            hub.save_comment(&comment, None).map_err(|e| deny(500, e.to_string()))?;
+            let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": source.id, "summary": format!("{kind} on {}: {}", row[0], text.chars().take(200).collect::<String>()), "ok": true }));
+            Ok((201, comment))
+        }
+        // Review requests to the owners of elements (LC-407): an architect asks the owner (tagged value Owner, else the
+        // author) to confirm or update an element; the owner answers in the hub.
+        ("POST", ["api", "sources", id, "review-requests"]) => {
+            require(role, Role::Architect)?;
+            let (source, scope) = hub.source_for(id, &user, role)?;
+            let b = body()?;
+            let question: String = b["question"].as_str().unwrap_or("").trim().chars().filter(|c| !c.is_control() || *c == '\n').take(2000).collect();
+            if question.chars().count() < 2 {
+                return Err(deny(400, crate::i18n::tr("write the question")));
+            }
+            let mut elements: Vec<i64> = b["elements"].as_array().map(|a| a.iter().filter_map(Value::as_i64).collect()).unwrap_or_default();
+            if let Some(package) = b["package"].as_i64() {
+                package_in(&scope, package)?;
+                let packages = scope_packages(&source.cfg, &[package.to_string()])?;
+                elements.extend(crate::tools::query_rows(&source.cfg, &format!(
+                    "select object_id from t_object where object_type not in ('Package', 'Note', 'Text', 'Boundary') and {}", in_list("package_id", &packages)
+                ))?.into_iter().filter_map(|r| r[0].parse::<i64>().ok()));
+            }
+            elements.dedup();
+            if elements.is_empty() || elements.len() > 500 {
+                return Err(deny(400, crate::i18n::tr("give 1 to 500 elements or a package")));
+            }
+            let to = b["to"].as_str().map(str::trim).filter(|t| !t.is_empty()).map(str::to_string);
+            let _guard = hub.change_lock.lock().unwrap_or_else(|p| p.into_inner());
+            let pending: HashSet<i64> = hub.comments().into_iter()
+                .filter(|c| c["source"] == source.id.as_str() && c["kind"] == "review" && c["status"] == "requested")
+                .filter_map(|c| c["element"].as_i64())
+                .collect();
+            let (mut created, mut skipped) = (Vec::new(), Vec::new());
+            for element in elements {
+                element_in(&source.cfg, &scope, element)?;
+                let row = crate::tools::query_rows(&source.cfg, &format!("select name, ea_guid from t_object where object_id = {element}"))?.into_iter().next().ok_or_else(|| deny(404, "element"))?;
+                if pending.contains(&element) {
+                    skipped.push(json!({ "element": element, "name": row[0], "why": "already asked" }));
+                    continue;
+                }
+                let Some(owner) = to.clone().or_else(|| owner_of(&source.cfg, element)) else {
+                    skipped.push(json!({ "element": element, "name": row[0], "why": "no owner (tagged value Owner or author)" }));
+                    continue;
+                };
+                let request = json!({ "id": format!("C-{}", &uuid::Uuid::new_v4().simple().to_string()[..10]), "time": chrono::Local::now().to_rfc3339(), "user": user, "source": source.id,
+                    "element": element, "guid": row[1], "name": row[0], "kind": "review", "to": owner, "text": question, "status": "requested" });
+                hub.save_comment(&request, None).map_err(|e| deny(500, e.to_string()))?;
+                created.push(request);
+            }
+            let _ = hub.append_audit(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "source": source.id, "summary": format!("review requests: {} sent, {} skipped: {}", created.len(), skipped.len(), question.chars().take(200).collect::<String>()), "ok": true }));
+            Ok((201, json!({ "created": created, "skipped": skipped })))
+        }
+        // The review requests waiting for me (all of them for an architect with ?all=1).
+        ("GET", ["api", "requests"]) => {
+            let all = request.query.get("all").is_some_and(|a| a == "1") && role >= Role::Architect;
+            let status = request.query.get("status").cloned().unwrap_or_else(|| "requested".into());
+            let list: Vec<Value> = hub.comments().into_iter()
+                .filter(|c| c["kind"] == "review" && (status == "any" || c["status"].as_str() == Some(status.as_str())))
+                .filter(|c| all || c["to"].as_str().is_some_and(|t| t.eq_ignore_ascii_case(&user)))
+                .collect();
+            Ok((200, json!(list)))
+        }
+        // The owner's answer: confirmed, or needs a change (with what), optionally recorded as a decision on the element.
+        ("POST", ["api", "comments", cid, "answer"]) => {
+            let b = body()?;
+            let answer = b["answer"].as_str().unwrap_or("");
+            if !matches!(answer, "confirmed" | "needs_change") {
+                return Err(deny(400, "answer: confirmed or needs_change"));
+            }
+            let text: String = b["text"].as_str().unwrap_or("").trim().chars().filter(|c| !c.is_control() || *c == '\n').take(4000).collect();
+            if answer == "needs_change" && text.chars().count() < 2 {
+                return Err(deny(400, crate::i18n::tr("say what needs to change")));
+            }
+            let _guard = hub.change_lock.lock().unwrap_or_else(|p| p.into_inner());
+            let mut request = hub.comments().into_iter().find(|c| c["id"] == *cid && c["kind"] == "review").ok_or_else(|| deny(404, crate::i18n::fmt("there is no review request {0}", &[cid.to_string()])))?;
+            if role < Role::Architect && !request["to"].as_str().is_some_and(|t| t.eq_ignore_ascii_case(&user)) {
+                return Err(deny(403, crate::i18n::tr("only the person asked or an architect answers a review request")));
+            }
+            let now = chrono::Local::now().to_rfc3339();
+            request["status"] = json!(answer);
+            request["answer"] = json!(text);
+            request["status_by"] = json!(user);
+            request["status_time"] = json!(now);
+            if b["decision"] == true && !text.is_empty() {
+                let decision = json!({ "id": format!("C-{}", &uuid::Uuid::new_v4().simple().to_string()[..10]), "time": now, "user": user, "source": request["source"],
+                    "element": request["element"], "guid": request["guid"], "name": request["name"], "kind": "decision", "text": text, "status": "proposed", "reply_to": cid });
+                hub.save_comment(&decision, None).map_err(|e| deny(500, e.to_string()))?;
+                request["decision"] = decision["id"].clone();
+            }
+            hub.save_comment(&request, Some(cid)).map_err(|e| deny(500, e.to_string()))?;
+            let _ = hub.append_audit(&json!({ "time": now, "user": user, "source": request["source"], "summary": format!("review of {}: {answer} {}", request["name"].as_str().unwrap_or(""), text.chars().take(200).collect::<String>()), "ok": true }));
+            Ok((200, request))
+        }
+        ("POST", ["api", "comments", cid, "status"]) => {
+            let status = body()?["status"].as_str().unwrap_or("").to_string();
+            if !matches!(status.as_str(), "open" | "resolved" | "proposed" | "accepted" | "rejected" | "superseded" | "requested" | "withdrawn") {
+                return Err(deny(400, "status: open, resolved, proposed, accepted, rejected, superseded, requested or withdrawn"));
+            }
+            let _guard = hub.change_lock.lock().unwrap_or_else(|p| p.into_inner());
+            let mut comment = hub.comments().into_iter().find(|c| c["id"] == *cid).ok_or_else(|| deny(404, crate::i18n::fmt("there is no comment {0}", &[cid.to_string()])))?;
+            if role < Role::Architect && comment["user"].as_str() != Some(user.as_str()) {
+                return Err(deny(403, crate::i18n::fmt("this needs the role {0}", &[Role::Architect.name().to_string()])));
+            }
+            comment["status"] = json!(status);
+            comment["status_by"] = json!(user);
+            comment["status_time"] = json!(chrono::Local::now().to_rfc3339());
+            hub.save_comment(&comment, Some(cid)).map_err(|e| deny(500, e.to_string()))?;
+            Ok((200, comment))
         }
         ("GET", ["api", "notes"]) => {
             let mut names: Vec<String> = std::fs::read_dir(hub.notes_dir()).into_iter().flatten().flatten().filter_map(|e| e.file_name().to_str().and_then(|n| n.strip_suffix(".md")).map(String::from)).collect();
@@ -1317,7 +2012,10 @@ in the language of the question, short. You can only read the model (db_query an
             }
             let normalized = crate::tools::normalize_ops(given);
             let ops = &normalized;
-            let source = hub.source(b["source"].as_str().unwrap_or(""))?;
+            let (source, scope) = hub.source_for(b["source"].as_str().unwrap_or(""), &user, role)?;
+            if scope.is_some() {
+                return Err(scoped_out(&crate::i18n::tr("a change set")));
+            }
             // What the reviewers see is computed here from the operations, not taken from the author.
             let summary = crate::ea::describe(ops);
             let preview = crate::governance::preview(&source.cfg, ops);
@@ -1420,7 +2118,7 @@ in the language of the question, short. You can only read the model (db_query an
             let _ = hub.append_audit(&json!({ "time": now, "user": user, "source": change["source"], "summary": format!("{} {}: {}", action, id, change["title"].as_str().unwrap_or("")), "ok": true }));
             Ok((200, change))
         }
-        ("POST", ["mcp"]) => mcp(hub, &body()?).map(|reply| match reply {
+        ("POST", ["mcp"]) => mcp(hub, &body()?, &user, role).map(|reply| match reply {
             Some(reply) => (200, reply),
             None => (202, Value::Null),
         }),
@@ -1428,22 +2126,24 @@ in the language of the question, short. You can only read the model (db_query an
     }
 }
 
-fn packages(cfg: &AppConfig) -> Result<String> {
-    let rows = crate::tools::query_rows(cfg, "select package_id as c0, parent_id as c1, name as c2 from t_package order by parent_id, tpos, name")?;
+fn packages(cfg: &AppConfig, scope: &Scope) -> Result<String> {
+    let only = scope.as_ref().map(|s| format!(" where {}", in_list("package_id", s))).unwrap_or_default();
+    let rows = crate::tools::query_rows(cfg, &format!("select package_id as c0, parent_id as c1, name as c2 from t_package{only} order by parent_id, tpos, name"))?;
     let mut out = vec!["package_id | parent_id | name".to_string()];
     out.extend(rows.into_iter().take(2000).map(|r| r.join(" | ")));
     Ok(out.join("\n"))
 }
 
-fn search(cfg: &AppConfig, q: &str) -> Result<String> {
+fn search(cfg: &AppConfig, q: &str, scope: &Scope) -> Result<String> {
     let q = q.trim();
     if q.chars().count() < 2 {
         bail!("{}", crate::i18n::tr("type at least 2 characters"));
     }
-    let like = q.to_lowercase().replace('\'', "''").replace('%', "").replace('_', "");
+    let like = crate::model_db::sql_text(cfg.model_source, &q.to_lowercase().replace('%', "").replace('_', ""));
     let rows = crate::tools::query_rows(cfg, &format!(
         "select o.object_id as c0, o.name as c1, o.object_type as c2, coalesce(o.stereotype,'') as c3, p.name as c4, substr(coalesce(o.note,''), 1, 120) as c5 from t_object o \
-         join t_package p on p.package_id = o.package_id where lower(o.name) like '%{like}%' or lower(coalesce(o.alias,'')) like '%{like}%' order by o.name limit 100"
+         join t_package p on p.package_id = o.package_id where (lower(o.name) like '%{like}%' or lower(coalesce(o.alias,'')) like '%{like}%'){} order by o.name limit 100",
+        within(scope, "o.package_id")
     ))?;
     let mut out = vec![crate::i18n::tr("object_id | name | type | stereotype | package | description").to_string()];
     out.extend(rows.into_iter().map(|r| r.iter().map(|c| c.replace(['\r', '\n'], " ")).collect::<Vec<_>>().join(" | ")));
@@ -1607,17 +2307,76 @@ impl Hub {
     /// Compass sends its requests here with the hub token. The first entry for the person, then for their role,
     /// then for everybody gives the key (a hub secret, e.g. LOONAR_SECRET_CLAUDE_KEY_TEAM). Usage per person goes to
     /// ai_usage.jsonl. The request is passed to Anthropic as it is.
-    fn ai_gateway(&self, user: &str, role: Role, body: &[u8]) -> Result<(u16, String, Vec<u8>), HttpError> {
-        let keys = self.ai["keys"].as_array().cloned().unwrap_or_default();
-        let wanted = [user.to_lowercase(), format!("role:{}", role.name()), "*".to_string()];
-        let secret = wanted.iter().find_map(|w| keys.iter().find(|k| k["for"].as_str().is_some_and(|f| f.trim().to_lowercase() == *w)).and_then(|k| k["secret"].as_str()))
+    fn ai_gateway(&self, user: &str, role: Role, body: &[u8], source: &str) -> Result<(u16, String, Vec<u8>), HttpError> {
+        let (secret, key) = self.ai_key(&self.ai["keys"], user, role)?;
+        let request = self.ai_allowed(user, role, body)?;
+        let http = reqwest::blocking::Client::builder().timeout(Duration::from_secs(600)).build().map_err(|e| HttpError(500, e.to_string()))?;
+        let response = http.post(crate::claude::API_URL).header("x-api-key", key).header("anthropic-version", crate::claude::API_VERSION)
+            .header("content-type", "application/json").body(body.to_vec()).send().map_err(|e| deny(502, format!("Anthropic: {e}")))?;
+        let status = response.status().as_u16();
+        let bytes = response.bytes().map_err(|e| deny(502, format!("Anthropic: {e}")))?.to_vec();
+        if let Ok(answer) = serde_json::from_slice::<Value>(&bytes) {
+            self.log_ai_usage(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "role": role.name(), "source": source, "key": secret, "model": request["model"], "status": status,
+                "input_tokens": answer["usage"]["input_tokens"], "output_tokens": answer["usage"]["output_tokens"],
+                "cache_creation_input_tokens": answer["usage"]["cache_creation_input_tokens"], "cache_read_input_tokens": answer["usage"]["cache_read_input_tokens"] }));
+        }
+        Ok((status, "application/json".into(), bytes))
+    }
+
+    /// The AI gateway for OpenAI-compatible models (LC-390): "ai": {"openai": {"url": "" (OpenAI) | an Azure OpenAI or
+    /// another OpenAI-compatible base, "keys": [{"for", "secret"}]}}. The same limits, budgets and allowed models as for
+    /// Claude; usage goes to ai_usage.jsonl.
+    fn ai_gateway_openai(&self, user: &str, role: Role, body: &[u8], source: &str) -> Result<(u16, String, Vec<u8>), HttpError> {
+        let openai = &self.ai["openai"];
+        if !openai.is_object() {
+            return Err(deny(404, crate::i18n::tr("the hub has no OpenAI gateway: ask the administrator of the hub")));
+        }
+        let (secret, key) = self.ai_key(&openai["keys"], user, role)?;
+        let request = self.ai_allowed(user, role, body)?;
+        let url = crate::openai::chat_url(openai["url"].as_str().unwrap_or(""));
+        let http = reqwest::blocking::Client::builder().timeout(Duration::from_secs(600)).build().map_err(|e| HttpError(500, e.to_string()))?;
+        let call = http.post(&url).header("content-type", "application/json").body(body.to_vec());
+        let call = if crate::openai::uses_api_key_header(&url) { call.header("api-key", key) } else { call.bearer_auth(key) };
+        let response = call.send().map_err(|e| deny(502, format!("OpenAI: {e}")))?;
+        let status = response.status().as_u16();
+        let bytes = response.bytes().map_err(|e| deny(502, format!("OpenAI: {e}")))?.to_vec();
+        if let Ok(answer) = serde_json::from_slice::<Value>(&bytes) {
+            self.log_ai_usage(&json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "role": role.name(), "source": source, "key": secret, "model": request["model"], "status": status,
+                "input_tokens": answer["usage"]["prompt_tokens"], "output_tokens": answer["usage"]["completion_tokens"] }));
+        }
+        Ok((status, "application/json".into(), bytes))
+    }
+
+    /// The key of the person from a list [{"for": "<user>" | "role:<role>" | "*", "secret": "<name>"}]: (secret name, value).
+    fn ai_key(&self, keys: &Value, user: &str, role: Role) -> Result<(String, String), HttpError> {
+        let keys = keys.as_array().cloned().unwrap_or_default();
+        let secret = wanted(user, role).iter().find_map(|w| keys.iter().find(|k| k["for"].as_str().is_some_and(|f| f.trim().to_lowercase() == *w)).and_then(|k| k["secret"].as_str().map(String::from)))
             .ok_or_else(|| deny(403, crate::i18n::tr("the hub has no AI key for you: ask the administrator of the hub")))?;
-        let key = crate::config::secrets::get(secret).map_err(|e| HttpError(500, format!("{e:#}")))?;
-        // Limits ("ai": {"limits": [{"for": …, "tokens_per_day": N, "tokens_per_month": N}]}): the first entry for the
-        // person, their role or everybody; input and output tokens counted from ai_usage.jsonl.
+        let key = crate::config::secrets::get(&secret).map_err(|e| HttpError(500, format!("{e:#}")))?;
+        Ok((secret, key))
+    }
+
+    fn log_ai_usage(&self, entry: &Value) {
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(self.dir.join("ai_usage.jsonl")) {
+            let _ = writeln!(f, "{entry}");
+        }
+    }
+
+    /// The person's limits and budgets, and the allowed models: the request as JSON when it may go on.
+    fn ai_allowed(&self, user: &str, role: Role, body: &[u8]) -> Result<Value, HttpError> {
+        let wanted = wanted(user, role);
+        // Limits ("ai": {"limits": [{"for": …, "tokens_per_day": N, "tokens_per_month": N, "usd_per_day": X,
+        // "usd_per_month": X}]}): the first entry for the person, their role or everybody; tokens and their cost at the
+        // model's prices (LC-390) counted from ai_usage.jsonl.
         let limits = self.ai["limits"].as_array().cloned().unwrap_or_default();
         if let Some(limit) = wanted.iter().find_map(|w| limits.iter().find(|l| l["for"].as_str().is_some_and(|f| f.trim().to_lowercase() == *w))) {
-            let (day, month) = self.ai_usage_of(user);
+            let (day, month, usd_day, usd_month) = self.ai_usage_of(user);
+            if limit["usd_per_day"].as_f64().is_some_and(|max| usd_day >= max) {
+                return Err(deny(429, crate::i18n::fmt("your AI budget for today is used up ({0} USD); it renews tomorrow or ask the administrator of the hub", &[format!("{usd_day:.2}")])));
+            }
+            if limit["usd_per_month"].as_f64().is_some_and(|max| usd_month >= max) {
+                return Err(deny(429, crate::i18n::fmt("your AI budget for this month is used up ({0} USD); ask the administrator of the hub", &[format!("{usd_month:.2}")])));
+            }
             if limit["tokens_per_day"].as_u64().is_some_and(|max| day >= max) {
                 return Err(deny(429, crate::i18n::fmt("your AI limit for today is used up ({0} tokens); it renews tomorrow or ask the administrator of the hub", &[day.to_string()])));
             }
@@ -1632,41 +2391,63 @@ impl Hub {
                 return Err(deny(403, crate::i18n::fmt("the model {0} is not allowed by the hub", &[model.to_string()])));
             }
         }
-        let http = reqwest::blocking::Client::builder().timeout(Duration::from_secs(600)).build().map_err(|e| HttpError(500, e.to_string()))?;
-        let response = http.post(crate::claude::API_URL).header("x-api-key", key).header("anthropic-version", crate::claude::API_VERSION)
-            .header("content-type", "application/json").body(body.to_vec()).send().map_err(|e| deny(502, format!("Anthropic: {e}")))?;
-        let status = response.status().as_u16();
-        let bytes = response.bytes().map_err(|e| deny(502, format!("Anthropic: {e}")))?.to_vec();
-        if let Ok(answer) = serde_json::from_slice::<Value>(&bytes) {
-            let usage = json!({ "time": chrono::Local::now().to_rfc3339(), "user": user, "key": secret, "model": request["model"], "status": status,
-                "input_tokens": answer["usage"]["input_tokens"], "output_tokens": answer["usage"]["output_tokens"],
-                "cache_creation_input_tokens": answer["usage"]["cache_creation_input_tokens"], "cache_read_input_tokens": answer["usage"]["cache_read_input_tokens"] });
-            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(self.dir.join("ai_usage.jsonl")) {
-                let _ = writeln!(f, "{usage}");
-            }
-        }
-        Ok((status, "application/json".into(), bytes))
+        Ok(request)
     }
 
-    /// Tokens (input + output) the person used today and this month, from ai_usage.jsonl.
-    fn ai_usage_of(&self, user: &str) -> (u64, u64) {
+    /// Tokens (input + output) the person used today and this month, and what they cost in USD, from ai_usage.jsonl.
+    fn ai_usage_of(&self, user: &str) -> (u64, u64, f64, f64) {
         let text = std::fs::read_to_string(self.dir.join("ai_usage.jsonl")).unwrap_or_default();
         let now = chrono::Local::now();
         let (today, this_month) = (now.format("%Y-%m-%d").to_string(), now.format("%Y-%m").to_string());
-        let (mut day, mut month) = (0u64, 0u64);
+        let (mut day, mut month, mut usd_day, mut usd_month) = (0u64, 0u64, 0f64, 0f64);
         for entry in text.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok()).filter(|e| e["user"].as_str().is_some_and(|u| u.eq_ignore_ascii_case(user))) {
             let time = entry["time"].as_str().unwrap_or("");
             // What the request costs, in input tokens: tokens read from the cache count a tenth, as Anthropic bills them.
             let tokens = entry["input_tokens"].as_u64().unwrap_or(0) + entry["output_tokens"].as_u64().unwrap_or(0)
                 + entry["cache_creation_input_tokens"].as_u64().unwrap_or(0) + entry["cache_read_input_tokens"].as_u64().unwrap_or(0) / 10;
+            let usd = cost_of(&entry);
             if time.starts_with(&this_month) {
                 month += tokens;
+                usd_month += usd;
                 if time.starts_with(&today) {
                     day += tokens;
+                    usd_day += usd;
                 }
             }
         }
-        (day, month)
+        (day, month, usd_day, usd_month)
+    }
+
+    /// The AI cost grouped by the model (hub source id) and by role, today and this month (LC-405). Requests from
+    /// before the role and source were logged count under "(not recorded)".
+    fn ai_usage_groups(&self) -> Value {
+        let text = std::fs::read_to_string(self.dir.join("ai_usage.jsonl")).unwrap_or_default();
+        let now = chrono::Local::now();
+        let (today, this_month) = (now.format("%Y-%m-%d").to_string(), now.format("%Y-%m").to_string());
+        let mut groups: std::collections::BTreeMap<(String, String), [f64; 4]> = std::collections::BTreeMap::new();
+        for entry in text.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok()) {
+            let time = entry["time"].as_str().unwrap_or("");
+            if !time.starts_with(&this_month) {
+                continue;
+            }
+            let tokens = (entry["input_tokens"].as_u64().unwrap_or(0) + entry["output_tokens"].as_u64().unwrap_or(0)) as f64;
+            let usd = cost_of(&entry);
+            for (by, value) in [("source", entry["source"].as_str()), ("role", entry["role"].as_str())] {
+                let name = value.filter(|v| !v.is_empty()).unwrap_or("(not recorded)").to_string();
+                let g = groups.entry((by.to_string(), name)).or_insert([0.0; 4]);
+                g[1] += tokens;
+                g[3] += usd;
+                if time.starts_with(&today) {
+                    g[0] += tokens;
+                    g[2] += usd;
+                }
+            }
+        }
+        let list = |by: &str| -> Vec<Value> {
+            groups.iter().filter(|((b, _), _)| b == by).map(|((_, name), g)| json!({ "name": name, "tokens_today": g[0] as u64, "tokens_month": g[1] as u64,
+                "usd_today": (g[2] * 100.0).round() / 100.0, "usd_month": (g[3] * 100.0).round() / 100.0 })).collect()
+        };
+        json!({ "by_source": list("source"), "by_role": list("role") })
     }
 
     /// The AI usage of every person, today and this month (the Users tab of the administrator).
@@ -1676,9 +2457,10 @@ impl Hub {
         people.sort_by_key(|p| p.to_lowercase());
         people.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
         people.iter().map(|p| {
-            let (day, month) = self.ai_usage_of(p);
+            let (day, month, usd_day, usd_month) = self.ai_usage_of(p);
             let key = text.lines().rev().filter_map(|l| serde_json::from_str::<Value>(l).ok()).find(|e| e["user"].as_str().is_some_and(|u| u.eq_ignore_ascii_case(p))).and_then(|e| e["key"].as_str().map(String::from)).unwrap_or_default();
-            json!({ "user": p, "tokens_today": day, "tokens_month": month, "key": key })
+            // The cost too (LC-390): the Users tab and reports show money, not only tokens.
+            json!({ "user": p, "tokens_today": day, "tokens_month": month, "usd_today": (usd_day * 100.0).round() / 100.0, "usd_month": (usd_month * 100.0).round() / 100.0, "key": key })
         }).collect()
     }
 
@@ -1697,6 +2479,16 @@ impl Hub {
         if method != "GET" && role == Role::Viewer {
             return Err(deny(403, crate::i18n::tr("a viewer only reads")));
         }
+        // Only what Compass uses, in the configured project or space (LC-351: any path and method went through with
+        // the team's service account).
+        let (project, space) = (s["project"].as_str().unwrap_or("").trim(), s["space"].as_str().unwrap_or("").trim());
+        proxy_allowed(kind, method, rest, project, space, body).map_err(|reason| deny(403, reason))?;
+        let mut query = query.clone();
+        if kind == "jira" && !project.is_empty() && (rest.ends_with("/search") || rest.ends_with("/search/jql")) {
+            let jql = query.get("jql").cloned().unwrap_or_default();
+            query.insert("jql".into(), jql_in_project(&jql, project));
+        }
+        let query = &query;
         let secret = if kind == "jira" { crate::config::secrets::JIRA_TOKEN } else { crate::config::secrets::CONFLUENCE_TOKEN };
         let token = crate::config::secrets::get(secret).map_err(|e| HttpError(500, format!("{e:#}")))?;
         let mut url = reqwest::Url::parse(&format!("{base}{rest}")).map_err(|_| deny(400, "invalid address"))?;
@@ -1753,7 +2545,8 @@ impl Hub {
     }
 }
 
-fn element_details(cfg: &AppConfig, id: i64) -> Result<String> {
+/// Details of an element; with a scope, relationships and diagrams outside it are left out (LC-385).
+fn element_details(cfg: &AppConfig, id: i64, scope: &Scope) -> Result<String> {
     let q = |sql: String| crate::tools::query_rows(cfg, &sql);
     let row = q(format!(
         "select o.object_id as c0, o.name as c1, o.object_type as c2, coalesce(o.stereotype,'') as c3, coalesce(o.alias,'') as c4, coalesce(o.status,'') as c5, coalesce(o.author,'') as c6, p.name as c7, coalesce(o.note,'') as c8, o.ea_guid as c9 \
@@ -1776,13 +2569,14 @@ fn element_details(cfg: &AppConfig, id: i64) -> Result<String> {
     let links = q(format!(
         "select c.connector_type as c0, case when c.start_object_id = {id} then '→' else '←' end as c1, o.object_id as c2, o.name as c3 from t_connector c \
          join t_object o on o.object_id = case when c.start_object_id = {id} then c.end_object_id else c.start_object_id end \
-         where c.start_object_id = {id} or c.end_object_id = {id} order by 1, 4"
+         where (c.start_object_id = {id} or c.end_object_id = {id}){} order by 1, 4",
+        within(scope, "o.package_id")
     ))?;
     if !links.is_empty() {
         out.push(format!("\n{}:", crate::i18n::tr("Relationships")));
         out.extend(links.into_iter().map(|l| format!("- {} {} {} (id {})", l[0], l[1], l[3], l[2])));
     }
-    let diagrams = q(format!("select d.diagram_id as c0, d.name as c1 from t_diagramobjects x join t_diagram d on d.diagram_id = x.diagram_id where x.object_id = {id} order by d.name"))?;
+    let diagrams = q(format!("select d.diagram_id as c0, d.name as c1 from t_diagramobjects x join t_diagram d on d.diagram_id = x.diagram_id where x.object_id = {id}{} order by d.name", within(scope, "d.package_id")))?;
     if !diagrams.is_empty() {
         out.push(format!("\n{}:", crate::i18n::tr("Diagrams")));
         out.extend(diagrams.into_iter().map(|d| format!("- {} (id {})", d[1], d[0])));
@@ -1805,7 +2599,24 @@ fn mcp_tools() -> Value {
 }
 
 /// MCP (JSON-RPC 2.0 over HTTP POST): initialize, tools/list, tools/call, ping. A notification gets no reply.
-fn mcp(hub: &Hub, message: &Value) -> Result<Option<Value>, HttpError> {
+/// The text of a failed MCP tool: an error of the model's database reaches the client only as an id, the details
+/// (SQL, engine messages) go to hub.log, like the 500s of the REST API (LC-343, round 11c).
+fn mcp_error_text(hub: &Hub, user: &str, e: &anyhow::Error) -> String {
+    if !db_failure(e) {
+        return format!("{e:#}");
+    }
+    let id = uuid::Uuid::new_v4().simple().to_string()[..8].to_string();
+    log(&hub.dir, &format!("MCP ({user}) -> error [{id}] {e:#}"));
+    crate::i18n::fmt("internal error of the hub (id {0}; details in hub.log)", &[id])
+}
+
+/// Whether an error comes from running a query on the model's database.
+fn db_failure(e: &anyhow::Error) -> bool {
+    let running = crate::i18n::tr("running the query");
+    e.chain().any(|c| c.to_string() == running)
+}
+
+fn mcp(hub: &Hub, message: &Value, user: &str, role: Role) -> Result<Option<Value>, HttpError> {
     let id = message.get("id").cloned();
     let Some(id) = id else { return Ok(None) };
     let method = message["method"].as_str().unwrap_or("");
@@ -1825,23 +2636,30 @@ fn mcp(hub: &Hub, message: &Value) -> Result<Option<Value>, HttpError> {
             let name = params["name"].as_str().unwrap_or("");
             let result: Result<String> = (|| {
                 if name == "list_sources" {
-                    return Ok(hub.sources.iter().map(|s| format!("{} | {} | {}", s.id, s.name, if s.cfg.uses_file() { "file" } else { "database" })).collect::<Vec<_>>().join("\n"));
+                    return Ok(hub.sources.iter().filter(|s| Hub::can_read(s, user, role)).map(|s| format!("{} | {} | {}", s.id, s.name, if s.cfg.uses_file() { "file" } else { "database" })).collect::<Vec<_>>().join("\n"));
                 }
-                let source = hub.source(args["source"].as_str().unwrap_or("")).map_err(|e| anyhow!(e.1))?;
+                let (source, scope) = hub.source_for(args["source"].as_str().unwrap_or(""), user, role).map_err(|e| anyhow!(e.1))?;
                 let int = |field: &str| args[field].as_i64().with_context(|| crate::i18n::fmt("missing number '{0}'", &[field.to_string()]));
                 match name {
-                    "list_packages" => packages(&source.cfg),
-                    "search_elements" => search(&source.cfg, args["query"].as_str().unwrap_or("")),
-                    "element_details" => element_details(&source.cfg, int("element")?),
+                    "list_packages" => packages(&source.cfg, &scope),
+                    "search_elements" => search(&source.cfg, args["query"].as_str().unwrap_or(""), &scope),
+                    "element_details" => {
+                        element_in(&source.cfg, &scope, int("element")?).map_err(|e| anyhow!(e.1))?;
+                        element_details(&source.cfg, int("element")?, &scope)
+                    }
+                    "impact_analysis" | "gap_analysis" if scope.is_some() => Err(anyhow!(scoped_out(&crate::i18n::tr("an analysis across packages")).1)),
                     "impact_analysis" => crate::tools::impact_analysis(args, &source.cfg),
-                    "model_lint" => crate::governance::lint(&json!({ "package": int("package")?, "rules": hub.rules() }), &source.cfg),
+                    "model_lint" => {
+                        package_in(&scope, int("package")?).map_err(|e| anyhow!(e.1))?;
+                        crate::governance::lint(&json!({ "package": int("package")?, "rules": hub.rules() }), &source.cfg)
+                    }
                     "gap_analysis" => crate::governance::gap(args, &source.cfg),
                     other => bail!("unknown tool {other}"),
                 }
             })();
             match result {
                 Ok(text) => ok(json!({ "content": [{ "type": "text", "text": text }], "isError": false })),
-                Err(e) => ok(json!({ "content": [{ "type": "text", "text": format!("{e:#}") }], "isError": true })),
+                Err(e) => ok(json!({ "content": [{ "type": "text", "text": mcp_error_text(hub, user, &e) }], "isError": true })),
             }
         }
         _ => Some(json!({ "jsonrpc": "2.0", "id": id, "error": { "code": -32601, "message": format!("method not found: {method}") } })),
@@ -2080,6 +2898,46 @@ impl Client {
         self.call(reqwest::Method::POST, &format!("/api/changes/{}/{action}", change_id(id)?), Some(body))
     }
 
+    pub fn comments(&self, source: &str, element: Option<i64>, status: Option<&str>) -> Result<Vec<Value>> {
+        let mut path = format!("/api/sources/{}/comments?", encode(source));
+        if let Some(e) = element {
+            path.push_str(&format!("element={e}&"));
+        }
+        if let Some(s) = status {
+            path.push_str(&format!("status={}", encode(s)));
+        }
+        Ok(self.call(reqwest::Method::GET, path.trim_end_matches(['&', '?']), None)?.as_array().cloned().unwrap_or_default())
+    }
+
+    pub fn add_comment(&self, source: &str, body: &Value) -> Result<Value> {
+        self.call(reqwest::Method::POST, &format!("/api/sources/{}/comments", encode(source)), Some(body))
+    }
+
+    pub fn review_requests(&self, source: &str, body: &Value) -> Result<Value> {
+        self.call(reqwest::Method::POST, &format!("/api/sources/{}/review-requests", encode(source)), Some(body))
+    }
+
+    pub fn requests(&self, all: bool, status: Option<&str>) -> Result<Vec<Value>> {
+        let path = format!("/api/requests?all={}&status={}", if all { 1 } else { 0 }, encode(status.unwrap_or("requested")));
+        Ok(self.call(reqwest::Method::GET, &path, None)?.as_array().cloned().unwrap_or_default())
+    }
+
+    pub fn answer_request(&self, id: &str, body: &Value) -> Result<Value> {
+        let id = id.trim();
+        if !id.starts_with("C-") || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            bail!("there is no review request {id}");
+        }
+        self.call(reqwest::Method::POST, &format!("/api/comments/{id}/answer"), Some(body))
+    }
+
+    pub fn comment_status(&self, id: &str, status: &str) -> Result<Value> {
+        let id = id.trim();
+        if !id.starts_with("C-") || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            bail!("there is no comment {id}");
+        }
+        self.call(reqwest::Method::POST, &format!("/api/comments/{id}/status"), Some(&json!({ "status": status })))
+    }
+
     pub fn save_note(&self, name: &str, text: &str) -> Result<()> {
         self.call(reqwest::Method::PUT, &format!("/api/notes/{}", encode(name)), Some(&json!({ "text": text }))).map(|_| ())
     }
@@ -2105,6 +2963,14 @@ const WEB_PAGE: &str = include_str!("hub_web.html");
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LC-343: an error of the model's database is told apart (the MCP client gets only an id); others stay as they are.
+    #[test]
+    fn database_errors_are_recognised() {
+        let db = anyhow::anyhow!("You have an error in your SQL syntax near '\\''").context(crate::i18n::tr("running the query"));
+        assert!(db_failure(&db));
+        assert!(!db_failure(&anyhow::anyhow!("several elements are named \"Kasa\"")));
+    }
 
     /// Unnamed ends of relationships (e.g. lifelines) get the classifier's name or their type and id.
     #[test]
@@ -2145,6 +3011,96 @@ mod tests {
     /// Behind a proxy on this computer the client is the last X-Forwarded-For address (wrong sign-ins of one client do
     /// not lock out the others), and a wrong sign-in is in the audit trail with ✗ and that address. The header from
     /// another computer is not trusted (the test can only connect from loopback, so it checks the trusted case).
+    /// LC-390: the cost of a gateway request at the model's prices.
+    #[test]
+    fn gateway_cost() {
+        let entry = json!({ "model": "claude-sonnet-5-5", "input_tokens": 1_000_000, "output_tokens": 100_000 });
+        assert!((cost_of(&entry) - 3.0).abs() < 1e-9, "{}", cost_of(&entry));
+        assert_eq!(cost_of(&json!({ "model": "gpt-x", "input_tokens": 5 })), 0.0);
+    }
+
+    /// LC-354: addresses of failed sign-ins are hidden from people who are not admins.
+    #[test]
+    fn addresses_hidden() {
+        assert_eq!(hide_address("wrong user name or password (10.0.0.7)"), "wrong user name or password");
+        assert_eq!(hide_address("wrong (password)"), "wrong (password)");
+        assert_eq!(hide_address("refused (2001:db8::1)"), "refused");
+    }
+
+    /// LC-351: the proxy lets through only Compass's calls, in the team's project and space.
+    #[test]
+    fn proxy_only_compass_calls() {
+        let jira = |m: &str, p: &str, body: &str| proxy_allowed("jira", m, p, "LC", "", body.as_bytes()).is_ok();
+        assert!(jira("GET", "/rest/api/3/myself", "") && jira("GET", "/rest/api/3/search/jql", "") && jira("GET", "/rest/api/2/issue/LC-12", ""));
+        assert!(jira("POST", "/rest/api/3/issue", r#"{"fields":{"project":{"key":"LC"}}}"#) && jira("POST", "/rest/api/3/issue/LC-12/comment", ""));
+        assert!(jira("PUT", "/rest/api/3/issue/lc-12", ""));
+        assert!(!jira("DELETE", "/rest/api/3/issue/LC-12", ""), "no DELETE");
+        assert!(!jira("PUT", "/rest/api/3/issue/HR-1", ""), "another project");
+        assert!(!jira("POST", "/rest/api/3/issue", r#"{"fields":{"project":{"key":"HR"}}}"#));
+        assert!(!jira("GET", "/rest/api/3/user/search", "") && !jira("POST", "/rest/api/3/project", "") && !jira("GET", "/rest/auth/1/session", ""));
+        let wiki = |m: &str, p: &str, body: &str| proxy_allowed("confluence", m, p, "", "ARCH", body.as_bytes()).is_ok();
+        assert!(wiki("GET", "/rest/api/content", "") && wiki("PUT", "/rest/api/content/1001", "") && wiki("POST", "/rest/api/content/1001/child/attachment/att7/data", ""));
+        assert!(wiki("POST", "/rest/api/content", r#"{"space":{"key":"ARCH"}}"#) && !wiki("POST", "/rest/api/content", r#"{"space":{"key":"HR"}}"#));
+        assert!(!wiki("DELETE", "/rest/api/content/1001", "") && !wiki("GET", "/rest/api/space/HR", "") && !wiki("GET", "/rest/api/user/memberof", ""));
+        assert_eq!(jql_in_project("assignee = currentUser() ORDER BY updated DESC", "LC"), "project = \"LC\" AND (assignee = currentUser()) ORDER BY updated DESC");
+        assert_eq!(jql_in_project("", "LC"), "project = \"LC\"");
+    }
+
+    /// LC-350: a hub on loopback refuses a foreign Host; the address helpers.
+    #[test]
+    fn local_hub_and_host_header() {
+        assert!(listens_on_loopback("127.0.0.1:8730") && listens_on_loopback("[::1]:8730") && listens_on_loopback("localhost:8730"));
+        assert!(!listens_on_loopback("0.0.0.0:8730") && !listens_on_loopback("10.0.0.5:8730"));
+        for ok in ["127.0.0.1:8730", "localhost", "LOCALHOST:1", "[::1]:8730", ""] {
+            assert!(host_is_local(ok, &[]), "{ok}");
+        }
+        for bad in ["evil.example:8730", "attacker.test", "10.0.0.5:8730", "[2001:db8::1]:80"] {
+            assert!(!host_is_local(bad, &[]), "{bad}");
+        }
+        crate::i18n::set(crate::i18n::Lang::En);
+        let dir = std::env::temp_dir().join(format!("loonar-hub-host-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0", "sources": [] }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let base = format!("http://{}", rx.recv().unwrap());
+        let http = reqwest::blocking::Client::new();
+        assert_eq!(http.get(format!("{base}/api/health")).send().unwrap().status().as_u16(), 200);
+        assert_eq!(http.get(format!("{base}/api/health")).header("Host", "rebind.example:8730").send().unwrap().status().as_u16(), 421);
+    }
+
+    /// LC-350: behind IIS/ARR on the same computer the public name of the hub (OIDC callback, allowed_hosts) is accepted.
+    #[test]
+    fn host_names_of_the_hub() {
+        let allowed = vec!["hub.lab.local".to_string(), "compass.example".to_string()];
+        assert!(super::host_is_local("127.0.0.1:8730", &[]));
+        assert!(super::host_is_local("[::1]:8730", &[]));
+        assert!(super::host_is_local("LOCALHOST", &[]));
+        assert!(super::host_is_local("Hub.Lab.Local", &allowed));
+        assert!(super::host_is_local("hub.lab.local:443", &allowed));
+        assert!(super::host_is_local("compass.example.", &allowed));
+        assert!(!super::host_is_local("hub.lab.local", &[]));
+        assert!(!super::host_is_local("rebind.example", &allowed));
+        assert!(!super::host_is_local("hub.lab.local.evil.example", &allowed));
+        assert_eq!(super::host_name("[::1]:8730"), "::1");
+    }
+
+    /// LC-350: with a company sign-in (OIDC) and no users there is no default admin/passw0rd account.
+    #[test]
+    fn no_default_account_with_oidc() {
+        let dir = std::env::temp_dir().join(format!("loonar-hub-oidc-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0", "sources": [],
+            "oidc": { "issuer": "https://login.example/realms/x", "client_id": "compass", "redirect_uri": "https://hub.example/auth/callback" } }).to_string()).unwrap();
+        let (hub, _) = load(&dir.join("hub.json")).unwrap();
+        assert!(hub.users.lock().unwrap().is_empty(), "no default account");
+        assert_eq!(hub.login(br#"{"name":"admin","password":"passw0rd"}"#, None).0, 401);
+        // LC-433: a malformed body is a bad request.
+        assert_eq!(hub.login(b"{x", None).0, 400);
+        assert_eq!(hub.login(br#"{"name":"admin"}"#, None).0, 400);
+    }
+
     #[test]
     fn sign_in_failures_behind_proxy() {
         crate::i18n::set(crate::i18n::Lang::En);
@@ -2208,6 +3164,201 @@ mod tests {
         assert_eq!(http.post(format!("{base}/proxy/jira/rest/api/3/issue")).bearer_auth("bartek-token-0123456789").json(&json!({})).send().unwrap().status(), 403);
         assert_eq!(http.get(format!("{base}/proxy/jira/secure/Dashboard.jspa")).bearer_auth("anna-token-0123456789").send().unwrap().status(), 403);
         // Compass reads the team's project from the policy.
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// LC-392: review comments and decisions on elements; status by an architect or the author.
+    /// `LOONAR_HUB_FILE_PROPS=… cargo test hub_comments -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a test model"]
+    fn hub_comments() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        let dir = std::env::temp_dir().join(format!("loonar-hub-comments-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let props = std::env::var("LOONAR_HUB_FILE_PROPS").unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0", "sources": [{ "id": "shop", "name": "Shop", "properties": props }],
+            "users": [{ "name": "olek", "token": "viewer-token-comments-01", "role": "viewer" }, { "name": "ada", "token": "arch-token-comments-012", "role": "architect" }, { "name": "ewa", "token": "viewer2-token-comments-1", "role": "viewer" }] }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let cfg = hub.sources[0].cfg.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let base = format!("http://{}", rx.recv().unwrap());
+        let element: i64 = crate::tools::query_rows(&cfg, "select object_id from t_object where object_type = 'Class'").unwrap()[0][0].parse().unwrap();
+        let http = reqwest::blocking::Client::new();
+        let add = |token: &str, body: Value| http.post(format!("{base}/api/sources/shop/comments")).bearer_auth(token).json(&body).send().unwrap();
+        let first = add("viewer-token-comments-01", json!({ "element": element, "text": "Is the date the order date or the delivery date?" }));
+        assert_eq!(first.status(), 201);
+        let first: Value = first.json().unwrap();
+        assert_eq!(first["status"], "open");
+        assert_eq!(add("viewer-token-comments-01", json!({ "element": element, "kind": "decision", "text": "ADR: dates in UTC" })).status(), 201);
+        let list: Value = http.get(format!("{base}/api/sources/shop/comments?element={element}")).bearer_auth("arch-token-comments-012").send().unwrap().json().unwrap();
+        assert_eq!(list.as_array().unwrap().len(), 2);
+        let status = |token: &str, s: &str| http.post(format!("{base}/api/comments/{}/status", first["id"].as_str().unwrap())).bearer_auth(token).json(&json!({ "status": s })).send().unwrap().status();
+        assert_eq!(status("viewer2-token-comments-1", "resolved"), 403, "another viewer may not");
+        assert_eq!(status("arch-token-comments-012", "resolved"), 200);
+        let open: Value = http.get(format!("{base}/api/sources/shop/comments?status=open")).bearer_auth("arch-token-comments-012").send().unwrap().json().unwrap();
+        assert!(open.as_array().unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// LC-406: the team's agents edited as a form: checked one by one, saved only when all are valid.
+    #[test]
+    fn hub_agents_form() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        let dir = std::env::temp_dir().join(format!("loonar-hub-agents-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0", "sources": [],
+            "users": [{ "name": "adm", "token": "admin-token-agents-0123", "role": "admin" }, { "name": "ada", "token": "arch-token-agents-01234", "role": "architect" }],
+            "policy": { "min_approval": "plan" } }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let base = format!("http://{}", rx.recv().unwrap());
+        let http = reqwest::blocking::Client::new();
+        assert_eq!(http.get(format!("{base}/api/agents")).bearer_auth("arch-token-agents-01234").send().unwrap().status(), 403);
+        let got: Value = http.get(format!("{base}/api/agents")).bearer_auth("admin-token-agents-0123").send().unwrap().json().unwrap();
+        assert!(got["events"].as_array().unwrap().iter().any(|e| e == "scheduled") && got["agents"].as_array().unwrap().is_empty());
+        let bad = json!({ "agents": [{ "name": "Guard new", "event": "element_created", "mode": "guard", "prompt": "No." }] });
+        let checked: Value = http.post(format!("{base}/api/agents/check")).bearer_auth("admin-token-agents-0123").json(&bad).send().unwrap().json().unwrap();
+        assert_eq!(checked["valid"], false);
+        assert_eq!(http.put(format!("{base}/api/agents")).bearer_auth("admin-token-agents-0123").json(&bad).send().unwrap().status(), 400, "not saved");
+        let good = json!({ "agents": [{ "name": "Keep requirements", "event": "element_deleting", "mode": "guard", "applies_to": "Requirement", "prompt": "Block approved requirements." }] });
+        let saved: Value = http.put(format!("{base}/api/agents")).bearer_auth("admin-token-agents-0123").json(&good).send().unwrap().json().unwrap();
+        assert!(saved["valid"] == true && saved["checked"][0]["means"].as_str().unwrap().contains("decides whether to stop it"), "{saved}");
+        let file: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("hub.json")).unwrap()).unwrap();
+        assert_eq!(file["policy"]["event_agents"][0]["name"], "Keep requirements");
+        assert_eq!(file["policy"]["min_approval"], "plan", "the rest of the policy stays");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// LC-407: review requests to the owner of an element (tagged value Owner or author), answered in the hub.
+    /// `LOONAR_HUB_FILE_PROPS=… cargo test hub_review_requests -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a test model"]
+    fn hub_review_requests() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        let dir = std::env::temp_dir().join(format!("loonar-hub-requests-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let props = std::env::var("LOONAR_HUB_FILE_PROPS").unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0", "sources": [{ "id": "shop", "name": "Shop", "properties": props }],
+            "users": [{ "name": "olek", "token": "viewer-token-requests-01", "role": "viewer" }, { "name": "ada", "token": "arch-token-requests-0123", "role": "architect" }, { "name": "ewa", "token": "viewer2-token-requests-1", "role": "viewer" }] }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let cfg = hub.sources[0].cfg.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let base = format!("http://{}", rx.recv().unwrap());
+        let rows = crate::tools::query_rows(&cfg, "select object_id from t_object where object_type = 'Class' order by object_id").unwrap();
+        let (a, b): (i64, i64) = (rows[0][0].parse().unwrap(), rows[1][0].parse().unwrap());
+        let http = reqwest::blocking::Client::new();
+        let post = |token: &str, path: &str, body: Value| http.post(format!("{base}{path}")).bearer_auth(token).json(&body).send().unwrap();
+        assert_eq!(post("viewer-token-requests-01", "/api/sources/shop/review-requests", json!({ "elements": [a], "question": "Still right?" })).status(), 403, "a viewer may not ask");
+        let sent: Value = post("arch-token-requests-0123", "/api/sources/shop/review-requests", json!({ "elements": [a, b], "question": "Is the description still right?", "to": "olek" })).json().unwrap();
+        assert_eq!(sent["created"].as_array().unwrap().len(), 2, "{sent}");
+        let again: Value = post("arch-token-requests-0123", "/api/sources/shop/review-requests", json!({ "elements": [a], "question": "Again?", "to": "olek" })).json().unwrap();
+        assert_eq!(again["skipped"][0]["why"], "already asked", "{again}");
+        // Without "to" the owner comes from the model: the author when there is no Owner tag.
+        let authored = crate::tools::query_rows(&cfg, "select object_id, author from t_object where author is not null and author <> '' order by object_id").unwrap();
+        assert_eq!(super::owner_of(&cfg, authored[0][0].parse().unwrap()), Some(authored[0][1].trim().to_string()));
+        let mine = |token: &str| http.get(format!("{base}/api/requests")).bearer_auth(token).send().unwrap().json::<Value>().unwrap();
+        assert_eq!(mine("viewer-token-requests-01").as_array().unwrap().len(), 2);
+        assert!(mine("viewer2-token-requests-1").as_array().unwrap().is_empty());
+        let first = sent["created"][0]["id"].as_str().unwrap().to_string();
+        let second = sent["created"][1]["id"].as_str().unwrap().to_string();
+        assert_eq!(post("viewer2-token-requests-1", &format!("/api/comments/{first}/answer"), json!({ "answer": "confirmed" })).status(), 403, "not the person asked");
+        assert_eq!(post("viewer-token-requests-01", &format!("/api/comments/{first}/answer"), json!({ "answer": "needs_change" })).status(), 400, "say what");
+        assert_eq!(post("viewer-token-requests-01", &format!("/api/comments/{first}/answer"), json!({ "answer": "confirmed" })).status(), 200);
+        let changed: Value = post("viewer-token-requests-01", &format!("/api/comments/{second}/answer"), json!({ "answer": "needs_change", "text": "Prices are in EUR now", "decision": true })).json().unwrap();
+        assert_eq!(changed["status"], "needs_change");
+        assert!(mine("viewer-token-requests-01").as_array().unwrap().is_empty(), "nothing waits any more");
+        let on_b: Value = http.get(format!("{base}/api/sources/shop/comments?element={b}")).bearer_auth("arch-token-requests-0123").send().unwrap().json().unwrap();
+        assert!(on_b.as_array().unwrap().iter().any(|c| c["kind"] == "decision" && c["text"] == "Prices are in EUR now" && c["reply_to"] == second.as_str()), "{on_b}");
+        let all: Value = http.get(format!("{base}/api/requests?all=1&status=any")).bearer_auth("arch-token-requests-0123").send().unwrap().json().unwrap();
+        assert_eq!(all.as_array().unwrap().len(), 2);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// LC-393: a portfolio view by one and by two dimensions, and its PowerPoint.
+    /// `LOONAR_HUB_FILE_PROPS=… cargo test hub_portfolio -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a test model"]
+    fn hub_portfolio() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        let dir = std::env::temp_dir().join(format!("loonar-hub-portfolio-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0", "sources": [{ "id": "shop", "name": "Shop", "properties": std::env::var("LOONAR_HUB_FILE_PROPS").unwrap() }],
+            "users": [{ "name": "olek", "token": "viewer-token-portfolio-1", "role": "viewer" }] }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let cfg = hub.sources[0].cfg.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let base = format!("http://{}", rx.recv().unwrap());
+        let root = crate::tools::query_rows(&cfg, "select package_id from t_package where parent_id = 0").unwrap()[0][0].clone();
+        let http = reqwest::blocking::Client::new();
+        let get = |q: &str| http.get(format!("{base}/api/sources/shop/{q}")).bearer_auth("viewer-token-portfolio-1").send().unwrap();
+        let one: Value = get(&format!("portfolio?package={root}&rows=status")).json().unwrap();
+        println!("{one}");
+        assert!(!one["rows"].as_array().unwrap().is_empty() && one["cols"].as_array().unwrap().is_empty());
+        let two: Value = get(&format!("portfolio?package={root}&rows=type&cols=status")).json().unwrap();
+        let total = |v: &Value| v["cells"].as_array().unwrap().iter().flat_map(|r| r.as_array().unwrap().iter().map(|n| n.as_i64().unwrap())).sum::<i64>();
+        assert_eq!(total(&one), total(&two), "the same elements counted");
+        assert_eq!(get(&format!("portfolio?package={root}&rows=tag:Owner")).status(), 200);
+        assert_eq!(get(&format!("portfolio?package={root}&rows=drop table")).status(), 400);
+        let pptx = get(&format!("portfolio.pptx?package={root}&rows=type&cols=status"));
+        assert_eq!(pptx.status(), 200);
+        assert!(pptx.bytes().unwrap().starts_with(b"PK"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// LC-390: the OpenAI gateway – the team's key goes upstream (never the hub token), usage is logged, limits apply.
+    #[test]
+    fn hub_openai_gateway() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        crate::config::secrets::use_environment();
+        std::env::set_var("LOONAR_SECRET_OPENAI_TEAM_TEST", "sk-team-test-123");
+        // An OpenAI-compatible upstream that records the Authorization header.
+        let upstream = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let up = upstream.local_addr().unwrap();
+        let (seen_tx, seen_rx) = std::sync::mpsc::channel::<String>();
+        std::thread::spawn(move || {
+            for stream in upstream.incoming().flatten() {
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let (mut auth, mut length) = (String::new(), 0usize);
+                loop {
+                    let mut line = String::new();
+                    reader.read_line(&mut line).unwrap();
+                    let line = line.trim_end().to_string();
+                    if line.is_empty() { break; }
+                    let lower = line.to_ascii_lowercase();
+                    if let Some(v) = lower.strip_prefix("authorization:") { auth = v.trim().to_string(); }
+                    if let Some(v) = lower.strip_prefix("content-length:") { length = v.trim().parse().unwrap(); }
+                }
+                let mut body = vec![0u8; length];
+                reader.read_exact(&mut body).unwrap();
+                seen_tx.send(auth).unwrap();
+                let answer = json!({ "model": "gpt-test", "choices": [{ "message": { "role": "assistant", "content": "OK" }, "finish_reason": "stop" }], "usage": { "prompt_tokens": 10, "completion_tokens": 5 } }).to_string();
+                let mut out = stream;
+                let _ = write!(out, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{answer}", answer.len());
+            }
+        });
+        let dir = std::env::temp_dir().join(format!("loonar-hub-openai-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:0", "sources": [],
+            "users": [{ "name": "anna", "token": "anna-token-openai-0123", "role": "architect" }, { "name": "bartek", "token": "bartek-token-openai-01", "role": "viewer" }],
+            "ai": { "openai": { "url": format!("http://{up}/v1"), "keys": [{ "for": "role:architect", "secret": "openai_team_test" }] }, "limits": [{ "for": "anna", "tokens_per_day": 1 }] } }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || serve(hub, &listen, |a| tx.send(a).unwrap()).unwrap());
+        let base = format!("http://{}", rx.recv().unwrap());
+        let http = reqwest::blocking::Client::new();
+        let ask = |token: &str| http.post(format!("{base}/ai/openai/v1/chat/completions")).bearer_auth(token).header("X-Compass-Source", "shop")
+            .json(&json!({ "model": "gpt-test", "messages": [{ "role": "user", "content": "Say OK." }] })).send().unwrap();
+        let first = ask("anna-token-openai-0123");
+        assert_eq!(first.status(), 200, "{}", first.text().unwrap_or_default());
+        assert_eq!(seen_rx.recv().unwrap(), "bearer sk-team-test-123", "the team's key goes upstream, not the hub token");
+        assert_eq!(ask("anna-token-openai-0123").status(), 429, "the daily limit is used up");
+        assert_eq!(ask("bartek-token-openai-01").status(), 403, "no key for a viewer");
+        let usage = std::fs::read_to_string(dir.join("ai_usage.jsonl")).unwrap();
+        assert!(usage.contains("\"input_tokens\":10") && usage.contains("\"user\":\"anna\"") && usage.contains("\"source\":\"shop\"") && usage.contains("\"role\":\"architect\""), "{usage}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -2392,6 +3543,8 @@ mod tests {
         let sign_in_at = |login: &str, user: &str, password: &str| -> reqwest::blocking::Response {
             let to_provider = http.get(format!("{base}{login}")).send().unwrap();
             assert_eq!(to_provider.status(), 302);
+            let hub_cookie = to_provider.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_string();
+            assert!(hub_cookie.starts_with("lc_signin="), "{hub_cookie}");
             let url = to_provider.headers()["location"].to_str().unwrap().to_string();
             assert!(url.contains("code_challenge_method=S256") && url.contains("nonce="));
             let page = http.get(&url).send().unwrap();
@@ -2402,7 +3555,8 @@ mod tests {
             assert_eq!(back.status(), 302, "Keycloak accepted the password");
             let callback = back.headers()["location"].to_str().unwrap().to_string();
             assert!(callback.starts_with(&format!("{base}/auth/callback?")), "{callback}");
-            http.get(&callback).send().unwrap()
+            // H9: the same callback from a browser without the cookie is refused (it would be someone else's sign-in).
+            http.get(&callback).header("Cookie", hub_cookie.clone()).send().unwrap()
         };
         let sign_in = |user: &str, password: &str| sign_in_at("/auth/login", user, password);
         // Compass: the session goes back to its one-time address on this computer; any other return is refused.
@@ -2492,6 +3646,70 @@ mod tests {
         let missing = http.get("http://127.0.0.1:18733/api/sources/shop/report?package=999999").bearer_auth("viewer-token-reports-0123").send().unwrap();
         assert_eq!(missing.status(), 404);
         assert_eq!(http.get(format!("http://127.0.0.1:18733/api/sources/shop/report?package={package}")).send().unwrap().status(), 401, "only signed-in users");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// LC-385: readers of a source and package scopes: `LOONAR_HUB_FILE_PROPS=… cargo test hub_scopes -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a test model"]
+    fn hub_scopes() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        let dir = std::env::temp_dir().join(format!("loonar-hub-scopes-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let props = std::env::var("LOONAR_HUB_FILE_PROPS").unwrap();
+        let cfg = AppConfig::load(Path::new(&props)).unwrap();
+        // A package with elements below the root, and an element outside it.
+        let rows = crate::tools::query_rows(&cfg, "select o.package_id as c0, count(*) as c1 from t_object o join t_package p on p.package_id = o.package_id where p.parent_id <> 0 and o.object_type <> 'Package' group by o.package_id order by 2 desc").unwrap();
+        let package: i64 = rows[0][0].parse().unwrap();
+        let inside = scope_packages(&cfg, &[package.to_string()]).unwrap();
+        let outside = crate::tools::query_rows(&cfg, &format!("select object_id as c0, name as c1 from t_object where object_type <> 'Package' and not {}", in_list("package_id", &inside))).unwrap();
+        let (outside_id, outside_name) = (outside[0][0].clone(), outside[0][1].clone());
+        let guid = crate::tools::query_rows(&cfg, &format!("select ea_guid as c0 from t_package where package_id = {package}")).unwrap()[0][0].clone();
+        std::fs::write(dir.join("hub.json"), json!({ "listen": "127.0.0.1:18736",
+            "sources": [
+                { "id": "shop", "name": "Shop", "properties": props, "scopes": [{ "for": "olek", "packages": [guid] }] },
+                { "id": "secret", "name": "Secret", "properties": props, "readers": ["role:architect"] }
+            ],
+            "users": [
+                { "name": "olek", "token": "viewer-token-scopes-0123", "role": "viewer" },
+                { "name": "ewa", "token": "viewer2-token-scopes-0123", "role": "viewer" },
+                { "name": "ada", "token": "admin-token-scopes-01234", "role": "admin" }
+            ] }).to_string()).unwrap();
+        let (hub, listen) = load(&dir.join("hub.json")).unwrap();
+        std::thread::spawn(move || serve(hub, &listen, |_| {}));
+        std::thread::sleep(Duration::from_millis(300));
+        let http = reqwest::blocking::Client::new();
+        let get = |path: &str, token: &str| -> (u16, Value) {
+            let r = http.get(format!("http://127.0.0.1:18736{path}")).bearer_auth(token).send().unwrap();
+            (r.status().as_u16(), r.json().unwrap_or(Value::Null))
+        };
+        let (olek, ewa, ada) = ("viewer-token-scopes-0123", "viewer2-token-scopes-0123", "admin-token-scopes-01234");
+        // "readers": a viewer does not see the secret source at all, an admin does.
+        assert_eq!(get("/api/sources", olek).1.as_array().unwrap().len(), 1);
+        assert_eq!(get("/api/sources", ada).1.as_array().unwrap().len(), 2);
+        assert_eq!(get("/api/sources/secret/packages", ewa).0, 404);
+        // The scope: only the package's elements, the rest looks like nothing.
+        let table = get("/api/sources/shop/table/elements", olek).1;
+        assert!(!table.as_array().unwrap().is_empty());
+        assert!(table.as_array().unwrap().iter().all(|r| inside.contains(&r["package_id"].as_str().unwrap().parse::<i64>().unwrap())), "{table}");
+        assert_eq!(get(&format!("/api/sources/shop/elements/{outside_id}"), olek).0, 404);
+        assert_eq!(get(&format!("/api/sources/shop/elements/{outside_id}"), ewa).0, 200, "without a scope the whole model");
+        let q: String = outside_name.chars().take(20).collect();
+        let found = get(&format!("/api/sources/shop/search?q={}", encode(&q)), olek).1;
+        assert!(!found["text"].as_str().unwrap().lines().skip(1).any(|l| l.starts_with(&format!("{outside_id} |"))), "{found}");
+        let packages = get("/api/sources/shop/packages", olek).1;
+        assert_eq!(packages["text"].as_str().unwrap().lines().count() - 1, inside.len());
+        // What cannot be limited by packages is refused.
+        let graphql = http.post("http://127.0.0.1:18736/api/sources/shop/graphql").bearer_auth(olek).json(&json!({ "query": "{ packages { name } }" })).send().unwrap();
+        assert_eq!(graphql.status(), 403);
+        assert_eq!(get(&format!("/api/sources/shop/impact/{outside_id}"), olek).0, 403);
+        let mcp: Value = http.post("http://127.0.0.1:18736/mcp").bearer_auth(olek)
+            .json(&json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": { "name": "element_details", "arguments": { "source": "shop", "element": outside_id.parse::<i64>().unwrap() } } }))
+            .send().unwrap().json().unwrap();
+        assert_eq!(mcp["result"]["isError"], true, "{mcp}");
+        // LC-425: the EA groups of a login (none in a model without security) and $group_locks without locks resolve to nothing.
+        assert!(super::ea_groups(&cfg, "nobody-here").is_empty());
+        assert!(super::scope_packages(&cfg, &["$group_locks:nogroup".to_string()]).unwrap().is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

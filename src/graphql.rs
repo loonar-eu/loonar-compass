@@ -7,18 +7,53 @@ use juniper::{graphql_object, EmptyMutation, EmptySubscription, FieldResult, Gra
 
 pub struct Ctx {
     pub cfg: AppConfig,
+    /// SQL queries of this request so far (LC-352: nested lists multiplied them without a limit).
+    queries: std::sync::atomic::AtomicUsize,
+}
+
+/// At most this many SQL queries for one GraphQL request, and this deep a selection.
+const MAX_QUERIES: usize = 300;
+const MAX_DEPTH: usize = 6;
+
+/// The deepest nesting of { } in a query, outside strings and comments.
+fn depth(query: &str) -> usize {
+    let (mut depth, mut deepest, mut in_string, mut in_comment, mut previous) = (0usize, 0usize, false, false, ' ');
+    for c in query.chars() {
+        match c {
+            '\n' => in_comment = false,
+            _ if in_comment => {}
+            '"' if previous != '\\' => in_string = !in_string,
+            _ if in_string => {}
+            '#' => in_comment = true,
+            '{' => {
+                depth += 1;
+                deepest = deepest.max(depth);
+            }
+            '}' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        previous = c;
+    }
+    deepest
 }
 impl juniper::Context for Ctx {}
 
 const MAX: i32 = 500;
 
 fn rows(ctx: &Ctx, sql: &str) -> FieldResult<Vec<Vec<String>>> {
+    if ctx.queries.fetch_add(1, std::sync::atomic::Ordering::Relaxed) >= MAX_QUERIES {
+        return Err(juniper::FieldError::new(format!("the query reads too much (more than {MAX_QUERIES} database queries): ask for fewer levels or smaller limits"), juniper::Value::null()));
+    }
     let sql = crate::model_db::portable_sql(ctx.cfg.model_source, sql);
-    crate::tools::query_rows(&ctx.cfg, &sql).map_err(|e| juniper::FieldError::new(format!("{e:#}"), juniper::Value::null()))
+    // The database's error text stays in the hub's output: it can show the schema or data (LC-343).
+    crate::tools::query_rows(&ctx.cfg, &sql).map_err(|e| {
+        eprintln!("graphql: {e:#}");
+        juniper::FieldError::new(crate::i18n::tr("the query on the model failed"), juniper::Value::null())
+    })
 }
 
-fn text(value: &str) -> String {
-    value.replace('\'', "''")
+fn text(ctx: &Ctx, value: &str) -> String {
+    crate::model_db::sql_text(ctx.cfg.model_source, value)
 }
 
 fn limit(n: Option<i32>) -> i32 {
@@ -130,7 +165,7 @@ impl Package {
     }
     /// Elements directly in this package, optionally of one type.
     fn elements(&self, ctx: &Ctx, r#type: Option<String>, limit: Option<i32>) -> FieldResult<Vec<Element>> {
-        let filter = r#type.map(|t| format!(" and object_type = '{}'", text(&t))).unwrap_or_default();
+        let filter = r#type.map(|t| format!(" and object_type = '{}'", text(ctx, &t))).unwrap_or_default();
         elements_where(ctx, &format!("package_id = {} and object_type not in ('Package'){filter}", self.id), self::limit(limit))
     }
     fn diagrams(&self, ctx: &Ctx) -> FieldResult<Vec<Diagram>> {
@@ -253,13 +288,13 @@ impl Query {
     fn elements(ctx: &Ctx, name: Option<String>, r#type: Option<String>, stereotype: Option<String>, package: Option<i32>, limit: Option<i32>) -> FieldResult<Vec<Element>> {
         let mut condition = vec!["object_type <> 'Package'".to_string()];
         if let Some(n) = name {
-            condition.push(format!("lower(name) like '%{}%'", text(&n.to_lowercase())));
+            condition.push(format!("lower(name) like '%{}%'", text(ctx, &n.to_lowercase())));
         }
         if let Some(t) = r#type {
-            condition.push(format!("object_type = '{}'", text(&t)));
+            condition.push(format!("object_type = '{}'", text(ctx, &t)));
         }
         if let Some(s) = stereotype {
-            condition.push(format!("stereotype = '{}'", text(&s)));
+            condition.push(format!("stereotype = '{}'", text(ctx, &s)));
         }
         if let Some(p) = package {
             condition.push(format!("package_id = {p}"));
@@ -275,7 +310,7 @@ impl Query {
             condition.push(format!("package_id = {p}"));
         }
         if let Some(n) = name {
-            condition.push(format!("lower(name) like '%{}%'", text(&n.to_lowercase())));
+            condition.push(format!("lower(name) like '%{}%'", text(ctx, &n.to_lowercase())));
         }
         diagrams_where(ctx, &condition.join(" and "))
     }
@@ -293,8 +328,11 @@ pub fn execute(cfg: &AppConfig, request: &serde_json::Value) -> serde_json::Valu
     if query.len() > 20_000 {
         return serde_json::json!({ "errors": [{ "message": "the query is too long" }] });
     }
+    if depth(query) > MAX_DEPTH {
+        return serde_json::json!({ "errors": [{ "message": format!("the query is nested too deep (at most {MAX_DEPTH} levels)") }] });
+    }
     let variables: juniper::Variables = serde_json::from_value(request["variables"].clone()).unwrap_or_default();
-    let ctx = Ctx { cfg: cfg.clone() };
+    let ctx = Ctx { cfg: cfg.clone(), queries: std::sync::atomic::AtomicUsize::new(0) };
     match juniper::execute_sync(query, request["operationName"].as_str(), &schema, &variables, &ctx) {
         Ok((data, errors)) => serde_json::json!({
             "data": serde_json::to_value(&data).unwrap_or_default(),
@@ -307,4 +345,20 @@ pub fn execute(cfg: &AppConfig, request: &serde_json::Value) -> serde_json::Valu
 /// The schema in SDL (shown to people who write queries).
 pub fn sdl() -> String {
     Schema::new(Query, EmptyMutation::new(), EmptySubscription::new()).as_sdl()
+}
+
+/// LC-352: the nesting of a query is measured outside strings and comments.
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn query_depth() {
+        assert_eq!(super::depth("{ packages { id } }"), 2);
+        assert_eq!(super::depth("{ packages { elements { connectors { source { name } } } } }"), 5);
+        assert_eq!(super::depth("{ elements(name: \"{{{{\") { id } } # {{{{"), 2);
+        let deep = "{ a { b { c { d { e { f { g } } } } } } }";
+        let props = std::env::temp_dir().join(format!("loonar-graphql-{}.properties", std::process::id()));
+        std::fs::write(&props, "model.source=file\nmodel.file=C:/nothing/x.qea\n").unwrap();
+        let cfg = crate::config::AppConfig::load(&props).unwrap();
+        assert!(super::execute(&cfg, &serde_json::json!({ "query": deep }))["errors"][0]["message"].as_str().unwrap().contains("too deep"));
+    }
 }

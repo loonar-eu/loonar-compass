@@ -279,6 +279,13 @@ pub fn list_meta(dir: &Path) -> Vec<(String, Meta)> {
 /// Saves a template with its header; with `old_name` (another name) the template is renamed.
 pub fn save_with_meta(dir: &Path, old_name: Option<&str>, name: &str, meta: &Meta, body: &str) -> Result<String> {
     if let Some(old) = old_name.filter(|o| o.trim() != name.trim()) {
+        // Only the letter case changes: the same file on Windows – written under the new name, never removed (I8).
+        if old.trim().to_lowercase() == name.trim().to_lowercase() {
+            let old_path = file_of(dir, old)?;
+            let new_path = file_of(dir, name)?;
+            std::fs::rename(&old_path, &new_path).with_context(|| crate::i18n::fmt("saving {0}", &[new_path.display().to_string()]))?;
+            return save(dir, name, &compose(meta, body, crate::i18n::current()));
+        }
         if exists(dir, name) {
             bail!("{}", crate::i18n::fmt("a template named \"{0}\" already exists", &[name.to_string()]));
         }
@@ -321,7 +328,7 @@ pub fn to_markdown(file_name: &str, bytes: &[u8]) -> Result<String> {
 }
 
 /// A heading level from a Word paragraph style (Heading1, Nagwek1, berschrift1, Titre1, Title…).
-fn heading_level(style: &str) -> Option<usize> {
+pub(crate) fn heading_level(style: &str) -> Option<usize> {
     let s = style.to_lowercase();
     if s == "title" || s.starts_with("tytu") || s == "titel" {
         return Some(1);
@@ -511,6 +518,19 @@ pub fn from_confluence(cfg: &crate::config::AppConfig, page: &str) -> Result<(St
 #[cfg(test)]
 mod tests {
     use crate::i18n::Lang;
+
+    /// I8: renaming a template only in letter case keeps it (one file on Windows).
+    #[test]
+    fn rename_in_letter_case_keeps_the_template() {
+        let dir = std::env::temp_dir().join(format!("loonar-tpl-case-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        super::save(&dir, "raport", "# 1. Cel\n").unwrap();
+        super::save_with_meta(&dir, Some("raport"), "Raport", &super::Meta::default(), "# 1. Cel\n# 2. Zakres\n").unwrap();
+        let files: Vec<String> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).filter(|n| n.ends_with(".md")).collect();
+        assert_eq!(files, vec!["Raport.md".to_string()]);
+        assert!(std::fs::read_to_string(dir.join(&files[0])).unwrap().contains("Zakres"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn header_with_tool_group_and_model() {

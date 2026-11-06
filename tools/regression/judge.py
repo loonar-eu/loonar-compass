@@ -9,7 +9,8 @@ from pathlib import Path
 import anthropic
 
 MODEL = "claude-haiku-5-5"
-TEXT_LIMIT = 6000  # characters per evidence file; logs are cut at the end, where results usually are
+TEXT_HEAD = 4000  # characters kept from the start of a long evidence file (what was run, LC-363)
+TEXT_TAIL = 16000  # and from its end, where the results usually are
 IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 
 SYSTEM = """You are an independent software tester judging one manual test case of a desktop application.
@@ -21,8 +22,10 @@ Be strict about facts in the expected result (numbers, names, messages), lenient
 expected result does not mention (another window still open, more items) does not fail a step.
 A regression run executes the cases of an earlier version on a newer build: a newer version than the precondition
 names is not a reason to fail or block. When the evidence shows several builds, the newest build decides (an earlier
-build that failed and a newer one that passes = the step passes, say so). A step the evidence names as done by a
-person or another tester, with what they observed, counts as evidence.
+build that failed and a newer one that passes = the step passes, say so). A step done by a person counts only when
+that person's own record is in the evidence (their screenshot, or their note with the time and what they saw); an
+executor's statement that someone did it is not evidence: blocked. Evidence marked as written before this run
+started is not evidence of this build: such a step is blocked unless other evidence of this run shows it.
 The overall verdict is FAIL if any step fails, otherwise BLOCKED if any step is blocked, otherwise PASS.
 Write the reasons in the language of the test case, one or two short sentences, naming what the evidence shows."""
 
@@ -64,8 +67,8 @@ def _evidence_blocks(evidence_dir):
             blocks.append({"type": "image", "source": {"type": "base64", "media_type": media, "data": base64.standard_b64encode(path.read_bytes()).decode()}})
         elif path.is_file():
             text = path.read_text(encoding="utf-8", errors="replace")
-            if len(text) > TEXT_LIMIT:
-                text = "[…beginning left out…]\n" + text[-TEXT_LIMIT:]
+            if len(text) > TEXT_HEAD + TEXT_TAIL:
+                text = text[:TEXT_HEAD] + "\n[…middle left out…]\n" + text[-TEXT_TAIL:]
             blocks.append({"type": "text", "text": f"Evidence ({path.name}):\n{text}"})
     return blocks or [{"type": "text", "text": "No evidence was collected."}]
 

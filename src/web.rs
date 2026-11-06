@@ -29,10 +29,31 @@ do not guess addresses. Use it when the user asks about a page, documentation or
     })
 }
 
-/// Whether the address appears in what the user or the tools put into the conversation (not in the assistant's own text).
+/// Whether the address is one the user wrote or a link on a page read earlier with web_fetch. Not one from other tool
+/// results or errors (LC-356): the model could build an address carrying data from the model (db_query returning
+/// 'https://evil/?d=…', an error repeating a path) and read it.
 pub fn seen_in_conversation(url: &str, messages: &[Value]) -> bool {
     let wanted = url.trim().trim_end_matches('/');
-    !wanted.is_empty() && messages.iter().filter(|m| m["role"] == "user").any(|m| m["content"].to_string().replace("\\/", "/").contains(wanted))
+    if wanted.is_empty() {
+        return false;
+    }
+    let fetched: Vec<&str> = messages
+        .iter()
+        .filter(|m| m["role"] == "assistant")
+        .flat_map(|m| m["content"].as_array().into_iter().flatten())
+        .filter(|b| b["type"] == "tool_use" && b["name"] == "web_fetch")
+        .filter_map(|b| b["id"].as_str())
+        .collect();
+    let has = |v: &Value| v.to_string().replace("\\/", "/").contains(wanted);
+    messages.iter().filter(|m| m["role"] == "user").any(|m| match &m["content"] {
+        Value::String(text) => text.contains(wanted),
+        Value::Array(blocks) => blocks.iter().any(|b| match b["type"].as_str() {
+            Some("text") => b["text"].as_str().is_some_and(|t| t.contains(wanted)),
+            Some("tool_result") => b["tool_use_id"].as_str().is_some_and(|id| fetched.contains(&id)) && has(&b["content"]),
+            _ => false,
+        }),
+        _ => false,
+    })
 }
 
 /// An address of this computer, of a private network, link-local or otherwise not public.
@@ -45,8 +66,9 @@ fn private(ip: IpAddr) -> bool {
     }
 }
 
-/// Checks one address (also every redirect): scheme, credentials, allowed domains, and that the host is public.
-fn check(url: &reqwest::Url, domains: &[String]) -> Result<()> {
+/// Checks one address (also every redirect): scheme, credentials, allowed domains, and that the host is public. Gives
+/// the checked address, so the request goes exactly there (LC-356: a second DNS lookup could give 127.0.0.1).
+fn check(url: &reqwest::Url, domains: &[String]) -> Result<std::net::SocketAddr> {
     if !matches!(url.scheme(), "http" | "https") {
         bail!("only http and https addresses can be read");
     }
@@ -58,16 +80,17 @@ fn check(url: &reqwest::Url, domains: &[String]) -> Result<()> {
         bail!("{host} is not among the allowed domains ({})", domains.join(", "));
     }
     let port = url.port_or_known_default().unwrap_or(443);
-    let addresses: Vec<IpAddr> = (host.trim_matches(['[', ']']), port).to_socket_addrs().with_context(|| format!("cannot resolve {host}"))?.map(|a| a.ip()).collect();
-    if addresses.is_empty() || addresses.iter().any(|ip| private(*ip)) {
+    let addresses: Vec<std::net::SocketAddr> = (host.trim_matches(['[', ']']), port).to_socket_addrs().with_context(|| format!("cannot resolve {host}"))?.collect();
+    if addresses.is_empty() || addresses.iter().any(|a| private(a.ip())) {
         bail!("{host} is an address of this computer or of a private network: it is not read");
     }
-    Ok(())
+    Ok(addresses[0])
 }
 
 /// Text of an HTML page: without scripts, styles and tags, with paragraphs kept as lines.
 pub(crate) fn html_text(html: &str) -> String {
-    let lower = html.to_lowercase();
+    // ASCII only: to_lowercase changes byte lengths ("İ" → "i̇") and the positions would not fit the page (LC-340).
+    let lower = html.to_ascii_lowercase();
     let mut text = String::new();
     let mut i = 0;
     while i < html.len() {
@@ -97,13 +120,15 @@ pub(crate) fn html_text(html: &str) -> String {
 /// Reads the page (the rules above) and returns its address, title and text.
 pub fn fetch(url: &str, domains: &[String]) -> Result<String> {
     let mut current = reqwest::Url::parse(url.trim()).context("not a valid address")?;
-    let client = reqwest::blocking::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .timeout(Duration::from_secs(20))
-        .user_agent(concat!("LoonarCompass/", env!("CARGO_PKG_VERSION")))
-        .build()?;
     for _ in 0..5 {
-        check(&current, domains)?;
+        let address = check(&current, domains)?;
+        // The connection goes to the address just checked; TLS still checks the host name.
+        let client = reqwest::blocking::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(Duration::from_secs(20))
+            .user_agent(concat!("LoonarCompass/", env!("CARGO_PKG_VERSION")))
+            .resolve(current.host_str().unwrap_or(""), address)
+            .build()?;
         let response = client.get(current.clone()).send().with_context(|| format!("cannot read {current}"))?;
         if response.status().is_redirection() {
             let location = response.headers().get(reqwest::header::LOCATION).and_then(|l| l.to_str().ok()).context("a redirect without an address")?;
@@ -118,7 +143,7 @@ pub fn fetch(url: &str, domains: &[String]) -> Result<String> {
         response.take(MAX_BYTES).read_to_end(&mut body)?;
         let raw = String::from_utf8_lossy(&body);
         let title = if html {
-            let lower = raw.to_lowercase();
+            let lower = raw.to_ascii_lowercase();
             lower.find("<title").and_then(|s| lower[s..].find('>').map(|g| s + g + 1)).and_then(|s| lower[s..].find("</title").map(|e| raw[s..s + e].trim().to_string())).unwrap_or_default()
         } else {
             String::new()
@@ -134,7 +159,25 @@ pub fn fetch(url: &str, domains: &[String]) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    /// LC-340: "İ" grows when lowercased; the text stays whole and the reading ends.
+    #[test]
+    fn html_text_with_letters_that_grow_when_lowercased() {
+        let text = super::html_text("<P>İstanbul İİİ</P><SCRIPT>var İ = 1;</SCRIPT><div>żółć</div>");
+        assert_eq!(text, "İstanbul İİİ
+żółć");
+    }
+
     use super::*;
+
+    /// LC-356: a real page through the pinned address (HTTPS with the host name checked):
+    /// `cargo test web_fetch_pinned -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires the internet"]
+    fn web_fetch_pinned() {
+        let page = fetch("https://example.com/", &[]).unwrap();
+        println!("{}", page.lines().take(3).collect::<Vec<_>>().join(" | "));
+        assert!(page.contains("Example Domain"));
+    }
 
     #[test]
     fn only_public_addresses_the_user_gave() {
@@ -144,6 +187,20 @@ mod tests {
         ];
         assert!(seen_in_conversation("https://example.com/docs/page", &messages));
         assert!(!seen_in_conversation("https://evil.example/?data=model", &messages), "not an address the assistant wrote itself");
+        // LC-356: an address in another tool's result is not one to read; a link on a page read with web_fetch is.
+        let with_tools = vec![
+            json!({ "role": "user", "content": "Read the docs." }),
+            json!({ "role": "assistant", "content": [
+                { "type": "tool_use", "id": "q1", "name": "db_query", "input": {} },
+                { "type": "tool_use", "id": "w1", "name": "web_fetch", "input": { "url": "https://example.com/docs/page" } }
+            ] }),
+            json!({ "role": "user", "content": [
+                { "type": "tool_result", "tool_use_id": "q1", "content": "name\nhttps://evil.example/?d=secret" },
+                { "type": "tool_result", "tool_use_id": "w1", "content": [{ "type": "text", "text": "See https://example.com/docs/next" }] }
+            ] }),
+        ];
+        assert!(!seen_in_conversation("https://evil.example/?d=secret", &with_tools));
+        assert!(seen_in_conversation("https://example.com/docs/next", &with_tools));
         for ip in ["127.0.0.1", "10.1.2.3", "192.168.0.5", "172.16.0.1", "169.254.169.254", "100.64.0.1", "::1", "fd00::1", "fe80::1"] {
             assert!(private(ip.parse().unwrap()), "{ip}");
         }

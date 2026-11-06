@@ -6,6 +6,9 @@
 
 #[path = "../../src/agent_ro.rs"]
 mod agent_ro;
+#[path = "../../src/agents.rs"]
+#[allow(dead_code)]
+mod agents;
 #[path = "../../src/claude.rs"]
 mod claude;
 #[path = "../../src/config.rs"]
@@ -34,6 +37,8 @@ mod graphql;
 mod docx;
 #[path = "../../src/xlsx.rs"]
 mod xlsx;
+#[path = "../../src/pptx.rs"]
+mod pptx;
 #[path = "../../src/oidc.rs"]
 mod oidc;
 #[path = "../../src/openai.rs"]

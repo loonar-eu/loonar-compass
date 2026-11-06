@@ -6,6 +6,10 @@ use serde_json::{json, Value};
 
 /// Operations the model may request. `delete_package`, `export_diagram` and `ping` are for internal use only.
 pub const MODEL_OPS: &[&str] = &[
+    "merge_elements",
+    "change_connector_type",
+    "diagram_options",
+    "baseline_compare",
     "create_package",
     "create_diagram",
     "create_element",
@@ -23,6 +27,7 @@ pub const MODEL_OPS: &[&str] = &[
     "set_bounds",
     "set_line_style",
     "route_connector",
+    "restore_link",
     "update_diagram",
     "hide_connectors",
     "repair_diagram_links",
@@ -34,6 +39,9 @@ pub const MODEL_OPS: &[&str] = &[
     "update_operation",
     "delete_operation",
     "clone_package",
+    "clone_element_version",
+    "create_matrix_specification",
+    "save_document_template",
     "create_baseline",
     "add_glossary_term",
     "create_scenario",
@@ -71,10 +79,15 @@ pub fn describe(ops: &[Value]) -> String {
         "set_bounds" => crate::i18n::tr("changed position or size on diagrams"),
         "set_line_style" => crate::i18n::tr("changed connector line styles on diagrams"),
         "route_connector" => crate::i18n::tr("routed connector paths on diagrams"),
+        "restore_link" => crate::i18n::tr("connector lines restored on diagrams"),
         "update_diagram" => crate::i18n::tr("changed diagram names or notes"),
         "hide_connectors" => crate::i18n::tr("connectors hidden or shown on diagrams"),
         "repair_diagram_links" => crate::i18n::tr("diagram links repaired (duplicates removed, hidden connectors shown)"),
         "create_attribute" => crate::i18n::tr("new attributes"),
+        "merge_elements" => crate::i18n::tr("duplicates merged into the kept elements"),
+        "change_connector_type" => crate::i18n::tr("relationships of another type in place of the old ones"),
+        "diagram_options" => crate::i18n::tr("diagram display options"),
+        "baseline_compare" => crate::i18n::tr("comparisons with baselines"),
         "create_legend" => crate::i18n::tr("diagram legends"),
         "create_operation" => crate::i18n::tr("new operations"),
         "update_attribute" => crate::i18n::tr("changed attributes"),
@@ -82,6 +95,9 @@ pub fn describe(ops: &[Value]) -> String {
         "update_operation" => crate::i18n::tr("changed operations"),
         "delete_operation" => crate::i18n::tr("operations DELETED"),
         "clone_package" => crate::i18n::tr("package copies (with all contents)"),
+        "clone_element_version" => crate::i18n::tr("new versions of elements (a copy traced to the original)"),
+        "create_matrix_specification" => crate::i18n::tr("relationship matrices in EA (Matrix Specification)"),
+        "save_document_template" => crate::i18n::tr("EA document templates (Report Builder)"),
         "create_baseline" => crate::i18n::tr("package baselines (saved versions)"),
         "add_glossary_term" => crate::i18n::tr("terms in the project glossary"),
         "create_scenario" | "update_scenario" => crate::i18n::tr("structured scenarios of elements"),
@@ -154,9 +170,9 @@ pub fn check_file_path(file: &str) -> Result<std::path::PathBuf> {
     let bytes = text.as_bytes();
     let drive = bytes.len() > 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'\\';
     // No "." or ".." segments, no streams (":"), no segments ending in a dot or a space, no doubled separators, no wildcards.
-    let segments: Vec<&str> = text[3.min(text.len())..].split('\\').collect();
+    let segments: Vec<&str> = text.get(3..).unwrap_or("").split('\\').collect();
     let odd = segments.iter().any(|s| s.is_empty() || *s == "." || *s == ".." || s.ends_with('.') || s.ends_with(' '))
-        || text[2.min(text.len())..].contains(':') || text.contains('*') || text.contains('?') || text.contains('"') || text.contains('<') || text.contains('>') || text.contains('|');
+        || text.get(2..).unwrap_or("").contains(':') || text.contains('*') || text.contains('?') || text.contains('"') || text.contains('<') || text.contains('>') || text.contains('|');
     if !drive || odd {
         bail!("{}", crate::i18n::fmt("{0}: give a full path on a local drive; network shares and relative paths are not allowed", &[file.to_string()]));
     }
@@ -191,3 +207,14 @@ pub fn check_file_path(file: &str) -> Result<std::path::PathBuf> {
     Ok(std::path::PathBuf::from(shown))
 }
 
+
+#[cfg(test)]
+mod tests {
+    /// LC-340: a file name without a drive whose third or fourth byte is inside a letter is refused, not a panic.
+    #[test]
+    fn check_file_path_refuses_names_with_letters_outside_ascii() {
+        for name in ["Żółw.xmi", "Prüfbericht.docx", "żó", "İ", "ą"] {
+            assert!(super::check_file_path(name).is_err(), "{name}");
+        }
+    }
+}

@@ -114,6 +114,19 @@ fn sqlserver_tls(driver: &str, mode: crate::config::SslMode) -> &'static str {
     }
 }
 
+/// The inside of a SQL string literal ('…') for the model's database: an apostrophe doubled and, on MySQL/MariaDB, a
+/// backslash doubled too. MySQL treats a backslash as an escape unless NO_BACKSLASH_ESCAPES is set, so with
+/// apostrophes doubled only, \' would end the literal (LC-343). With NO_BACKSLASH_ESCAPES the doubled backslash only
+/// makes a search miss a name with a backslash – never a way out of the literal.
+pub fn sql_text(source: crate::config::ModelSource, text: &str) -> String {
+    let text = text.replace('\'', "''");
+    if source == crate::config::ModelSource::MySql {
+        text.replace('\\', "\\\\")
+    } else {
+        text
+    }
+}
+
 /// Positions of a word outside string literals and at parenthesis depth 0 (case-insensitive, whole word).
 fn top_level_words(sql: &str, word: &str) -> Vec<usize> {
     let lower = sql.to_ascii_lowercase();
@@ -128,9 +141,10 @@ fn top_level_words(sql: &str, word: &str) -> Vec<usize> {
             match c {
                 b'(' => depth += 1,
                 b')' => depth -= 1,
-                _ if depth == 0 && lower[i..].starts_with(word) => {
-                    let before = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
-                    let after = bytes.get(i + word.len()).is_none_or(|b| !(b.is_ascii_alphanumeric() || *b == b'_'));
+                _ if depth == 0 && bytes[i..].starts_with(word.as_bytes()) => {
+                    // A byte of a letter outside ASCII (≥ 0x80) is part of a word: "żfrom" is not FROM.
+                    let before = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_' || bytes[i - 1] >= 0x80);
+                    let after = bytes.get(i + word.len()).is_none_or(|b| !(b.is_ascii_alphanumeric() || *b == b'_' || *b >= 0x80));
                     if before && after {
                         out.push(i);
                     }
@@ -155,7 +169,7 @@ fn replace_outside_literals(sql: &str, from: &str, to: &str) -> String {
         if c == b'\'' {
             quoted = !quoted;
         }
-        if !quoted && lower[i..].starts_with(&from_lower) {
+        if !quoted && lower.as_bytes()[i..].starts_with(from_lower.as_bytes()) {
             out.push_str(to);
             i += from.len();
             continue;
@@ -181,7 +195,7 @@ fn oracle_coalesce_empty(sql: &str) -> String {
             quoted = !quoted;
         }
         let word_start = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
-        if !quoted && word_start && lower[i..].starts_with("coalesce(") {
+        if !quoted && word_start && lower.as_bytes()[i..].starts_with(b"coalesce(") {
             let open = i + "coalesce".len();
             // The matching parenthesis and the top-level commas inside.
             let (mut depth, mut q2, mut j, mut commas, mut close) = (0i32, false, open, Vec::new(), None);
@@ -337,7 +351,15 @@ fn odbc_select(cfg: &AppConfig, sql: &str, limit: usize) -> Result<Selected> {
     let sql = sql.as_str();
     let mut out = Selected { columns: Vec::new(), rows: Vec::new(), truncated: false };
     let result = (|| -> Result<()> {
-        if let Some(mut cursor) = conn.execute(sql, ()).context(crate::i18n::tr("running the query"))? {
+        // A time limit, as for EA files (LC-342): a query must not hold the assistant (e.g. a waitfor or a huge join).
+        let mut statement = conn.preallocate().context(crate::i18n::tr("running the query"))?;
+        {
+            use odbc_api::handles::{AsStatementRef, Statement};
+            let handle = statement.as_stmt_ref().as_sys();
+            // SAFETY: a valid statement handle of this connection; QueryTimeout takes the seconds as the pointer value.
+            unsafe { let _ = odbc_api::sys::SQLSetStmtAttr(handle, odbc_api::sys::StatementAttribute::QueryTimeout, FILE_QUERY_LIMIT.as_secs() as usize as odbc_api::sys::Pointer, 0); };
+        }
+        if let Some(mut cursor) = statement.execute(sql, ()).context(crate::i18n::tr("running the query"))? {
             out.columns = cursor.column_names()?.collect::<std::result::Result<Vec<_>, _>>()?;
             let mut buffers = TextRowSet::for_cursor(500, &mut cursor, Some(65_536))?;
             let mut rows = cursor.bind_buffer(&mut buffers)?;
@@ -421,6 +443,14 @@ const FORBIDDEN_FUNCTIONS: &[&str] = &[
     // Dynamic SQL inside a SELECT (a blocked function called by name in a string).
     "query_to_xml", "cursor_to_xml", "table_to_xml", "schema_to_xml", "database_to_xml", "query_to_json", "pg_execute_server_program", "pg_signal_backend",
     "lo_from_bytea", "lo_put", "lo_create", "lo_unlink", "readfile", "writefile", "edit(", "fts3_tokenizer",
+    // SQL Server (LC-342): other servers, files, the shell, the registry and dynamic SQL.
+    "openrowset", "opendatasource", "openquery", "openxml", "xp_cmdshell", "xp_dirtree", "xp_fileexist", "xp_subdirs", "xp_regread",
+    "xp_regwrite", "xp_instance_reg", "sp_oa", "sp_execute", "sp_configure", "sp_addlogin", "sp_password", "fn_xe_file", "fn_get_audit_file",
+    "sys.fn_dblog",
+    // MySQL/MariaDB: files, waiting, locks and plugins.
+    "load_file", "sleep(", "benchmark(", "get_lock", "release_lock", "is_free_lock", "master_pos_wait", "source_pos_wait", "sys_exec", "sys_eval",
+    // Oracle: network, files, jobs and every DBMS_ package.
+    "utl_http", "utl_file", "utl_inaddr", "utl_smtp", "utl_tcp", "utl_mail", "httpuritype", "dbms_", "ctxsys.", "ordsys.",
 ];
 
 /// Words of statements that change data or the session: a query may not contain them outside strings and quoted names
@@ -430,6 +460,10 @@ const WRITE_WORDS: &[&str] = &[
     "prepare", "deallocate", "pragma", "attach", "detach", "vacuum", "reindex", "analyze", "cluster", "refresh", "lock", "listen", "notify",
     "unlisten", "load", "reset", "set", "begin", "commit", "rollback", "savepoint", "release", "into", "comment", "security", "import",
     "discard", "checkpoint", "returning",
+    // T-SQL needs no semicolons between statements, so "select 1 exec('…')" is two statements (LC-342); MySQL and
+    // Oracle statements of the same kind (REPLACE INTO is caught by INTO; replace() stays a function).
+    "exec", "waitfor", "declare", "dbcc", "kill", "shutdown", "backup", "restore", "bulk", "reconfigure", "use", "goto", "openrowset",
+    "rename", "flush", "purge", "handler", "install", "uninstall", "optimize", "repair",
 ];
 
 /// The first word of WRITE_WORDS in the query outside string literals, quoted names and comments; or a Unicode-escaped
@@ -438,10 +472,16 @@ pub(crate) fn write_word(sql: &str) -> Option<String> {
     let chars: Vec<char> = sql.chars().collect();
     let mut i = 0;
     let mut word = String::new();
-    let check = |word: &mut String| -> Option<String> {
+    // PostgreSQL's DO is a statement only as the first word; elsewhere "do" is a name or an alias (LC-464).
+    let mut first = true;
+    let mut check = |word: &mut String| -> Option<String> {
         let w = word.to_ascii_lowercase();
         word.clear();
-        WRITE_WORDS.contains(&w.as_str()).then_some(w)
+        if w.is_empty() {
+            return None;
+        }
+        let at_start = std::mem::replace(&mut first, false);
+        (WRITE_WORDS.contains(&w.as_str()) && (w != "do" || at_start)).then_some(w)
     };
     while i < chars.len() {
         let c = chars[i];
@@ -495,6 +535,9 @@ struct Selected {
     truncated: bool,
 }
 
+/// Set while EA waits for Compass's answer to a guard request: a file model is read from the disk then.
+pub static EA_WAITS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// Runs a read-only query on the model (database or file) and returns at most `limit` rows.
 fn select(cfg: &AppConfig, sql: &str, limit: usize) -> Result<Selected> {
     let mut out = Selected { columns: Vec::new(), rows: Vec::new(), truncated: false };
@@ -504,8 +547,9 @@ fn select(cfg: &AppConfig, sql: &str, limit: usize) -> Result<Selected> {
         return Ok(Selected { columns, rows, truncated });
     }
     // An EA file open in an EA window: EA writes it to disk only when it closes the file, so the current model is
-    // read through that window (the file on disk may not have the latest changes yet).
-    if cfg.uses_file() && crate::ea_ui::file_open_in_window(cfg) {
+    // read through that window (the file on disk may not have the latest changes yet). Not while that EA waits for
+    // a guard's answer: its queries then come back empty (round 10: an empty snapshot before a deletion, LC-382).
+    if cfg.uses_file() && !EA_WAITS.load(std::sync::atomic::Ordering::SeqCst) && crate::ea_ui::file_open_in_window(cfg) {
         let (columns, rows, truncated) = crate::ea_ui::sql_query(sql, limit)?;
         return Ok(Selected { columns, rows, truncated });
     }
@@ -570,8 +614,9 @@ pub fn query_rows(cfg: &AppConfig, sql: &str) -> Result<Vec<Vec<String>>> {
     Ok(selected.rows.into_iter().map(|row| row.into_iter().map(Option::unwrap_or_default).collect()).collect())
 }
 
-pub fn db_query(sql: &str, cfg: &AppConfig) -> Result<String> {
-    let s = sql.trim().trim_end_matches(';').trim();
+/// Refuses a query that is not a plain read of the model: only SELECT/WITH, one statement, no server functions,
+/// no quoting the checks could read differently from the database, no statement words outside strings.
+fn check_read_only(s: &str) -> Result<()> {
     let lower = s.to_ascii_lowercase();
     if !(lower.starts_with("select") || lower.starts_with("with")) {
         bail!("{}", crate::i18n::tr("only SELECT or WITH queries are allowed"));
@@ -580,7 +625,7 @@ pub fn db_query(sql: &str, cfg: &AppConfig) -> Result<String> {
         bail!("{}", crate::i18n::tr("one query at a time (no semicolons inside)"));
     }
     if let Some(f) = FORBIDDEN_FUNCTIONS.iter().find(|f| lower.contains(*f)) {
-        bail!("{}", crate::i18n::fmt("the query uses a server function that is not allowed ({0}); only reading the model is allowed", &[f.trim_end_matches('_').to_string()]));
+        bail!("{}", crate::i18n::fmt("the query uses a server function that is not allowed ({0}); only reading the model is allowed", &[f.trim_end_matches(['_', '(']).to_string()]));
     }
     // Quoting the check could read differently from the database (dollar quotes, backslash escapes, comments,
     // [..] and `..` names) is not needed for reading the model: refused.
@@ -590,12 +635,19 @@ pub fn db_query(sql: &str, cfg: &AppConfig) -> Result<String> {
     if let Some(word) = write_word(s) {
         bail!("{}", crate::i18n::fmt("the query contains {0}: only reading the model is allowed (a SELECT without INSERT, UPDATE, DELETE, INTO…)", &[word.to_uppercase()]));
     }
+    Ok(())
+}
 
+pub fn db_query(sql: &str, cfg: &AppConfig) -> Result<String> {
+    let s = sql.trim().trim_end_matches(';').trim();
+    check_read_only(s)?;
     let selected = select(cfg, s, MAX_ROWS)?;
     if selected.rows.is_empty() {
         return Ok("(no rows)".into());
     }
-    let mut out = selected.columns.join(" | ");
+    // A column without a name (SQL Server's count(*)) gets one: an empty header line was not counted as the header and
+    // the step showed "rows: 0" (LC-471).
+    let mut out = selected.columns.iter().enumerate().map(|(i, c)| if c.trim().is_empty() { format!("column{}", i + 1) } else { c.clone() }).collect::<Vec<_>>().join(" | ");
     out.push('\n');
     for row in &selected.rows {
         let cols: Vec<&str> = row.iter().map(|v| v.as_deref().unwrap_or("NULL")).collect();
@@ -944,3 +996,109 @@ mod odbc_tests {
     }
 }
 
+
+/// LC-340: SQL with letters outside ASCII (aliases, CTE names, values) – no panic on any engine.
+#[cfg(test)]
+mod non_ascii_tests {
+    use crate::config::ModelSource;
+
+    #[test]
+    fn portable_sql_with_polish_and_turkish_letters() {
+        let sql = "with dane_źródłowe as (select count(*) as liczba_elementów from t_object where name ilike 'İstanbul%') \
+                   select coalesce(liczba_elementów, '') as łączna_żółć from dane_źródłowe limit 5";
+        for source in [ModelSource::Postgres, ModelSource::File, ModelSource::SqlServer, ModelSource::MySql, ModelSource::Oracle] {
+            let out = super::portable_sql(source, sql);
+            assert!(out.contains("liczba_elementów") && out.contains("łączna_żółć"), "{source:?}: {out}");
+        }
+        let sql = "select ó as żfrom, 1 as fromą from t";
+        assert_eq!(super::top_level_words(sql, "from"), vec![sql.find(" from t").unwrap() + 1]);
+        assert_eq!(super::replace_outside_literals("a żółć ilike 'b'", " ilike ", " like "), "a żółć like 'b'");
+    }
+}
+
+/// LC-342: statements and server functions of SQL Server, MySQL/MariaDB and Oracle are refused like PostgreSQL ones.
+#[cfg(test)]
+mod read_only_tests {
+    #[test]
+    fn statements_and_functions_of_every_engine_are_refused() {
+        for sql in [
+            "select 1 exec('delete from t_object commit')",
+            "select 1 EXEC sp_executesql N'x'",
+            "select name from t_object waitfor delay '0:0:30'",
+            "select 1 declare @x int",
+            "select * from openrowset('SQLNCLI', 'x', 'select 1')",
+            "select load_file('c:/windows/win.ini')",
+            "select sleep(30)",
+            "select benchmark(100000000, md5('x'))",
+            "select utl_http.request('http://x') from dual",
+            "select dbms_pipe.receive_message('x', 10) from dual",
+            "select 1 from t_object where 1=1 shutdown",
+        ] {
+            assert!(super::check_read_only(sql).is_err(), "{sql}");
+        }
+        // LC-464: "do" as an alias is no DO statement; the message names the function without its bracket.
+        assert!(super::check_read_only("select o.name from t_object do where do.object_id = 1").is_ok());
+        assert!(super::check_read_only("do $$ begin end $$").is_err());
+        assert!(!format!("{:#}", super::check_read_only("select sleep(3)").unwrap_err()).contains("sleep("));
+    }
+
+    /// The time limit of ODBC queries on a real SQL Server (Windows sign-in):
+    /// `LOONAR_TEST_MSSQL_WIN="127.0.0.1;1433;ea_lab" cargo test odbc_query_time_limit -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a SQL Server with an EA repository"]
+    fn odbc_query_time_limit() {
+        let spec = std::env::var("LOONAR_TEST_MSSQL_WIN").unwrap();
+        let parts: Vec<&str> = spec.split(';').collect();
+        let props = std::env::temp_dir().join(format!("loonar-mssql-win-{}.properties", std::process::id()));
+        std::fs::write(&props, format!("model.source=sqlserver
+db.host={}
+db.port={}
+db.name={}
+db.user=
+", parts[0], parts[1], parts[2])).unwrap();
+        let cfg = crate::config::AppConfig::load(&props).unwrap();
+        println!("objects: {:?}", super::query_rows(&cfg, "select count(*) from t_object").unwrap());
+        let started = std::time::Instant::now();
+        let result = super::query_rows(&cfg, "waitfor delay '00:01:30'");
+        let took = started.elapsed().as_secs();
+        println!("waitfor: {took} s, {:?}", result.as_ref().err().map(|e| format!("{e:#}")));
+        assert!(result.is_err() && (55..85).contains(&took), "{took} s");
+    }
+
+    #[test]
+    fn ordinary_reads_pass() {
+        for sql in [
+            "select o.name, o.stereotype from t_object o where o.note like '%exec%' and o.name <> 'waitfor'",
+            "with d as (select object_id from t_object) select count(*) from d",
+            "select o.name from t_object o where o.object_type = 'Class' order by o.name",
+            "select count(*) as liczba_elementów from t_object",
+        ] {
+            assert!(super::check_read_only(sql).is_ok(), "{sql}: {:?}", super::check_read_only(sql));
+        }
+    }
+}
+
+/// LC-343: a backslash cannot end a string literal on MySQL/MariaDB.
+#[cfg(test)]
+mod literal_tests {
+    use crate::config::ModelSource;
+
+    #[test]
+    fn sql_text_doubles_backslashes_on_mysql_only() {
+        let attack = r"x\' union select password from t_secuser -- ";
+        let mysql = super::sql_text(ModelSource::MySql, attack);
+        assert_eq!(mysql, r"x\\'' union select password from t_secuser -- ");
+        // Inside '…' on MySQL with backslash escapes: \\ is one backslash, '' one apostrophe – the literal does not end.
+        let (mut i, chars): (usize, Vec<char>) = (0, mysql.chars().collect());
+        while i < chars.len() {
+            match chars[i] {
+                '\\' => i += 2,
+                '\'' if chars.get(i + 1) == Some(&'\'') => i += 2,
+                '\'' => panic!("the literal ends at {i}: {mysql}"),
+                _ => i += 1,
+            }
+        }
+        assert_eq!(super::sql_text(ModelSource::Postgres, attack), r"x\'' union select password from t_secuser -- ");
+        assert_eq!(super::sql_text(ModelSource::SqlServer, r"a\b"), r"a\b");
+    }
+}

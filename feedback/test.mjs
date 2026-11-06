@@ -81,13 +81,14 @@ const issue = calls.find((c) => c.url.endsWith("/repos/loonar-eu/loonar-compass/
 assert.equal(issue.body.title, "[0.9.0] Wrong answer of the assistant");
 assert.deepEqual(issue.body.labels, ["bug", "from-app"]);
 assert.ok(!issue.body.body.includes("ACME-Billing"), "the reported answer is not public");
+assert.ok(!issue.body.body.includes(install), "the installation ID is not public (LC-361 T2)");
 assert.ok(!issue.body.body.includes("@someone"), "mentions are broken");
 assert.ok(issue.body.body.includes("1 screenshot(s) and the reported answer"));
 const privateFiles = calls.filter((c) => c.method === "PUT").map((c) => c.url);
 assert.equal(privateFiles.length, 2);
 assert.ok(privateFiles.every((u) => u.includes("/repos/loonar-eu/compass-private/contents/reports/") && u.includes("/issue-42-")));
 const privateText = Buffer.from(calls.find((c) => c.url.endsWith("report.md")).body.content, "base64").toString();
-assert.ok(privateText.includes("ACME-Billing") && privateText.includes("issues/42"));
+assert.ok(privateText.includes("ACME-Billing") && privateText.includes("issues/42") && privateText.includes(install));
 
 // 4. Reports that are not allowed.
 calls.length = 0;

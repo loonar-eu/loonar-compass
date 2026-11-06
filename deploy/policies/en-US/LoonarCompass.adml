@@ -8,6 +8,7 @@
       <string id="Compass">Loonar Compass</string>
       <string id="SUPPORTED_Compass09">Loonar Compass 0.9 or later</string>
       <string id="SUPPORTED_Compass091">Loonar Compass 0.9.1 or later</string>
+      <string id="SUPPORTED_Compass093">Loonar Compass 0.9.3 or later</string>
       <string id="HubUrl">Team hub address</string>
       <string id="HubUrl_Help">The address of the team hub (Compass Hub), for example https://compass-hub.example.com. Compass uses it instead of the address in its settings, and the field in the settings is locked. The hub's team policy (model check rules, minimum approval mode, web access, event agents) then applies to everyone. Users sign in with their company account in Settings → Team (Compass Hub).</string>
       <string id="RequireHub">Require the team hub</string>
@@ -25,6 +26,8 @@
       <string id="MinApproval_Auto">auto – no approval</string>
       <string id="AllowedProviders">Allowed AI providers</string>
       <string id="AllowedProviders_Help">The AI providers Compass may use, separated by commas: anthropic, openai. Another provider in the settings is refused with a message.</string>
+      <string id="Dictation">Speaking instead of typing</string>
+      <string id="Dictation_Help">Disabled: the microphone button of the message field is hidden, so nobody dictates messages. Enabled or not configured: users may dictate; the speech is recognised on the computer by a Whisper model and the recording never leaves it. The speech model is downloaded once from Hugging Face after the user agrees, unless web access is switched off (WebAccess); then place ggml-small-q5_1.bin or ggml-base-q5_1.bin in %ProgramData%\Loonar Compass\speech.</string>
     </stringTable>
     <presentationTable>
       <presentation id="HubUrl"><textBox refId="HubUrl"><label>Address of the hub:</label></textBox></presentation>

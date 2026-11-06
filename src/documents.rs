@@ -79,7 +79,12 @@ fn pptx(bytes: &[u8]) -> Result<String> {
     for (n, slide) in slides.iter().enumerate() {
         let xml = part(&mut archive, slide).unwrap_or_default();
         out.push(format!("--- Slide {} ---", n + 1));
-        out.extend(paragraphs(&xml));
+        let text = paragraphs(&xml);
+        // A slide of pictures only (LC-484): said, so the assistant looks at it with slide_images.
+        if text.is_empty() {
+            out.push("(no text on this slide: pictures or shapes only – slide_images shows it)".to_string());
+        }
+        out.extend(text);
         let number = slide.trim_start_matches("ppt/slides/slide").trim_end_matches(".xml");
         if let Some(notes) = part(&mut archive, &format!("ppt/notesSlides/notesSlide{number}.xml")) {
             let lines: Vec<String> = paragraphs(&notes).into_iter().filter(|l| l.trim() != number).collect();
@@ -89,6 +94,52 @@ fn pptx(bytes: &[u8]) -> Result<String> {
         }
     }
     Ok(out.join("\n"))
+}
+
+/// The pictures embedded in slide `n` (numbered from 1 as in the text of the PPTX): (file name, bytes); PNG, JPEG and
+/// GIF only (LC-484: the look of a slide when PowerPoint cannot draw it).
+pub fn slide_pictures(bytes: &[u8], n: usize) -> Result<Vec<(String, Vec<u8>)>> {
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).context("the PPTX is not a valid ZIP")?;
+    let slides = names(&archive, "ppt/slides/slide");
+    let slide = slides.get(n.wrapping_sub(1)).with_context(|| format!("the presentation has {} slides", slides.len()))?;
+    let file = slide.rsplit('/').next().unwrap_or("");
+    let rels = part(&mut archive, &format!("ppt/slides/_rels/{file}.rels")).unwrap_or_default();
+    let mut out = Vec::new();
+    for rel in rels.split("<Relationship ").skip(1) {
+        let rel = format!(" {rel}");
+        let Some(target) = attr(&rel, "Target") else { continue };
+        if !attr(&rel, "Type").is_some_and(|t| t.ends_with("/image")) {
+            continue;
+        }
+        let name = target.rsplit('/').next().unwrap_or("").to_string();
+        let lower = name.to_lowercase();
+        if !(lower.ends_with(".png") || lower.ends_with(".jpg") || lower.ends_with(".jpeg") || lower.ends_with(".gif")) {
+            continue;
+        }
+        let Ok(mut entry) = archive.by_name(&format!("ppt/media/{name}")) else { continue };
+        let mut data = Vec::new();
+        if entry.read_to_end(&mut data).is_ok() && !out.iter().any(|(n, _): &(String, Vec<u8>)| *n == name) {
+            out.push((name, data));
+        }
+    }
+    Ok(out)
+}
+
+pub fn slides_definition() -> Value {
+    json!({
+        "name": "slide_images",
+        "description": "Shows slides of a PowerPoint presentation as pictures, for when their look matters or a slide has no text \
+(the text of a .pptx – read_document or an attachment – has no layout, colours, charts or pictures). With PowerPoint on this computer \
+each slide is drawn as it looks; without it, the pictures embedded in the slide are given. At most 6 slides at a time: ask for the ones you need.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file": { "type": "string", "description": "The attachment's name, or the full path of the .pptx." },
+                "slides": { "type": "array", "items": { "type": "integer" }, "description": "Slide numbers (from 1, as in the text of the presentation), at most 6." }
+            },
+            "required": ["file", "slides"]
+        }
+    })
 }
 
 fn vsdx(bytes: &[u8]) -> Result<String> {
@@ -194,7 +245,7 @@ fn xlsx(bytes: &[u8]) -> Result<String> {
 }
 
 fn pdf(bytes: &[u8]) -> Result<String> {
-    // The PDF library can panic on damaged files: the reading is isolated.
+    // The PDF library can panic on damaged files: the reading is isolated (works with panic = "unwind", LC-340).
     let owned = bytes.to_vec();
     let result = std::panic::catch_unwind(move || pdf_extract::extract_text_from_mem(&owned));
     match result {
@@ -203,6 +254,31 @@ fn pdf(bytes: &[u8]) -> Result<String> {
         Ok(Err(e)) => bail!("{}", crate::i18n::fmt("the PDF cannot be read: {0}", &[e.to_string()])),
         Err(_) => bail!("{}", crate::i18n::tr("the PDF cannot be read (damaged or unsupported)")),
     }
+}
+
+/// Why a PDF cannot be opened at all, or `None` when it can (a scan without a text layer can). The model's API refuses a
+/// damaged PDF and the attachment goes with every turn, so one such file stopped the whole conversation (LC-437).
+/// The answer is kept per file content, as the attachments are sent again with every turn.
+pub fn pdf_unreadable(bytes: &[u8]) -> Option<String> {
+    use std::hash::{Hash, Hasher};
+    static SEEN: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<u64, Option<String>>>> = std::sync::OnceLock::new();
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    bytes.hash(&mut hasher);
+    let key = hasher.finish();
+    let seen = SEEN.get_or_init(Default::default);
+    if let Some(known) = seen.lock().ok().and_then(|s| s.get(&key).cloned()) {
+        return known;
+    }
+    let owned = bytes.to_vec();
+    let reason = match std::panic::catch_unwind(move || pdf_extract::extract_text_from_mem(&owned)) {
+        Ok(Ok(_)) => None,
+        Ok(Err(e)) => Some(e.to_string()),
+        Err(_) => Some("damaged or unsupported".to_string()),
+    };
+    if let Ok(mut s) = seen.lock() {
+        s.insert(key, reason.clone());
+    }
+    reason
 }
 
 /// The text of a document by its extension.
@@ -280,6 +356,20 @@ mod tests {
         let text = text_of("deck.pptx", &p).unwrap();
         assert!(text.contains("Customer pays & waits") && text.contains("Notes: Say it slowly"), "{text}");
         assert!(text.find("Second").unwrap() < text.find("Last").unwrap(), "slides in number order");
+
+        // LC-484: a slide of pictures only is marked, and its pictures can be taken out of the file.
+        let pictures = office(&[
+            ("ppt/slides/slide1.xml", r#"<p:sld><a:p><a:r><a:t>Title</a:t></a:r></a:p></p:sld>"#),
+            ("ppt/slides/slide2.xml", r#"<p:sld><p:pic/></p:sld>"#),
+            ("ppt/slides/_rels/slide2.xml.rels", r#"<Relationships><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/></Relationships>"#),
+            ("ppt/media/image1.png", "png-bytes"),
+        ]);
+        let text = text_of("pics.pptx", &pictures).unwrap();
+        assert!(text.contains("--- Slide 2 ---\n(no text on this slide"), "{text}");
+        let found = slide_pictures(&pictures, 2).unwrap();
+        assert_eq!(found, vec![("image1.png".to_string(), b"png-bytes".to_vec())]);
+        assert!(slide_pictures(&pictures, 1).unwrap().is_empty());
+        assert!(slide_pictures(&pictures, 3).is_err());
 
         let v = office(&[
             ("visio/pages/pages.xml", r#"<Pages><Page ID="0" NameU="Process" Name="Proces"/></Pages>"#),

@@ -99,7 +99,7 @@ fn model_config(o: &Options, default_props: &Path) -> Result<AppConfig> {
 fn packages(cfg: &AppConfig, given: Option<&str>) -> Result<Vec<(i64, String)>> {
     let rows = match given.map(str::trim).filter(|g| !g.is_empty()) {
         Some(g) if g.chars().all(|c| c.is_ascii_digit()) => crate::tools::query_rows(cfg, &format!("select package_id as c0, name as c1 from t_package where package_id = {g}"))?,
-        Some(g) => crate::tools::query_rows(cfg, &format!("select package_id as c0, name as c1 from t_package where name = '{}' order by package_id", g.replace('\'', "''")))?,
+        Some(g) => crate::tools::query_rows(cfg, &format!("select package_id as c0, name as c1 from t_package where name = '{}' order by package_id", crate::model_db::sql_text(cfg.model_source, g)))?,
         None => crate::tools::query_rows(cfg, "select package_id as c0, name as c1 from t_package where parent_id = 0 order by package_id")?,
     };
     if rows.is_empty() {
@@ -148,7 +148,8 @@ fn junit(items: &[Item], fail_on: u8, suites: &[&str]) -> String {
 pub fn check(o: &Options, default_props: &Path) -> Result<(String, String, bool)> {
     let cfg = model_config(o, default_props)?;
     let rules: Value = match &o.rules {
-        Some(p) => serde_json::from_str(&std::fs::read_to_string(p).with_context(|| format!("cannot read {}", p.display()))?).with_context(|| format!("{} is not valid JSON", p.display()))?,
+        // A BOM (Set-Content -Encoding UTF8 in Windows PowerShell writes one) is not part of the JSON (LC-430).
+        Some(p) => serde_json::from_str(std::fs::read_to_string(p).with_context(|| format!("cannot read {}", p.display()))?.trim_start_matches('\u{feff}')).with_context(|| format!("{} is not valid JSON", p.display()))?,
         None => crate::governance::load_rules(&cfg, &Value::Null),
     };
     let mut items: Vec<Item> = Vec::new();
@@ -221,7 +222,12 @@ pub fn check(o: &Options, default_props: &Path) -> Result<(String, String, bool)
     if let Some(doc) = &o.requirements {
         let text = crate::traceability::read_document(doc)?;
         let reqs = crate::traceability::extract(&text);
-        let t = crate::traceability::trace_data(&cfg, &reqs, None)?;
+        // With --package only that package (and its children) is matched, candidates included (LC-432).
+        let package = match o.package.as_deref() {
+            Some(given) => packages(&cfg, Some(given))?.first().map(|p| p.0),
+            None => None,
+        };
+        let t = crate::traceability::trace_data(&cfg, &reqs, package)?;
         let chain = match &o.code {
             Some(code) => Some(crate::traceability::chain(&t, &reqs, code)?),
             None => None,

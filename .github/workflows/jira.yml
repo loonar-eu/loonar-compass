@@ -15,17 +15,14 @@ on:
 permissions:
   contents: read
 
-env:
-  JIRA_CLIENT_ID: ${{ secrets.JIRA_CLIENT_ID }}
-  JIRA_CLIENT_SECRET: ${{ secrets.JIRA_CLIENT_SECRET }}
-  JIRA_CLOUD_ID: ${{ vars.JIRA_CLOUD_ID }}
-
+# The Jira credentials are given only to the steps that talk to Jira, not to "cargo test" (a build script of a
+# dependency could read them there) (LC-361).
 jobs:
   tests:
     if: github.event_name != 'release'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -36,15 +33,23 @@ jobs:
       - name: Send test results to Jira
         if: always()
         shell: bash
+        env:
+          JIRA_CLIENT_ID: ${{ secrets.JIRA_CLIENT_ID }}
+          JIRA_CLIENT_SECRET: ${{ secrets.JIRA_CLIENT_SECRET }}
+          JIRA_CLOUD_ID: ${{ vars.JIRA_CLOUD_ID }}
         run: python .github/jira/jira_sync.py build ${{ steps.tests.outcome == 'success' && 'successful' || 'failed' }} test.log
 
   release:
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
           persist-credentials: false
       - name: Send the release to Jira
+        env:
+          JIRA_CLIENT_ID: ${{ secrets.JIRA_CLIENT_ID }}
+          JIRA_CLIENT_SECRET: ${{ secrets.JIRA_CLIENT_SECRET }}
+          JIRA_CLOUD_ID: ${{ vars.JIRA_CLOUD_ID }}
         run: python3 .github/jira/jira_sync.py release

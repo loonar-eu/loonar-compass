@@ -8,6 +8,7 @@
       <string id="Compass">Loonar Compass</string>
       <string id="SUPPORTED_Compass09">Loonar Compass 0.9 lub nowszy</string>
       <string id="SUPPORTED_Compass091">Loonar Compass 0.9.1 lub nowszy</string>
+      <string id="SUPPORTED_Compass093">Loonar Compass 0.9.3 lub nowszy</string>
       <string id="HubUrl">Adres huba zespołu</string>
       <string id="HubUrl_Help">Adres huba zespołu (Compass Hub), na przykład https://compass-hub.example.com. Compass używa go zamiast adresu z ustawień, a pole w ustawieniach jest zablokowane. Polityka zespołu z huba (reguły kontroli modelu, minimalny tryb zatwierdzania, dostęp do internetu, agenci zdarzeń) obowiązuje wtedy wszystkich. Użytkownicy logują się kontem firmowym w Ustawienia → Zespół (Compass Hub).</string>
       <string id="RequireHub">Wymagaj huba zespołu</string>
@@ -25,6 +26,8 @@
       <string id="MinApproval_Auto">auto – bez zatwierdzania</string>
       <string id="AllowedProviders">Dozwoleni dostawcy AI</string>
       <string id="AllowedProviders_Help">Dostawcy AI, z których Compass może korzystać, rozdzieleni przecinkami: anthropic, openai. Inny dostawca w ustawieniach jest odrzucany z komunikatem.</string>
+      <string id="Dictation">Mówienie zamiast pisania</string>
+      <string id="Dictation_Help">Wyłączone: przycisk mikrofonu w polu wiadomości jest ukryty, więc nikt nie dyktuje wiadomości. Włączone albo nieskonfigurowane: użytkownicy mogą dyktować; mowę rozpoznaje na komputerze model Whisper, a nagranie nie opuszcza komputera. Model mowy jest pobierany raz z Hugging Face po zgodzie użytkownika, chyba że dostęp do sieci jest wyłączony (WebAccess); wtedy umieść ggml-small-q5_1.bin albo ggml-base-q5_1.bin w %ProgramData%\Loonar Compass\speech.</string>
     </stringTable>
     <presentationTable>
       <presentation id="HubUrl"><textBox refId="HubUrl"><label>Adres huba:</label></textBox></presentation>

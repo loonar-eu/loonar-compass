@@ -48,6 +48,44 @@ pub struct Agent {
     pub prompt: String,
     /// "advise" or "guard" (a guard can stop a deletion).
     pub mode: String,
+    /// For the event "scheduled" (LC-428): "hourly", "every 4h", "every 30m", "daily 07:30" or "weekly mon 08:00".
+    pub schedule: String,
+}
+
+/// Whether a scheduled agent is due now, given when it last ran (LC-428).
+pub fn due(schedule: &str, last: Option<chrono::NaiveDateTime>, now: chrono::NaiveDateTime) -> bool {
+    use chrono::{Datelike, Duration, NaiveTime};
+    let words: Vec<String> = schedule.split_whitespace().map(|w| w.to_lowercase()).collect();
+    let every = |d: Duration| last.is_none_or(|l| now - l >= d);
+    let at = |t: &str| NaiveTime::parse_from_str(t, "%H:%M").ok();
+    match words.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
+        ["hourly"] => every(Duration::hours(1)),
+        ["every", n] => {
+            let (num, unit) = n.split_at(n.len().saturating_sub(1));
+            match (num.parse::<i64>(), unit) {
+                (Ok(k), "h") if k > 0 => every(Duration::hours(k)),
+                (Ok(k), "m") if k >= 5 => every(Duration::minutes(k)),
+                _ => false,
+            }
+        }
+        ["daily", t] => at(t).is_some_and(|t| {
+            let today = now.date().and_time(t);
+            now >= today && last.is_none_or(|l| l < today)
+        }),
+        ["weekly", day, t] => at(t).is_some_and(|t| {
+            let wanted = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"].iter().position(|d| day.starts_with(d));
+            let Some(wanted) = wanted else { return false };
+            let back = (now.weekday().num_days_from_monday() as i64 - wanted as i64).rem_euclid(7);
+            let slot = (now.date() - Duration::days(back)).and_time(t);
+            now >= slot && last.is_none_or(|l| l < slot)
+        }),
+        _ => false,
+    }
+}
+
+fn valid_schedule(schedule: &str) -> bool {
+    let probe = chrono::NaiveDate::from_ymd_opt(2026, 1, 5).and_then(|d| d.and_hms_opt(23, 59, 0)).unwrap_or_default();
+    due(schedule, None, probe)
 }
 
 impl Agent {
@@ -71,7 +109,11 @@ pub fn parse(text: &str) -> Result<Vec<Agent>> {
             continue;
         }
         let event = a["event"].as_str().unwrap_or("").trim().to_string();
-        if !EVENTS.contains(&event.as_str()) {
+        let schedule = a["schedule"].as_str().unwrap_or("").trim().to_string();
+        if event == "scheduled" && !valid_schedule(&schedule) {
+            bail!("{}", crate::i18n::fmt("event agent {0}: schedule must be hourly, every 4h, every 30m, daily 07:30 or weekly mon 08:00", &[a["name"].as_str().unwrap_or("?").to_string()]));
+        }
+        if event != "scheduled" && !EVENTS.contains(&event.as_str()) {
             bail!("{}", crate::i18n::fmt("event agent {0}: event must be one of {1}", &[a["name"].as_str().unwrap_or("?").to_string(), EVENTS.join(", ")]));
         }
         let prompt = a["prompt"].as_str().unwrap_or("").trim().to_string();
@@ -85,9 +127,46 @@ pub fn parse(text: &str) -> Result<Vec<Agent>> {
         if mode == "guard" && !event.ends_with("_deleting") {
             bail!("{}", crate::i18n::fmt("event agent {0}: only the *_deleting events can be guarded (EA asks before deleting; other events are reported after they happen)", &[a["name"].as_str().unwrap_or("?").to_string()]));
         }
-        out.push(Agent { name: a["name"].as_str().unwrap_or("agent").to_string(), event, applies_to: a["applies_to"].as_str().unwrap_or("*").to_string(), prompt, mode });
+        if mode == "guard" && event == "scheduled" {
+            bail!("{}", crate::i18n::fmt("event agent {0}: a scheduled agent advises, it cannot guard", &[a["name"].as_str().unwrap_or("?").to_string()]));
+        }
+        out.push(Agent { name: a["name"].as_str().unwrap_or("agent").to_string(), event, applies_to: a["applies_to"].as_str().unwrap_or("*").to_string(), prompt, mode, schedule });
     }
     Ok(out)
+}
+
+/// An agent in plain words, for a preview before it is saved (LC-406).
+pub fn in_words(a: &Agent) -> String {
+    let when = if a.event == "scheduled" { format!("on the schedule \"{}\"", a.schedule) } else { format!("when {}", a.event.replace('_', " ")) };
+    let what = match a.applies_to.trim() {
+        "" | "*" => "any object".to_string(),
+        t => format!("objects matching \"{t}\""),
+    };
+    let how = if a.is_guard() { "decides whether to stop it (a BLOCK cancels the deletion in EA)" } else { "advises in the Loonar Compass tab of System Output" };
+    format!("{when}, for {what}, the assistant {how}: \"{}\"", a.prompt)
+}
+
+/// Each agent of a team list checked on its own (LC-406): (name, the problem or none, the agent in plain words); also
+/// names used twice.
+pub fn check_each(list: &[Value]) -> Vec<(String, Option<String>, String)> {
+    let mut seen = std::collections::HashSet::new();
+    list.iter()
+        .map(|a| {
+            let name = a["name"].as_str().unwrap_or("").trim().to_string();
+            if name.is_empty() {
+                return (name, Some(crate::i18n::tr("give the agent a name").to_string()), String::new());
+            }
+            if !seen.insert(name.to_lowercase()) {
+                return (name.clone(), Some(crate::i18n::fmt("the name {0} is used twice", &[name])), String::new());
+            }
+            let mut one = a.clone();
+            one["enabled"] = Value::Bool(true);
+            match parse(&serde_json::json!({ "agents": [one] }).to_string()) {
+                Ok(parsed) => (name, None, parsed.first().map(in_words).unwrap_or_default()),
+                Err(e) => (name, Some(e.to_string()), String::new()),
+            }
+        })
+        .collect()
 }
 
 pub fn load(base_dir: &Path) -> Vec<Agent> {
@@ -140,7 +219,7 @@ pub fn describe(cfg: &crate::config::AppConfig, kind: &str, id: i64) -> Option<(
         },
     };
     match kind {
-        "package" => q(format!("select coalesce(p.name,'') as c0, coalesce(o.stereotype,'') as c1, coalesce(parent.name,'') as c2 from t_package p left join t_object o on o.pdata1 = cast(p.package_id as varchar(20)) and o.object_type = 'Package' left join t_package parent on parent.package_id = p.parent_id where p.package_id = {id}"))
+        "package" => q(format!("select coalesce(p.name,'') as c0, coalesce(o.stereotype,'') as c1, coalesce(parent.name,'') as c2 from t_package p left join t_object o on o.object_type = 'Package' and (o.ea_guid = p.ea_guid or o.pdata1 = cast(p.package_id as varchar(20))) left join t_package parent on parent.package_id = p.parent_id where p.package_id = {id}"))
             .map(|r| (format!("package \"{}\" (package_id {id}) in package \"{}\"", r[0], r[2]), "Package".to_string(), r[1].clone())),
         "attribute" => q(format!("select coalesce(a.name,'') as c0, coalesce(a.type,'') as c1, coalesce(o.name,'') as c2, o.object_type as c3, coalesce(a.stereotype,'') as c4 from t_attribute a join t_object o on o.object_id = a.object_id where a.id = {id}"))
             .map(|r| (format!("attribute \"{}\" : {} (attribute id {id}) of {} \"{}\"", r[0], r[1], r[3], r[2]), "Attribute".to_string(), r[4].clone())),
@@ -173,6 +252,11 @@ pub fn guards<'a>(agents: &'a [Agent], event: &str, object_type: &str, stereotyp
     matching(agents, event, object_type, stereotype).into_iter().filter(|a| a.is_guard()).collect()
 }
 
+/// Whether any guard watches this deleting event (whatever the object's type).
+pub fn guards_event(agents: &[Agent], event: &str) -> bool {
+    agents.iter().any(|a| a.is_guard() && a.event == event)
+}
+
 /// The message a guard gets: a decision, ALLOW or BLOCK on the first line.
 pub fn guard_prompt(agent: &Agent, event: &str, object: &str) -> String {
     let object: String = object.chars().filter(|c| !c.is_control()).take(400).collect::<String>().replace('<', "‹").replace('>', "›");
@@ -197,9 +281,10 @@ pub fn guard_decision(answer: &str) -> Option<String> {
     Some(reason.unwrap_or_else(|| crate::i18n::tr("blocked by a guard of the model").to_string()))
 }
 
-/// The guard requests EA has made (Compass in a tab of EA): files `loonar-ea-guard-<name>-<n>.req` with "event:id".
+/// The guard requests EA has made (Compass in a tab of EA): files `loonar-ea-guard-<name>-<n>.req` with "event:id", or
+/// for a creation (LC-391) "event:package_id<TAB>type<TAB>stereotype" ending with a line break (complete only then).
 /// The answer goes to the same name with `.res`: "allow" or "block\n<reason>".
-pub fn guard_requests(rot_name: &str) -> Vec<(PathBuf, String, i64)> {
+pub fn guard_requests(rot_name: &str) -> Vec<(PathBuf, String, i64, Vec<String>)> {
     let prefix = format!("loonar-ea-guard-{rot_name}-");
     let mut out = Vec::new();
     for entry in std::fs::read_dir(std::env::temp_dir()).into_iter().flatten().flatten() {
@@ -209,10 +294,16 @@ pub fn guard_requests(rot_name: &str) -> Vec<(PathBuf, String, i64)> {
         }
         let path = entry.path();
         let Ok(text) = std::fs::read_to_string(&path) else { continue };
-        let _ = std::fs::remove_file(&path);
-        if let Some((event, id)) = text.trim().split_once(':') {
-            if let Ok(id) = id.trim().parse() {
-                out.push((path, event.trim().to_string(), id));
+        // A request the add-in is still writing does not parse yet: it stays for the next round (LC-345).
+        if let Some((event, rest)) = text.trim_start().split_once(':') {
+            // Both kinds end with a line break once complete (a deletion carries the object's description, LC-345).
+            if !rest.ends_with('\n') {
+                continue;
+            }
+            let mut parts = rest.trim_end_matches(['\r', '\n']).split('\t');
+            if let Ok(id) = parts.next().unwrap_or("").trim().parse() {
+                let _ = std::fs::remove_file(&path);
+                out.push((path, event.trim().to_string(), id, parts.map(|p| p.trim().to_string()).collect()));
             }
         }
     }
@@ -232,15 +323,19 @@ pub fn answer_guard(request: &Path, block: Option<&str>) {
 }
 
 /// The events EA has to ask about (they have guards): written for the add-in, so that it waits only when needed.
-pub fn publish_guarded_events(rot_name: &str, agents: &[Agent]) {
+pub fn publish_guarded_events(rot_name: &str, agents: &[Agent], extra: &[&str]) {
     let mut events: Vec<&str> = agents.iter().filter(|a| a.is_guard()).map(|a| a.event.as_str()).collect();
+    events.extend_from_slice(extra);
     events.sort();
     events.dedup();
     let file = std::env::temp_dir().join(format!("loonar-ea-guards-{rot_name}.txt"));
     if events.is_empty() {
         let _ = std::fs::remove_file(file);
     } else {
-        let _ = std::fs::write(file, events.join("\n"));
+        let tmp = file.with_extension("tmp");
+        if std::fs::write(&tmp, events.join("\n")).is_ok() {
+            let _ = std::fs::rename(&tmp, &file);
+        }
     }
 }
 
@@ -259,6 +354,80 @@ Answer in at most 4 short lines, in the language of the task.",
 
 #[cfg(test)]
 mod tests {
+    /// LC-428: schedules – due once per slot, and the forms that are refused.
+    #[test]
+    fn schedules() {
+        let t = |s: &str| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M").unwrap();
+        assert!(super::due("daily 07:30", None, t("2026-11-02 08:00")));
+        assert!(!super::due("daily 07:30", Some(t("2026-11-02 07:31")), t("2026-11-02 12:00")));
+        assert!(super::due("daily 07:30", Some(t("2026-11-01 07:31")), t("2026-11-02 07:30")));
+        assert!(!super::due("daily 07:30", None, t("2026-11-02 07:00")));
+        assert!(super::due("every 4h", Some(t("2026-11-02 04:00")), t("2026-11-02 08:00")));
+        assert!(!super::due("every 4h", Some(t("2026-11-02 05:00")), t("2026-11-02 08:00")));
+        assert!(super::due("weekly mon 08:00", Some(t("2026-10-26 08:01")), t("2026-11-02 09:00")));
+        assert!(!super::due("weekly mon 08:00", Some(t("2026-11-02 08:01")), t("2026-11-04 09:00")));
+        assert!(super::parse(r#"{"agents":[{"name":"Morning","event":"scheduled","schedule":"daily 07:30","prompt":"Check the Shop package"}]}"#).is_ok());
+        assert!(super::parse(r#"{"agents":[{"name":"X","event":"scheduled","schedule":"sometimes","prompt":"p"}]}"#).is_err());
+        assert!(super::parse(r#"{"agents":[{"name":"X","event":"scheduled","schedule":"every 1m","prompt":"p"}]}"#).is_err());
+    }
+
+    /// LC-345: a request the add-in is still writing stays until it is complete; then it is taken once.
+    #[test]
+    fn guard_requests_wait_for_a_complete_request() {
+        let rot = format!("test{}", std::process::id());
+        let path = std::env::temp_dir().join(format!("loonar-ea-guard-{rot}-x.req"));
+        std::fs::write(&path, "element_deleting:").unwrap();
+        assert!(super::guard_requests(&rot).is_empty());
+        assert!(path.exists(), "a half-written request must not be dropped");
+        // Without its line break the description from EA may still be cut (round 10): it waits.
+        std::fs::write(&path, "element_deleting:42\telement \"Old\" (Class").unwrap();
+        assert!(super::guard_requests(&rot).is_empty());
+        std::fs::write(&path, "element_deleting:42\telement \"Old\" (Class, object_id 42) in package \"P\"\tClass\t\n").unwrap();
+        let taken = super::guard_requests(&rot);
+        assert_eq!(taken.len(), 1);
+        assert_eq!((taken[0].1.as_str(), taken[0].2), ("element_deleting", 42));
+        assert_eq!(taken[0].3, vec!["element \"Old\" (Class, object_id 42) in package \"P\"".to_string(), "Class".to_string(), String::new()]);
+        assert!(!path.exists());
+        // LC-391: a creation is complete only with its line break (a cut type must not be decided on).
+        std::fs::write(&path, "element_creating:7\tCla").unwrap();
+        // LC-406: each agent of a team list checked on its own, with a plain description.
+        let checked = super::check_each(&[
+            serde_json::json!({ "name": "Keep", "event": "element_deleting", "mode": "guard", "applies_to": "Requirement", "prompt": "Block approved ones." }),
+            serde_json::json!({ "name": "Keep", "event": "element_created", "prompt": "x" }),
+            serde_json::json!({ "name": "Bad", "event": "element_created", "mode": "guard", "prompt": "x" }),
+            serde_json::json!({ "name": "Daily", "event": "scheduled", "schedule": "daily 07:30", "prompt": "Summarise.", "enabled": false }),
+        ]);
+        assert!(checked[0].1.is_none() && checked[0].2.contains("when element deleting, for objects matching \"Requirement\", the assistant decides"), "{checked:?}");
+        assert!(checked[1].1.as_deref().is_some_and(|e| e.contains("used twice")), "{checked:?}");
+        assert!(checked[2].1.as_deref().is_some_and(|e| e.contains("_deleting")), "{checked:?}");
+        assert!(checked[3].1.is_none() && checked[3].2.starts_with("on the schedule \"daily 07:30\""), "a switched-off agent is still checked: {checked:?}");
+        assert!(super::guard_requests(&rot).is_empty());
+        std::fs::write(&path, "element_creating:7\tClass\tentity\r\n").unwrap();
+        let taken = super::guard_requests(&rot);
+        assert_eq!((taken[0].1.as_str(), taken[0].2, taken[0].3.clone()), ("element_creating", 7, vec!["Class".to_string(), "entity".to_string()]));
+    }
+
+    /// LC-345: the description of a package on a real SQL Server (the query has no varchar cast):
+    /// `LOONAR_TEST_MSSQL_WIN="127.0.0.1;1433;ea_lab" cargo test describe_package_on_sql_server -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a SQL Server with an EA repository"]
+    fn describe_package_on_sql_server() {
+        let spec = std::env::var("LOONAR_TEST_MSSQL_WIN").unwrap();
+        let parts: Vec<&str> = spec.split(';').collect();
+        let props = std::env::temp_dir().join(format!("loonar-mssql-guard-{}.properties", std::process::id()));
+        std::fs::write(&props, format!("model.source=sqlserver
+db.host={}
+db.port={}
+db.name={}
+db.user=
+", parts[0], parts[1], parts[2])).unwrap();
+        let cfg = crate::config::AppConfig::load(&props).unwrap();
+        let id: i64 = crate::tools::query_rows(&cfg, "select max(package_id) from t_package").unwrap()[0][0].parse().unwrap();
+        let described = super::describe(&cfg, "package_deleting", id);
+        println!("{described:?}");
+        assert!(described.is_some_and(|d| d.1 == "Package"));
+    }
+
     use super::*;
 
     #[test]

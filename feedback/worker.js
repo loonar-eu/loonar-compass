@@ -291,7 +291,8 @@ async function report(request, env) {
   const hasPrivate = r.private.trim().length > 0 || r.images.length > 0;
   const lines = [noMentions(r.description.trim()), "", "---"];
   if (r.technical.trim()) lines.push("```", r.technical.trim().replace(/```/g, "'''"), "```");
-  lines.push(`Version ${r.app} · ${r.os} · language ${r.lang} · installation \`${r.install}\``);
+  // The installation ID stays out of the public issue (LC-361 T2): it is only in the private report below.
+  lines.push(`Version ${r.app} · ${r.os} · language ${r.lang}`);
   if (hasPrivate) {
     const parts = [];
     if (r.images.length) parts.push(`${r.images.length} screenshot(s)`);
@@ -306,7 +307,8 @@ async function report(request, env) {
   });
   if (issue.status !== 201) throw new Error(`GitHub ${issue.status} creating the issue`);
   const number = issue.data.number;
-  if (hasPrivate) {
+  // Always a private report: it keeps the installation ID that the public issue no longer shows.
+  {
     const folder = `reports/${new Date().toISOString().slice(0, 7)}/issue-${number}-${ref}`;
     const text = [
       `# Issue #${number}: ${r.title}`,

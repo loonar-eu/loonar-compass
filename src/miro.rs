@@ -10,6 +10,68 @@ use serde_json::{json, Value};
 use std::time::Duration;
 
 const API: &str = "https://api.miro.com/v2";
+
+/// Diagrams the assistant (tool `miro_send`) or the EA add-in (diagram menu "Send to Miro") asked to send, each with
+/// the elements picked on it (empty: the whole diagram): the window opens the "Send to Miro" dialog, where the user
+/// picks the board and the place and sends.
+static REQUESTS: std::sync::Mutex<Vec<(i64, Vec<i64>)>> = std::sync::Mutex::new(Vec::new());
+
+pub fn request(diagram_id: i64, only: Vec<i64>) {
+    REQUESTS.lock().unwrap_or_else(|e| e.into_inner()).push((diagram_id, only));
+}
+
+pub fn take_requests() -> Vec<(i64, Vec<i64>)> {
+    std::mem::take(&mut *REQUESTS.lock().unwrap_or_else(|e| e.into_inner()))
+}
+
+/// A part of a diagram (the elements selected in EA): the picked elements with everything inside them (a boundary or
+/// a package keeps its contents) and only the connectors between kept elements.
+pub fn only(model: &mut Value, picked: &[i64]) {
+    let Some(elements) = model["elements"].as_array().cloned() else { return };
+    let mut keep: std::collections::HashSet<i64> = picked.iter().copied().collect();
+    loop {
+        let before = keep.len();
+        for el in &elements {
+            if let (Some(id), Some(parent)) = (el["id"].as_i64(), el["parent"].as_i64()) {
+                if keep.contains(&parent) {
+                    keep.insert(id);
+                }
+            }
+        }
+        if keep.len() == before {
+            break;
+        }
+    }
+    let kept = |v: &Value| v.as_i64().is_some_and(|id| keep.contains(&id));
+    model["elements"] = Value::Array(elements.into_iter().filter(|el| kept(&el["id"])).collect());
+    if let Some(connectors) = model["connectors"].as_array().cloned() {
+        model["connectors"] = Value::Array(connectors.into_iter().filter(|c| kept(&c["source"]) && kept(&c["target"])).collect());
+    }
+}
+
+pub fn definition() -> Value {
+    json!({
+        "name": "miro_send",
+        "description": "Opens the \"Send to Miro\" window for a diagram of the model: the user picks the Miro board and the place on its thumbnail and sends; the diagram goes to the board as editable shapes and connectors in a frame named after the diagram (only from EA to Miro). Use it when the user wants a diagram on a Miro board. You do not send it yourself and do not learn whether it was sent: tell the user the window is open. Take the diagram id from db_query (t_diagram.diagram_id).",
+        "input_schema": {
+            "type": "object",
+            "properties": { "diagram_id": { "type": "integer" } },
+            "required": ["diagram_id"]
+        }
+    })
+}
+
+/// The tool `miro_send`: checks the diagram and the connection, then asks the window to open the dialog.
+pub fn tool(input: &Value, cfg: &crate::config::AppConfig) -> Result<String> {
+    let id = input["diagram_id"].as_i64().with_context(|| crate::i18n::fmt("missing field '{0}'", &["diagram_id".to_string()]))?;
+    let rows = crate::tools::query_rows(cfg, &format!("select name from t_diagram where diagram_id = {id}"))?;
+    let name = rows.first().and_then(|r| r.first()).with_context(|| crate::i18n::fmt("there is no diagram with id {0}", &[id.to_string()]))?;
+    if !crate::config::secrets::exists(crate::config::secrets::MIRO_TOKEN) {
+        return Ok("Miro is not connected in Compass: tell the user to set it up in Settings → 7. Miro (a Miro access token), then ask again.".into());
+    }
+    request(id, Vec::new());
+    Ok(format!("The \"Send to Miro\" window is open for diagram \"{name}\" (id {id}). The user picks the board and the place and sends it there; you do not know whether it was sent."))
+}
 /// Space between the frame's edge and the diagram, and between a new frame and what is on the board.
 const PADDING: f64 = 40.0;
 const GAP: f64 = 120.0;
@@ -711,5 +773,23 @@ mod tests {
         }
         // Close to the content, not far away.
         assert!(spot.x < 2500.0 && spot.y < 2000.0, "{spot:?}");
+    }
+
+    #[test]
+    fn only_keeps_the_picked_part() {
+        let mut m = json!({
+            "elements": [
+                { "id": 1, "parent": 0 }, { "id": 2, "parent": 0 }, { "id": 3, "parent": 0 },
+                { "id": 10, "parent": 0 }, { "id": 11, "parent": 10 }, { "id": 12, "parent": 11 }
+            ],
+            "connectors": [
+                { "id": 100, "source": 1, "target": 2 }, { "id": 101, "source": 2, "target": 3 }, { "id": 102, "source": 11, "target": 1 }
+            ]
+        });
+        only(&mut m, &[1, 2, 10]);
+        let ids = |k: &str| m[k].as_array().unwrap().iter().map(|v| v["id"].as_i64().unwrap()).collect::<Vec<_>>();
+        // A boundary keeps what is inside it, also two levels down; connectors only between kept elements.
+        assert_eq!(ids("elements"), vec![1, 2, 10, 11, 12]);
+        assert_eq!(ids("connectors"), vec![100, 102]);
     }
 }

@@ -269,7 +269,7 @@ pub fn run(input: &Value, ctx: &crate::tools::ToolContext) -> Result<String> {
         if given.contains(['/', '\\', ':']) {
             bail!("{}", crate::i18n::tr("upload only files from the attachments folder (documents and presentations you created)"));
         }
-        Some(attachment_named(&ctx.cfg.attachments_dir, given).with_context(|| crate::i18n::tr("upload only files from the attachments folder (documents and presentations you created)"))?)
+        Some(crate::history::attachment_named(&ctx.cfg.attachments_dir, given).with_context(|| crate::i18n::tr("upload only files from the attachments folder (documents and presentations you created)"))?)
     } else {
         None
     };
@@ -316,24 +316,6 @@ pub fn run(input: &Value, ctx: &crate::tools::ToolContext) -> Result<String> {
     }
 }
 
-/// The file in the attachments folder: its stored name ("<id>_Name.docx") or, as the model usually says it, the
-/// name the user sees ("Name.docx"); then the newest such file.
-fn attachment_named(dir: &std::path::Path, given: &str) -> Option<String> {
-    if dir.join(given).is_file() {
-        return Some(given.to_string());
-    }
-    std::fs::read_dir(dir)
-        .ok()?
-        .flatten()
-        .filter(|e| e.path().is_file())
-        .filter_map(|e| {
-            let name = e.file_name().to_string_lossy().to_string();
-            let shown = crate::history::display_name(&name).to_string();
-            (shown.eq_ignore_ascii_case(given) || shown.eq_ignore_ascii_case(&crate::history::sanitize_name(given))).then(|| (e.metadata().and_then(|m| m.modified()).ok(), name))
-        })
-        .max_by_key(|(modified, _)| *modified)
-        .map(|(_, name)| name)
-}
 
 pub fn definition() -> Value {
     json!({

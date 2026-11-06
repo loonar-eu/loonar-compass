@@ -52,8 +52,10 @@ shown on the download page.
 
 ## Privacy
 
-The application runs on your computer and has no telemetry. To answer, it sends the conversation,
-attachments and the model excerpts it needs directly to the Anthropic API under your account.
+The application runs on your computer. Apart from anonymous usage statistics, which can be switched
+off (no conversation content, names from the model or file paths), it collects no data. To answer, it
+sends the conversation, attachments and the model excerpts it needs directly to the AI provider chosen
+in the settings (Anthropic, OpenAI, Azure OpenAI or a local model) under your account.
 Secrets (API key, passwords, tokens) are kept in the Windows Credential Manager. Model changes are
 made only through Enterprise Architect with the permissions of the configured EA user. Details:
 [loonar.eu/privacy](https://loonar.eu/privacy/).

@@ -25,19 +25,38 @@ fn one(cfg: &AppConfig, sql: String) -> Option<Vec<String>> {
 
 /// Reverse operations for the changes of existing objects, read BEFORE the save. Ops creating objects get their
 /// reverse after the save (from the created ids).
+/// Every reverse operation carries "_at", the index of the operation it reverses (a failed save journals only the
+/// operations before the failed one, LC-348); `record` takes the field off.
 pub fn before(cfg: &AppConfig, ops: &[Value]) -> (Vec<Value>, Vec<String>) {
     let mut reverse = Vec::new();
     let mut not_undoable = Vec::new();
-    for op in ops {
+    for (at, op) in ops.iter().enumerate() {
+        let start = reverse.len();
+        before_one(cfg, op, &mut reverse, &mut not_undoable);
+        for r in &mut reverse[start..] {
+            r["_at"] = json!(at);
+        }
+    }
+    (reverse, not_undoable)
+}
+
+/// Operations whose objects are journalled from the save's result (deleted on undo) or that do not change the model.
+const UNDONE_FROM_RESULT: &[&str] = &[
+    "create_package", "create_diagram", "create_element", "create_connector", "create_attribute", "create_operation", "clone_package",
+    "clone_element_version", "create_matrix_specification", "export_diagram", "export_xmi", "generate_report", "create_baseline", "ping",
+];
+
+fn before_one(cfg: &AppConfig, op: &Value, reverse: &mut Vec<Value>, not_undoable: &mut Vec<String>) {
+    {
         let kind = op["op"].as_str().unwrap_or("");
         let id = |field: &str| op[field].as_i64();
         match kind {
             "update_element" => {
-                let Some(e) = id("element") else { continue };
+                let Some(e) = id("element") else { return };
                 let Some(r) = one(cfg, format!(
                     "select coalesce(name,'') as c0, coalesce(note,'') as c1, coalesce(alias,'') as c2, coalesce(stereotype,'') as c3, coalesce(status,'') as c4, \
                      coalesce(version,'') as c5, coalesce(author,'') as c6, coalesce(phase,'') as c7 from t_object where object_id = {e}"
-                )) else { continue };
+                )) else { return };
                 let mut back = Map::new();
                 back.insert("op".into(), json!("update_element"));
                 back.insert("element".into(), json!(e));
@@ -68,8 +87,8 @@ pub fn before(cfg: &AppConfig, ops: &[Value]) -> (Vec<Value>, Vec<String>) {
                 reverse.push(Value::Object(back));
             }
             "update_connector" => {
-                let Some(c) = id("connector") else { continue };
-                let Some(r) = one(cfg, format!("select coalesce(name,'') as c0, coalesce(stereotype,'') as c1, coalesce(notes,'') as c2 from t_connector where connector_id = {c}")) else { continue };
+                let Some(c) = id("connector") else { return };
+                let Some(r) = one(cfg, format!("select coalesce(name,'') as c0, coalesce(stereotype,'') as c1, coalesce(notes,'') as c2 from t_connector where connector_id = {c}")) else { return };
                 let mut back = Map::new();
                 back.insert("op".into(), json!("update_connector"));
                 back.insert("connector".into(), json!(c));
@@ -85,8 +104,8 @@ pub fn before(cfg: &AppConfig, ops: &[Value]) -> (Vec<Value>, Vec<String>) {
                 reverse.push(Value::Object(back));
             }
             "update_diagram" => {
-                let Some(d) = id("diagram") else { continue };
-                let Some(r) = one(cfg, format!("select coalesce(name,'') as c0, coalesce(notes,'') as c1 from t_diagram where diagram_id = {d}")) else { continue };
+                let Some(d) = id("diagram") else { return };
+                let Some(r) = one(cfg, format!("select coalesce(name,'') as c0, coalesce(notes,'') as c1 from t_diagram where diagram_id = {d}")) else { return };
                 let mut back = json!({ "op": "update_diagram", "diagram": d });
                 if !op["name"].is_null() {
                     back["name"] = json!(r[0]);
@@ -96,9 +115,22 @@ pub fn before(cfg: &AppConfig, ops: &[Value]) -> (Vec<Value>, Vec<String>) {
                 }
                 reverse.push(back);
             }
+            // LC-376: a layout moves everything; the positions before it are the way back, and the lines of the
+            // connectors as they were (bend points, geometry, colour and width), which a layout redraws.
+            "layout_diagram" => {
+                let Some(d) = id("diagram") else { return };
+                for r in query_rows(cfg, &format!("select object_id, rectleft, recttop, rectright, rectbottom from t_diagramobjects where diagram_id = {d}")).unwrap_or_default() {
+                    let n = |i: usize| r[i].parse::<i64>().unwrap_or(0);
+                    reverse.push(json!({ "op": "set_bounds", "diagram": d, "element": n(0), "left": n(1), "top": -n(2), "width": n(3) - n(1), "height": n(2) - n(4) }));
+                }
+                for r in query_rows(cfg, &format!("select connectorid, coalesce(path,''), coalesce(geometry,''), coalesce(style,''), coalesce(hidden,0) from t_diagramlinks where diagramid = {d}")).unwrap_or_default() {
+                    reverse.push(json!({ "op": "restore_link", "diagram": d, "connector": r[0].parse::<i64>().unwrap_or(0), "path": r[1], "geometry": r[2], "style": r[3],
+                        "hidden": r[4] == "1" || r[4].eq_ignore_ascii_case("true") }));
+                }
+            }
             "set_bounds" => {
-                let (Some(d), Some(e)) = (id("diagram"), id("element")) else { continue };
-                let Some(r) = one(cfg, format!("select rectleft as c0, recttop as c1, rectright as c2, rectbottom as c3 from t_diagramobjects where diagram_id = {d} and object_id = {e}")) else { continue };
+                let (Some(d), Some(e)) = (id("diagram"), id("element")) else { return };
+                let Some(r) = one(cfg, format!("select rectleft as c0, recttop as c1, rectright as c2, rectbottom as c3 from t_diagramobjects where diagram_id = {d} and object_id = {e}")) else { return };
                 let n = |i: usize| r[i].parse::<i64>().unwrap_or(0);
                 reverse.push(json!({ "op": "set_bounds", "diagram": d, "element": e, "left": n(0), "top": -n(1), "width": n(2) - n(0), "height": n(1) - n(3) }));
             }
@@ -123,26 +155,81 @@ pub fn before(cfg: &AppConfig, ops: &[Value]) -> (Vec<Value>, Vec<String>) {
                     reverse.push(json!({ "op": "remove_from_diagram", "diagram": d, "element": e }));
                 }
             }
-            "delete" | "remove_from_diagram" | "delete_attribute" | "delete_operation" | "delete_scenario" | "import_xmi" | "set_color" | "set_line_style" | "route_connector" | "hide_connectors" | "repair_diagram_links" | "layout_diagram" | "set_swimlanes" | "diagram_style" => {
-                not_undoable.push(kind.to_string());
+            "update_attribute" | "update_operation" => {
+                // The previous values of the fields this save sets (LC-348: they were not reversed at all).
+                let attribute = kind == "update_attribute";
+                let Some(m) = id(if attribute { "attribute" } else { "operation" }) else { return };
+                let sql = if attribute {
+                    format!("select coalesce(name,'') as c0, coalesce(type,'') as c1, coalesce(scope,'') as c2, coalesce(notes,'') as c3, coalesce({},'') as c4, \
+                             coalesce(stereotype,'') as c5, coalesce(style,'') as c6, coalesce(isstatic,0) as c7 from t_attribute where id = {m}", "\"default\"")
+                } else {
+                    format!("select coalesce(name,'') as c0, coalesce(type,'') as c1, coalesce(scope,'') as c2, coalesce(notes,'') as c3, '' as c4, \
+                             coalesce(stereotype,'') as c5, coalesce(style,'') as c6, coalesce(isstatic,0) as c7 from t_operation where operationid = {m}")
+                };
+                let Some(r) = one(cfg, sql) else {
+                    not_undoable.push(format!("{kind} {m}"));
+                    return;
+                };
+                let mut back = Map::new();
+                back.insert("op".into(), json!(kind));
+                back.insert((if attribute { "attribute" } else { "operation" }).into(), json!(m));
+                let type_field = if attribute { "type" } else { "return_type" };
+                for (field, index) in [("name", 0), (type_field, 1), ("visibility", 2), ("notes", 3), ("default", 4), ("stereotype", 5), ("alias", 6)] {
+                    if !op[field].is_null() && (attribute || field != "default") {
+                        back.insert(field.into(), json!(r[index]));
+                    }
+                }
+                if !op["static"].is_null() {
+                    back.insert("static".into(), json!(r[7] == "1" || r[7].eq_ignore_ascii_case("true")));
+                }
+                reverse.push(Value::Object(back));
             }
-            _ => {}
+            "update_package" => {
+                let Some(p) = op["package"].as_i64() else {
+                    not_undoable.push(kind.to_string());
+                    return;
+                };
+                let Some(r) = one(cfg, format!(
+                    "select coalesce(p.name,'') as c0, coalesce(p.notes,'') as c1, coalesce(p.version,'') as c2, coalesce(o.status,'') as c3, coalesce(o.stereotype,'') as c4 \
+                     from t_package p left join t_object o on o.object_type = 'Package' and (o.ea_guid = p.ea_guid or o.pdata1 = cast(p.package_id as varchar(20))) where p.package_id = {p}"
+                )) else {
+                    not_undoable.push(format!("{kind} {p}"));
+                    return;
+                };
+                let mut back = json!({ "op": "update_package", "package": p });
+                for (field, index) in [("name", 0), ("notes", 1), ("version", 2), ("status", 3), ("stereotype", 4)] {
+                    if !op[field].is_null() {
+                        back[field] = json!(r[index]);
+                    }
+                }
+                reverse.push(back);
+            }
+            // Reversing a connector again restores it.
+            "reverse_connector" => {
+                if let Some(c) = id("connector") {
+                    reverse.push(json!({ "op": "reverse_connector", "connector": c }));
+                }
+            }
+            k if UNDONE_FROM_RESULT.contains(&k) => {}
+            // Everything else cannot be reversed by operations, and says so (LC-348: set_composite, set_linked_document,
+            // scenarios, glossary terms, legends, navigation cells, templates, version control… were silent).
+            _ => not_undoable.push(kind.to_string()),
         }
     }
-    (reverse, not_undoable)
 }
 
 /// Packages to baseline before a save that deletes: the packages of the deleted objects (or the deleted package's parent).
 pub fn packages_to_baseline(cfg: &AppConfig, ops: &[Value]) -> Vec<i64> {
     let mut out = Vec::new();
-    for op in ops.iter().filter(|o| matches!(o["op"].as_str(), Some("delete" | "delete_attribute" | "delete_operation" | "delete_scenario" | "import_xmi" | "layout_diagram"))) {
-        let package = if let Some(e) = op["element"].as_i64() {
+    for op in ops.iter().filter(|o| matches!(o["op"].as_str(), Some("delete" | "delete_attribute" | "delete_operation" | "delete_scenario" | "import_xmi" | "layout_diagram" | "merge_elements" | "change_connector_type"))) {
+        let package = if let Some(e) = op["element"].as_i64().or_else(|| op["remove"].as_i64()) {
             one(cfg, format!("select package_id as c0 from t_object where object_id = {e}"))
         } else if let Some(d) = op["diagram"].as_i64() {
             one(cfg, format!("select package_id as c0 from t_diagram where diagram_id = {d}"))
         } else if let Some(p) = op["package"].as_i64() {
             if op["op"] == "import_xmi" { Some(vec![p.to_string()]) } else { one(cfg, format!("select parent_id as c0 from t_package where package_id = {p}")) }
         } else if let Some(c) = op["connector"].as_i64() {
+            // (a change of type: the package of the relationship's source)
             one(cfg, format!("select o.package_id as c0 from t_connector c join t_object o on o.object_id = c.start_object_id where c.connector_id = {c}"))
         } else {
             None
@@ -160,16 +247,26 @@ pub fn packages_to_baseline(cfg: &AppConfig, ops: &[Value]) -> Vec<i64> {
 pub fn record(cfg: &AppConfig, summary: &str, result: &Value, reverse_before: Vec<Value>, not_undoable: Vec<String>, baselines: Vec<String>) {
     let mut reverse: Vec<Value> = Vec::new();
     let created: Vec<&Value> = result["created"].as_array().into_iter().flatten().collect();
-    // Connectors first, then elements, diagrams, packages (an element takes its connectors with it).
-    for kind in ["connector", "element", "diagram", "package"] {
+    // Attributes and operations first (LC-348: they were left behind), then connectors, elements, diagrams, packages
+    // (an element takes its connectors with it).
+    for kind in ["attribute", "operation", "connector", "element", "diagram", "package"] {
         for c in created.iter().rev().filter(|c| c["kind"] == kind) {
             if let Some(id) = c["id"].as_i64() {
-                reverse.push(json!({ "op": "delete", kind: id }));
+                reverse.push(match kind {
+                    "attribute" => json!({ "op": "delete_attribute", "attribute": id }),
+                    "operation" => json!({ "op": "delete_operation", "operation": id }),
+                    _ => json!({ "op": "delete", kind: id }),
+                });
             }
         }
     }
     // Changes of existing objects are reversed in the opposite order of the save.
-    reverse.extend(reverse_before.into_iter().rev());
+    reverse.extend(reverse_before.into_iter().rev().map(|mut r| {
+        if let Some(o) = r.as_object_mut() {
+            o.remove("_at");
+        }
+        r
+    }));
     if reverse.is_empty() && not_undoable.is_empty() {
         return;
     }
@@ -180,6 +277,16 @@ pub fn record(cfg: &AppConfig, summary: &str, result: &Value, reverse_before: Ve
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(journal_file(cfg)) {
         let _ = writeln!(f, "{entry}");
     }
+}
+
+/// A save that failed at operation `failed_at`: the changes of existing objects made by the operations before it stay
+/// in the model, so their reverse goes to the journal (the created objects were rolled back) (LC-348).
+pub fn record_partial(cfg: &AppConfig, summary: &str, failed_at: usize, reverse_before: Vec<Value>, baselines: Vec<String>) {
+    let kept: Vec<Value> = reverse_before.into_iter().filter(|r| r["_at"].as_u64().is_some_and(|at| (at as usize) < failed_at)).collect();
+    if kept.is_empty() {
+        return;
+    }
+    record(cfg, &format!("{summary} [{}]", crate::i18n::tr("failed part-way; the changes made before the error")), &json!({ "created": [] }), kept, Vec::new(), baselines);
 }
 
 pub fn entries(cfg: &AppConfig) -> Vec<Value> {
@@ -205,7 +312,11 @@ pub fn mark_undone(cfg: &AppConfig, ids: &[String]) {
             _ => l.to_string(),
         })
         .collect();
-    let _ = std::fs::write(journal_file(cfg), lines.join("\n") + "\n");
+    // Written to a copy and renamed (LC-348): a reader never sees a half-written journal.
+    let tmp = journal_file(cfg).with_extension("jsonl.tmp");
+    if std::fs::write(&tmp, lines.join("\n") + "\n").is_ok() {
+        let _ = std::fs::rename(&tmp, journal_file(cfg));
+    }
 }
 
 /// The latest `count` saves not undone yet (newest first).
@@ -240,11 +351,40 @@ pub fn definition() -> Value {
         "name": "undo_change",
         "description": "Time machine of the assistant's saves to this model. action list: the journal (newest first) with what can be undone; undo: undoes the latest \
 `count` saves not undone yet (default 1), newest first: created objects are deleted, changed fields, tagged values, positions and moves get their previous values. \
-Deletions, imports and diagram layout cannot be reversed by operations: before such a save Compass made an EA baseline of the package - tell the user to restore it in EA \
+Attributes, operations and packages changed or created and a diagram layout are reversed too. Deletions, imports, merges, changes of relationship type and the operations listed as not undoable (e.g. scenarios, glossary terms, linked documents, legends) cannot be reversed by operations: before such a save Compass made an EA baseline of the package - tell the user to restore it in EA \
 (package in the browser → Manage Baselines → Restore). The user approves the undo.",
         "input_schema": { "type": "object", "properties": {
             "action": { "type": "string", "enum": ["list", "undo"] },
             "count": { "type": "integer" }
         }, "required": ["action"] }
     })
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use serde_json::json;
+
+    /// LC-376: undoing a layout brings back the line of a connector (bend points, colour, width), on a model copy:
+    /// `LOONAR_TEST_PROPS=E:/livetest/r440/m5.properties LOONAR_TEST_DIAGRAM=1170 LOONAR_TEST_CONNECTOR=5044 cargo test layout_undo_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA and the model from LOONAR_TEST_PROPS"]
+    fn layout_undo_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("app.properties");
+        let d: i64 = std::env::var("LOONAR_TEST_DIAGRAM").unwrap().parse().unwrap();
+        let c: i64 = std::env::var("LOONAR_TEST_CONNECTOR").unwrap().parse().unwrap();
+        let opts = crate::ea::BatchOptions::default();
+        let link = || crate::model_db::query_rows(&cfg, &format!("select coalesce(path,''), coalesce(style,'') from t_diagramlinks where diagramid = {d} and connectorid = {c}")).unwrap()[0].clone();
+        crate::ea::run_batch(&cfg, &[json!({ "op": "restore_link", "diagram": d, "connector": c, "path": "80:-160;230:-160;", "style": "Mode=3;EOID=0;SOID=0;Color=255;LWidth=3;", "hidden": false })], &opts).expect("set line");
+        let set = link();
+        let layout = [json!({ "op": "layout_diagram", "diagram": d })];
+        let (reverse, _) = super::before(&cfg, &layout);
+        crate::ea::run_batch(&cfg, &layout, &opts).expect("layout");
+        println!("before {set:?} after layout {:?}", link());
+        crate::ea::run_batch(&cfg, &reverse, &opts).expect("undo");
+        let back = link();
+        crate::ea::shutdown();
+        println!("undone {back:?}");
+        assert_eq!(back[0], set[0], "bend points");
+        assert!(back[1].contains("Color=255") && back[1].contains("LWidth=3"), "{back:?}");
+    }
 }

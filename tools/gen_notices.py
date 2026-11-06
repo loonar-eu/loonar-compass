@@ -15,6 +15,7 @@ EXTRA = {  # license files outside the crate root or with unusual names
     'epaint_default_fonts': ['fonts/OFL.txt', 'fonts/UFL.txt', 'fonts/Hack-Regular.txt', 'fonts/emoji-icon-font-mit-license.txt'],
     'ring': ['LICENSE', 'LICENSE-BoringSSL', 'LICENSE-other-bits'],
     'encoding_rs': ['COPYRIGHT', 'LICENSE-MIT', 'LICENSE-WHATWG'],
+    'whisper-rs-sys': ['whisper.cpp/LICENSE'],  # vendored (vendor/whisper-rs-sys): whisper.cpp and ggml, MIT
 }
 MIT_TEMPLATE = """MIT License
 
@@ -60,7 +61,8 @@ def license_files(p):
 
 def main(app_meta, inst_meta, out_path):
     global APACHE_TEXT
-    reg = os.path.dirname(os.path.dirname(json.load(open(app_meta, encoding='utf-8'))['packages'][0]['manifest_path']))
+    # The registry folder: of a crate from crates.io (a vendored path crate may come first).
+    reg = os.path.dirname(os.path.dirname(next(p['manifest_path'] for p in json.load(open(app_meta, encoding='utf-8'))['packages'] if (p.get('source') or '').startswith('registry+'))))
     APACHE_TEXT = open(os.path.join(reg, next(d for d in os.listdir(reg) if d.startswith('serde-1.')), 'LICENSE-APACHE'), encoding='utf-8').read()
     pk = runtime_packages(app_meta)
     pk.update(runtime_packages(inst_meta))

@@ -46,6 +46,13 @@ pub fn in_ea_tab() -> bool {
     IN_EA_TAB.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+/// Compass works without its window (--ask): there is no window of the user's to point at in messages.
+static NO_WINDOW: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_no_window() {
+    NO_WINDOW.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
 /// What EA opens: the path of an EA file, or the connection string of the model database built from the database
 /// settings (EA needs the database account in it). The port follows a comma (`SRC=server,port@database`), the same way
 /// EA itself writes it.
@@ -157,7 +164,9 @@ impl Worker {
         let (requests, inbox) = mpsc::channel::<Request>();
         let thread_login = login.clone();
         let thread = std::thread::spawn(move || worker_loop(thread_login, inbox));
-        Self { requests, login, started_wall: chrono::Local::now(), thread }
+        let started_wall = chrono::Local::now();
+        *BRIDGE_STARTED.lock().unwrap_or_else(|p| p.into_inner()) = Some(started_wall);
+        Self { requests, login, started_wall, thread }
     }
 }
 
@@ -237,7 +246,17 @@ pub fn run_batch(cfg: &AppConfig, ops: &[Value], options: &BatchOptions) -> Resu
     // the same file (a .qea file is meant for one user). The background session for it, if any, is closed.
     if cfg.uses_file() || IN_EA_TAB.load(std::sync::atomic::Ordering::Relaxed) {
         let target = crate::ea_ui::Target::of(cfg);
-        if crate::ea_ui::has_model_open(&target) {
+        let in_window = crate::ea_ui::model_in_window(&target);
+        // An EA window that does not answer may have this very file open: a second EA must not write it (E3).
+        if in_window.is_none() && cfg.uses_file() {
+            // Without the application's window (--ask) the EA that does not answer is mostly another Compass working in
+            // the background, not the user's window (LC-448).
+            if NO_WINDOW.load(std::sync::atomic::Ordering::Relaxed) {
+                bail!("{}", crate::i18n::tr("An EA running on this computer does not answer (another Compass may be working with it, or a dialog box is open in an EA window), and it may have this file open. Try again when it is done; nothing was written."));
+            }
+            bail!("{}", crate::i18n::tr("Your EA window does not answer (a dialog box may be open), and it may have this file open. Close the dialog in EA and try again; nothing was written."));
+        }
+        if in_window == Some(true) {
             WORKER.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).take();
             let result = crate::ea_ui::run_in_window(&target, cfg.ea_user.clone(), ops.to_vec(), options.rollback_key.clone(), options.keep_locks, locks, timeout())?;
             return check_result(ops, result);
@@ -304,6 +323,29 @@ pub fn run_batch(cfg: &AppConfig, ops: &[Value], options: &BatchOptions) -> Resu
     check_result(ops, result)
 }
 
+/// A write that failed at one operation: the message for the user and the index of the failed operation, so the save
+/// can journal the changes of existing objects made before it (LC-348).
+#[derive(Debug)]
+pub struct BatchError {
+    pub message: String,
+    pub failed_at: Option<usize>,
+}
+
+impl std::fmt::Display for BatchError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for BatchError {}
+
+/// Operations that only add objects (removed again by the rollback) or only read (exports): everything else changes
+/// objects that existed before the write, and such a change stays when a later operation fails.
+const ADDING_OPS: &[&str] = &[
+    "create_package", "create_diagram", "create_element", "create_connector", "create_attribute", "create_operation", "ping",
+    "export_diagram", "export_xmi", "generate_report", "create_baseline",
+];
+
 /// Turns an EA reply into the result of a write: an error message that says what failed and what was left in the model.
 fn check_result(ops: &[Value], result: Value) -> Result<Value> {
     if result["ok"] != true {
@@ -314,14 +356,27 @@ fn check_result(ops: &[Value], result: Value) -> Result<Value> {
             Some(i) => crate::i18n::fmt("operation {0} ({1}) failed: {2}", &[(i + 1).to_string(), op_name(ops, i), error.to_string()]),
             None => error.to_string(),
         };
-        if result["rolled_back"] == true {
+        // Changes of existing objects made before the failed operation are not rolled back (LC-348): say so.
+        let changed_before: Vec<String> = at
+            .map(|i| ops.iter().take(i as usize).enumerate().filter(|(_, op)| !ADDING_OPS.contains(&op["op"].as_str().unwrap_or(""))).map(|(n, _)| (n + 1).to_string()).collect())
+            .unwrap_or_default();
+        if result["rolled_back"] == true && changed_before.is_empty() {
             msg.push(' ');
             msg.push_str(crate::i18n::tr("The changes were rolled back; nothing was left in the model."));
-        } else if left > 0 {
-            msg.push(' ');
-            msg.push_str(&crate::i18n::fmt("{0} objects created before the error remain in the model.", &[left.to_string()]));
+        } else {
+            if result["rolled_back"] == true {
+                msg.push(' ');
+                msg.push_str(crate::i18n::tr("The objects created before the error were removed."));
+            } else if left > 0 {
+                msg.push(' ');
+                msg.push_str(&crate::i18n::fmt("{0} objects created before the error remain in the model.", &[left.to_string()]));
+            }
+            if !changed_before.is_empty() {
+                msg.push(' ');
+                msg.push_str(&crate::i18n::fmt("The changes of existing objects made by operations {0} stay in the model (they are in the undo journal).", &[changed_before.join(", ")]));
+            }
         }
-        bail!(msg);
+        return Err(BatchError { message: msg, failed_at: at.map(|i| i as usize) }.into());
     }
     Ok(result)
 }
@@ -330,7 +385,24 @@ fn check_result(ops: &[Value], result: Value) -> Result<Value> {
 /// and holds a license (the EA thread dies together with the application process before it closes EA). Waits up to 8 s for
 /// EA to close, then kills the EA processes started by this session.
 pub fn shutdown() {
-    let worker = WORKER.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).take();
+    // A save in progress holds the session for up to its time limit (E8): closing does not wait for it, the EA started
+    // by this session is closed instead.
+    let deadline = std::time::Instant::now() + Duration::from_secs(8);
+    let mut guard = loop {
+        match WORKER.try_lock() {
+            Ok(guard) => break guard,
+            Err(std::sync::TryLockError::Poisoned(p)) => break p.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) if std::time::Instant::now() < deadline => std::thread::sleep(Duration::from_millis(100)),
+            Err(std::sync::TryLockError::WouldBlock) => {
+                if let Some(started) = *BRIDGE_STARTED.lock().unwrap_or_else(|p| p.into_inner()) {
+                    kill_orphan_ea(started);
+                }
+                return;
+            }
+        }
+    };
+    let worker = guard.take();
+    drop(guard);
     let Some(worker) = worker else { return };
     let Worker { requests, started_wall, thread, .. } = worker;
     drop(requests); // end of the channel: the EA thread closes the session (Exit) and finishes
@@ -342,6 +414,9 @@ pub fn shutdown() {
         kill_orphan_ea(started_wall);
     }
 }
+
+/// When the current background EA session was started (for closing it without its lock, E8).
+static BRIDGE_STARTED: std::sync::Mutex<Option<chrono::DateTime<chrono::Local>>> = std::sync::Mutex::new(None);
 
 fn op_name(ops: &[Value], index: i64) -> String {
     ops.get(index as usize).and_then(|o| o["op"].as_str()).unwrap_or("?").to_string()
@@ -537,6 +612,44 @@ model.file=C:/nie-ma/takiego/pliku.qea
         assert_eq!(members[0], vec!["1".to_string(), "1".to_string()]);
         assert_eq!(baselines.len(), 1);
         assert_eq!(copied[0][0], "1");
+    }
+
+    /// A new version of an element (EA's former "Clone as New Version"): members, tags, next version, «trace» to the
+    /// original. Run with: `cargo test ea_clone_element_version -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "requires EA, a license and the model database from app.properties"]
+    fn ea_clone_element_version() {
+        let cfg = test_config();
+        let _ea = CloseEa;
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).expect(sql);
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id limit 1")[0][0].parse().unwrap();
+        let name = format!("ZZ_test_wersji_{}", chrono::Local::now().format("%H%M%S"));
+        let ops = vec![
+            json!({"op":"create_package","key":"pkg","parent":root,"name":name}),
+            json!({"op":"create_element","key":"a","package":"#pkg","name":"Zamówienie","type":"Class","stereotype":"entity","notes":"Opis","tags":{"owner":"Team A"}}),
+            json!({"op":"create_attribute","element":"#a","name":"total","type":"Decimal","visibility":"Private"}),
+            json!({"op":"create_operation","element":"#a","name":"pay","return_type":"Boolean","parameters":[{"name":"amount","type":"Decimal"}]}),
+        ];
+        let created = run_batch(&cfg, &ops, &BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("creation");
+        let id_of = |v: &Value, key: &str| v["created"].as_array().unwrap().iter().find(|c| c["key"] == key).expect(key)["id"].as_i64().unwrap();
+        let (pkg, a) = (id_of(&created, "pkg"), id_of(&created, "a"));
+        let cloned = run_batch(&cfg, &[json!({"op":"clone_element_version","key":"v2","element":a})], &BatchOptions::default()).expect("new version");
+        let v2 = id_of(&cloned, "v2");
+        let row = q(&format!(
+            "select o.name, o.version, coalesce(o.stereotype,''), coalesce(o.note,''), (select count(*) from t_attribute where object_id = o.object_id), \
+             (select count(*) from t_operation where object_id = o.object_id), (select count(*) from t_operationparams p join t_operation m on m.operationid = p.operationid where m.object_id = o.object_id), \
+             (select count(*) from t_objectproperties where object_id = o.object_id and property = 'owner'), \
+             (select count(*) from t_connector c where c.start_object_id = o.object_id and c.end_object_id = {a} and c.connector_type = 'Abstraction' and c.stereotype = 'trace'), \
+             (select version from t_object where object_id = {a}) from t_object o where o.object_id = {v2}"
+        ));
+        println!("new version: {:?}", row[0]);
+        run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &BatchOptions::default()).expect("deleting the test package");
+        shutdown();
+        let r = &row[0];
+        assert_eq!(r[0], "Zamówienie");
+        assert!(!r[1].is_empty() && r[1] != r[9], "version {} after {}", r[1], r[9]);
+        assert_eq!((r[2].as_str(), r[3].as_str()), ("entity", "Opis"));
+        assert_eq!((r[4].as_str(), r[5].as_str(), r[6].as_str(), r[7].as_str(), r[8].as_str()), ("1", "1", "1", "1", "1"));
     }
 
     /// Renaming a diagram (update_diagram) and hiding a connector on the diagram (hide_connectors).
@@ -788,6 +901,222 @@ model.file=C:/nie-ma/takiego/pliku.qea
         let message = format!("{refused:?}");
         println!("{message}");
         assert!(message.contains("zablokowany przez konto admin"), "no information about the lock owner");
+    }
+
+    /// LC-348: undo restores a changed attribute and deletes a created operation; a save that fails part-way says which
+    /// changes stay and journals them. Run with a file copy:
+    /// `LOONAR_TEST_PROPS=E:/livetest/undo/undo.properties cargo test ea_undo_attributes -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "requires EA, a license and the model database from app.properties"]
+    fn ea_undo_attributes() {
+        let cfg = test_config();
+        let _ea = CloseEa;
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).expect(sql);
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id limit 1")[0][0].parse().unwrap();
+        let ops = vec![
+            json!({"op":"create_package","key":"pkg","parent":root,"name":format!("ZZ_undo_{}", chrono::Local::now().format("%H%M%S"))}),
+            json!({"op":"create_element","key":"c","package":"#pkg","name":"Order","type":"Class"}),
+            json!({"op":"create_attribute","key":"a","element":"#c","name":"amount","type":"int"}),
+        ];
+        let created = run_batch(&cfg, &ops, &BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("creation");
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).expect(key)["id"].as_i64().unwrap();
+        let (pkg, class, attribute) = (id_of("pkg"), id_of("c"), id_of("a"));
+
+        // A change of the attribute and a new operation in one save, journalled as the save does it.
+        let save = vec![
+            json!({"op":"update_attribute","attribute":attribute,"name":"total","type":"decimal"}),
+            json!({"op":"create_operation","key":"o","element":class,"name":"pay","return_type":"void"}),
+        ];
+        let (reverse, not_undoable) = crate::undo::before(&cfg, &save);
+        let done = run_batch(&cfg, &save, &BatchOptions::default()).expect("save");
+        let journal = std::env::temp_dir().join(format!("loonar-undo-{}", std::process::id()));
+        std::fs::create_dir_all(&journal).unwrap();
+        let mut jcfg = cfg.clone();
+        jcfg.base_dir = journal.clone();
+        crate::undo::record(&jcfg, "test", &done, reverse.clone(), not_undoable, Vec::new());
+        let entry = crate::undo::latest(&jcfg, 1).pop().expect("a journal entry");
+        let back: Vec<Value> = entry["reverse"].as_array().unwrap().clone();
+        println!("reverse: {back:?}");
+        assert!(back.iter().any(|r| r["op"] == "delete_operation"), "the created operation is deleted on undo");
+        assert!(back.iter().any(|r| r["op"] == "update_attribute" && r["name"] == "amount" && r["type"] == "int"));
+        assert!(back.iter().all(|r| r.get("_at").is_none()));
+        run_batch(&cfg, &back, &BatchOptions::default()).expect("undo");
+        assert_eq!(q(&format!("select name, type from t_attribute where id = {attribute}"))[0], vec!["amount".to_string(), "int".to_string()]);
+        assert!(q(&format!("select operationid from t_operation where object_id = {class}")).is_empty());
+
+        // A save that fails at its second operation: the first change stays and is named.
+        let failing = vec![
+            json!({"op":"update_attribute","attribute":attribute,"name":"sum"}),
+            json!({"op":"update_element","element":987654321,"name":"x"}),
+        ];
+        let (reverse, _) = crate::undo::before(&cfg, &failing);
+        let err = run_batch(&cfg, &failing, &BatchOptions::default()).expect_err("must fail");
+        let batch = err.downcast_ref::<BatchError>().expect("a BatchError");
+        println!("{}", batch.message);
+        assert_eq!(batch.failed_at, Some(1));
+        crate::undo::record_partial(&jcfg, "failing", 1, reverse, Vec::new());
+        let partial = crate::undo::latest(&jcfg, 1).pop().unwrap();
+        assert_eq!(partial["reverse"][0]["name"], "amount");
+
+        run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &BatchOptions::default()).expect("deleting the test package");
+        let _ = std::fs::remove_dir_all(&journal);
+    }
+
+    /// LC-371: what EA's baseline comparison returns (an experiment kept as a test): a package copied, a baseline,
+    /// a change, the comparison in %TEMP%\loonar_baseline_compare.xml.
+    /// `LOONAR_TEST_PROPS=E:/livetest/undo/undo.properties cargo test ea_baseline_compare -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA, a license and the model database from app.properties"]
+    fn ea_baseline_compare() {
+        let cfg = test_config();
+        let _ea = CloseEa;
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).expect(sql);
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id")[0][0].parse().unwrap();
+        let ops = vec![
+            json!({"op":"create_package","key":"pkg","parent":root,"name":format!("ZZ_base_{}", chrono::Local::now().format("%H%M%S"))}),
+            json!({"op":"create_element","key":"a","package":"#pkg","name":"Order","type":"Class","notes":"Line one.\r\nLine two."}),
+            json!({"op":"create_element","key":"b","package":"#pkg","name":"Invoice","type":"Class"}),
+        ];
+        let created = run_batch(&cfg, &ops, &BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("creation");
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).expect(key)["id"].as_i64().unwrap();
+        let (pkg, a, b) = (id_of("pkg"), id_of("a"), id_of("b"));
+        run_batch(&cfg, &[json!({"op":"create_baseline","package":pkg,"version":"1.0","notes":"test"})], &BatchOptions::default()).expect("baseline");
+        run_batch(&cfg, &[
+            json!({"op":"update_element","element":a,"name":"Customer Order","status":"Approved"}),
+            json!({"op":"delete","element":b}),
+            json!({"op":"create_element","package":pkg,"name":"Payment","type":"Class"}),
+        ], &BatchOptions::default()).expect("changes");
+        let file = std::env::temp_dir().join("loonar_baseline_compare.xml");
+        let result = run_batch(&cfg, &[json!({"op":"baseline_compare","package":pkg,"baseline":"1.0","file":file.display().to_string()})], &BatchOptions::default());
+        run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &BatchOptions::default()).expect("cleanup");
+        result.expect("compare");
+        let xml = std::fs::read_to_string(&file).unwrap();
+        println!("{} bytes\n{}", xml.len(), xml.chars().take(3000).collect::<String>());
+        let (added, deleted, changed, noise) = crate::changes::baseline_diff(&xml);
+        println!("added {added:?}
+deleted {deleted:?}
+changed {changed:?}
+noise {noise}");
+        assert!(added.iter().any(|a| a.contains("Payment")) && deleted.iter().any(|d| d.contains("Invoice")));
+        assert!(changed.iter().any(|c| c.contains("Name: \"Order\" → \"Customer Order\"") && c.contains("Status") && !c.contains("DateModified")), "{changed:?}");
+    }
+
+    /// LC-376: a layout undone from the journal puts every element back; aligning to the top lines them up.
+    /// `LOONAR_TEST_PROPS=E:/livetest/undo/undo.properties cargo test ea_layout_undo_and_align -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA, a license and the model database from app.properties"]
+    fn ea_layout_undo_and_align() {
+        let cfg = test_config();
+        let _ea = CloseEa;
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).expect(sql);
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id")[0][0].parse().unwrap();
+        let ops = vec![
+            json!({"op":"create_package","key":"pkg","parent":root,"name":format!("ZZ_layout_{}", chrono::Local::now().format("%H%M%S"))}),
+            json!({"op":"create_diagram","key":"d","package":"#pkg","name":"Layout","type":"Logical"}),
+            json!({"op":"create_element","key":"a","package":"#pkg","name":"A","type":"Class"}),
+            json!({"op":"create_element","key":"b","package":"#pkg","name":"B","type":"Class"}),
+            json!({"op":"create_element","key":"c","package":"#pkg","name":"C","type":"Class"}),
+            json!({"op":"create_connector","source":"#a","target":"#b","type":"Association"}),
+            json!({"op":"create_connector","source":"#b","target":"#c","type":"Association"}),
+            json!({"op":"place","diagram":"#d","element":"#a","left":500,"top":300,"width":110,"height":60}),
+            json!({"op":"place","diagram":"#d","element":"#b","left":40,"top":40,"width":110,"height":60}),
+            json!({"op":"place","diagram":"#d","element":"#c","left":300,"top":420,"width":110,"height":60}),
+        ];
+        let created = run_batch(&cfg, &ops, &BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("creation");
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).expect(key)["id"].as_i64().unwrap();
+        let (pkg, d, a, b) = (id_of("pkg"), id_of("d"), id_of("a"), id_of("b"));
+        let places = || q(&format!("select object_id, rectleft, recttop from t_diagramobjects where diagram_id = {d} order by object_id"));
+        let before = places();
+        let layout = vec![json!({"op":"layout_diagram","diagram":d,"direction":"down"})];
+        let (reverse, not_undoable) = crate::undo::before(&cfg, &layout);
+        assert!(not_undoable.is_empty() && reverse.len() == 3, "{reverse:?} {not_undoable:?}");
+        let done = run_batch(&cfg, &layout, &BatchOptions::default()).expect("layout");
+        println!("warnings: {}", done["warnings"]);
+        let moved = places();
+        let back: Vec<Value> = reverse.into_iter().map(|mut r| { r.as_object_mut().unwrap().remove("_at"); r }).collect();
+        run_batch(&cfg, &back, &BatchOptions::default()).expect("undo the layout");
+        let restored = places();
+        let align = crate::tools::align_ops(&cfg, &json!({ "diagram": d, "elements": [b, a], "how": "top" })).unwrap();
+        run_batch(&cfg, &align, &BatchOptions::default()).expect("align");
+        let tops = q(&format!("select recttop from t_diagramobjects where diagram_id = {d} and object_id in ({a}, {b})"));
+        run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &BatchOptions::default()).expect("cleanup");
+        println!("before {before:?}\nafter layout {moved:?}\nrestored {restored:?}");
+        assert_eq!(restored, before, "the layout undone");
+        assert_eq!(tops[0], tops[1], "aligned to the top");
+    }
+
+    /// LC-416: a relationship changed to an ArchiMate type gets its profile synchronized, without a warning.
+    /// `LOONAR_TEST_PROPS=E:/livetest/undo/undo.properties cargo test ea_change_type_synch_profile -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA, a license and the model database from app.properties"]
+    fn ea_change_type_synch_profile() {
+        let cfg = test_config();
+        let _ea = CloseEa;
+        let root: i64 = crate::tools::query_rows(&cfg, "select package_id from t_package where parent_id = 0 order by package_id").unwrap()[0][0].parse().unwrap();
+        let created = run_batch(&cfg, &[
+            json!({"op":"create_package","key":"pkg","parent":root,"name":format!("ZZ_synch_{}", chrono::Local::now().format("%H%M%S"))}),
+            json!({"op":"create_element","key":"a","package":"#pkg","name":"CRM","type":"Component","stereotype":"ArchiMate3::ArchiMate_ApplicationComponent"}),
+            json!({"op":"create_element","key":"b","package":"#pkg","name":"Billing","type":"Component","stereotype":"ArchiMate3::ArchiMate_ApplicationComponent"}),
+            json!({"op":"create_connector","key":"c","source":"#a","target":"#b","type":"Association","stereotype":"ArchiMate3::ArchiMate_Association"}),
+        ], &BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("creation");
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).expect(key)["id"].as_i64().unwrap();
+        let (pkg, c) = (id_of("pkg"), id_of("c"));
+        let changed = run_batch(&cfg, &[json!({"op":"change_connector_type","connector":c,"type":"Association","stereotype":"ArchiMate3::ArchiMate_Serving"})], &BatchOptions::default()).expect("change");
+        println!("{changed}");
+        let new_id = changed["created"][0]["id"].as_i64().unwrap();
+        let stereo = crate::tools::query_rows(&cfg, &format!("select coalesce(c.stereotype,''), coalesce(x.description,'') from t_connector c left join t_xref x on x.client = c.ea_guid and x.name = 'Stereotypes' where c.connector_id = {new_id}")).unwrap();
+        println!("{stereo:?}");
+        run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &BatchOptions::default()).expect("cleanup");
+        assert!(changed["warnings"].as_array().is_none_or(|w| !w.iter().any(|w| w.as_str().unwrap_or("").contains("synchronized"))), "{changed}");
+        assert!(stereo[0][1].contains("ArchiMate_Serving"), "{stereo:?}");
+    }
+
+    /// LC-374: a relationship of another type keeps its name, notes, tag, its route on one diagram and its hiding on
+    /// another. `LOONAR_TEST_PROPS=E:/livetest/undo/undo.properties cargo test ea_change_connector_type -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA, a license and the model database from app.properties"]
+    fn ea_change_connector_type() {
+        let cfg = test_config();
+        let _ea = CloseEa;
+        let q = |sql: &str| crate::tools::query_rows(&cfg, sql).expect(sql);
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id")[0][0].parse().unwrap();
+        let ops = vec![
+            json!({"op":"create_package","key":"pkg","parent":root,"name":format!("ZZ_type_{}", chrono::Local::now().format("%H%M%S"))}),
+            json!({"op":"create_diagram","key":"d1","package":"#pkg","name":"Routed","type":"Logical"}),
+            json!({"op":"create_diagram","key":"d2","package":"#pkg","name":"Hidden","type":"Logical"}),
+            json!({"op":"create_element","key":"a","package":"#pkg","name":"A","type":"Class"}),
+            json!({"op":"create_element","key":"b","package":"#pkg","name":"B","type":"Class"}),
+            json!({"op":"create_connector","key":"c","source":"#b","target":"#a","type":"Association","name":"uses","tags":{"Owner":"Team"}}),
+            json!({"op":"update_connector","connector":"#c","notes":"Old notes."}),
+            json!({"op":"place","diagram":"#d1","element":"#a","left":60,"top":40,"width":110,"height":60}),
+            json!({"op":"place","diagram":"#d1","element":"#b","left":300,"top":200,"width":110,"height":60}),
+            json!({"op":"place","diagram":"#d2","element":"#a","left":60,"top":40,"width":110,"height":60}),
+            json!({"op":"place","diagram":"#d2","element":"#b","left":300,"top":40,"width":110,"height":60}),
+        ];
+        let created = run_batch(&cfg, &ops, &BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).expect("creation");
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).expect(key)["id"].as_i64().unwrap();
+        let (pkg, d1, d2, c) = (id_of("pkg"), id_of("d1"), id_of("d2"), id_of("c"));
+        run_batch(&cfg, &[
+            json!({"op":"route_connector","diagram":d1,"connector":c,"start":[300,230],"points":[[115,230]],"end":[115,100]}),
+            json!({"op":"hide_connectors","diagram":d2,"connectors":[c]}),
+        ], &BatchOptions::default()).expect("route and hide");
+        let route_before = q(&format!("select path from t_diagramlinks where diagramid = {d1} and connectorid = {c}"));
+        let diagrams: Vec<i64> = q(&format!("select distinct diagramid from t_diagramlinks where connectorid = {c}")).iter().map(|r| r[0].parse().unwrap()).collect();
+        let done = run_batch(&cfg, &[json!({"op":"change_connector_type","connector":c,"type":"Dependency","diagrams":diagrams})], &BatchOptions::default()).expect("change type");
+        let new = done["created"][0]["id"].as_i64().expect("the new connector");
+        let problems = {
+            let mut p = Vec::new();
+            if !q(&format!("select connector_id from t_connector where connector_id = {c}")).is_empty() { p.push("the old one is still there".to_string()); }
+            let row = q(&format!("select connector_type, coalesce(name,''), coalesce(notes,'') from t_connector where connector_id = {new}"));
+            if row[0] != vec!["Dependency".to_string(), "uses".to_string(), "Old notes.".to_string()] { p.push(format!("new: {:?}", row[0])); }
+            if q(&format!("select value from t_connectortag where elementid = {new} and property = 'Owner'")).first().map(|r| r[0].as_str()) != Some("Team") { p.push("tag".into()); }
+            if q(&format!("select path from t_diagramlinks where diagramid = {d1} and connectorid = {new}")) != route_before { p.push("route".into()); }
+            let hidden = q(&format!("select hidden from t_diagramlinks where diagramid = {d2} and connectorid = {new}"));
+            if !hidden.first().is_some_and(|r| r[0] == "1" || r[0].eq_ignore_ascii_case("true")) { p.push(format!("hidden: {hidden:?}")); }
+            p
+        };
+        run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &BatchOptions::default()).expect("cleanup");
+        assert!(problems.is_empty(), "{problems:?}");
     }
 
     /// Linking a BPMN subprocess to the subprocess diagram (set_composite) on a real EA: on double-click EA

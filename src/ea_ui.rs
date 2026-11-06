@@ -188,7 +188,7 @@ pub fn alias_expressions(sql: &str) -> String {
                     i += 1;
                 }
             }
-            _ if depth == 0 && lower[i..].starts_with("select") && (i == 0 || !bytes[i - 1].is_ascii_alphanumeric()) => {
+            _ if depth == 0 && bytes[i..].starts_with(b"select") && (i == 0 || !bytes[i - 1].is_ascii_alphanumeric()) => {
                 start = Some(i + 6);
                 break;
             }
@@ -274,13 +274,31 @@ pub fn sql_query(sql: &str, limit: usize) -> Result<(Vec<String>, Vec<Vec<Option
             }
         })
     };
-    let xml = with_running_ea(Duration::from_secs(60), move |repo| Ok(repo.call("SQLQuery", &[crate::com::s(&sql)])?.text()));
+    let xml = with_running_ea(Duration::from_secs(60), move |repo| {
+        // The SQL of the repository's engine (LC-345: reads in an EA tab skipped portable_sql, so e.g. a cast to
+        // varchar failed on MySQL and a guard got no description).
+        let kind = repo.call("RepositoryType", &[]).map(|v| v.text()).unwrap_or_default();
+        let sql = crate::model_db::portable_sql(source_of_repository(&kind), &sql);
+        Ok(repo.call("SQLQuery", &[crate::com::s(&sql)])?.text())
+    });
     done.store(true, std::sync::atomic::Ordering::Relaxed);
     let _ = watcher.join();
     if let Some(error) = caught.lock().unwrap_or_else(|p| p.into_inner()).take() {
         bail!("{}", error.lines().filter(|l| !l.trim().is_empty()).collect::<Vec<_>>().join(" "));
     }
     Ok(parse_sql_xml(&xml?, limit))
+}
+
+/// The engine of an EA repository (Repository.RepositoryType) for portable_sql; files and others as SQLite/Jet.
+fn source_of_repository(kind: &str) -> crate::config::ModelSource {
+    use crate::config::ModelSource;
+    match kind.to_ascii_uppercase().as_str() {
+        "SQLSVR" => ModelSource::SqlServer,
+        "MYSQL" => ModelSource::MySql,
+        "ORACLE" => ModelSource::Oracle,
+        "POSTGRES" => ModelSource::Postgres,
+        _ => ModelSource::File,
+    }
 }
 
 /// Message boxes of the given EA process. With `skip` (the boxes open before the query): closes the first new one that
@@ -343,7 +361,8 @@ fn close_error_box(ea_pid: u32, skip: Option<&std::collections::HashSet<isize>>)
     for window in search.found.into_iter().filter(|w| !skip.contains(w)) {
         let mut text = String::new();
         unsafe { EnumChildWindows(window, child, &mut text as *mut String as isize) };
-        if text.contains("SQL") || text.contains("Database API") || text.contains("XML") || text.contains("Error processing") {
+        // EA's error box has one button (OK); a box with OK/Cancel is a question for the user and stays (LC-359).
+        if (text.contains("SQL") || text.contains("Database API") || text.contains("XML") || text.contains("Error processing")) && button_count(window) == 1 {
             // IDOK on the box's own OK button (EA's error box has only this button).
             unsafe { PostMessageW(window, 0x0111, 1, 0) };
             return vec![(window, text)];
@@ -409,13 +428,72 @@ pub fn background_message_box(since: chrono::DateTime<chrono::Local>) -> Option<
         unsafe { CloseHandle(process) };
         let exe = String::from_utf16_lossy(&name[..size as usize]).to_lowercase();
         let started = ((created.high as u64) << 32) | created.low as u64;
-        if ok && exe.ends_with("\\ea.exe") && started >= since_ticks {
+        // Only an EA without a visible main window is the background one Compass started (LC-359: an EA the user
+        // opened after it had its OK/Cancel boxes answered too).
+        if ok && exe.ends_with("\\ea.exe") && started >= since_ticks && !has_visible_main_window(pid) {
             let text = box_text(window);
             close_box(window);
             return Some(text.trim().to_string());
         }
     }
     None
+}
+
+/// Whether the process has a visible top-level window that is not a message box (the user's EA window).
+fn has_visible_main_window(pid: u32) -> bool {
+    #[link(name = "user32")]
+    extern "system" {
+        fn EnumWindows(callback: extern "system" fn(isize, isize) -> i32, param: isize) -> i32;
+        fn GetWindowThreadProcessId(window: isize, process: *mut u32) -> u32;
+        fn GetClassNameW(window: isize, name: *mut u16, max: i32) -> i32;
+        fn IsWindowVisible(window: isize) -> i32;
+    }
+    struct Search {
+        pid: u32,
+        found: bool,
+    }
+    extern "system" fn top(window: isize, param: isize) -> i32 {
+        // SAFETY: param points to the Search below for the duration of EnumWindows.
+        let search = unsafe { &mut *(param as *mut Search) };
+        let mut pid = 0u32;
+        unsafe { GetWindowThreadProcessId(window, &mut pid) };
+        if pid == search.pid && unsafe { IsWindowVisible(window) } != 0 {
+            let mut class = [0u16; 64];
+            let n = unsafe { GetClassNameW(window, class.as_mut_ptr(), 64) };
+            if String::from_utf16_lossy(&class[..n.max(0) as usize]) != "#32770" {
+                search.found = true;
+                return 0;
+            }
+        }
+        1
+    }
+    let mut search = Search { pid, found: false };
+    // SAFETY: the callback only uses the Search passed in, which outlives the call.
+    unsafe { EnumWindows(top, &mut search as *mut Search as isize) };
+    search.found
+}
+
+/// The number of buttons of a dialog.
+fn button_count(window: isize) -> usize {
+    #[link(name = "user32")]
+    extern "system" {
+        fn EnumChildWindows(parent: isize, callback: extern "system" fn(isize, isize) -> i32, param: isize) -> i32;
+        fn GetClassNameW(window: isize, name: *mut u16, max: i32) -> i32;
+    }
+    extern "system" fn child(window: isize, param: isize) -> i32 {
+        // SAFETY: param points to the counter below for the duration of EnumChildWindows.
+        let count = unsafe { &mut *(param as *mut usize) };
+        let mut class = [0u16; 16];
+        let n = unsafe { GetClassNameW(window, class.as_mut_ptr(), 16) };
+        if String::from_utf16_lossy(&class[..n.max(0) as usize]) == "Button" {
+            *count += 1;
+        }
+        1
+    }
+    let mut count = 0usize;
+    // SAFETY: the callback only uses the counter passed in, which outlives the call.
+    unsafe { EnumChildWindows(window, child, &mut count as *mut usize as isize) };
+    count
 }
 
 /// The texts of a message box (its Static controls).
@@ -516,6 +594,36 @@ pub fn take_references() -> Vec<String> {
     text.lines().map(str::trim).filter(|line| !line.is_empty()).map(str::to_string).collect()
 }
 
+/// Commands from the add-in's context menu: ("usage", [operation id, element id, name]) or ("version", [element id, name]).
+pub fn take_commands() -> Vec<(String, Vec<String>)> {
+    let Some(name) = ROT_NAME.get() else { return Vec::new() };
+    let file = std::env::temp_dir().join(format!("loonar-ea-command-{name}.txt"));
+    let Ok(text) = std::fs::read_to_string(&file) else { return Vec::new() };
+    let _ = std::fs::remove_file(&file);
+    text.lines()
+        .filter_map(|line| {
+            let mut parts = line.trim_end_matches(['\r', '\n']).split('\t');
+            let kind = parts.next()?.trim().to_string();
+            Some((kind, parts.map(str::to_string).collect()))
+        })
+        .collect()
+}
+
+/// Diagrams the EA add-in sent with "Send to Miro" (the diagram menu), taken out of their hand-over file: one line
+/// each, "diagram" or "diagram:element,element,…" when elements were selected on it.
+pub fn take_miro() -> Vec<(i64, Vec<i64>)> {
+    let Some(name) = ROT_NAME.get() else { return Vec::new() };
+    let file = std::env::temp_dir().join(format!("loonar-ea-miro-{name}.txt"));
+    let Ok(text) = std::fs::read_to_string(&file) else { return Vec::new() };
+    let _ = std::fs::remove_file(&file);
+    text.lines().filter_map(parse_miro).collect()
+}
+
+fn parse_miro(line: &str) -> Option<(i64, Vec<i64>)> {
+    let (diagram, picked) = line.trim().split_once(':').unwrap_or((line.trim(), ""));
+    Some((diagram.trim().parse().ok()?, picked.split(',').filter_map(|id| id.trim().parse().ok()).collect()))
+}
+
 /// Model events the EA add-in passed on (a new relationship, a changed element): ("connector" | "element", id).
 /// One event of EA: kind, id and, for a deletion, the object's description from EA (description, type, stereotype),
 /// because the object is gone when Compass reads the event.
@@ -544,6 +652,24 @@ fn parse_event(line: &str) -> Option<Event> {
 
 #[cfg(test)]
 mod event_tests {
+    /// E1: a save that fails at once (no EA window, or another model there) does not leave the "still running" mark,
+    /// so the next save is not refused.
+    #[test]
+    fn failed_window_save_clears_the_mark() {
+        let target = super::Target { db_name: "no_such_model_e1".into(), file: None };
+        for _ in 0..2 {
+            let error = super::run_in_window(&target, String::new(), vec![], None, false, false, std::time::Duration::from_secs(20)).unwrap_err().to_string();
+            assert!(!error.contains("still running"), "{error}");
+        }
+    }
+
+    #[test]
+    fn miro_requests_with_and_without_selection() {
+        assert_eq!(super::parse_miro("42"), Some((42, vec![])));
+        assert_eq!(super::parse_miro("42:7, 9,8 "), Some((42, vec![7, 9, 8])));
+        assert_eq!(super::parse_miro("x:1"), None);
+    }
+
     #[test]
     fn events_with_and_without_description() {
         assert_eq!(super::parse_event("element:42"), Some(("element".into(), 42, None)));
@@ -619,6 +745,14 @@ fn same_file(a: &Path, b: &Path) -> bool {
 
 /// Checks whether the open EA window shows the same model the assistant works with
 /// (the database name in the connection, or the same EA file).
+/// Whether `word` is in `text` as a whole name (any letter case): the characters around it are not letters, digits
+/// or "_" (LC-359: "ea" matched the connection of "ea_prod").
+pub(crate) fn contains_word(text: &str, word: &str) -> bool {
+    let (text, word) = (text.to_lowercase(), word.to_lowercase());
+    let inside = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
+    text.match_indices(&word).any(|(at, _)| !inside(text[..at].chars().next_back()) && !inside(text[at + word.len()..].chars().next()))
+}
+
 fn same_model(repo: &Disp, target: &Target) -> Result<()> {
     let connection = repo.text("ConnectionString").unwrap_or_default();
     match &target.file {
@@ -629,7 +763,7 @@ fn same_model(repo: &Disp, target: &Target) -> Result<()> {
         }
         None => {
             let db_name = &target.db_name;
-            if !db_name.is_empty() && !connection.to_lowercase().contains(&db_name.to_lowercase()) {
+            if !db_name.is_empty() && !contains_word(&connection, db_name) {
                 bail!("{}", crate::i18n::fmt("the open EA window shows a different model (connection: {0}), but the assistant works with the database \"{1}\"", &[safe_connection(&connection), db_name.to_string()]));
             }
         }
@@ -689,19 +823,52 @@ impl HiddenCommand for std::process::Command {
 }
 
 pub fn has_model_open(target: &Target) -> bool {
+    matches!(model_in_window(target), Some(true))
+}
+
+/// Whether the user's EA window has this model open: `None` when an EA window is there but does not answer (a dialog
+/// box may be open) – then nobody knows, and an EA file must not be opened by a second EA meanwhile (E3).
+pub fn model_in_window(target: &Target) -> Option<bool> {
     let target = target.clone();
-    with_running_ea(Duration::from_secs(5), move |repo| same_model(repo, &target)).is_ok()
+    match with_running_ea(Duration::from_secs(5), move |repo| Ok(same_model(repo, &target).is_ok())) {
+        Ok(open) => Some(open),
+        Err(e) if e.to_string() == crate::i18n::tr("the EA window is not responding (a dialog box may be open)") => None,
+        Err(_) => Some(false),
+    }
 }
 
 /// Runs a write job in the user's EA window (an EA file the user has open: a second EA instance must not
 /// open the same `.qea` file). The reply has the same form as from the background session.
 pub fn run_in_window(target: &Target, user: String, ops: Vec<Value>, rollback_key: Option<String>, keep_locks: bool, locks: bool, timeout: Duration) -> Result<Value> {
+    use std::sync::atomic::Ordering;
+    // A save that ran out of time may still be finishing in the EA window (E1): a new save waits for it instead of
+    // writing the same objects a second time.
+    if WINDOW_SAVE_RUNNING.swap(true, Ordering::SeqCst) {
+        bail!("{}", crate::i18n::tr("The previous save is still running in the EA window (it did not answer in time). Wait until EA is free, check the model, then try again."));
+    }
+    // Cleared when the save's thread lets go of the job: done, failed, or never started (no EA window).
+    struct Running;
+    impl Drop for Running {
+        fn drop(&mut self) {
+            WINDOW_SAVE_RUNNING.store(false, Ordering::SeqCst);
+        }
+    }
+    let running = Running;
     let target = target.clone();
-    with_running_ea(timeout, move |repo| {
+    let result = with_running_ea(timeout, move |repo| {
+        let _running = running;
         same_model(repo, &target)?;
         Ok(crate::ea_com::run_request(repo, &user, &ops, rollback_key.as_deref(), keep_locks, locks))
-    })
+    });
+    if result.is_err() && WINDOW_SAVE_RUNNING.load(Ordering::SeqCst) {
+        // Still running: the error says that EA may yet finish the save.
+        return Err(anyhow!("{}", crate::i18n::tr("The EA window did not answer in time (a dialog box may be open). EA may still finish this save: check the model before trying again – a repeated save could create everything twice.")));
+    }
+    result
 }
+
+/// A save through the user's EA window is running (also one abandoned after its time limit, until EA finishes it).
+static WINDOW_SAVE_RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// What the user has open and selected in EA.
 pub fn context(target: &Target) -> Result<Value> {
@@ -764,6 +931,20 @@ pub fn open_diagram(target: &Target, diagram_id: i32) -> Result<()> {
     })
 }
 
+/// Opens a diagram in the user's EA window with an element selected on it (LC-411).
+pub fn open_diagram_at(target: &Target, diagram_id: i32, element_id: i32) -> Result<()> {
+    let db = target.clone();
+    with_running_ea(Duration::from_secs(15), move |repo| {
+        same_model(repo, &db)?;
+        repo.call("OpenDiagram", &[i(diagram_id)])?;
+        let diagram = repo.call_obj("GetDiagramByID", &[i(diagram_id)])?;
+        let element = repo.call_obj("GetElementByID", &[i(element_id)])?;
+        let kind = element.text("Type").unwrap_or_default();
+        diagram.obj("SelectedObjects")?.call("AddNew", &[crate::com::s(&element_id.to_string()), crate::com::s(&kind)])?;
+        Ok(())
+    })
+}
+
 /// Shows an element in the project browser of the user's EA window.
 pub fn show_element(target: &Target, element_id: i32) -> Result<()> {
     let db = target.clone();
@@ -796,6 +977,35 @@ pub fn refresh_after_write(target: &Target, diagrams: Vec<i32>, packages: Vec<i3
 
 #[cfg(test)]
 mod tests {
+    /// LC-359: the model's database name is a whole word of the connection.
+    #[test]
+    fn database_name_as_a_whole_word() {
+        assert!(super::contains_word("ea_lab --- DBType=4;Connect=Provider=MSDASQL.1;Data Source=ea_lab;", "ea_lab"));
+        assert!(super::contains_word("Initial Catalog=EA;Data Source=srv", "ea"));
+        assert!(!super::contains_word("Initial Catalog=ea_prod;Data Source=srv", "ea"));
+        assert!(!super::contains_word("Data Source=lab_ea", "ea"));
+        assert!(super::contains_word("Data Source=sklep-ea.db", "sklep-ea"));
+    }
+
+    /// LC-345: EA's repository types map to the engines of portable_sql.
+    #[test]
+    fn repository_types() {
+        use crate::config::ModelSource;
+        assert_eq!(super::source_of_repository("SQLSVR"), ModelSource::SqlServer);
+        assert_eq!(super::source_of_repository("MYSQL"), ModelSource::MySql);
+        assert_eq!(super::source_of_repository("ORACLE"), ModelSource::Oracle);
+        assert_eq!(super::source_of_repository("POSTGRES"), ModelSource::Postgres);
+        assert_eq!(super::source_of_repository("SL3"), ModelSource::File);
+        assert_eq!(super::source_of_repository("JET"), ModelSource::File);
+    }
+
+    /// LC-340: text outside ASCII before the outer SELECT (a CTE name).
+    #[test]
+    fn alias_expressions_after_a_polish_cte() {
+        let sql = "with dane_źródłowe as (select 1 as a) select count(*) from dane_źródłowe";
+        assert!(super::alias_expressions(sql).contains("dane_źródłowe"));
+    }
+
     #[test]
     fn connection_shown_to_the_model_has_no_credentials() {
         let shown = super::safe_connection("model --- DBType=4;Connect=Provider=SSDB;SRC=host,5432@ea;UID=postgres;PWD=Secret1;");

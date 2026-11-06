@@ -189,6 +189,14 @@ pub struct Session {
     /// `from`. Kept with the conversation, so every later turn sends the same text and reads it from the cache.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<EarlierSummary>,
+    /// How many messages at the start came from an imported .lcchat file (LC-476): marked in the window, and the
+    /// assistant is told they were not written in this conversation.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub imported: usize,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 /// A summary of the messages before the message created at `from`.
@@ -239,6 +247,7 @@ impl Session {
             moves: Vec::new(),
             steps: Default::default(),
             summary: None,
+            imported: 0,
         }
     }
 
@@ -266,6 +275,17 @@ impl Session {
     /// a note of the application, so the assistant does not trust names and ids from the earlier model blindly.
     pub fn messages_for_model(&self) -> Vec<Message> {
         let mut out = self.messages.clone();
+        // Imported messages (LC-476): the first one says where they come from.
+        if self.imported > 0 {
+            if let Some(first) = out.first_mut() {
+                first.text = format!(
+                    "[Note from the application, not from the user: the first {} messages of this conversation were imported from an \
+                     exported .lcchat file; they were not written in this conversation, and their answers may be about another model \
+                     or an older state of it.]\n\n{}",
+                    self.imported, first.text
+                );
+            }
+        }
         for mv in &self.moves {
             if let Some(m) = out.iter_mut().skip(mv.at).find(|m| m.role == "user") {
                 let earlier = if mv.from.is_empty() { String::from("another model") } else { mv.from.clone() };
@@ -371,7 +391,7 @@ pub fn store_bytes(attachments_dir: &Path, original: &str, bytes: &[u8]) -> Resu
 
 /// Original file name from the stored name (without the uuid prefix).
 /// The start of the application's note with the steps of the previous answer (see `messages_for_model`).
-pub const STEPS_NOTE: &str = "[Note from the application, not from the user and not to be repeated in your answer: steps done while making your previous answer:";
+pub const STEPS_NOTE: &str = "[Note from the application, not from the user and not to be repeated in your answer: steps done while making your previous answer, with what the tools got and returned (shortened). They are what really happened: rely on them, do not take back what they show:";
 
 /// What the user wrote in a message prepared for the model: the notes of the application put before it (the steps of
 /// the previous answer, a change of the model, a summary) are left out (found in the 0.9.2 tests: a template named in
@@ -415,6 +435,39 @@ pub fn sanitize_name(original: &str) -> String {
         .map(|c| if c.is_alphanumeric() || c == '.' || c == '-' || c == '_' { c } else { '_' })
         .take(80)
         .collect()
+}
+
+/// The file in the attachments folder: its stored name ("<id>_Name.docx") or, as the model usually says it, the
+/// name the user sees ("Name.docx", also with the spaces and letters the stored name turned into "_"); then the newest
+/// such file. Every tool that reads an attachment finds it this way (LC-436: the model is shown the name without the id).
+pub fn attachment_named(dir: &Path, given: &str) -> Option<String> {
+    let given = given.trim();
+    if given.is_empty() {
+        return None;
+    }
+    if dir.join(given).is_file() {
+        return Some(given.to_string());
+    }
+    let source = Path::new(given);
+    let stored_form = format!("{}.{}", sanitize(source.file_stem().and_then(|s| s.to_str()).unwrap_or("")), source.extension().and_then(|e| e.to_str()).unwrap_or("bin"));
+    std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .filter(|e| e.path().is_file())
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().to_string();
+            let shown = display_name(&name).to_string();
+            (shown.eq_ignore_ascii_case(given) || shown.eq_ignore_ascii_case(&sanitize_name(given)) || shown.eq_ignore_ascii_case(&stored_form))
+                .then(|| (e.metadata().and_then(|m| m.modified()).ok(), name))
+        })
+        .max_by_key(|(modified, _)| *modified)
+        .map(|(_, name)| name)
+}
+
+/// The path of an attachment named by the model (see `attachment_named`); a name that matches no file stays as given,
+/// so reading it reports the missing attachment.
+pub fn attachment_path(dir: &Path, given: &str) -> PathBuf {
+    dir.join(attachment_named(dir, given).unwrap_or_else(|| given.to_string()))
 }
 
 /// Copies the attachment file into the `attachments` folder; returns the name it was saved under.
@@ -529,8 +582,11 @@ pub fn import(source: &Path, attachments_dir: &Path, model: ModelChoice) -> Resu
     let mut session = Session::new();
     session.title = exported.title.chars().take(200).collect();
     session.messages = exported.messages;
+    session.imported = session.messages.len();
     for m in &mut session.messages {
-        m.attachments = m.attachments.iter().map(|a| renamed.get(a).cloned().unwrap_or_else(|| a.clone())).collect();
+        // Only attachments that came in this file (LC-347): a name without its file (e.g. a path such as
+        // C:\Users\x\secret.docx) would point at a file of this computer – sent to the AI, opened, exported again.
+        m.attachments = m.attachments.iter().filter_map(|a| renamed.get(a).cloned()).collect();
     }
     let count = session.messages.len();
     session.moves = exported.moves.into_iter().filter(|m| m.at <= count).collect();
@@ -549,6 +605,24 @@ pub fn import(source: &Path, attachments_dir: &Path, model: ModelChoice) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LC-436: a tool finds an attached file by the name the model is shown (without the id, with spaces or "_").
+    #[test]
+    fn attachment_by_the_shown_name() {
+        let dir = std::env::temp_dir().join(format!("lc436-{}", uuid::Uuid::new_v4().simple()));
+        let source = dir.join("in").join("Specyfikacja pakietu Żółw.docx");
+        std::fs::create_dir_all(source.parent().unwrap()).unwrap();
+        std::fs::write(&source, b"docx").unwrap();
+        let files = dir.join("files");
+        let stored = store_attachment(&files, &source).unwrap();
+        let shown = display_name(&stored).to_string();
+        for given in ["Specyfikacja pakietu Żółw.docx", shown.as_str(), stored.as_str(), "specyfikacja_pakietu_Żółw.DOCX"] {
+            assert_eq!(attachment_named(&files, given).as_deref(), Some(stored.as_str()), "{given}");
+        }
+        assert_eq!(attachment_named(&files, "inny.docx"), None);
+        assert_eq!(attachment_path(&files, "inny.docx"), files.join("inny.docx"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     fn settings(text: &str) -> crate::config::AppConfig {
         let dir = std::env::temp_dir().join(format!("loonar-model-choice-{}-{}", std::process::id(), text.len()));
@@ -669,6 +743,10 @@ mod tests {
         let name = &back.messages[0].attachments[0];
         assert_ne!(name, &stored, "a new name in the attachments folder");
         assert_eq!(std::fs::read(other_att.join(name)).unwrap(), b"png-bytes");
+        // LC-476: the imported messages are counted, and the assistant is told where they come from.
+        assert_eq!(back.imported, 2);
+        assert!(back.messages_for_model()[0].text.contains("imported from an exported .lcchat file"));
+        assert!(!back.messages[0].text.contains("Note from the application"), "the stored message stays as it was");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -685,12 +763,13 @@ mod tests {
         let mut zip = zip::ZipWriter::new(std::fs::File::create(&evil).unwrap());
         let o = zip::write::SimpleFileOptions::default();
         zip.start_file("conversation.json", o).unwrap();
-        zip.write_all(br#"{"format":"loonar-compass-conversation","version":1,"app":"0.9.1","exported":"","title":"t","model":"m","messages":[{"role":"user","text":"x","attachments":["../../evil.txt"],"created":""}]}"#).unwrap();
+        zip.write_all(br#"{"format":"loonar-compass-conversation","version":1,"app":"0.9.1","exported":"","title":"t","model":"m","messages":[{"role":"user","text":"x","attachments":["../../evil.txt","C:\\Users\\x\\secret.docx"],"created":""}]}"#).unwrap();
         zip.start_file("attachments/../../evil.txt", o).unwrap();
         zip.write_all(b"boom").unwrap();
         zip.finish().unwrap();
         let back = import(&evil, &dir.join("att"), db()).unwrap();
         assert_eq!(back.messages.len(), 1);
+        assert!(back.messages[0].attachments.is_empty(), "an attachment without its file in the export is dropped");
         assert!(!dir.join("evil.txt").exists() && !std::env::temp_dir().join("evil.txt").exists());
         let _ = std::fs::remove_dir_all(&dir);
     }

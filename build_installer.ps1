@@ -2,11 +2,14 @@
 #   .\build_installer.ps1           release build: application + installer (installs per user by default, no admin needed)
 #   .\build_installer.ps1 -SkipApp  installer only, with the application already in target\release
 #   .\build_installer.ps1 -Sign     public release: signs the application and the installer (no signing configuration = error)
+#   .\build_installer.ps1 -Label 0.9.3-dev27   the build's name shown in Info and the footer with the commit (LC-483)
 # Output: dist\LoonarCompass-Setup-<version>.exe and its .sha256 file. The version comes from Cargo.toml
 # (shown as major.minor, plus .patch when it is not 0 - the same rule the installer uses).
 #
 # Digital signature (Authenticode): signing\sign.ps1 (Azure Artifact Signing by default; "az login" first).
-param([switch]$SkipApp, [switch]$Sign)
+param([switch]$SkipApp, [switch]$Sign, [string]$Label = '')
+# The build's name goes into the program through build.rs (LOONAR_BUILD); empty for a release build.
+$env:LOONAR_BUILD = $Label
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"

@@ -30,6 +30,10 @@ button.ghost { background:transparent; color:var(--accent); border:1px solid var
 .tree div:hover, .tree div.on { background:var(--bg); color:var(--accent); }
 table { border-collapse:collapse; width:100%; font-size:13px; }
 th, td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--line); vertical-align:top; overflow-wrap:anywhere; }
+/* A cross table of the portfolio: words are not broken letter by letter, wide tables scroll (LC-393, round 10). */
+.scroll-x { overflow-x:auto; }
+table.cross { width:auto; }
+table.cross th, table.cross td { white-space:nowrap; overflow-wrap:normal; }
 th { color:var(--muted); font-weight:600; }
 tr.click { cursor:pointer; } tr.click:hover td { background:var(--bg); }
 .sev-error { color:var(--err); font-weight:600; } .sev-warning { color:var(--warn); font-weight:600; } .sev-info { color:var(--info); }
@@ -96,11 +100,14 @@ h3 { font-size:14px; margin:16px 0 6px; }
       <button data-tab="search">Search</button>
       <button data-tab="lint">Model check</button>
       <button data-tab="gap">Gaps</button>
+      <button data-tab="portfolio">Portfolio</button>
       <button data-tab="audit">Audit trail</button>
       <button data-tab="notes">Team notes</button>
       <button data-tab="changes">Change sets</button>
+      <button data-tab="requests">Review requests</button>
       <button data-tab="users" id="userstab" hidden>Users</button>
       <button data-tab="policy" id="policytab" hidden>Team policy</button>
+      <button data-tab="agents" id="agentstab" hidden>Team agents</button>
     </div>
     <div id="view-ask">
       <p class="muted">Ask about the selected model in your own words, e.g. "Which systems use the payment gateway?" The assistant only reads the model.</p>
@@ -118,9 +125,17 @@ h3 { font-size:14px; margin:16px 0 6px; }
       <div class="row"><input id="asis" placeholder="as-is package id"><input id="tobe" placeholder="to-be package id"><button id="gapgo">Compare</button></div>
       <div id="gap"></div>
     </div>
+    <div id="view-portfolio" hidden><p class="muted">Pick a package on the left: its elements (with subpackages) counted by one or two properties; tag:&lt;name&gt; uses a tagged value (e.g. tag:Owner, tag:Lifecycle).</p>
+      <div class="row"><input id="pfrows" value="status" placeholder="rows: type, stereotype, status, phase, author, version, package, tag:…"><input id="pfcols" placeholder="columns (optional)"><input id="pftype" placeholder="only this element type (optional)"><button id="pfgo">Show</button><button id="pfppt" class="ghost">PowerPoint</button><button id="pfcsv" class="ghost">CSV</button></div>
+      <div id="portfolio"></div></div>
     <div id="view-audit" hidden><div id="audit"></div></div>
     <div id="view-notes" hidden><div id="notes"></div></div>
     <div id="view-changes" hidden><div id="changes"></div></div>
+    <div id="view-agents" hidden><p class="muted">Agents that run in everybody's Compass in EA: when something happens to an object (or on a schedule), the assistant
+      advises in System Output, or – for deletions – guards and can stop them. Check shows what each agent will do; Save keeps them in the team policy.</p>
+      <div id="agents"></div>
+      <div class="row"><button id="agadd" class="ghost">Add an agent</button><button id="agcheck" class="ghost">Check</button><button id="agsave">Save</button><span id="agstatus" class="muted"></span></div></div>
+    <div id="view-requests" hidden><p class="muted">Elements you own that an architect asked you to look at: confirm them, or say what needs to change.</p><div id="requests"></div></div>
     <div id="view-users" hidden><div id="users"></div></div>
     <div id="view-policy" hidden>
       <p class="muted">The team's rules for every Compass connected to this hub, as JSON: <b>min_approval</b> (plan, ask, auto), <b>governance</b> (model check rules),
@@ -138,8 +153,12 @@ const $ = id => document.getElementById(id);
 let token = '';
 try { token = sessionStorage.getItem('hubToken') || ''; } catch (e) {}
 // Back from the company sign-in: the session is in the fragment, taken out of the address at once.
+// A session in the address is taken only after a company sign-in started from this tab (H9): a link with someone
+// else's session does not sign this browser in.
 if (location.hash.startsWith('#session=')) {
-  token = decodeURIComponent(location.hash.slice('#session='.length));
+  let started = false;
+  try { started = sessionStorage.getItem('ssoStarted') === '1'; sessionStorage.removeItem('ssoStarted'); } catch (e) {}
+  if (started) token = decodeURIComponent(location.hash.slice('#session='.length));
   history.replaceState(null, '', '/');
 }
 let selectedPackage = null;
@@ -211,6 +230,20 @@ async function loadUsers() {
       list.map(u => '<tr><td>' + esc(u.user) + '</td><td>' + esc(u.key || '') + '</td><td>' + u.tokens_today + '</td><td>' + u.tokens_month + '</td></tr>').join('') + '</table>' +
       '<p class="muted small">Tokens read from the cache count a tenth. Keys and limits per person, role or everybody are set in hub.json, section "ai".</p>'
       : '<p class="muted">Nobody has used the AI through the hub yet.</p>';
+    // Cost by model and by role this month (LC-405).
+    api('/api/users/ai/groups').then(g => {
+      const t = (title, rows) => rows.length ? '<h4>' + title + '</h4><table><tr><th></th><th>Today (USD)</th><th>This month (USD)</th><th>Tokens this month</th></tr>' + rows.map(r => '<tr><td>' + esc(r.name) + '</td><td>' + r.usd_today.toFixed(2) + '</td><td>' + r.usd_month.toFixed(2) + '</td><td>' + r.tokens_month + '</td></tr>').join('') + '</table>' : '';
+      $('aiusage').insertAdjacentHTML('beforeend', t('By model', g.by_source) + t('By role', g.by_role) +
+        (g.by_source.length || g.by_role.length ? '<div class="actions"><button class="ghost" id="aicsv">Download CSV</button></div>' : ''));
+      // The same sums as a CSV file (LC-405).
+      if ($('aicsv')) $('aicsv').onclick = () => {
+        const q = v => '"' + String(v).replace(/"/g, '""') + '"';
+        const lines = ['group;name;usd_today;usd_month;tokens_month'].concat(
+          g.by_source.map(r => ['model', q(r.name), r.usd_today.toFixed(2), r.usd_month.toFixed(2), r.tokens_month].join(';')),
+          g.by_role.map(r => ['role', q(r.name), r.usd_today.toFixed(2), r.usd_month.toFixed(2), r.tokens_month].join(';')));
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/csv' })); a.download = 'ai-costs.csv'; a.click();
+      };
+    }).catch(() => {});
   }).catch(() => {});
   api('/api/users/company').then(list => {
     $('company').innerHTML = list.length ? '<table><tr><th>Account</th><th>Role at the last sign-in</th><th>Last sign-in</th></tr>' +
@@ -256,6 +289,7 @@ async function login() {
     if (me.must_change) { try { sessionStorage.setItem('hubToken', token); } catch (e) {} showChange(); return; }
     $('userstab').hidden = me.role !== 'admin';
     $('policytab').hidden = me.role !== 'admin';
+    $('agentstab').hidden = me.role !== 'admin';
     try { sessionStorage.setItem('hubToken', token); } catch (e) {}
     $('who').textContent = me.name + ' · ' + me.role;
     $('loginview').hidden = true;
@@ -318,13 +352,60 @@ $('results').onclick = async e => {
   const name = (details.text.split('\n')[0] || '').split(' (')[0];
   $('results').innerHTML = '<button class="ghost" id="back">← Results</button>' +
     (canWrite() && integrations.jira ? '<div class="actions"><button id="ejira">Create Jira issue</button></div>' : '') +
-    '<h3>Element</h3><pre>' + esc(details.text) + '</pre><h3>Impact</h3>' + table(impact.text);
+    '<h3>Element</h3><pre>' + esc(details.text) + '</pre><h3>Comments and decisions</h3><div id="comments"></div>' +
+    '<textarea id="ctext" rows="3" placeholder="A comment or a question for the architects"></textarea><div class="actions"><button id="cadd">Add a comment</button> <button id="cdec" class="ghost">Record a decision</button></div>' +
+    '<h3>Impact</h3>' + table(impact.text);
   $('back').onclick = search;
+  const loadComments = async () => {
+    const list = await api('/api/sources/' + source() + '/comments?element=' + id);
+    $('comments').innerHTML = list.length ? list.map(c => '<div class="note"><b>' + esc(c.user) + '</b> · ' + esc((c.time || '').slice(0, 16).replace('T', ' ')) + ' · ' + esc(c.kind) + ' · <i>' + esc(c.status) + '</i>' +
+      ((canWrite() || c.user === me.name) ? ' <button class="ghost cst" data-id="' + esc(c.id) + '" data-s="' + (c.kind === 'decision' ? 'accepted' : 'resolved') + '">' + (c.kind === 'decision' ? 'Accept' : 'Resolve') + '</button>' : '') +
+      '<pre>' + esc(c.text) + '</pre></div>').join('') : '<p class="muted">No comments yet.</p>';
+    document.querySelectorAll('.cst').forEach(b => b.onclick = async () => { await post('/api/comments/' + b.dataset.id + '/status', { status: b.dataset.s }); loadComments(); });
+  };
+  const addComment = async kind => {
+    const text = $('ctext').value.trim(); if (!text) return;
+    try { await post('/api/sources/' + source() + '/comments', { element: Number(id), text, kind }); $('ctext').value = ''; loadComments(); }
+    catch (err) { $('comments').insertAdjacentHTML('beforeend', '<p class="error">' + esc(err.message) + '</p>'); }
+  };
+  $('cadd').onclick = () => addComment('comment');
+  $('cdec').onclick = () => addComment('decision');
+  loadComments();
   if ($('ejira')) $('ejira').onclick = () => jiraIssue('/api/sources/' + source() + '/jira', 'Model: ' + name, { element: Number(id) });
 };
 $('gapgo').onclick = async () => {
   try { $('gap').innerHTML = table((await api('/api/sources/' + source() + '/gap?as_is=' + encodeURIComponent($('asis').value) + '&to_be=' + encodeURIComponent($('tobe').value))).text); }
   catch (e) { $('gap').innerHTML = '<p class="error">' + esc(e.message) + '</p>'; }
+};
+// Portfolio views (LC-393): a bar per value, or a heat map of two properties.
+let portfolioView = null;
+function portfolioQuery() {
+  return 'package=' + encodeURIComponent(selectedPackage || '') + '&rows=' + encodeURIComponent($('pfrows').value.trim() || 'status') + '&cols=' + encodeURIComponent($('pfcols').value.trim()) + '&type=' + encodeURIComponent($('pftype').value.trim());
+}
+$('pfgo').onclick = async () => {
+  if (!selectedPackage) { $('portfolio').innerHTML = '<p class="error">Pick a package on the left first.</p>'; return; }
+  try {
+    const v = portfolioView = await api('/api/sources/' + source() + '/portfolio?' + portfolioQuery());
+    const max = Math.max(1, ...v.cells.flat());
+    if (!v.cols.length) {
+      const total = v.cells.reduce((a, r) => a + r[0], 0) || 1;
+      $('portfolio').innerHTML = '<h3>' + esc(v.title) + '</h3><table>' + v.rows.map((r, i) => '<tr><td>' + esc(r) + '</td><td style="width:60%"><div style="background:var(--accent);height:14px;width:' + Math.round(v.cells[i][0] * 100 / max) + '%"></div></td><td>' + v.cells[i][0] + ' (' + Math.round(v.cells[i][0] * 100 / total) + '%)</td></tr>').join('') + '</table>';
+    } else {
+      $('portfolio').innerHTML = '<h3>' + esc(v.title) + '</h3><div class="scroll-x"><table class="cross"><tr><th></th>' + v.cols.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr>' + v.rows.map((r, i) => '<tr><td>' + esc(r) + '</td>' + v.cells[i].map(n => '<td style="text-align:center;background:rgba(220,80,40,' + (n ? (0.12 + 0.75 * n / max).toFixed(2) : 0) + ')">' + (n || '') + '</td>').join('') + '</tr>').join('') + '</table></div>';
+    }
+  } catch (e) { $('portfolio').innerHTML = '<p class="error">' + esc(e.message) + '</p>'; }
+};
+$('pfppt').onclick = async () => {
+  if (!selectedPackage) return;
+  const r = await fetch('/api/sources/' + source() + '/portfolio.pptx?' + portfolioQuery(), { headers: { Authorization: 'Bearer ' + token } });
+  if (!r.ok) { $('portfolio').innerHTML = '<p class="error">' + esc((await r.json().catch(() => ({}))).error || r.status) + '</p>'; return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob()); a.download = 'portfolio.pptx'; a.click();
+};
+$('pfcsv').onclick = () => {
+  const v = portfolioView; if (!v) return;
+  const q = s => '"' + String(s).replace(/"/g, '""') + '"';
+  const lines = [[''].concat(v.cols.length ? v.cols : ['count']).map(q).join(',')].concat(v.rows.map((r, i) => [q(r)].concat(v.cells[i]).join(',')));
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/csv' })); a.download = 'portfolio.csv'; a.click();
 };
 async function loadAudit() {
   const entries = await api('/api/audit?limit=200');
@@ -342,6 +423,66 @@ async function post(path, body) {
   const v = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(v.error || r.status);
   return v;
+}
+// The team's event agents as a form (LC-406).
+let agentEvents = [], agentList = [];
+async function loadAgents() {
+  const got = await api('/api/agents');
+  agentEvents = got.events; agentList = got.agents;
+  drawAgents();
+}
+function drawAgents(checked) {
+  const opt = (v, cur) => '<option' + (v === cur ? ' selected' : '') + '>' + esc(v) + '</option>';
+  $('agents').innerHTML = agentList.length ? agentList.map((a, i) => {
+    const c = checked && checked[i];
+    return '<div class="note" data-i="' + i + '"><div class="row"><input class="ag-name" placeholder="Name" value="' + esc(a.name || '') + '">' +
+      '<select class="ag-event">' + agentEvents.map(e => opt(e, a.event || 'element_created')).join('') + '</select>' +
+      '<input class="ag-schedule" placeholder="schedule: hourly, every 4h, daily 07:30, weekly mon 08:00" value="' + esc(a.schedule || '') + '"' + (a.event === 'scheduled' ? '' : ' hidden') + '>' +
+      '<input class="ag-applies" placeholder="applies to: * , a type, «stereotype»" value="' + esc(a.applies_to || '*') + '">' +
+      '<select class="ag-mode">' + ['advise', 'guard'].map(m => opt(m, a.mode || 'advise')).join('') + '</select>' +
+      '<label><input type="checkbox" class="ag-on"' + (a.enabled === false ? '' : ' checked') + '> on</label><button class="ag-del ghost">Remove</button></div>' +
+      '<textarea class="ag-prompt" rows="2" style="width:100%" placeholder="What the assistant should check or do">' + esc(a.prompt || '') + '</textarea>' +
+      (c ? (c.problem ? '<p class="error">' + esc(c.problem) + '</p>' : '<p class="muted">' + esc(c.means) + '</p>') : '') + '</div>';
+  }).join('') : '<p class="muted">No team agents yet.</p>';
+  document.querySelectorAll('#agents .note').forEach(n => {
+    const i = Number(n.dataset.i);
+    n.querySelector('.ag-event').onchange = () => { readAgents(); drawAgents(); };
+    n.querySelector('.ag-del').onclick = () => { readAgents(); agentList.splice(i, 1); drawAgents(); };
+  });
+}
+function readAgents() {
+  document.querySelectorAll('#agents .note').forEach(n => {
+    const a = agentList[Number(n.dataset.i)], q = s => n.querySelector(s);
+    a.name = q('.ag-name').value.trim(); a.event = q('.ag-event').value; a.applies_to = q('.ag-applies').value.trim() || '*';
+    a.mode = q('.ag-mode').value; a.prompt = q('.ag-prompt').value.trim(); a.enabled = q('.ag-on').checked;
+    if (a.event === 'scheduled') a.schedule = q('.ag-schedule').value.trim(); else delete a.schedule;
+  });
+}
+async function sendAgents(method) {
+  readAgents();
+  $('agstatus').textContent = '';
+  const r = await fetch('/api/agents' + (method === 'POST' ? '/check' : ''), { method, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ agents: agentList }) });
+  const res = await r.json();
+  drawAgents(res.checked);
+  $('agstatus').textContent = res.error || (method === 'PUT' ? 'Saved: every Compass takes them at its next start.' : (res.valid ? 'All agents are valid.' : 'Fix the agents marked.'));
+}
+$('agadd').onclick = () => { readAgents(); agentList.push({ name: '', event: 'element_created', applies_to: '*', mode: 'advise', prompt: '' }); drawAgents(); };
+$('agcheck').onclick = () => sendAgents('POST').catch(e => $('agstatus').textContent = e.message);
+$('agsave').onclick = () => sendAgents('PUT').catch(e => $('agstatus').textContent = e.message);
+
+// Review requests addressed to me (LC-407): confirm, or say what needs to change (optionally as a decision).
+async function loadRequests() {
+  const list = await api('/api/requests');
+  if (!list.length) { $('requests').innerHTML = '<p class="muted">Nothing waits for you.</p>'; return; }
+  $('requests').innerHTML = list.map(r => '<div class="note"><b>' + esc(r.name) + '</b> <span class="muted">(' + esc(r.source) + ', id ' + esc(String(r.element)) + ') asked by ' + esc(r.user) + ' · ' +
+    esc((r.time || '').slice(0, 10)) + '</span><pre>' + esc(r.text) + '</pre><div class="row"><button class="rq" data-id="' + esc(r.id) + '" data-a="confirmed">Still right</button>' +
+    '<input id="rt-' + esc(r.id) + '" placeholder="What needs to change"><label><input type="checkbox" id="rd-' + esc(r.id) + '"> as a decision</label>' +
+    '<button class="rq ghost" data-id="' + esc(r.id) + '" data-a="needs_change">Needs a change</button></div></div>').join('');
+  document.querySelectorAll('.rq').forEach(b => b.onclick = async () => {
+    const id = b.dataset.id;
+    try { await post('/api/comments/' + id + '/answer', { answer: b.dataset.a, text: $('rt-' + id).value, decision: $('rd-' + id).checked }); loadRequests(); }
+    catch (err) { $('requests').insertAdjacentHTML('afterbegin', '<p class="error">' + esc(err.message) + '</p>'); }
+  });
 }
 async function loadChanges() {
   const list = await api('/api/changes');
@@ -383,7 +524,9 @@ async function ask() {
 }
 function show(tab) {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-  ['ask', 'search', 'lint', 'gap', 'audit', 'notes', 'changes', 'users', 'policy'].forEach(t => $('view-' + t).hidden = t !== tab);
+  ['ask', 'search', 'lint', 'gap', 'portfolio', 'audit', 'notes', 'changes', 'requests', 'users', 'policy', 'agents'].forEach(t => $('view-' + t).hidden = t !== tab);
+  if (tab === 'agents') loadAgents().catch(e => $('agents').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
+  if (tab === 'requests') loadRequests().catch(e => $('requests').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
   if (tab === 'policy') api('/api/policy').then(p => { $('policytext').value = JSON.stringify(p, null, 2); $('policystatus').textContent = ''; }).catch(e => $('policystatus').textContent = e.message);
   if (tab === 'users') loadUsers().catch(e => $('users').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
   if (tab === 'changes') loadChanges().catch(e => $('changes').innerHTML = '<p class="error">' + esc(e.message) + '</p>');
@@ -427,6 +570,7 @@ $('q').onkeydown = e => { if (e.key === 'Enter') search(); };
 $('source').onchange = () => { loadTree(); $('results').innerHTML = ''; $('lint').innerHTML = ''; };
 fetch('/api/auth').then(r => r.json()).then(a => {
   if (a.oidc) { $('sso').textContent = a.button || $('sso').textContent; $('sso').hidden = false; }
+  $('sso').addEventListener('click', () => { try { sessionStorage.setItem('ssoStarted', '1'); } catch (e) {} });
   if (a.password_login === false) { $('byname').hidden = true; $('login').hidden = true; $('usetoken').hidden = true; }
 }).catch(() => {});
 if (token) login();

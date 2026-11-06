@@ -173,7 +173,8 @@ fn official(url: &str) -> bool {
 
 pub fn send(http: &reqwest::blocking::Client, base: &str, key: &str, body: &Value) -> Result<Value> {
     let url = chat_url(base);
-    crate::jira::check_base_url(&url).map_err(|_| anyhow::anyhow!("{}", crate::i18n::tr("The model endpoint must start with https:// (http:// only on this computer)")))?;
+    // A model in the organization's network (Ollama, vLLM behind its VPN) may be reached with http:// (LC-277).
+    crate::net::check_model_url(&url).map_err(|_| anyhow::anyhow!("{}", crate::i18n::tr("The model endpoint must start with https:// (http:// only on this computer or in a private network)")))?;
     let mut body = body.clone();
     if !official(&url) {
         // Local and other compatible servers: the widely supported names, without OpenAI's reasoning settings.

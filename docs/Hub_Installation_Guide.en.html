@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Compass Hub 0.9.2 - Installation guide for IT</title>
+<title>Compass Hub 0.9.3 - Installation guide for IT</title>
 <style>
   @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
   body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1f1e1b; }
@@ -34,7 +34,7 @@
   <img src="img/logo.png" alt="Loonar Compass logo">
   <h1 style="margin-top: 10mm;">Compass Hub</h1>
   <div class="sub">Installation guide for IT</div>
-  <div class="sub" style="font-size: 11pt;">version 0.9.2 &middot; October 2026</div>
+  <div class="sub" style="font-size: 11pt;">version 0.9.3 &middot; October 2026</div>
   <div class="owner">
     Loonar Mariusz Głowacki<br>
     ul. Gombrowicza 12, 73-110 Stargard<br>
@@ -96,18 +96,18 @@
   <tr><td>☐</td><td>Secrets ready, held by the person who installs</td><td>Claude API key(s), Atlassian API token, OIDC client secret, DB password. They are never put into hub.json.</td></tr>
   <tr><td>☐</td><td>Outbound HTTPS from the server</td><td><code>api.anthropic.com</code> (AI gateway), your Atlassian site (Jira/Confluence). Through a proxy: set <code>HTTPS_PROXY</code> for the service (step 3).</td></tr>
 </table>
-<p>Files from the release: <code>CompassHub-0.9.0-windows-x64.zip</code> (with <code>compass-hub.exe</code>, <code>hub.example.json</code>, <code>README.md</code>, the licences), and for the workstations <code>LoonarCompass-Setup-0.9.exe</code> plus the <code>policies</code> folder (ADMX/ADML).</p>
+<p>Files from the release: <code>CompassHub-0.9.3-windows-x64.zip</code> (with <code>compass-hub.exe</code>, <code>hub.example.json</code>, <code>README.md</code>, the licences), and for the workstations <code>LoonarCompass-Setup-0.9.3.exe</code> plus the <code>policies</code> folder (ADMX/ADML).</p>
 
 <h2 id="s3" class="break">3. Step 1 – Files and folder</h2>
 <ol>
   <li>Check the SHA-256 of the download against the value published with the release:
-<pre>Get-FileHash .\CompassHub-0.9.0-windows-x64.zip -Algorithm SHA256</pre></li>
+<pre>Get-FileHash .\CompassHub-0.9.3-windows-x64.zip -Algorithm SHA256</pre></li>
   <li>Unpack it to <code>C:\CompassHub</code> and create the subfolders <code>models</code> and <code>secrets</code>.</li>
   <li>Restrict the folder to the service and the administrators. The hub writes its data here, and the secrets are here:
 <pre>icacls C:\CompassHub /inheritance:r /grant:r "SYSTEM:(OI)(CI)F" "BUILTIN\Administrators:(OI)(CI)F"</pre>
   On a Windows in another language, use the SID <code>*S-1-5-32-544</code> instead of the name of the Administrators group.</li>
 </ol>
-<p><b>Check:</b> <code>C:\CompassHub\compass-hub.exe --version</code> prints <code>0.9.0</code>.</p>
+<p><b>Check:</b> <code>C:\CompassHub\compass-hub.exe --version</code> prints <code>0.9.3</code>.</p>
 
 <h2 id="s4">4. Step 2 – hub.json and the models</h2>
 <p>Copy <code>hub.example.json</code> to <code>C:\CompassHub\hub.json</code>. A minimal start:</p>
@@ -121,6 +121,8 @@
 <ul>
   <li><code>listen</code> stays on <code>127.0.0.1</code>: only IIS on the same server talks to the hub.</li>
   <li><code>sources</code>: one entry per model. <code>id</code> is short and stable, because the users and Power BI use it. <code>properties</code> is relative to hub.json.</li>
+  <li><code>readers</code> and <code>scopes</code> (in a source, optional): <code>"readers": ["anna", "role:architect"]</code> – only they (and admins) see the source at all; <code>"scopes": [{"for": "role:viewer", "packages": ["{GUID}", 42]}]</code> – the first entry for the person, their role or <code>*</code> limits them to those packages and their subpackages in the web view, search, element details, reports, Power BI tables and MCP. GraphQL, the assistant (Ask), impact and gap analysis and change sets cannot be limited by packages, so a person with a scope gets a clear refusal there.</li>
+  <li><b>Review and portfolio</b> (web view): under an element's details everybody who may read it comments or records a decision (ADR); an architect or the author resolves or accepts it (comments.json next to hub.json). The Portfolio tab counts the elements of a package by one or two properties (type, status, phase, author, a tagged value such as tag:Owner) as bars or a heat map, with PowerPoint and CSV.</li>
   <li>Leave out <code>users</code>: the hub then creates the account <code>admin</code> (step 4) and writes users back itself, as hashes only.</li>
 </ul>
 <p>The model file, e.g. <code>C:\CompassHub\models\architecture.properties</code>:</p>
@@ -175,8 +177,9 @@ Restart-Service CompassHub</pre>
 <pre>C:\CompassHub\compass-hub.exe --service-install C:\CompassHub\hub.json</pre>
   This creates the service <code>CompassHub</code> ("Compass Hub (Loonar Compass team service)"), with automatic start under LocalSystem, and starts it.</li>
   <li>Now set the secrets of the service (step 3) and run <code>Restart-Service CompassHub</code>.</li>
-  <li>On the server, open <code>http://127.0.0.1:8730/</code> and sign in as <code>admin</code> / <code>passw0rd</code> (with a zero). The hub asks for a new password at once and allows nothing else until then. The password needs at least 10 characters. Do this <b>before</b> step 5 makes the hub reachable.</li>
+  <li>On the server, open <code>http://127.0.0.1:8730/</code> and sign in as <code>admin</code> / <code>passw0rd</code> (with a zero). The hub asks for a new password at once and allows nothing else until then. The password needs at least 10 characters. Do this <b>before</b> step 5 makes the hub reachable. If <code>hub.json</code> already has a company sign-in (<code>oidc</code>), there is no <code>admin</code> account: sign in with an account from the admin group (<code>roles.admin</code>).</li>
 </ol>
+<p><b>Service account (recommended for production).</b> LocalSystem is the simplest start, but whoever took over the hub would act as SYSTEM, and Windows authentication to SQL Server uses the computer account. Better: a dedicated domain account or a group managed service account (gMSA) with only the rights the hub needs – modify on <code>C:\CompassHub</code>, read on the models, <code>db_datareader</code> in the model databases: <code>sc.exe config CompassHub obj= "DOMAIN\svc-compasshub$"</code> (gMSA, no password) and <code>Restart-Service CompassHub</code>.</p>
 <p><b>Check:</b></p>
 <ul>
   <li><code>Get-Service CompassHub</code> shows Running;</li>
@@ -187,7 +190,7 @@ Restart-Service CompassHub</pre>
 <h2 id="s7">7. Step 5 – HTTPS with IIS (URL Rewrite + ARR)</h2>
 <p>The hub speaks plain HTTP on 127.0.0.1. IIS gives it the company name and certificate.</p>
 <ol>
-  <li>Install IIS with URL Rewrite and ARR. Create a site, e.g. <b>CompassHub</b>, with a binding for <code>https</code>, port 443, the host name <code>hub.company.com</code> and the certificate. The physical path is an empty folder, e.g. <code>C:\inetpub\compasshub</code>.</li>
+  <li>Install IIS with URL Rewrite and ARR. Create a site, e.g. <b>CompassHub</b>, with a binding for <code>https</code>, port 443, the host name <code>hub.company.com</code> and the certificate. The physical path is an empty folder, e.g. <code>C:\inetpub\compasshub</code>. If the hub has no company sign-in (<code>oidc</code>), add <code>"allowed_hosts": ["hub.company.com"]</code> to <code>hub.json</code>: a hub on 127.0.0.1 answers only to its own names (otherwise 421).</li>
   <li>Turn on the proxy and switch off rewriting the host in redirects. This is <b>required</b>; otherwise ARR rewrites the redirect to AD FS to the hub's own address, and the company sign-in fails. Set the timeout for long AI answers as well:
 <pre>Import-Module WebAdministration
 $p = 'MACHINE/WEBROOT/APPHOST'
@@ -293,15 +296,16 @@ Set-WebConfigurationProperty -PSPath $p -Filter system.webServer/proxy -Name tim
 <table>
   <tr><th>Setting</th><th>Meaning</th></tr>
   <tr><td><code>ai.keys</code></td><td>Which Claude key a person uses. Order: the user name, then <code>role:&lt;role&gt;</code>, then <code>*</code>. No match means no AI for that person.</td></tr>
-  <tr><td><code>ai.limits</code></td><td>Tokens per day and per month. Above the limit, the hub refuses with a clear message.</td></tr>
+  <tr><td><code>ai.limits</code></td><td>Tokens per day and per month, and also USD per day and per month (<code>usd_per_day</code>, <code>usd_per_month</code>: the cost at the model's prices, cache included). Above the limit, the hub refuses with a clear message. The usage summary shows USD today and this month.</td></tr>
   <tr><td><code>ai.models</code></td><td>The allowed models; other models are refused.</td></tr>
+  <tr><td><code>ai.openai</code></td><td>The gateway for OpenAI-compatible models: <code>{"url": "" (OpenAI) or an Azure OpenAI / other base, "keys": [{"for": …, "secret": …}]}</code>. Compass with the provider OpenAI and <code>policy.ai_via_hub</code> sends its requests here; the same limits, budgets and allowed models apply.</td></tr>
   <tr><td><code>policy.ai_via_hub</code></td><td>Compass asks the AI only through the hub: no API key on the workstations.</td></tr>
   <tr><td><code>policy.jira_via_hub</code>, <code>confluence_via_hub</code></td><td>Jira/Confluence through the service account of the hub. A viewer may only read; every change is audited.</td></tr>
   <tr><td><code>policy.min_approval</code></td><td>The weakest approval mode allowed in Compass for writes to the model (<code>ask</code> is the strictest).</td></tr>
   <tr><td><code>policy.web_access</code>, <code>web_allowed_domains</code></td><td>Whether the assistant may search the web or read pages, and from which domains.</td></tr>
   <tr><td><code>policy.update_check</code></td><td>Whether Compass checks GitHub every hour for a new version.</td></tr>
 </table>
-<p>Admins change the policy later in the <b>Team policy</b> tab of the web view, and the usage per person is in <b>Users → AI usage</b>.</p>
+<p>Admins change the policy later in the <b>Team policy</b> tab of the web view, and the usage per person is in <b>Users → AI usage</b>, together with the cost in USD (today and this month) by model and by role and a <b>Download CSV</b> button.</p>
 
 <h2 id="s10" class="break">10. Step 8 – The workstations (Group Policy)</h2>
 <ol>
@@ -314,13 +318,13 @@ Set-WebConfigurationProperty -PSPath $p -Filter system.webServer/proxy -Name tim
   <tr><td>Hub address</td><td><code>HubUrl</code> (text)</td><td>The hub address is fixed in Compass and cannot be changed.</td></tr>
   <tr><td>Require the hub</td><td><code>RequireHub</code> = 1</td><td>The assistant works only while the person is signed in to the hub.</td></tr>
   <tr><td>Web access</td><td><code>WebAccess</code> = 0</td><td>No web search and no reading of pages; the 🌐 button is disabled.</td></tr>
-  <tr><td>Update check</td><td><code>UpdateCheck</code> = 0</td><td>No daily check for a new version.</td></tr>
+  <tr><td>Update check</td><td><code>UpdateCheck</code> = 0</td><td>No hourly check for a new version.</td></tr>
   <tr><td>Minimum approval mode</td><td><code>MinApproval</code> = ask / plan / auto</td><td>A weaker mode cannot be chosen.</td></tr>
   <tr><td>Allowed AI providers</td><td><code>AllowedProviders</code>, e.g. <code>anthropic</code></td><td>Other providers (e.g. OpenAI) are refused.</td></tr>
 </table>
 <p>Without a domain, the same values can be imported with <code>LoonarCompass-company-policy.reg</code> (and removed with <code>LoonarCompass-remove-policy.reg</code>). The computer policy is stronger than the hub policy and the user's settings; it can only make Compass stricter.</p>
-<p><b>Installing Compass.</b> <code>LoonarCompass-Setup-0.9.exe</code> installs for the current user (<code>%LOCALAPPDATA%\Programs\Loonar Compass</code>) or for all users (<code>Program Files</code>), and registers the add-in in Enterprise Architect. For deployment tools (Intune, Configuration Manager, a startup script) it installs without a window:</p>
-<pre>LoonarCompass-Setup-0.9.exe --quiet --all-users</pre>
+<p><b>Installing Compass.</b> <code>LoonarCompass-Setup-0.9.3.exe</code> installs for the current user (<code>%LOCALAPPDATA%\Programs\Loonar Compass</code>) or for all users (<code>Program Files</code>), and registers the add-in in Enterprise Architect. For deployment tools (Intune, Configuration Manager, a startup script) it installs without a window:</p>
+<pre>LoonarCompass-Setup-0.9.3.exe --quiet --all-users</pre>
 <table>
   <tr><th>Option</th><th>Effect</th></tr>
   <tr><td><code>--quiet</code></td><td>No window and no questions. Exit code 0 = installed, 1 = error, 740 = <code>--all-users</code> without administrator rights. The result is in <code>%TEMP%\LoonarCompass-Setup.log</code> (for SYSTEM: <code>C:\Windows\Temp</code>).</td></tr>
@@ -398,7 +402,7 @@ Start-Service CompassHub</pre>
 <p>The same hub runs in a container. The data folder (hub.json with <code>"listen": "0.0.0.0:8730"</code>, the models and the hub's files) is mounted as <code>/data</code> and must be writable by user 10001. The secrets come from <code>LOONAR_SECRET_*</code> variables or from Docker secrets through <code>LOONAR_SECRET_*_FILE</code>:</p>
 <pre>docker run -d --name compass-hub -p 127.0.0.1:8730:8730 -v /srv/compass-hub:/data \
   -e LOONAR_SECRET_CLAUDE_KEY_TEAM_FILE=/run/secrets/claude_key_team \
-  ghcr.io/loonar-eu/compass-hub:0.9.0</pre>
+  ghcr.io/loonar-eu/compass-hub:0.9.3</pre>
 <p>Put nginx or another HTTPS proxy in front of it, as in step 5. The proxy must keep the <code>Location</code> header of redirects unchanged, pass <code>X-Forwarded-For</code>, allow 32 MB bodies and a 5-minute timeout. For SQL Server, MySQL or Oracle models, build your own image on this one and add the vendor's Linux ODBC driver.</p>
 
 </body>

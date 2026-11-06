@@ -30,16 +30,6 @@ impl Lang {
         }
     }
 
-    /// The published usage statistics on loonar.eu in this language.
-    pub fn stats_url(self) -> &'static str {
-        match self {
-            Lang::Pl => "https://loonar.eu/compass/pl/stats/",
-            Lang::En => "https://loonar.eu/compass/stats/",
-            Lang::De => "https://loonar.eu/compass/de/stats/",
-            Lang::Fr => "https://loonar.eu/compass/fr/stats/",
-        }
-    }
-
     /// The language's name in that language (for the language picker).
     pub fn native_name(self) -> &'static str {
         match self {
@@ -149,16 +139,46 @@ pub fn tr_in(lang: Lang, key: &'static str) -> &'static str {
 
 /// Text with values: the key contains placeholders {0}, {1}…
 pub fn fmt(key: &'static str, values: &[String]) -> String {
-    let mut out = tr(key).to_string();
-    for (i, value) in values.iter().enumerate() {
-        out = out.replace(&format!("{{{i}}}"), value);
+    fill(tr(key), values)
+}
+
+/// One pass over the template: {n} is the n-th value, {{ and }} are braces; a value is inserted as it is, so a "{1}" or
+/// "{{" inside a value (a script, a note the user approves) is never changed (LC-346).
+fn fill(template: &str, values: &[String]) -> String {
+    let mut out = String::with_capacity(template.len());
+    let mut rest = template;
+    while let Some(c) = rest.chars().next() {
+        if rest.starts_with("{{") || rest.starts_with("}}") {
+            out.push(c);
+            rest = &rest[2..];
+            continue;
+        }
+        if c == '{' {
+            if let Some(end) = rest.find('}') {
+                if let Some(value) = rest[1..end].parse::<usize>().ok().and_then(|n| values.get(n)) {
+                    out.push_str(value);
+                    rest = &rest[end + 1..];
+                    continue;
+                }
+            }
+        }
+        out.push(c);
+        rest = &rest[c.len_utf8()..];
     }
-    out.replace("{{", "{").replace("}}", "}")
+    out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LC-346: values are inserted as they are.
+    #[test]
+    fn fill_keeps_values_unchanged() {
+        let values = ["a {1} {{x}} }}".to_string(), "B".to_string()];
+        assert_eq!(fill("{0} / {1} / {{literal}} / {9}", &values), "a {1} {{x}} }} / B / {literal} / {9}");
+        assert_eq!(fill("ż {0}ó", &["ł".to_string()]), "ż łó");
+    }
 
     #[test]
     fn every_key_used_in_code_has_all_translations() {

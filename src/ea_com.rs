@@ -10,6 +10,18 @@ use std::collections::HashMap;
 
 /// Base UML type for MDG stereotypes given as the type by mistake (e.g. type = "BPMN2.0::StartEvent").
 const BASE_TYPES: &[(&str, &str)] = &[
+    // ArchiMate 3 relationships and their UML base types, as EA's ArchiMate technology stores them (LC-374).
+    ("ArchiMate_Serving", "Association"),
+    ("ArchiMate_Assignment", "Association"),
+    ("ArchiMate_Association", "Association"),
+    ("ArchiMate_Aggregation", "Association"),
+    ("ArchiMate_Composition", "Association"),
+    ("ArchiMate_Triggering", "ControlFlow"),
+    ("ArchiMate_Influence", "ControlFlow"),
+    ("ArchiMate_Flow", "InformationFlow"),
+    ("ArchiMate_Access", "Dependency"),
+    ("ArchiMate_Realization", "Dependency"),
+    ("ArchiMate_Specialization", "Generalization"),
     ("Activity", "Activity"),
     ("BusinessProcess", "Activity"),
     ("StartEvent", "Event"),
@@ -164,20 +176,19 @@ pub fn run_request(repo: &Disp, user: &str, ops: &[Value], rollback_key: Option<
                 let created: Vec<Value> = job.created.iter().rev().cloned().collect();
                 let mut left = Vec::new();
                 for object in created {
-                    let field = match object["kind"].as_str().unwrap_or("") {
-                        "package" => "package",
-                        "element" => "element",
-                        "diagram" => "diagram",
-                        "connector" => "connector",
+                    let kind = object["kind"].as_str().unwrap_or("");
+                    let id = object["id"].as_i64().unwrap_or(0);
+                    let delete = match kind {
+                        "package" | "element" | "diagram" | "connector" => json!({ "op": "delete", kind: id }),
+                        "attribute" => json!({ "op": "delete_attribute", "attribute": id }),
+                        "operation" => json!({ "op": "delete_operation", "operation": id }),
                         _ => continue,
                     };
-                    let id = object["id"].as_i64().unwrap_or(0);
-                    // An object already deleted together with its owner (an element with its connectors) counts as removed.
-                    if let Err(e) = job.op(&json!({ "op": "delete", field: id })) {
-                        let text = e.to_string().to_lowercase();
-                        if !(text.contains("no ") || text.contains("nie ma") || text.contains("there is")) {
-                            left.push(object.clone());
-                        }
+                    // An object already deleted together with its owner (an element with its connectors) counts as
+                    // removed; EA is asked whether it is still there (LC-348: the error text "no lock…" was taken as
+                    // "already deleted").
+                    if job.op(&delete).is_err() && job.exists(kind, id) {
+                        left.push(object.clone());
                     }
                 }
                 if left.is_empty() {
@@ -207,6 +218,35 @@ fn lost(mut result: Value, error: &str) -> Value {
     result["error"] = json!(error);
     result["session_lost"] = json!(true);
     result
+}
+
+/// The GUID of a baseline in EA's list (<Baseline … guid="{…}" version="…" … />): the one with that version, or the
+/// newest when `wanted` is empty.
+pub(crate) fn baseline_guid(list: &str, wanted: &str) -> Option<String> {
+    let attr = |tag: &str, name: &str| -> Option<String> {
+        let at = tag.find(&format!("{name}=\""))? + name.len() + 2;
+        Some(tag[at..].split('"').next()?.to_string())
+    };
+    let tags: Vec<&str> = list.split("<Baseline").skip(1).collect();
+    let pick = if wanted.trim().is_empty() {
+        tags.iter().max_by_key(|t| attr(t, "date").unwrap_or_default())
+    } else {
+        tags.iter().find(|t| attr(t, "version").as_deref() == Some(wanted.trim()) || attr(t, "guid").as_deref() == Some(wanted.trim()))
+    }?;
+    attr(pick, "guid")
+}
+
+/// "Key=value;" pairs with the given keys set (replaced in place, or added at the end).
+pub(crate) fn set_option_keys(current: &str, keys: &serde_json::Map<String, Value>) -> String {
+    let mut parts: Vec<String> = current.split(';').filter(|p| !p.is_empty()).map(str::to_string).collect();
+    for (key, value) in keys {
+        let value = value.as_str().map(str::to_string).unwrap_or_else(|| value.to_string());
+        match parts.iter_mut().find(|p| p.split('=').next() == Some(key.as_str())) {
+            Some(part) => *part = format!("{key}={value}"),
+            None => parts.push(format!("{key}={value}")),
+        }
+    }
+    parts.iter().map(|p| format!("{p};")).collect()
 }
 
 /// Errors of a broken connection to the EA process (e.g. EA was closed): the session has to be reopened.
@@ -286,6 +326,33 @@ fn is_key(value: &Value) -> Option<&str> {
 }
 
 impl Job<'_> {
+    /// Whether an object of this kind and id is still in the model (EA's Get…ByID).
+    fn exists(&self, kind: &str, id: i64) -> bool {
+        let getter = match kind {
+            "package" => "GetPackageByID",
+            "element" => "GetElementByID",
+            "diagram" => "GetDiagramByID",
+            "connector" => "GetConnectorByID",
+            "attribute" => "GetAttributeByID",
+            "operation" => "GetMethodByID",
+            _ => return false,
+        };
+        self.repo.call(getter, &[i(id as i32)]).ok().and_then(|v| v.object()).is_some()
+    }
+
+    /// The column Partition of t_xref: a reserved word on MySQL/MariaDB, quoted there (LC-343).
+    fn partition_column(&self) -> &'static str {
+        let kind = self.repo.call("RepositoryType", &[]).map(|v| v.text()).unwrap_or_default();
+        if kind.eq_ignore_ascii_case("MYSQL") { "`Partition`" } else { "Partition" }
+    }
+
+    /// The inside of a SQL string literal for Repository.Execute on the open repository (backslash too on MySQL, LC-343).
+    fn sql_text(&self, text: &str) -> String {
+        let kind = self.repo.call("RepositoryType", &[]).map(|v| v.text()).unwrap_or_default();
+        let source = if kind.eq_ignore_ascii_case("MYSQL") { crate::config::ModelSource::MySql } else { crate::config::ModelSource::File };
+        crate::model_db::sql_text(source, text)
+    }
+
     fn register(&mut self, key: &Value, kind: Kind, object: &Disp, id: i32, guid: String, name: String) {
         if let Some(key) = key.as_str().filter(|k| !k.is_empty()) {
             self.keys.insert(key.trim_start_matches('#').to_string(), (kind, object.clone()));
@@ -303,11 +370,27 @@ impl Job<'_> {
         if self.locked.contains_key(&key) {
             return Ok(());
         }
-        let _ = object.call("ReleaseUserLock", &[]);
-        if !object.call("ApplyUserLock", &[])?.bool() {
+        // A lock the object already had (E7): when it is the user's own, it is used and kept after the job instead of
+        // being released and taken again – the user does not lose their locks.
+        let guid_property = match kind {
+            Kind::Package => "PackageGUID",
+            Kind::Element => "ElementGUID",
+            Kind::Diagram => "DiagramGUID",
+            Kind::Connector => "ConnectorGUID",
+        };
+        let guid = object.text(guid_property).unwrap_or_default().replace('\'', "");
+        let locked_before = !guid.is_empty()
+            && self.repo.call("SQLQuery", &[s(&format!("SELECT EntityID FROM t_seclocks WHERE EntityID = '{guid}'"))]).map(|xml| !xml_rows(&xml.text()).is_empty()).unwrap_or(false);
+        let applied = object.call("ApplyUserLock", &[])?.bool() || {
+            let _ = object.call("ReleaseUserLock", &[]);
+            object.call("ApplyUserLock", &[])?.bool()
+        };
+        if !applied {
             bail!("{}", crate::i18n::fmt("Cannot lock the object ({0} id={1}). It is probably locked by another user.", &[kind.name().to_string(), id.to_string()]));
         }
-        self.locked.insert(key, object.clone());
+        if !locked_before {
+            self.locked.insert(key, object.clone());
+        }
         Ok(())
     }
 
@@ -360,6 +443,31 @@ impl Job<'_> {
         self.package(&op["package"])
     }
 
+    /// Files linked to an element (its Files tab; LC-424): paths or web addresses, the ones already there skipped.
+    fn add_files(&self, element: &Disp, files: &Value) -> Result<()> {
+        let wanted: Vec<String> = match files {
+            Value::String(f) => vec![f.clone()],
+            Value::Array(list) => list.iter().filter_map(|f| f.as_str().map(str::to_string)).collect(),
+            _ => return Ok(()),
+        };
+        let collection = element.obj("Files")?;
+        let count = collection.int("Count")?;
+        let mut have = Vec::new();
+        for n in 0..count {
+            have.push(collection.call("GetAt", &[i(n)])?.object().map(|f| f.text("Name").unwrap_or_default().to_lowercase()).unwrap_or_default());
+        }
+        for f in wanted.iter().map(|f| f.trim()).filter(|f| !f.is_empty()) {
+            if have.contains(&f.to_lowercase()) {
+                continue;
+            }
+            let kind = if f.starts_with("http://") || f.starts_with("https://") { "Web Address" } else { "Local File" };
+            let file = collection.call("AddNew", &[s(f), s(kind)])?.object().ok_or_else(|| anyhow!("EA did not link the file {f}"))?;
+            file.update(&crate::i18n::fmt("file '{0}'", &[f.to_string()]))?;
+        }
+        collection.call("Refresh", &[])?;
+        Ok(())
+    }
+
     /// Element keywords (the Keywords field in EA, t_object.pdata5 in the database), e.g. for coloring by a legend.
     fn set_keywords(&self, element: &Disp, keywords: &Value) -> Result<()> {
         if keywords.is_null() {
@@ -370,7 +478,7 @@ impl Job<'_> {
             other => text_field_value(other),
         };
         let id = element.int("ElementID")?;
-        self.repo.call("Execute", &[s(&format!("UPDATE t_object SET PDATA5 = '{}' WHERE Object_ID = {id}", text.replace('\'', "''")))])?;
+        self.repo.call("Execute", &[s(&format!("UPDATE t_object SET PDATA5 = '{}' WHERE Object_ID = {id}", self.sql_text(&text)))])?;
         Ok(())
     }
 
@@ -391,7 +499,7 @@ impl Job<'_> {
         }
         let id = legend.int("ElementID")?;
         let guid = legend.text("ElementGUID")?;
-        self.repo.call("Execute", &[s(&format!("UPDATE t_object SET StyleEx = '{}' WHERE Object_ID = {id}", style.replace('\'', "''")))])?;
+        self.repo.call("Execute", &[s(&format!("UPDATE t_object SET StyleEx = '{}' WHERE Object_ID = {id}", self.sql_text(&style)))])?;
         // Legend entries: filter value, element fill color or connector line color.
         let mut props = String::new();
         let mut position = 0;
@@ -416,9 +524,10 @@ impl Job<'_> {
         }
         props.push_str(&format!("@PROP=@NAME=Legend@ENDNAME;@TYPE=LEGEND_STYLE_SETTINGS@ENDTYPE;@VALU=#TITLE#={title};@ENDVALU;@PRMT=@ENDPRMT;@ENDPROP;"));
         let xref = format!("{{{}}}", uuid::Uuid::new_v4().to_string().to_uppercase());
+        let partition = self.partition_column();
         self.repo.call("Execute", &[s(&format!(
-            "INSERT INTO t_xref (XrefID, Name, Type, Visibility, Partition, Description, Client, Supplier) VALUES ('{xref}', 'CustomProperties', 'element property', 'Public', '0', '{}', '{guid}', '<none>')",
-            props.replace('\'', "''")
+            "INSERT INTO t_xref (XrefID, Name, Type, Visibility, {partition}, Description, Client, Supplier) VALUES ('{xref}', 'CustomProperties', 'element property', 'Public', '0', '{}', '{guid}', '<none>')",
+            self.sql_text(&props)
         ))])?;
         // On the diagram: top right corner or the given position.
         let (left, top) = (int_of(&op["left"]).unwrap_or(20), int_of(&op["top"]).unwrap_or(20));
@@ -431,6 +540,24 @@ impl Job<'_> {
         object.set("ElementID", i(id))?;
         object.update(crate::i18n::tr("legend on the diagram"))?;
         self.register(&op["key"], Kind::Element, &legend, id, guid, title);
+        Ok(())
+    }
+
+    /// UML constraints of a connector: [{name, type?}], type Invariant unless given; one already there is not added again.
+    fn add_constraints(&self, connector: &Disp, constraints: &Value, label: &str) -> Result<()> {
+        for constraint in constraints.as_array().into_iter().flatten() {
+            let collection = connector.obj("Constraints")?;
+            collection.call("Refresh", &[])?;
+            let name = text_field(constraint, "name");
+            if name.trim().is_empty() || collection.items()?.iter().any(|c| c.text("Name").ok().as_deref() == Some(name.as_str())) {
+                continue;
+            }
+            let kind = constraint["type"].as_str().unwrap_or("Invariant");
+            if let Some(added) = collection.call("AddNew", &[s(&name), s(kind)])?.object() {
+                added.update(&crate::i18n::fmt("connector '{0}'", &[label.to_string()]))?;
+            }
+            collection.call("Refresh", &[])?;
+        }
         Ok(())
     }
 
@@ -513,6 +640,10 @@ impl Job<'_> {
     fn new_typed(&self, collection: &Disp, name: &str, kind: &str, stereotype: &str) -> Result<Disp> {
         // An object node of an activity is EA's Object (AddNew rejects "ObjectNode" in a package).
         let mut kind = if kind == "ObjectNode" { "Object".to_string() } else { kind.to_string() };
+        // An ArchiMate concept named without its profile ("ArchiMate_Serving").
+        if kind.starts_with("ArchiMate_") {
+            kind = format!("ArchiMate3::{kind}");
+        }
         let mut stereotype = stereotype.to_string();
         if kind.contains("::") {
             if stereotype.is_empty() {
@@ -825,12 +956,18 @@ impl Job<'_> {
                 if let Some(n) = int_of(&op["subtype"]) {
                     element.set("Subtype", i(n))?;
                 }
+                // The type of an instance or lifeline (LC-472: a lifeline of a class from a PlantUML sequence).
+                if !op["classifier"].is_null() {
+                    let classifier = self.element(&op["classifier"])?.int("ElementID")?;
+                    element.set("ClassifierID", i(classifier))?;
+                }
                 element.update(&crate::i18n::fmt("element '{0}'", &[title.clone()]))?;
                 if !op["color"].is_null() {
                     element.call("SetAppearance", &[i(1), i(0), i(color(&op["color"])?)])?;
                     element.update(crate::i18n::tr("element color"))?;
                 }
                 self.set_tags(&element, &op["tags"])?;
+                self.add_files(&element, &op["files"])?;
                 self.set_keywords(&element, &op["keywords"])?;
                 let (id, guid, real) = (element.int("ElementID")?, element.text("ElementGUID")?, element.text("Name")?);
                 self.register(&op["key"], Kind::Element, &element, id, guid, real);
@@ -854,22 +991,47 @@ impl Job<'_> {
                 if !op["message_sort"].is_null() {
                     connector.set("TransitionEvent", s(&text_field(op, "message_sort")))?;
                 }
+                // Navigability, e.g. "Source -> Destination" (LC-473: an arrow of PlantUML or Mermaid).
+                if !op["direction"].is_null() {
+                    connector.set("Direction", s(&text_field(op, "direction")))?;
+                }
+                // The line colour, #RRGGBB (LC-473: -[#red]-> of PlantUML).
+                if !op["color"].is_null() {
+                    connector.set("Color", i(color(&op["color"])?))?;
+                }
                 // Aggregation: Weak = shared aggregation, Strong = composition.
+                let aggregation = text_field(op, "type").eq_ignore_ascii_case("Aggregation");
                 if !op["subtype"].is_null() {
                     connector.set("Subtype", s(&text_field(op, "subtype")))?;
-                } else if text_field(op, "type").eq_ignore_ascii_case("Aggregation") {
+                } else if aggregation {
                     connector.set("Subtype", s("Weak"))?;
                 }
                 connector.update(&crate::i18n::fmt("connector '{0}'", &[title.clone()]))?;
+                // The diamond is drawn from the whole's end (the target), not from the subtype (LC-473: a composition
+                // showed an empty diamond): 1 shared, 2 composite.
+                if aggregation {
+                    let whole = connector.obj("SupplierEnd")?;
+                    whole.set("Aggregation", i(if text_field(op, "subtype").eq_ignore_ascii_case("Strong") { 2 } else { 1 }))?;
+                    whole.update(crate::i18n::tr("connector end"))?;
+                }
                 self.set_reply(&connector, &op["is_return"])?;
                 self.set_tags(&connector, &op["tags"])?;
+                // Constraints of the connector (LC-421: a time or duration constraint of a message, a UML constraint on
+                // it): [{name, type?}], type Invariant unless given.
+                self.add_constraints(&connector, &op["constraints"], &title)?;
                 let (id, guid, real) = (connector.int("ConnectorID")?, connector.text("ConnectorGUID")?, connector.text("Name")?);
                 self.register(&op["key"], Kind::Connector, &connector, id, guid, real);
             }
             "place" => {
                 let diagram = self.diagram(&op["diagram"])?;
                 let element = self.element(&op["element"])?;
-                let (left, top) = (int_field(op, "left")?, int_field(op, "top")?);
+                let (left, mut top) = (int_field(op, "left")?, int_field(op, "top")?);
+                // "below_all": top counts from under the lowest object already on the diagram (notes of an import,
+                // added after the automatic layout moved the classes, round 11a).
+                if op["below_all"].as_bool() == Some(true) {
+                    let lowest = diagram.obj("DiagramObjects").and_then(|o| o.items()).unwrap_or_default().iter().filter_map(|o| o.int("bottom").ok()).map(|b| -b).max().unwrap_or(0);
+                    top += lowest + 40;
+                }
                 let (right, bottom) = (left + int_field(op, "width")?, top + int_field(op, "height")?);
                 let object = diagram
                     .obj("DiagramObjects")?
@@ -889,6 +1051,17 @@ impl Job<'_> {
                 }
                 self.orient_partition(&element, &object, right - left, bottom - top)?;
             }
+            "diagram_options" => {
+                // Set keys of the diagram's option strings (LC-377): extended = ExtendedStyle (t_diagram.PDATA:
+                // HideAtts, HideOps, HideStereo, HideEStereo, ShowNotes…), style = StyleEx (SuppConnectorLabels…).
+                let diagram = self.diagram(&op["diagram"])?;
+                for (field, property) in [("extended", "ExtendedStyle"), ("style", "StyleEx")] {
+                    let Some(keys) = op[field].as_object() else { continue };
+                    let current = diagram.text(property).unwrap_or_default();
+                    diagram.set(property, s(&set_option_keys(&current, keys)))?;
+                }
+                diagram.update(crate::i18n::tr("diagram style"))?;
+            }
             "diagram_style" => {
                 let diagram = self.diagram(&op["diagram"])?;
                 let current = diagram.text("StyleEx")?;
@@ -901,6 +1074,160 @@ impl Job<'_> {
                 for statement in op["statements"].as_array().into_iter().flatten() {
                     self.repo.call("Execute", &[s(statement.as_str().unwrap_or(""))])?;
                 }
+            }
+            "change_connector_type" => {
+                // A relationship of another type in place of the old one (LC-374): EA does not change the type of an
+                // existing connector reliably, so a new one is made between the same ends with the old name, direction,
+                // notes, stereotype and tagged values, it gets the old geometry, style and visibility on every diagram,
+                // and the old one is deleted.
+                let id = int_field(op, "connector")?;
+                let old = self.repo.call("GetConnectorByID", &[i(id)]).ok().and_then(|v| v.object())
+                    .ok_or_else(|| anyhow!("{}", crate::i18n::fmt("There is no connector with id {0}.", &[id.to_string()])))?;
+                let (client, supplier) = (old.int("ClientID")?, old.int("SupplierID")?);
+                let source = self.element(&json!(client))?;
+                self.element(&json!(supplier))?;
+                let name = old.text("Name").unwrap_or_default();
+                // A new type given as a concept of a profile (ArchiMate3::ArchiMate_Serving) brings its own stereotype; the
+                // old one (e.g. ArchiMate_Triggering) is not carried over to it (LC-374: the relationship lost ArchiMate).
+                let typed_by_profile = text_field(op, "type").contains("::") || text_field(op, "type").starts_with("ArchiMate_");
+                let stereotype = if !op["stereotype"].is_null() {
+                    text_field(op, "stereotype")
+                } else if typed_by_profile {
+                    String::new()
+                } else {
+                    old.text("StereotypeEx").unwrap_or_default()
+                };
+                let new = self.new_typed(&source.obj("Connectors")?, &name, &text_field(op, "type"), &stereotype)?;
+                new.set("SupplierID", i(supplier))?;
+                for property in ["Notes", "Direction"] {
+                    if let Ok(value) = old.text(property) {
+                        new.set(property, s(&value))?;
+                    }
+                }
+                new.update(&crate::i18n::fmt("connector '{0}'", &[name.clone()]))?;
+                let mut tags = serde_json::Map::new();
+                for tag in old.obj("TaggedValues")?.items()? {
+                    tags.insert(tag.text("Name")?, json!(tag.text("Value").unwrap_or_default()));
+                }
+                self.set_tags(&new, &Value::Object(tags))?;
+                // EA drops a stereotype that does not apply to the type (e.g. ArchiMate Serving on a Dependency): said, not hidden.
+                if !stereotype.trim().is_empty() && new.text("StereotypeEx").unwrap_or_default().trim().is_empty() {
+                    self.warnings.push(crate::i18n::fmt("EA did not accept the stereotype «{0}» on a {1} (the profile allows it on another type)", &[stereotype.clone(), text_field(op, "type")]));
+                }
+                // A stereotype of a profile: its tagged values completed as EA's "Synchronize Stereotype" does (LC-416).
+                if let Some((profile, short)) = stereotype.split(',').next().unwrap_or("").trim().split_once("::") {
+                    let done = self.repo.call("CustomCommand", &[s("Repository"), s("SynchProfile"), s(&format!("Profile={profile};Stereotype={short};"))]);
+                    if done.is_err() {
+                        self.warnings.push(crate::i18n::fmt("the tagged values of «{0}» were not synchronized with its profile", &[stereotype.clone()]));
+                    }
+                }
+                let new_id = new.int("ConnectorID")?;
+                for diagram_id in op["diagrams"].as_array().into_iter().flatten().filter_map(|v| v.as_i64()) {
+                    let Some(diagram) = self.repo.call("GetDiagramByID", &[i(diagram_id as i32)]).ok().and_then(|v| v.object()) else { continue };
+                    let links = diagram.obj("DiagramLinks")?;
+                    let Some(link) = links.items()?.into_iter().find(|l| l.int("ConnectorID").ok() == Some(id)) else { continue };
+                    let added = links.call_obj("AddNew", &[s(""), s("")])?;
+                    added.set("ConnectorID", i(new_id))?;
+                    for property in ["Geometry", "Style", "Path"] {
+                        if let Ok(value) = link.text(property) {
+                            added.set(property, s(&value))?;
+                        }
+                    }
+                    added.set("IsHidden", b(link.get("IsHidden").map(|v| v.bool()).unwrap_or(false)))?;
+                    added.update(&crate::i18n::fmt("diagram id={0}", &[diagram_id.to_string()]))?;
+                }
+                self.op(&json!({ "op": "delete", "connector": id }))?;
+                // Not a plain new object: undo must not delete it without bringing the old one back.
+                self.created.push(json!({ "key": op["key"], "kind": "replaced_connector", "id": new_id, "replaces": id }));
+            }
+            "merge_elements" => {
+                // Merge and replace (LC-370): the lists of what to re-point come from merge::plan (read with SQL).
+                let (keep, remove) = (int_field(op, "keep")?, int_field(op, "remove")?);
+                let kept = self.element(&json!(keep))?;
+                let gone = self.element(&json!(remove))?;
+                let (kept_guid, gone_guid) = (kept.text("ElementGUID")?, gone.text("ElementGUID")?);
+                let list = |field: &str| -> Vec<i32> { op[field].as_array().into_iter().flatten().filter_map(|v| v.as_i64()).map(|v| v as i32).collect() };
+                // Relationships: their end moves to the kept element.
+                for id in list("connectors") {
+                    let Some(connector) = self.repo.call("GetConnectorByID", &[i(id)]).ok().and_then(|v| v.object()) else { continue };
+                    for end in ["ClientID", "SupplierID"] {
+                        if connector.int(end)? == remove {
+                            connector.set(end, i(keep))?;
+                        }
+                    }
+                    connector.update(&crate::i18n::fmt("connector id={0}", &[id.to_string()]))?;
+                }
+                // Diagrams: the duplicate's place is taken by the kept element (same position); where both are, it goes.
+                let both = list("diagrams_with_both");
+                for id in list("diagrams") {
+                    let Some(diagram) = self.repo.call("GetDiagramByID", &[i(id)]).ok().and_then(|v| v.object()) else { continue };
+                    let objects = diagram.obj("DiagramObjects")?;
+                    let items = objects.items()?;
+                    if let Some(index) = items.iter().position(|o| o.int("ElementID").ok() == Some(remove)) {
+                        if both.contains(&id) {
+                            objects.call("DeleteAt", &[i(index as i32), b(false)])?;
+                            objects.call("Refresh", &[])?;
+                        } else {
+                            items[index].set("ElementID", i(keep))?;
+                            items[index].update(&crate::i18n::fmt("diagram id={0}", &[id.to_string()]))?;
+                        }
+                    }
+                }
+                // Instances, lifelines and actions classified by it; attributes, return types and parameters typed by it.
+                for id in list("instances") {
+                    let instance = self.element(&json!(id))?;
+                    instance.set("ClassifierID", i(keep))?;
+                    instance.update(&crate::i18n::fmt("element id={0}", &[id.to_string()]))?;
+                }
+                for id in list("attributes") {
+                    if let Some(attribute) = self.repo.call("GetAttributeByID", &[i(id)]).ok().and_then(|v| v.object()) {
+                        attribute.set("ClassifierID", i(keep))?;
+                        attribute.update(&crate::i18n::fmt("attribute id={0}", &[id.to_string()]))?;
+                    }
+                }
+                for id in list("operations") {
+                    if let Some(method) = self.repo.call("GetMethodByID", &[i(id)]).ok().and_then(|v| v.object()) {
+                        method.set("ClassifierID", s(&keep.to_string()))?;
+                        method.update(&crate::i18n::fmt("operation id={0}", &[id.to_string()]))?;
+                    }
+                }
+                for id in list("parameter_operations") {
+                    if let Some(method) = self.repo.call("GetMethodByID", &[i(id)]).ok().and_then(|v| v.object()) {
+                        for parameter in method.obj("Parameters")?.items()? {
+                            if parameter.text("ClassifierID").ok().as_deref() == Some(remove.to_string().as_str()) {
+                                parameter.set("ClassifierID", s(&keep.to_string()))?;
+                                parameter.update(&crate::i18n::fmt("parameter of operation id={0}", &[id.to_string()]))?;
+                            }
+                        }
+                    }
+                }
+                // Tagged values pointing at the duplicate (RefGUID).
+                for id in list("tag_owners") {
+                    let owner = self.element(&json!(id))?;
+                    for tag in owner.obj("TaggedValues")?.items()? {
+                        if tag.text("Value").ok().as_deref() == Some(gone_guid.as_str()) {
+                            tag.set("Value", s(&kept_guid))?;
+                            tag.update(crate::i18n::tr("tagged value"))?;
+                        }
+                    }
+                }
+                // Its tagged values the kept element lacks, and its notes.
+                let have: Vec<String> = kept.obj("TaggedValues")?.items()?.iter().filter_map(|t| t.text("Name").ok()).collect();
+                let mut missing = serde_json::Map::new();
+                for tag in gone.obj("TaggedValues")?.items()? {
+                    let name = tag.text("Name")?;
+                    if !have.iter().any(|h| h.eq_ignore_ascii_case(&name)) {
+                        missing.insert(name, json!(tag.text("Value").unwrap_or_default()));
+                    }
+                }
+                self.set_tags(&kept, &Value::Object(missing))?;
+                let (kept_notes, gone_notes) = (kept.text("Notes").unwrap_or_default(), gone.text("Notes").unwrap_or_default());
+                if op["notes"].as_str() != Some("keep") && !gone_notes.trim().is_empty() && gone_notes.trim() != kept_notes.trim() {
+                    let notes = if kept_notes.trim().is_empty() { gone_notes } else { format!("{kept_notes}\r\n\r\n{gone_notes}") };
+                    kept.set("Notes", s(&notes))?;
+                    kept.update(&crate::i18n::fmt("element id={0}", &[keep.to_string()]))?;
+                }
+                self.op(&json!({ "op": "delete", "element": remove }))?;
             }
             "reverse_connector" => {
                 let id = int_field(op, "connector")?;
@@ -973,7 +1300,29 @@ impl Job<'_> {
                 // dialog in EA 17 and writes nothing (found in the 0.9.2 live tests).
                 let generator = self.repo.call_obj("CreateDocumentGenerator", &[])?;
                 generator.call("NewDocument", &[s("")])?;
-                generator.call("DocumentPackage", &[i(package.int("PackageID")?), i(0), s(&template)])?;
+                // DocumentPackage through the API documents the package and its diagrams but leaves out its elements
+                // (EA 17, also with EA's own "Model Report"; found with LC-335): every element is added with
+                // DocumentElement and the same template, child packages the same way.
+                let mut pending = vec![package];
+                while let Some(current) = pending.pop() {
+                    generator.call("DocumentPackage", &[i(current.int("PackageID")?), i(0), s(&template)])?;
+                    let mut elements: Vec<(i32, String, i32)> = current
+                        .obj("Elements")?
+                        .items()?
+                        .iter()
+                        .filter(|e| e.int("ParentID").unwrap_or(0) == 0)
+                        // Notes, texts and boundaries are part of their diagram, not elements to describe.
+                        .filter(|e| !matches!(e.text("Type").unwrap_or_default().as_str(), "Note" | "Text" | "Boundary"))
+                        .filter_map(|e| Some((e.int("TreePos").unwrap_or(0), e.text("Name").ok()?, e.int("ElementID").ok()?)))
+                        .collect();
+                    elements.sort();
+                    for (_, _, id) in elements {
+                        generator.call("DocumentElement", &[i(id), i(0), s(&template)])?;
+                    }
+                    let mut children = current.obj("Packages")?.items()?;
+                    children.reverse();
+                    pending.extend(children);
+                }
                 // DocumentType: dtRTF = 0, dtHTML = 1, dtPDF = 2, dtDOCX = 3.
                 let kind = if lower.ends_with(".pdf") { 2 } else if lower.ends_with(".rtf") { 0 } else { 3 };
                 if !generator.call("SaveDocument", &[s(&file), i(kind)])?.bool() {
@@ -1000,11 +1349,22 @@ impl Job<'_> {
                 let spacing = int_of(&op["spacing"]).unwrap_or(40);
                 let project = self.repo.call("GetProjectInterface", &[])?.object().ok_or_else(|| anyhow!("Project interface"))?;
                 let guid = diagram.text("DiagramGUID")?;
+                let places = |d: &Disp| -> Vec<(i32, i32, i32)> {
+                    d.obj("DiagramObjects").and_then(|o| o.items()).unwrap_or_default().iter().filter_map(|o| Some((o.int("ElementID").ok()?, o.int("left").ok()?, o.int("top").ok()?))).collect()
+                };
+                let before = places(&diagram);
                 let done = project.call("LayoutDiagramEx", &[s(&guid), i(style), i(4), i(spacing), i(spacing), b(true)])?.bool();
                 if !done {
                     bail!("{}", crate::i18n::tr("EA could not lay out the diagram"));
                 }
-                self.repo.call("ReloadDiagram", &[i(diagram.int("DiagramID")?)]).ok();
+                let id = diagram.int("DiagramID")?;
+                self.repo.call("ReloadDiagram", &[i(id)]).ok();
+                // EA's layout sometimes does nothing and says nothing (LC-376): compared with the positions before.
+                if let Some(again) = self.repo.call("GetDiagramByID", &[i(id)]).ok().and_then(|v| v.object()) {
+                    if before.len() > 1 && places(&again) == before {
+                        self.warnings.push(crate::i18n::tr("EA's automatic layout did not move anything on this diagram (try another direction, or arrange it with set_bounds).").to_string());
+                    }
+                }
             }
             "export_xmi" => {
                 let package = self.package(&op["package"])?;
@@ -1105,6 +1465,7 @@ impl Job<'_> {
                     element.update(crate::i18n::tr("element color"))?;
                 }
                 self.set_tags(&element, &op["tags"])?;
+                self.add_files(&element, &op["files"])?;
             }
             "update_connector" => {
                 // Properties of an existing relationship: name, stereotype, direction, notes, the multiplicities and roles
@@ -1180,6 +1541,8 @@ impl Job<'_> {
                     end.update(crate::i18n::tr("connector end"))?;
                 }
                 self.set_tags(&connector, &op["tags"])?;
+                // Constraints added to an existing relationship, e.g. a time constraint of a message (LC-421).
+                self.add_constraints(&connector, &op["constraints"], &format!("id={id}"))?;
             }
             "move" => {
                 // Moves an existing object to another package (relationships and positions on diagrams are kept).
@@ -1254,6 +1617,13 @@ impl Job<'_> {
                 for object in objects.items()? {
                     if object.int("ElementID")? == element_id {
                         object.set("BackgroundColor", i(color(&op["bgcolor"])?))?;
+                        // The font of the element on this diagram (LC-420: the profiles change fonts too).
+                        if let Some(bold) = op["bold"].as_bool() {
+                            object.set("FontBold", b(bold))?;
+                        }
+                        if let Some(size) = int_of(&op["font_size"]) {
+                            object.set("FontSize", i(size))?;
+                        }
                         object.update(crate::i18n::tr("color on the diagram"))?;
                         found = true;
                     }
@@ -1286,6 +1656,9 @@ impl Job<'_> {
                     if !op[field].is_null() {
                         operation.set(property, s(&text_field(op, field)))?;
                     }
+                }
+                if let Some(abstract_) = op["abstract"].as_bool() {
+                    operation.set("Abstract", b(abstract_))?;
                 }
                 operation.update(&crate::i18n::fmt("operation '{0}'", &[name.clone()]))?;
                 for parameter in op["parameters"].as_array().into_iter().flatten() {
@@ -1343,6 +1716,122 @@ impl Job<'_> {
                 parent.obj("Packages")?.call("Refresh", &[])?;
                 let (id, guid, real) = (copy.int("PackageID")?, copy.text("PackageGUID")?, copy.text("Name")?);
                 self.register(&op["key"], Kind::Package, &copy, id, guid, real);
+            }
+            "save_document_template" => {
+                // An EA document template (Publish → Report Builder) made from the user's document: package, element
+                // and diagram parts in Markdown with EA fields, stored the way EA keeps templates (t_document, SSDOCSTYLE).
+                let title = text_field(op, "name");
+                if title.trim().is_empty() {
+                    bail!("{}", crate::i18n::tr("The template needs a name."));
+                }
+                let rtf = crate::ea_template::rtf(&text_field(op, "package_part"), &text_field(op, "element_part"), &text_field(op, "diagram_part"));
+                let bytes = crate::ea_template::document(&title, &rtf)?;
+                let kind = self.repo.call("RepositoryType", &[]).map(|v| v.text()).unwrap_or_default();
+                let literal = crate::ea_template::binary_literal(&kind, &bytes)?;
+                let quoted = self.sql_text(&title);
+                self.repo.call("Execute", &[s(&format!("DELETE FROM t_document WHERE DocType = 'SSDOCSTYLE' AND DocName = '{quoted}'"))])?;
+                let id = format!("{{{}}}", uuid::Uuid::new_v4().to_string().to_uppercase());
+                self.repo.call("Execute", &[s(&format!(
+                    "INSERT INTO t_document (DocID, DocName, Style, ElementID, ElementType, BinContent, DocType, IsActive, Sequence) \
+                     VALUES ('{id}', '{quoted}', 'Zip=1;', 'SSDOCSTYLE', 'SSDOCSTYLE', {literal}, 'SSDOCSTYLE', 1, 0)"
+                ))])?;
+                self.warnings.push(crate::i18n::fmt("EA template \"{0}\" saved: Publish → Report Builder → Generate Documentation, or ask Compass for a report with it.", &[title.clone()]));
+            }
+            "create_matrix_specification" => {
+                // EA's Relationship Matrix kept in the model: an Artifact «EAMatrixSpecification» whose tagged value
+                // MatrixOptions holds the profile (packages by GUID, element types, link type, direction). Double-click
+                // in the Browser opens the live matrix.
+                let owner = self.package(&op["package"])?;
+                let source = self.package(&op["source_package"])?;
+                let target = self.package(&op["target_package"])?;
+                let title = text_field(op, "name");
+                let attr = |v: String| v.replace('&', "&amp;").replace('"', "&quot;").replace('<', "&lt;");
+                let link = { let l = text_field(op, "link_type"); if l.is_empty() { "Realisation".to_string() } else { l } };
+                let direction = match text_field(op, "direction").to_lowercase().as_str() {
+                    "target_to_source" => 1,
+                    "both" => 2,
+                    _ => 0,
+                };
+                let children = if op["children"].as_bool().unwrap_or(true) { 1 } else { 0 };
+                let options = format!(
+                    "<MatrixData><Profile linktype=\"{}\" source=\"{}\" target=\"{}\" direction=\"{direction}\" targetpackage=\"{}\" sourcepackage=\"{}\" showsourcechildren=\"{children}\" showtargetchildren=\"{children}\"/></MatrixData>",
+                    attr(link), attr(text_field(op, "source_type")), attr(text_field(op, "target_type")), target.text("PackageGUID")?, source.text("PackageGUID")?
+                );
+                let artifact = self.new_typed(&owner.obj("Elements")?, &title, "Artifact", "EAUML::EAMatrixSpecification")?;
+                artifact.update(&crate::i18n::fmt("element '{0}'", &[title.clone()]))?;
+                // The stereotype brings its own (empty) MatrixOptions tag: fill that one, add it only when missing.
+                let tags = artifact.obj("TaggedValues")?;
+                let existing = tags.items()?.into_iter().find(|t| t.text("Name").map(|n| n == "MatrixOptions").unwrap_or(false));
+                let tag = match existing {
+                    Some(tag) => tag,
+                    None => tags.call_obj("AddNew", &[s("MatrixOptions"), s("<memo>")])?,
+                };
+                tag.set("Value", s("<memo>"))?;
+                tag.set("Notes", s(&options))?;
+                tag.update(crate::i18n::tr("tagged value"))?;
+                artifact.obj("TaggedValues")?.call("Refresh", &[])?;
+                owner.obj("Elements")?.call("Refresh", &[])?;
+                let (id, guid, real) = (artifact.int("ElementID")?, artifact.text("ElementGUID")?, artifact.text("Name")?);
+                self.register(&op["key"], Kind::Element, &artifact, id, guid, real);
+            }
+            "clone_element_version" => {
+                // EA's "Clone as New Version" (removed after EA 16.0): a copy of the element next to it with the next
+                // version number and a «trace» from the new version to the original.
+                let original = self.element(&op["element"])?;
+                let package = self.package(&json!(original.int("PackageID")?))?;
+                let title = if op["name"].is_null() { original.text("Name")? } else { text_field(op, "name") };
+                let copy = self.new_typed(&package.obj("Elements")?, &title, &original.text("Type")?, &original.text("StereotypeEx").unwrap_or_default())?;
+                for property in ["Notes", "Alias", "Status", "Phase", "Author", "Complexity", "Difficulty", "Priority"] {
+                    if let Ok(value) = original.text(property) {
+                        let _ = copy.set(property, s(&value));
+                    }
+                }
+                let version = if op["version"].is_null() { next_version(&original.text("Version").unwrap_or_default()) } else { text_field(op, "version") };
+                copy.set("Version", s(&version))?;
+                copy.update(&crate::i18n::fmt("element '{0}'", &[title.clone()]))?;
+                for attribute in original.obj("Attributes")?.items()? {
+                    let a = copy.obj("Attributes")?.call_obj("AddNew", &[s(&attribute.text("Name")?), s(&attribute.text("Type")?)])?;
+                    for property in ["Visibility", "Notes", "Default", "StereotypeEx", "Style", "LowerBound", "UpperBound", "IsStatic", "IsConst"] {
+                        if let Ok(value) = attribute.text(property) {
+                            let _ = a.set(property, s(&value));
+                        }
+                    }
+                    a.update(crate::i18n::tr("attribute"))?;
+                }
+                for method in original.obj("Methods")?.items()? {
+                    let m = copy.obj("Methods")?.call_obj("AddNew", &[s(&method.text("Name")?), s(&method.text("ReturnType")?)])?;
+                    for property in ["Visibility", "Notes", "StereotypeEx", "Style", "Behavior", "IsStatic", "Abstract", "IsQuery"] {
+                        if let Ok(value) = method.text(property) {
+                            let _ = m.set(property, s(&value));
+                        }
+                    }
+                    m.update(crate::i18n::tr("operation"))?;
+                    for parameter in method.obj("Parameters")?.items()? {
+                        let p = m.obj("Parameters")?.call_obj("AddNew", &[s(&parameter.text("Name")?), s(&parameter.text("Type")?)])?;
+                        for property in ["Kind", "Default", "Notes"] {
+                            if let Ok(value) = parameter.text(property) {
+                                let _ = p.set(property, s(&value));
+                            }
+                        }
+                        p.update(crate::i18n::tr("operation parameter"))?;
+                    }
+                }
+                for tag in original.obj("TaggedValues")?.items()? {
+                    let t = copy.obj("TaggedValues")?.call_obj("AddNew", &[s(&tag.text("Name")?), s(&tag.text("Value")?)])?;
+                    if let Ok(notes) = tag.text("Notes") {
+                        let _ = t.set("Notes", s(&notes));
+                    }
+                    t.update(crate::i18n::tr("tagged value"))?;
+                }
+                for collection in ["Attributes", "Methods", "TaggedValues"] {
+                    copy.obj(collection)?.call("Refresh", &[])?;
+                }
+                let trace = self.new_typed(&copy.obj("Connectors")?, "", "Abstraction", "trace")?;
+                trace.set("SupplierID", i(original.int("ElementID")?))?;
+                trace.update(crate::i18n::tr("EA did not create the trace to the original."))?;
+                package.obj("Elements")?.call("Refresh", &[])?;
+                let (id, guid, real) = (copy.int("ElementID")?, copy.text("ElementGUID")?, copy.text("Name")?);
+                self.register(&op["key"], Kind::Element, &copy, id, guid, real);
             }
             "update_scenario" | "delete_scenario" => {
                 // An existing structured scenario of an element, found by its name (or GUID).
@@ -1472,6 +1961,21 @@ impl Job<'_> {
                     bail!("{}", crate::i18n::fmt("EA did not create a baseline of package '{0}': {1}", &[package.text("Name")?, project.text("GetLastError").unwrap_or_default()]));
                 }
             }
+            "baseline_compare" => {
+                // EA's comparison of a package with one of its baselines (LC-371), written to a file for what_changed:
+                // the list of baselines (GetBaselines) and the comparison (DoBaselineCompare) are XML.
+                let package = self.package(&op["package"])?;
+                let guid = package.text("PackageGUID")?;
+                let project = self.repo.call_obj("GetProjectInterface", &[])?;
+                let list = project.call("GetBaselines", &[s(&guid), s("")])?.text();
+                let file = text_field(op, "file");
+                std::fs::write(format!("{file}.baselines.xml"), &list)?;
+                let wanted = text_field(op, "baseline");
+                let package_name = package.text("Name").unwrap_or_default();
+                let baseline = baseline_guid(&list, &wanted).ok_or_else(|| anyhow!("{}", crate::i18n::fmt("package '{0}' has no baseline {1}", &[package_name, wanted.clone()])))?;
+                let diff = project.call("DoBaselineCompare", &[s(&guid), s(&baseline), s("")])?.text();
+                std::fs::write(&file, diff)?;
+            }
             "update_diagram" => {
                 // Name, description and stereotype of an existing diagram.
                 let diagram = self.diagram(&op["diagram"])?;
@@ -1496,6 +2000,27 @@ impl Job<'_> {
                     link.set("IsHidden", b(hidden))?;
                     link.update(crate::i18n::tr("connector visibility on the diagram"))?;
                 }
+                diagram.update(crate::i18n::tr("diagram"))?;
+                // An open diagram shows the change at once (LC-480: a relationship hidden by the visibility policy
+                // stayed on the screen until the diagram was opened again).
+                self.repo.call("ReloadDiagram", &[i(diagram.int("DiagramID")?)]).ok();
+            }
+            "restore_link" => {
+                // Internal (undo of a layout, LC-376): a connector's line on one diagram as it was – its bend points
+                // (Path), geometry and style (colour, width), read before the change.
+                let diagram = self.diagram(&op["diagram"])?;
+                let links = diagram.obj("DiagramLinks")?;
+                let cid = int_of(&op["connector"]).ok_or_else(|| anyhow!("restore_link: connector"))?;
+                let link = self.single_link(&links, cid)?;
+                for (field, property) in [("path", "Path"), ("geometry", "Geometry"), ("style", "Style")] {
+                    if let Some(value) = op[field].as_str() {
+                        link.set(property, s(value))?;
+                    }
+                }
+                if let Some(hidden) = op["hidden"].as_bool() {
+                    link.set("IsHidden", b(hidden))?;
+                }
+                link.update(crate::i18n::tr("connector visibility on the diagram"))?;
                 diagram.update(crate::i18n::tr("diagram"))?;
             }
             "repair_diagram_links" => {
@@ -1813,12 +2338,13 @@ impl Job<'_> {
             &[s(&format!("update t_object set pdata1='{target_id}', ntype=82, styleex='{style_ex}' where object_id={element_id}"))],
         )?;
         let xref = format!("{{{}}}", uuid::Uuid::new_v4().to_string().to_uppercase());
-        let link_type = target_type.replace('\'', "''");
+        let link_type = self.sql_text(&target_type);
+        let partition = self.partition_column();
         let guid = element.text("ElementGUID")?;
         self.repo.call(
             "Execute",
             &[s(&format!(
-                "insert into t_xref (xrefid, name, type, visibility, partition, client, supplier, description) values \
+                "insert into t_xref (xrefid, name, type, visibility, {partition}, client, supplier, description) values \
                  ('{xref}', 'CustomProperties', 'element property', 'Public', '0', '{guid}', '<none>', \
                  '@PROP=@NAME=DiagLinkType@ENDNAME;@TYPE=string@ENDTYPE;@VALU={link_type}@ENDVALU;@PRMT=@ENDPRMT;@ENDPROP;')"
             ))],
@@ -1868,6 +2394,18 @@ mod tests {
 }
 
 
+/// The version after `v`: the last number goes up ("1.0" → "1.1", "2" → "3", "v1.9" → "v1.10"); without a number,
+/// ".2" is added ("" → "2").
+fn next_version(v: &str) -> String {
+    let v = v.trim();
+    let digits = v.chars().rev().take_while(|c| c.is_ascii_digit()).count();
+    if digits == 0 {
+        return if v.is_empty() { "2".into() } else { format!("{v}.2") };
+    }
+    let (head, number) = v.split_at(v.len() - digits);
+    format!("{head}{}", number.parse::<u64>().map(|n| n + 1).unwrap_or(2))
+}
+
 /// Plain text as a minimal RTF document (EA keeps linked documents as RTF): paragraphs per line, Unicode escaped.
 fn rtf(text: &str) -> String {
     let mut out = String::from("{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Calibri;}}\\fs22 ");
@@ -1893,4 +2431,63 @@ fn rtf(text: &str) -> String {
     }
     out.push('}');
     out
+}
+
+#[cfg(test)]
+mod version_tests {
+    #[test]
+    fn next_versions() {
+        assert_eq!(super::next_version("1.0"), "1.1");
+        assert_eq!(super::next_version("2"), "3");
+        assert_eq!(super::next_version("v1.9"), "v1.10");
+        assert_eq!(super::next_version(""), "2");
+        assert_eq!(super::next_version("draft"), "draft.2");
+    }
+}
+
+/// LC-377: diagram option keys replaced in place or added.
+#[cfg(test)]
+mod option_tests {
+    #[test]
+    fn option_keys() {
+        let keys = serde_json::json!({ "HideAtts": "1", "New": "x" });
+        assert_eq!(super::set_option_keys("HideRel=0;HideAtts=0;HideOps=0;", keys.as_object().unwrap()), "HideRel=0;HideAtts=1;HideOps=0;New=x;");
+        assert_eq!(super::set_option_keys("", keys.as_object().unwrap()), "HideAtts=1;New=x;");
+    }
+}
+
+#[cfg(test)]
+mod archimate_type_tests {
+    /// LC-374: Triggering changed to Serving becomes EA's Association with the ArchiMate_Serving stereotype, on a model copy:
+    /// `LOONAR_TEST_PROPS=E:/livetest/r440/m5.properties LOONAR_TEST_CONNECTOR=2699 cargo test archimate_type_change_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA and a copy of a model with an ArchiMate Triggering relationship"]
+    fn archimate_type_change_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
+        let c: i64 = std::env::var("LOONAR_TEST_CONNECTOR").unwrap().parse().unwrap();
+        let ends = crate::tools::query_rows(&cfg, &format!("select start_object_id, end_object_id from t_connector where connector_id = {c}")).unwrap()[0].clone();
+        crate::ea::run_batch(&cfg, &[serde_json::json!({ "op": "change_connector_type", "connector": c, "type": "ArchiMate_Serving" })], &crate::ea::BatchOptions::default()).expect("change");
+        crate::ea::shutdown();
+        let now = crate::tools::query_rows(&cfg, &format!("select connector_type, stereotype from t_connector where start_object_id = {} and end_object_id = {} and stereotype like '%Serving%'", ends[0], ends[1])).unwrap();
+        println!("{now:?}");
+        assert_eq!(now.first().map(|r| r[0].as_str()), Some("Association"), "{now:?}");
+    }
+}
+
+#[cfg(test)]
+mod constraint_tests {
+    /// LC-421: a time constraint added to an existing message is a UML constraint of it, on a model copy:
+    /// `LOONAR_TEST_PROPS=E:/livetest/r440/m5.properties LOONAR_TEST_CONNECTOR=<message id> cargo test message_constraint_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA and a copy of a model with a sequence message"]
+    fn message_constraint_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
+        let c: i64 = std::env::var("LOONAR_TEST_CONNECTOR").unwrap().parse().unwrap();
+        let op = serde_json::json!({ "op": "update_connector", "connector": c, "constraints": [{ "name": "{< 3s}" }] });
+        crate::ea::run_batch(&cfg, &[op.clone(), op], &crate::ea::BatchOptions::default()).expect("constraint");
+        crate::ea::shutdown();
+        let rows = crate::tools::query_rows(&cfg, &format!("select \"constraint\", constrainttype from t_connectorconstraint where connectorid = {c}")).unwrap();
+        println!("{rows:?}");
+        assert_eq!(rows.iter().filter(|r| r[0] == "{< 3s}").count(), 1, "added once: {rows:?}");
+    }
 }

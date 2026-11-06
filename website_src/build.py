@@ -37,15 +37,15 @@ OWNER = "Loonar Mariusz Głowacki"
 EMAIL = "mariusz@loonar.eu"
 
 # ---- current release: change these lines for a new version (see website/README.md) ----
-VER = "0.9.2"
+VER = "0.9.3"
 # The only link to the installer: a GitHub release asset. The file name and the repository are taken from it.
-SETUP_URL = "https://github.com/loonar-eu/loonar-compass/releases/download/v0.9.2/LoonarCompass-Setup-0.9.2.exe"
-RELEASE = "2026-10-30"
-DATE = {"en": "30 October 2026", "pl": "30 października 2026", "de": "30. Oktober 2026", "fr": "30 octobre 2026"}
+SETUP_URL = "https://github.com/loonar-eu/loonar-compass/releases/download/v0.9.3/LoonarCompass-Setup-0.9.3.exe"
+RELEASE = "2026-11-06"
+DATE = {"en": "6 November 2026", "pl": "6 listopada 2026", "de": "6. November 2026", "fr": "6 novembre 2026"}
 # SHA-256 of the installer, shown next to the download button (PowerShell: Get-FileHash <installer>).
 # When the installer is in DIST, the build checks this value against the file and takes the size from it;
 # without the file it uses SHA256 and SIZE_MB as written here and prints a warning.
-SHA256 = "9cdff6de837e929abf033cdb7004590726ff8fcccac7181fc5615d1ac243f7e7"
+SHA256 = "cb7510f9cba32e277d2b06321a1e5a2f6fdb9298036d9c7d2f00792eb7cea12b"
 SIZE_MB = 34
 DIST = os.path.join(ROOT, "dist")
 # ---- services used by the website --------------------------------------------------------
@@ -486,7 +486,7 @@ def home_page(lang):
     <header class="sec-h reveal"><h2>{t["r_h"]}</h2></header>
     <div class="req reveal">
       <div class="req-col"><h3>{t["r_need"]}</h3><ul class="ticks">{req}</ul></div>
-      <div class="req-col opt"><h3>{t["r_opt"]}</h3><ul class="ticks">{opt}</ul><p class="note">{t["r_note"]}</p></div>
+      <div class="req-col opt"><h3>{t["r_opt"]}</h3><ul class="ticks">{opt}</ul>{f'<p class="note">{t["r_note"]}</p>' if t["r_note"] else ""}</div>
     </div>
   </div>
 </section>
@@ -605,56 +605,6 @@ def doc_page(kind, lang):
 '''
     write(d + "index.html", html)
 
-# ---------------------------------------------------------------------------- published usage statistics
-
-# The weekly summary over all installations (feedback/worker.js, GET /v1/summary; it allows any origin). The
-# workers.dev address is only read by assets/stats.js: Chrome shows a lookalike-domain warning when it is opened.
-STATS_API = "https://compass-feedback.loonar-eu.workers.dev/v1/summary"
-STATS_V = 1
-STATS_T = {
-    "en": dict(title="Usage statistics", desc="Anonymous usage statistics of Loonar Compass: a weekly summary over all installations together.",
-               intro="If you leave usage statistics on, Loonar Compass sends anonymous statistics (see the <a href=\"{privacy}\">privacy policy</a>, section 8). Only the author sees the data of single installations; here is the summary of each week over all installations together. A value shared by fewer than 3 installations is counted as “other”. The summary of a week is computed the day after it ends.",
-               nojs="This page needs JavaScript."),
-    "pl": dict(title="Statystyki użycia", desc="Anonimowe statystyki użycia Loonar Compass: podsumowanie tygodnia dla wszystkich instalacji łącznie.",
-               intro="Jeśli zostawisz statystyki użycia włączone, Loonar Compass wysyła anonimowe statystyki (zob. <a href=\"{privacy}\">politykę prywatności</a>, punkt 8). Dane pojedynczych instalacji widzi tylko autor; tutaj jest podsumowanie każdego tygodnia dla wszystkich instalacji łącznie. Wartość, którą ma mniej niż 3 instalacje, jest liczona jako „inne”. Podsumowanie tygodnia powstaje dzień po jego końcu.",
-               nojs="Ta strona wymaga JavaScriptu."),
-    "de": dict(title="Nutzungsstatistik", desc="Anonyme Nutzungsstatistik von Loonar Compass: eine Wochenzusammenfassung über alle Installationen zusammen.",
-               intro="Wenn Sie die Nutzungsstatistik eingeschaltet lassen, sendet Loonar Compass anonyme Statistiken (siehe <a href=\"{privacy}\">Datenschutzerklärung</a>, Abschnitt 8). Die Daten einzelner Installationen sieht nur der Autor; hier steht die Zusammenfassung jeder Woche über alle Installationen zusammen. Ein Wert, den weniger als 3 Installationen haben, wird als „andere“ gezählt. Die Zusammenfassung einer Woche entsteht am Tag nach ihrem Ende.",
-               nojs="Diese Seite braucht JavaScript."),
-    "fr": dict(title="Statistiques d’utilisation", desc="Statistiques d’utilisation anonymes de Loonar Compass : un résumé hebdomadaire de toutes les installations ensemble.",
-               intro="Si vous laissez les statistiques d’utilisation activées, Loonar Compass envoie des statistiques anonymes (voir la <a href=\"{privacy}\">politique de confidentialité</a>, section 8). Seul l’auteur voit les données de chaque installation ; voici le résumé de chaque semaine pour toutes les installations ensemble. Une valeur partagée par moins de 3 installations est comptée comme « autres ». Le résumé d’une semaine est calculé le lendemain de sa fin.",
-               nojs="Cette page nécessite JavaScript."),
-}
-
-
-def stats_page(lang):
-    d, P, t, sw = common("stats", lang)
-    s = STATS_T[lang]
-    home = rel(d, page_dir("home", lang))
-    privacy = rel(d, page_dir("privacy", lang))
-    alternates = [(l, SITE + page_dir("stats", l)) for l in LANGS] + [("x-default", SITE + page_dir("stats", "en"))]
-    extra = (f'<link rel="stylesheet" href="{P}assets/stats.css?v={STATS_V}">\n'
-             f'<script src="{P}assets/stats.js?v={STATS_V}" defer></script>\n')
-    html = head(lang, f"{s['title']} – {NAME}", s["desc"], SITE + d, alternates, P, f"{s['title']} – {NAME}", s["desc"],
-                extra=extra, connect=STATS_API) + f'''
-<body id="top">
-{header(t, lang, home, sw)}
-
-<main id="main" class="doc-main">
-  <article class="wrap doc">
-    <h1>{s["title"]}</h1>
-    <p>{s["intro"].format(privacy=privacy)}</p>
-    <div id="stats" class="stats" aria-live="polite"><noscript><p>{s["nojs"]}</p></noscript></div>
-    <p class="doc-back"><a href="{home}">← {t["doc_home"]}</a></p>
-  </article>
-</main>
-
-{footer(t, lang, P, privacy, rel(d, page_dir("legal", lang)), sw["html"])}
-</body>
-</html>
-'''
-    write(d + "index.html", html)
-
 # ---------------------------------------------------------------------------- changelog (from CHANGELOG*.md)
 
 CHANGELOGS = {"pl": "CHANGELOG.md", "en": "CHANGELOG.en.md", "de": "CHANGELOG.de.md", "fr": "CHANGELOG.fr.md"}
@@ -745,10 +695,17 @@ def legacy_redirects():
     forwarding page at its old address, the root too (loonar.eu -> loonar.eu/compass/); old folders are removed
     first, so no stale copy stays. PDFs of the user guide are copied too (the Start menu and old links point there)."""
     compass_out = os.path.join(OUT, *COMPASS.strip("/").split("/"))
-    for old in ["docs"] + [PATH[l] + k for l in LANGS for k in ("changelog", "stats")]:
+    for old in ["docs", COMPASS.rstrip("/") + "/stats"] + [COMPASS + PATH[l] + "stats" for l in LANGS] + [PATH[l] + k for l in LANGS for k in ("changelog", "stats")]:
         path = os.path.join(OUT, *old.strip("/").split("/"))
         if os.path.isdir(path):
             shutil.rmtree(path)
+    for l in LANGS:
+        home = page_dir("home", l)
+        for old in (COMPASS + PATH[l] + "stats/", PATH[l] + "stats/"):
+            target = rel(old, home)
+            write(old + "index.html", '<!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex">'
+                  f'<meta http-equiv="refresh" content="0; url={target}"><title>Loonar Compass</title></head>'
+                  f'<body><a href="{target}">Loonar Compass</a></body></html>\n')
     for dirpath, _, files in os.walk(compass_out):
         for f in files:
             rp = os.path.relpath(os.path.join(dirpath, f), compass_out).replace(os.sep, "/")
@@ -799,7 +756,7 @@ def not_found():
 
 def sitemap(extra=()):
     urls = [f'  <url>\n    <loc>{u}</loc>\n  </url>' for u in extra]
-    for kind in ("home", "privacy", "legal", "stats", "changelog"):
+    for kind in ("home", "privacy", "legal", "changelog"):
         for l in LANGS:
             alts = ''.join(f'\n    <xhtml:link rel="alternate" hreflang="{a}" href="{SITE + page_dir(kind, a)}"/>' for a in LANGS)
             alts += f'\n    <xhtml:link rel="alternate" hreflang="x-default" href="{SITE + page_dir(kind, "en")}"/>'
@@ -910,7 +867,6 @@ if __name__ == "__main__":
         home_page(l)
         doc_page("privacy", l)
         doc_page("legal", l)
-        stats_page(l)
         changelog_page(l)
     doc_urls = docs.generate(sys.modules[__name__])
     not_found()

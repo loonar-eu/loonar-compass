@@ -159,21 +159,44 @@ fn approved_scripts() -> &'static std::sync::Mutex<std::collections::HashSet<Str
     SET.get_or_init(Default::default)
 }
 
+/// Words that make a string literal code rather than data: SQL statements (Repository.Execute, SQLQuery) and what runs
+/// text as code or a program. A literal with one of them keeps its content in the build (LC-346).
+const CODE_WORDS: &[&str] = &[
+    "insert", "update", "delete", "merge", "upsert", "truncate", "alter", "create", "drop", "grant", "revoke", "exec", "execute",
+    "replace", "select", "into", "commit", "rollback", "declare", "waitfor", "shutdown", "eval", "wscript", "cscript", "shell",
+    "activexobject", "createobject", "powershell", "cmd", "run",
+];
+
+/// Whether a string literal's content holds one of CODE_WORDS as a whole word (any letter case).
+fn code_like(content: &str) -> bool {
+    content.split(|c: char| !(c.is_alphanumeric() || c == '_')).any(|w| CODE_WORDS.iter().any(|k| w.eq_ignore_ascii_case(k)))
+}
+
 /// The build of a script: its code without the content of string literals and without numbers, whitespace collapsed.
-/// Two scripts with the same build differ only in their data.
+/// Two scripts with the same build differ only in their data. A literal that looks like code (SQL, eval, a shell) keeps
+/// its content: Repository.Execute("UPDATE …") and Repository.Execute("DELETE …") are two builds, not one (LC-346).
 pub fn script_shape(code: &str) -> String {
     let mut out = String::new();
     let mut chars = code.chars().peekable();
     while let Some(c) = chars.next() {
         match c {
             '"' | '\'' => {
-                out.push(c);
+                let mut content = String::new();
                 while let Some(d) = chars.next() {
                     if d == '\\' {
-                        chars.next();
+                        if let Some(e) = chars.next() {
+                            content.push(d);
+                            content.push(e);
+                        }
                     } else if d == c {
                         break;
+                    } else {
+                        content.push(d);
                     }
+                }
+                out.push(c);
+                if code_like(&content) {
+                    out.push_str(&content.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase());
                 }
                 out.push(c);
             }
@@ -312,6 +335,83 @@ pub fn definitions() -> Value {
     if let Some(items) = list.as_array_mut() {
         items.extend(crate::model_db::read_only_definitions());
         items.push(crate::changelog::definition());
+        items.push(crate::miro::definition());
+        items.push(crate::matrix::definition());
+        items.extend(crate::model_usage::definitions());
+        items.push(crate::repo_doctor::definition());
+        items.push(crate::changes::definition());
+        items.push(crate::governance::rules_definition());
+        items.push(crate::trace_gaps::definition());
+        items.push(crate::template_doctor::definition());
+        items.push(crate::safety_net::definition());
+        items.extend(crate::sequence::definitions());
+        items.push(crate::api_import::definition());
+        items.push(crate::text_export::definition());
+        items.push(crate::notation::definition());
+        items.push(crate::test_results::definition());
+        items.push(crate::translate_model::definition());
+        items.push(crate::migration::definition());
+        items.push(crate::baseline_diff::definition());
+        items.extend(crate::readonly_why::definitions());
+        items.push(crate::what_if::definition());
+        items.extend(crate::mermaid_ddl::definitions());
+        items.push(crate::ea_help::definition());
+        items.push(crate::bulk::definition());
+        items.push(crate::recycle::definition());
+        items.push(crate::merge::definition());
+        items.push(crate::visibility::definition());
+        items.push(crate::style::definition());
+        items.push(crate::context_diagram::definition());
+        items.push(crate::diagram_clone::definition());
+        items.push(crate::publications::definition());
+        items.push(crate::import_sheet::definition());
+        items.push(crate::jira_sync::definition());
+        items.push(json!({
+            "name": "exec_view",
+            "description": "A presentation copy of a diagram for management or business (the original stays as it is): a new diagram next to it with \
+the same elements in the same places, attributes, operations and stereotypes hidden, relationship labels hidden, elements coloured by type, \
+optionally a title. One save the user approves (the copy can be deleted or undone). Use it for /exec-view; offer a short explanation (/explain) or \
+a slide of the copy with speaker notes (create_presentation, notes).",
+            "input_schema": { "type": "object", "properties": {
+                "diagram": { "type": "integer" },
+                "name": { "type": "string", "description": "Name of the copy (default: <name> – presentation)" }
+            }, "required": ["diagram"] }
+        }));
+        items.push(json!({
+            "name": "align_elements",
+            "description": "Line up elements of a diagram without moving the others: align left / right / top / bottom / center (horizontal centres) / \
+middle (vertical centres) to the first element given, distribute_horizontally / distribute_vertically (equal gaps between the outermost ones), \
+same_size (the size of the first one), snap (to a 10 px grid). One save the user approves; undoable. Elements = object_ids on that diagram.",
+            "input_schema": { "type": "object", "properties": {
+                "diagram": { "type": "integer" },
+                "elements": { "type": "array", "items": { "type": "integer" } },
+                "how": { "type": "string", "enum": ["left", "right", "top", "bottom", "center", "middle", "distribute_horizontally", "distribute_vertically", "same_size", "snap"] }
+            }, "required": ["diagram", "elements", "how"] }
+        }));
+        items.push(json!({
+            "name": "place_new_elements",
+            "description": "Incremental layout: places new elements of a diagram in free space next to an element they are related to (or the \
+nearest one), and moves nothing else – unlike layout_diagram, which rearranges the whole diagram. Default: the elements that lie on top of \
+others (e.g. just added at the same spot); or give their object_ids. One save the user approves; undoable.",
+            "input_schema": { "type": "object", "properties": {
+                "diagram": { "type": "integer" },
+                "elements": { "type": "array", "items": { "type": "integer" } },
+                "spacing": { "type": "integer", "description": "Gap in pixels (default 40)" }
+            }, "required": ["diagram"] }
+        }));
+        items.push(json!({
+            "name": "change_connector_type",
+            "description": "Give relationships another type (e.g. ArchiMate Composition → Serving, Association → Dependency), also many at once: a new \
+relationship between the same ends with the old name, direction, notes, tagged values and stereotype (or the given one) gets the old route, style and \
+visibility on every diagram, and the old one is deleted. One save the user approves (a baseline first: not undoable by operations); the new relationship \
+is checked by the ArchiMate 3.2 and team rules. Use connector ids from the model.",
+            "input_schema": { "type": "object", "properties": {
+                "connector": { "type": "integer" },
+                "connectors": { "type": "array", "items": { "type": "integer" } },
+                "type": { "type": "string", "description": "EA connector type, e.g. Dependency, Realisation, Association, Aggregation, InformationFlow; for ArchiMate the concept itself, e.g. ArchiMate_Serving or ArchiMate3::ArchiMate_Triggering (Compass picks EA's base type and the stereotype)" },
+                "stereotype": { "type": "string", "description": "e.g. ArchiMate3::ArchiMate_Serving (empty keeps the old one)" }
+            }, "required": ["type"] }
+        }));
         items.push(crate::scripts::definition());
         items.push(crate::traceability::definition());
         items.push(crate::code_drift::definition());
@@ -323,6 +423,7 @@ pub fn definitions() -> Value {
         items.push(crate::gdrive::definition());
         items.push(crate::instructions::definition());
         items.push(crate::documents::definition());
+        items.push(crate::documents::slides_definition());
         items.push(crate::mdg::version_control_definition());
         items.push(crate::ea_api::definition());
         items.push(crate::undo::definition());
@@ -343,6 +444,28 @@ submit for review or prepare a change for approval. Nothing is changed in the mo
 or apply (id: an APPROVED change set of this model is saved to the model with the usual approval and verification; the hub records it as applied).",
             "input_schema": { "type": "object", "properties": {
                 "action": { "type": "string", "enum": ["list", "show", "apply"] },
+                "id": { "type": "string" },
+                "status": { "type": "string" }
+            }, "required": ["action"] }
+        }));
+        items.push(json!({
+            "name": "review_comments",
+            "description": "Review comments and decisions (ADR) the team left on elements of this model in the hub's web view (LC-392). action list \
+(optionally element = object_id, status open/resolved/proposed/accepted/rejected): who said what about which element; action add (element, text, \
+kind comment or decision); action status (id, status). Review requests (LC-407): action request asks the owners (tagged value Owner, else the \
+author; or to = a hub user) to confirm or update elements (element, elements or package; text = the question; architect role); action requests \
+lists the ones waiting for the user (all: true – everybody's, status any for the answered ones too); action answer (id, status confirmed or \
+needs_change, text, kind decision to record the answer as a decision). Use it when the user asks what reviewers said, to answer open comments, to \
+record a decision about an element, or to ask owners to review their elements.",
+            "input_schema": { "type": "object", "properties": {
+                "action": { "type": "string", "enum": ["list", "add", "status", "request", "requests", "answer"] },
+                "element": { "type": "integer" },
+                "elements": { "type": "array", "items": { "type": "integer" } },
+                "package": { "type": "integer" },
+                "to": { "type": "string" },
+                "all": { "type": "boolean" },
+                "text": { "type": "string" },
+                "kind": { "type": "string", "enum": ["comment", "decision"] },
                 "id": { "type": "string" },
                 "status": { "type": "string" }
             }, "required": ["action"] }
@@ -373,24 +496,24 @@ create_package {key, parent, name, notes?}; \
 create_diagram {key, package | parent_element, name, type} (type e.g. \"Logical\", \"Component\", \"Sequence\", \"Use Case\", \"Activity\", \"Custom\", \"BPMN2.0::Business Process\"); \
 create_element {key, package | parent_element, name, type, stereotype?, notes?, tags?, color?, keywords?} (type is the UML type: Class, Component, Interface, Actor, UseCase, Requirement, Activity, Event, Decision, Note, Boundary...; parent_element nests the element inside another one, e.g. the contents of a subprocess); \
 a fork/join is type Synchronization placed as a thin bar (e.g. 8x80 vertical, 80x8 horizontal; the application sets EA's orientation from the size); create_element also takes subtype: for type StateNode 3 = initial state, 4 = final state, 11 = choice, 100 / 101 = initial / final node of an activity; \
-create_connector {source, target, type, stereotype?, name?, tags?, diagram?, sequence?, message_sort?, is_return?, subtype?} (type: Association, Aggregation, Dependency, Generalization, Realisation, ControlFlow, InformationFlow, Sequence...; aggregation and composition are the connector type Aggregation (never an Association with a stereotype): source = the part, target = the whole (the diamond is at the whole), subtype Weak = shared aggregation (default), Strong = composition; a message of a sequence diagram: type Sequence, diagram = that diagram, sequence = its number in the order, message_sort Synchronous or Asynchronous, is_return true for a reply; EA lays messages out from top to bottom by that number); \
+create_connector {source, target, type, stereotype?, name?, tags?, diagram?, sequence?, message_sort?, is_return?, subtype?, constraints?} (constraints = [{name, type?}] UML constraints of the connector, e.g. a time or duration constraint of a message \"{< 2s}\" (type Invariant unless given); type: Association, Aggregation, Dependency, Generalization, Realisation, ControlFlow, InformationFlow, Sequence...; aggregation and composition are the connector type Aggregation (never an Association with a stereotype): source = the part, target = the whole (the diamond is at the whole), subtype Weak = shared aggregation (default), Strong = composition; a message of a sequence diagram: type Sequence, diagram = that diagram, sequence = its number in the order, message_sort Synchronous or Asynchronous, is_return true for a reply; EA lays messages out from top to bottom by that number); \
 place {diagram, element, left, top, width, height, bgcolor?} (bgcolor is the fill color on this diagram, written as #RRGGBB (e.g. #FFE599); pixels; the top-left corner of the diagram is 0,0, the Y axis grows downwards; place a frame that contains other elements before its contents); \
 update_element {element, name?, notes?, alias?, stereotype?, clear_stereotype?, status?, version?, author?, phase?, complexity?, abstract?, tags?, color?, keywords?} (keywords = the Keywords field in EA, t_object.pdata5 in the database, a text or a list; used, among other things, by legends for coloring; complexity is '1' easy, '2' medium, '3' difficult; abstract is true or false; a tag with the value null is removed); \
-update_connector {connector, name?, stereotype?, clear_stereotype?, direction?, notes?, source_multiplicity?, source_role?, target_multiplicity?, target_role?, tags?, sequence?, message_sort?, is_return?} (properties of an existing relationship, connector = t_connector.connector_id; direction: 'Unspecified', 'Source -> Destination', 'Destination -> Source' or 'Bi-Directional'; multiplicities e.g. '1', '0..1', '1..*'); create_legend {diagram, title?, filter?, entries, connector_filter?, connector_entries?, left?, top?} (a diagram legend with automatic coloring, as in EA: filter = the element property the legend colors by, Element.Keyword by default, others e.g. Element.Stereotype, Element.Status, Element.Type; entries = [{value, color #RRGGBB, label?}] the fill color of elements with that value; connector_filter e.g. Connector.Stereotype and connector_entries = [{value, color, width?}] the line color of connectors; elements are colored automatically once they have the value set, e.g. the keyword prio1; in the database a legend is a t_object of type Text with ntype 76); \
+update_connector {connector, name?, stereotype?, clear_stereotype?, direction?, notes?, source_multiplicity?, source_role?, target_multiplicity?, target_role?, tags?, sequence?, message_sort?, is_return?, constraints?} (properties of an existing relationship, connector = t_connector.connector_id; constraints = [{name, type?}] adds UML constraints, e.g. a time constraint \"{< 2s}\" of an existing message; direction: 'Unspecified', 'Source -> Destination', 'Destination -> Source' or 'Bi-Directional'; multiplicities e.g. '1', '0..1', '1..*'); create_legend {diagram, title?, filter?, entries, connector_filter?, connector_entries?, left?, top?} (a diagram legend with automatic coloring, as in EA: filter = the element property the legend colors by, Element.Keyword by default, others e.g. Element.Stereotype, Element.Status, Element.Type; entries = [{value, color #RRGGBB, label?}] the fill color of elements with that value; connector_filter e.g. Connector.Stereotype and connector_entries = [{value, color, width?}] the line color of connectors; elements are colored automatically once they have the value set, e.g. the keyword prio1; in the database a legend is a t_object of type Text with ntype 76); \
 move {package, element | diagram | child_package} (moves an existing element, diagram or package into the package given in package; connectors and positions on diagrams are kept, so never recreate objects just to change their package); \
 delete {element | diagram | connector | package} (permanently deletes an object from the model; an element takes its connectors and diagram occurrences with it, a package all of its contents; delete only what the user asked for or what you created by mistake yourself, and tell the user what you deleted; take the connector id from t_connector.connector_id); \
 remove_from_diagram {diagram, element} (removes the element from the diagram, the element stays in the model); \
 reverse_connector {connector} (swaps the source and the target of a relationship); \
 update_package {package, name?, notes?, version?, status?, stereotype?}; \
 version_control {package, action, comment?} (version control of a package that is already under version control in EA: action check_out, check_in, get_latest (replaces the package with the version from version control), put_latest (checks in and keeps it checked out) or resync (reads the version control status of the package again); comment for check_out, check_in and put_latest; always asked; call version_control_status first); \
-generate_report {package, file, template?} (a document from an EA document template, like Publish → Report Builder: file = a full path ending .docx, .pdf or .rtf, by default in the attachments folder; template = the name of an EA template, default \"Model Report\"; use it when the user wants EA's own report format or a company template; for documents you write yourself use create_document); \
+generate_report {package, file, template?} (a document from an EA document template, like Publish → Report Builder: file = a file name ending .docx, .pdf or .rtf (kept with the conversation's files; give only the name unless the user asked for a folder) or a full path the user named; template = the name of an EA template, default \"Model Report\"; use it when the user wants EA's own report format or a company template; for documents you write yourself use create_document); \
 layout_diagram {diagram, direction?, spacing?} (EA's automatic layout of the whole diagram, like Layout → Diagram Layout: direction down (default), right, up or left; spacing in pixels, default 40; use it after creating a diagram with many elements or when the user asks to tidy a diagram; then check the result with ea_show_diagram); \
 export_xmi {package, file} (exports the package with its contents and diagrams to an XMI file; file = a full path ending .xml or .xmi, by default in the attachments folder); \
 import_xmi {package, file, keep_guids?} (imports an XMI file into the package; GUIDs are replaced unless keep_guids is true, so an import never overwrites existing objects; only on the user's request); \
 set_linked_document {element, text} (the element's linked document (Ctrl+Alt+D in EA), from plain text, one paragraph per line; replaces an existing one); \
 set_swimlanes {diagram, lanes: [{title, width?, color?}], orientation?} (diagram swimlanes (Diagram → Swimlanes), replaces existing ones; orientation vertical (default) or horizontal); \
 set_composite {element, diagram} (links the element to an existing diagram as its composite diagram (in EA: New Child Diagram → Composite → Select Composite Diagram): when the element is double-clicked, EA opens that diagram instead of the properties; this is how you link a BPMN subprocess to the subprocess diagram, also when the diagram is in an ordinary package; in the database the linked element has t_object.ntype = 8 and the diagram id in the pdata1 column); \
-create_attribute {element, name, type?, visibility?, notes?, default?, stereotype?, alias?} (a class attribute, visibility: Public|Private|Protected|Package); create_operation {element, name, return_type?, visibility?, notes?, stereotype?, alias?, parameters?: [{name, type}]} (a class operation with parameters; alias is the operation's alias in EA, e.g. the REST path of an endpoint: set it here, no script is needed); update_attribute {attribute, name?, type?, visibility?, notes?, default?, stereotype?, alias?, static?} and delete_attribute {attribute} (attribute = t_attribute.id); update_operation {operation, name?, return_type?, visibility?, notes?, stereotype?, alias?, static?} and delete_operation {operation} (operation = t_operation.operationid); clone_package {package, name?, key?} (a copy of the package with all its contents next to the original, e.g. a variant to experiment with); update_scenario {element, scenario, name?, type?, notes?, steps?} (changes an existing structured scenario found by its name or GUID; steps, when given, replace all steps); delete_scenario {element, scenario}; create_scenario {element, name, type?, notes?, steps: [{text, actor?, uses?, results?}]} (a STRUCTURED SCENARIO of an element, e.g. a use case: the Scenarios tab of the element, with numbered steps; ALWAYS use this, never notes, when the user asks for scenarios, flows or structured scenarios; type: Basic Path (default), Alternate or Exception; actor = true for a step done by the actor, false for the system; in the database t_objectscenarios, steps in its xmlcontent); add_glossary_term {term, type?, meaning, forms?: [..]} (a term in the EA PROJECT GLOSSARY, the list EA highlights in notes and documents with its meaning - not a model element; t_glossary holds the terms; EA highlights only the exact written form, so for a Polish term ALWAYS pass in forms every inflected form of it: singular and plural in all seven cases from the nominative to the vocative, for a multi-word term the whole phrase inflected; type: the one the user names, otherwise Glossary (the type appears in EA once used); ask the user for the meaning if they did not give it); create_baseline {package, version, notes?} (saves a version of the package in the model; ALWAYS make a baseline before deleting from or substantially restructuring an existing package that you did not create in this conversation, and tell the user they can restore it in EA: package in the browser → Manage Baselines → Compare/Restore; baselines are in t_document with doctype = 'Baseline'); \
+create_attribute {element, name, type?, visibility?, notes?, default?, stereotype?, alias?} (a class attribute, visibility: Public|Private|Protected|Package); create_operation {element, name, return_type?, visibility?, notes?, stereotype?, alias?, parameters?: [{name, type}]} (a class operation with parameters; alias is the operation's alias in EA, e.g. the REST path of an endpoint: set it here, no script is needed); update_attribute {attribute, name?, type?, visibility?, notes?, default?, stereotype?, alias?, static?} and delete_attribute {attribute} (attribute = t_attribute.id); update_operation {operation, name?, return_type?, visibility?, notes?, stereotype?, alias?, static?} and delete_operation {operation} (operation = t_operation.operationid); clone_package {package, name?, key?} (a copy of the package with all its contents next to the original, e.g. a variant to experiment with); save_document_template {name, package_part, element_part, diagram_part?} (an EA document template for Publish → Report Builder, made e.g. from a document the user gave: each part is Markdown (# headings, - lists, **bold**) with EA fields in braces; package_part is written once per package ({Pkg.Name}, {Pkg.Notes}, {Pkg.Version}…), diagram_part for each diagram ({Diagram.Name}, {Diagram.Notes}, {Diagram.DiagramImg} the picture), element_part for each element ({Element.Name}, {Element.Type}, {Element.Stereotype}, {Element.Notes}, {Element.Status}, {Element.Version}, {Element.Author}…; the value of one tagged value is {Element.valueOf(TagName)}, e.g. {Element.valueOf(Owner)}: there is no field for all tagged values, so name each tag the document shows); a template with the same name is replaced; then generate_report with template = that name makes the document); create_matrix_specification {package, name, source_package, target_package, source_type, target_type, link_type?, direction?, children?, key?} (EA's own Relationship Matrix saved in the model as a Matrix Specification artifact in `package`: the user double-clicks it in the Browser and EA shows the live matrix; source_type / target_type: element types of rows and columns, e.g. Requirement, UseCase, Component; link_type: e.g. Realisation (default), Dependency, Association, Abstraction for trace; direction: source_to_target (default), target_to_source or both; children: include child packages, default true); clone_element_version {element, version?, name?, key?} (EA's former \"Clone as New Version\": a copy of the element in the same package with its notes, attributes, operations with parameters and tagged values, the next version number (or version), and a «trace» relationship from the new version to the original, which stays as it is); update_scenario {element, scenario, name?, type?, notes?, steps?} (changes an existing structured scenario found by its name or GUID; steps, when given, replace all steps); delete_scenario {element, scenario}; create_scenario {element, name, type?, notes?, steps: [{text, actor?, uses?, results?}]} (a STRUCTURED SCENARIO of an element, e.g. a use case: the Scenarios tab of the element, with numbered steps; ALWAYS use this, never notes, when the user asks for scenarios, flows or structured scenarios; type: Basic Path (default), Alternate or Exception; actor = true for a step done by the actor, false for the system; in the database t_objectscenarios, steps in its xmlcontent); add_glossary_term {term, type?, meaning, forms?: [..]} (a term in the EA PROJECT GLOSSARY, the list EA highlights in notes and documents with its meaning - not a model element; t_glossary holds the terms; EA highlights only the exact written form, so for a Polish term ALWAYS pass in forms every inflected form of it: singular and plural in all seven cases from the nominative to the vocative, for a multi-word term the whole phrase inflected; type: the one the user names, otherwise Glossary (the type appears in EA once used); ask the user for the meaning if they did not give it); create_baseline {package, version, notes?} (saves a version of the package in the model; ALWAYS make a baseline before deleting from or substantially restructuring an existing package that you did not create in this conversation, and tell the user they can restore it in EA: package in the browser → Manage Baselines → Compare/Restore; baselines are in t_document with doctype = 'Baseline'); \
 update_diagram {diagram, name?, notes?, stereotype?} (changes the name, notes or stereotype of an existing diagram); repair_diagram_links {diagram, show_hidden?} \
 (connectors not visible on a diagram although both ends are on it. It fixes, in this order: connectors that are not messages but are bound to one \
 diagram (t_connector.diagramid <> 0: EA draws them only on that diagram) - set back to 0; duplicate links of one connector in t_diagramlinks (EA uses \
@@ -404,7 +527,8 @@ hide_connectors {diagram, connectors, hidden?} (hides the given connectors on th
 route_connector {diagram, connector, start?, points?, end?} (routes one connector along the given path, e.g. following the user's sketch: start = [x, y] the attachment point on the edge of the source element, end = [x, y] the attachment point on the edge of the target element, points = a list of bend points [[x, y], ...]; coordinates as in place (pixels from the top-left corner of the diagram, Y axis downwards), and take the element positions from t_diagramobjects (rectleft, -recttop, rectright, -rectbottom); for purely horizontal and vertical lines, each successive point (from start through points to end) must have the same x or y coordinate as the previous one; example: from the left side of element B to the left, then up to the bottom side of element A: start at the middle of B's left side, one bend point below the middle of A at the height of start, end at the middle of A's bottom side; connector = t_connector.connector_id); \
 set_line_style {diagram, style, connectors?} (the routing of connector lines on the diagram, as in EA Line Style: style = direct (straight) | auto (automatic) | custom (manually bent) | orthogonal_square (orthogonal) | orthogonal_rounded (orthogonal, rounded) | tree_vertical | tree_horizontal | lateral_vertical | lateral_horizontal; connectors = a list of connector ids (t_connector.connector_id), without it all connectors between the diagram's elements get the style; bend points are cleared; in the database the style is in t_diagramlinks.style as Mode= and TREE=); \
 set_bounds {diagram, element, left?, top?, width?, height?} (moves or resizes an element that is already on the diagram; connectors are kept; omitted fields stay unchanged; for enlarging frames, pools, lanes and subprocesses, instead of removing them and placing them again); \
-set_color {diagram, element, bgcolor} (the fill color of an element already on the diagram, #RRGGBB (e.g. #FFE599); the element's default color on all diagrams is set by the color field in create_element and update_element); \
+set_color {diagram, element, bgcolor, bold?, font_size?} (bold and font_size: the element's font on this diagram; the fill color of an element already on the diagram, #RRGGBB (e.g. #FFE599); the element's default color on all diagrams is set by the color field in create_element and update_element); \
+diagram_options {diagram, extended?, style?} (display options of a diagram, keys with the value \"1\" or \"0\": extended = EA's ExtendedStyle keys such as ShowSN (sequence numbers on a sequence diagram: EA numbers the messages itself, hierarchically by activation, so a message sent by a lifeline while a call to it is active gets the sub-number, 1, 1.1, 1.2; the numbers are not stored in the messages), HideAtts, HideOps, HideStereo, ShowNotes; style = StyleEx keys such as SuppConnectorLabels); \
 navigation_cell {diagram, target, left, top, width?, height?, image?, caption?} (a navigation cell, i.e. a link tile on the diagram given in diagram that opens the diagram given in target when double-clicked; the caption is the name of the target diagram unless you give caption; in the database a cell is a t_object of type Text with the stereotype NavigationCell, the caption is in the alias column and the target diagram (diagram_id) in the pdata1 column; you change the caption of an existing cell with update_element {alias}; default size 170x115; the icon is chosen automatically for the target diagram type, give the image field only when explicitly asked to; build start pages and model tables of contents from such cells laid out in an even grid, e.g. every 200 px horizontally and 140 px vertically). \
 BPMN 2.0: task = type Activity + stereotype BPMN2.0::Activity (tags taskType: Abstract|Manual|User|Service|Script|Send|Receive|BusinessRule; subprocess: tag activityType=Sub-Process); \
 embedded subprocess (expanded, with its steps visible inside): a subprocess element without set_composite, you create its steps with parent_element = the subprocess \
@@ -487,7 +611,8 @@ Use it when the user asks for slides or a presentation; keep slides short (at mo
                             "properties": {
                                 "title": { "type": "string" },
                                 "bullets": { "type": "array", "items": { "anyOf": [{ "type": "string" }, { "type": "object", "properties": { "text": { "type": "string" }, "level": { "type": "integer" } }, "required": ["text"] }] } },
-                                "image": { "type": "string", "description": "diagram:ID or image:NAME" }
+                                "image": { "type": "string", "description": "diagram:ID or image:NAME" },
+                                "notes": { "type": "string", "description": "Speaker notes: what to say on this slide (lines become paragraphs)" }
                             },
                             "required": ["title"]
                         }
@@ -500,8 +625,15 @@ Use it when the user asks for slides or a presentation; keep slides short (at mo
         {
             "name": "create_document",
             "description": "Creates a Word document (DOCX) and shows it to the user in the chat with the \"Open\" and \"Save as…\" buttons. \
-Content in Markdown: # / ## / ### headings, paragraphs with **bold**, lists (- item, 1. item), tables (| a | b | with a |---|---| row), \
-images on separate lines: ![caption](diagram:ID) inserts a diagram from EA (id from t_diagram.diagram_id), ![caption](image:NAME) inserts an image \
+Content in Markdown, laid out in a polished style (coloured headings, tables with a navy header and striped rows): # to #### headings, paragraphs, \
+lists (- item, 1. item, - [ ] / - [x] checkboxes), tables (| a | b | with a |---|---| row), > quotes or notes (a highlighted box), --- separator, \
+code blocks in ``` fences with a language (```json, ```http, ```xml, ```sql…): every line and its indentation is kept exactly, monospaced in a grey box, \
+JSON in colour - write requests and responses the way Postman shows them (method and URL, headers, pretty-printed JSON body). \
+Inline: **bold**, *italic*, `code`, ~~strike~~, ==highlight==, [text](https://…) links, and colours with HTML tags: \
+<span style=\"color:red\">…</span> (any colour name or #RRGGBB), <span style=\"background:yellow\">…</span>, <u>…</u>, and for marking changes \
+<del>removed text</del> (red, struck through) and <ins>added text</ins> (green, underlined). When the user asks for colours, changes in red or other \
+formatting, use these: never tell the user Word cannot do it. \
+Images on separate lines: ![caption](diagram:ID) inserts a diagram from EA (id from t_diagram.diagram_id), ![caption](image:NAME) inserts an image \
 drawn earlier with render_image (NAME from its result). Use it when the user asks for a document, description, specification or report for Word.",
             "input_schema": {
                 "type": "object",
@@ -521,7 +653,8 @@ drawn earlier with render_image (NAME from its result). Use it when the user ask
             "description": "Works with the Enterprise Architect window that the user has open (the same model): \
 action=context returns the open diagram, the elements and the connector selected on it, and the selection in the project browser \
 (use it when the user says \"this\", \"the selected\", \"this diagram\", \"here\"); action=open_diagram {diagram} opens the diagram in the user's EA window; \
-action=show_element {element} shows the element in the project browser. After every ea_write the changed diagrams refresh \
+action=show_element {element} shows the element in the project browser; action=open_diagram with element too opens the diagram with that \
+element selected (after where_used: \"show me where it is\"). After every ea_write the changed diagrams refresh \
 in the user's window automatically, so don't ask the user to press F5 (unless the EA window was closed or shows a different model).",
             "input_schema": {
                 "type": "object",
@@ -793,7 +926,7 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         let (ask, server, tool) = crate::mcp_client::needs_consent(&ctx.cfg.base_dir, name)?;
         if ask {
             let args = serde_json::to_string_pretty(input).unwrap_or_default();
-            ctx.approver.confirm_kind("mcp", &crate::i18n::fmt(MCP_QUESTION, &[tool, server, args.chars().take(1500).collect()]))?;
+            ctx.approver.confirm_kind("mcp", &crate::i18n::fmt(MCP_QUESTION, &[tool, server, args.chars().take(20_000).collect()]))?;
         }
         return crate::mcp_client::call(&ctx.cfg.base_dir, name, input).map(Into::into);
     }
@@ -801,6 +934,179 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "db_query" => db_query(input["sql"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["sql".to_string()]))?, ctx.cfg).map(Into::into),
         "ea_write" => ea_write(input, ctx).map(Into::into),
         "ea_show_diagram" => ea_show_diagram(input, ctx),
+        "miro_send" => crate::miro::tool(input, ctx.cfg).map(Into::into),
+        "package_matrix" => crate::matrix::tool(input, ctx.cfg),
+        "where_used" => {
+            let mut text = crate::model_usage::where_used(input, ctx.cfg)?;
+            text.push_str("\n(The user can ask to open a diagram with the element selected – ea_ui open_diagram {diagram, element} – or to show it in the project browser – ea_ui show_element.)");
+            // Pictures unless they are refused (round 11a: the model sometimes left "thumbnails" out and the answer had none).
+            if input["thumbnails"] == false || input["element"].is_null() {
+                return Ok(text.into());
+            }
+            // Pictures of the first diagrams it is on (LC-411).
+            let id = input["element"].as_i64().or_else(|| query_rows(ctx.cfg, &format!("select object_id from t_object where name = '{}'", crate::model_db::sql_text(ctx.cfg.model_source, input["element"].as_str().unwrap_or("")))).ok()?.first()?[0].parse().ok());
+            let diagrams: Vec<i64> = id.map(|e| query_rows(ctx.cfg, &format!("select distinct diagram_id from t_diagramobjects where object_id = {e}")).unwrap_or_default()).unwrap_or_default()
+                .into_iter().filter_map(|r| r[0].parse().ok()).take(4).collect();
+            let mut images = Vec::new();
+            for d in diagrams {
+                match ea_show_diagram(&json!({ "diagram_id": d }), ctx) {
+                    Ok(shown) => images.extend(shown.images),
+                    Err(e) => text.push_str(&format!("\n(The picture of diagram {d} could not be drawn: {e:#}.)")),
+                }
+            }
+            Ok(ToolOutput { text, images, files: Vec::new() })
+        }
+        "find_orphans" => crate::model_usage::find_orphans(input, ctx.cfg).map(Into::into),
+        "find_duplicates" => crate::model_usage::find_duplicates(input, ctx.cfg).map(Into::into),
+        "elements_without_notes" => crate::model_usage::elements_without_notes(input, ctx.cfg).map(Into::into),
+        "repo_doctor" => crate::repo_doctor::run(input, ctx.cfg).map(Into::into),
+        "what_changed" => crate::changes::run(input, ctx.cfg).map(Into::into),
+        "team_rules" => team_rules(input, ctx).map(Into::into),
+        "trace_gaps" => crate::trace_gaps::run(input, ctx.cfg).map(Into::into),
+        "template_doctor" => crate::template_doctor::run(input, ctx.cfg).map(Into::into),
+        // Restoring from the safety net is one ordinary save (approval, undo journal, audit, verification).
+        "safety_net" if input["action"].as_str() == Some("restore") => {
+            let ops = crate::safety_net::restore_ops(input, ctx.cfg)?;
+            ea_write(&json!({ "ops": ops }), ctx).map(Into::into)
+        }
+        "safety_net" => crate::safety_net::run(input, ctx.cfg).map(Into::into),
+        "sequence_check" => crate::sequence::check(input, ctx.cfg).map(Into::into),
+        "export_text" => crate::text_export::run(input, ctx.cfg),
+        "diagram_as_text" => crate::notation::run(input, ctx.cfg).map(Into::into),
+        "migration_check" => crate::migration::run(input, ctx.cfg).map(Into::into),
+        "compare_baselines" => crate::baseline_diff::run(input, ctx.cfg).map(Into::into),
+        "why_locked" => crate::readonly_why::why_locked(input, ctx.cfg).map(Into::into),
+        "what_if" => crate::what_if::run(input, ctx.cfg).map(Into::into),
+        "table_ddl" => crate::mermaid_ddl::table_ddl(input, ctx.cfg).map(Into::into),
+        "import_mermaid" | "import_plantuml" => {
+            let (ops, text) = if name == "import_plantuml" { crate::mermaid_ddl::import_plantuml(input, ctx.cfg)? } else { crate::mermaid_ddl::import_mermaid(input, ctx.cfg)? };
+            if ops.is_empty() { Ok(text.into()) } else { ea_write(&json!({ "ops": ops }), ctx).map(|saved| format!("{text}
+
+{saved}")).map(Into::into) }
+        }
+        "dead_links" => crate::readonly_why::dead_links(input, ctx.cfg).map(Into::into),
+        // Translating the model (LC-400): texts reads only; apply is one ordinary save of the translations.
+        "translate_model" => {
+            let (ops, text) = crate::translate_model::run(input, ctx.cfg)?;
+            if ops.is_empty() { Ok(text.into()) } else { ea_write(&json!({ "ops": ops }), ctx).map(|saved| format!("{text}\n\n{saved}")).map(Into::into) }
+        }
+        // Test results (LC-399): the report reads only; apply writes tagged values on the requirements (one save).
+        "test_results" => {
+            let (ops, text) = crate::test_results::run(input, ctx.cfg)?;
+            if ops.is_empty() { Ok(text.into()) } else { ea_write(&json!({ "ops": ops }), ctx).map(|saved| format!("{text}\n\n{saved}")).map(Into::into) }
+        }
+        // An API specification as a model (LC-397): preview reads only, apply is one ordinary save.
+        "import_api" => {
+            let (ops, text) = crate::api_import::run(input, ctx.cfg)?;
+            if ops.is_empty() { Ok(text.into()) } else { ea_write(&json!({ "ops": ops }), ctx).map(|saved| format!("{text}
+
+{saved}")).map(Into::into) }
+        }
+        // A sequence from text is one ordinary save; the report (bound, new, missing operations) goes with its result.
+        "sequence_from_text" => {
+            let (ops, report) = crate::sequence::from_text(input, ctx.cfg)?;
+            ea_write(&json!({ "ops": ops }), ctx).map(|saved| format!("{report}\n\n{saved}")).map(Into::into)
+        }
+        "ea_howto" => crate::ea_help::run(input, ctx.cfg).map(Into::into),
+        // A bulk change: the preview reads only; apply is one ordinary save (approval, undo journal, audit, verification).
+        "bulk_set" if input["action"].as_str() == Some("apply") => {
+            let ops = crate::bulk::ops_to_apply(input, ctx.cfg)?;
+            ea_write(&json!({ "ops": ops }), ctx).map(Into::into)
+        }
+        "bulk_set" => crate::bulk::preview(input, ctx.cfg).map(Into::into),
+        // Another type for relationships (LC-374): one save; the ArchiMate/team rules are checked on the new ones.
+        "change_connector_type" => {
+            let ids: Vec<i64> = input["connectors"].as_array().into_iter().flatten().filter_map(Value::as_i64).chain(input["connector"].as_i64()).collect();
+            let kind = input["type"].as_str().filter(|t| !t.trim().is_empty()).context("give the new type")?;
+            let mut ops = Vec::new();
+            let mut ends = Vec::new();
+            for id in &ids {
+                if let Some(r) = query_rows(ctx.cfg, &format!("select start_object_id, end_object_id from t_connector where connector_id = {id}"))?.into_iter().next() {
+                    ends.push((r[0].clone(), r[1].clone()));
+                }
+                let diagrams: Vec<i64> = query_rows(ctx.cfg, &format!("select distinct diagramid from t_diagramlinks where connectorid = {id}"))?.iter().filter_map(|r| r[0].parse().ok()).collect();
+                let mut op = json!({ "op": "change_connector_type", "connector": id, "type": kind, "diagrams": diagrams });
+                match input["stereotype"].as_str() {
+                    // An ArchiMate stereotype decides the type too (LC-374: "Dependency" with ArchiMate_Serving lost it).
+                    Some(st) if st.rsplit("::").next().unwrap_or("").starts_with("ArchiMate_") => op["type"] = json!(st),
+                    Some(st) => op["stereotype"] = json!(st),
+                    None => {}
+                }
+                ops.push(op);
+            }
+            if ops.is_empty() {
+                bail!("give connector or connectors");
+            }
+            let saved = ea_write(&json!({ "ops": ops }), ctx)?;
+            // The new relationships: between the same ends, of the new type.
+            let kind_sql = crate::model_db::sql_text(ctx.cfg.model_source, kind);
+            let new_ids: Vec<i64> = ends
+                .iter()
+                .flat_map(|(a, b)| query_rows(ctx.cfg, &format!("select connector_id from t_connector where start_object_id = {a} and end_object_id = {b} and lower(connector_type) = lower('{kind_sql}')")).unwrap_or_default())
+                .filter_map(|r| r[0].parse().ok())
+                .collect();
+            let findings: Vec<String> = new_ids.iter().flat_map(|id| crate::governance::check_object(ctx.cfg, "connector", *id).unwrap_or_default()).collect();
+            Ok(if findings.is_empty() { saved } else { format!("{saved}\nModel check of the new relationship: {}", findings.join("; ")) }.into())
+        }
+        "exec_view" => {
+            let ops = exec_view_ops(ctx.cfg, input)?;
+            ea_write(&json!({ "ops": ops }), ctx).map(Into::into)
+        }
+        // Publishing a stale page again (LC-426): the same source, space and page, with fresh diagrams; the usual approval.
+        "stale_publications" if input["action"].as_str() == Some("republish") => {
+            let wanted = input["target"].as_str().unwrap_or("");
+            let record = crate::publications::find(ctx.cfg, wanted).with_context(|| format!("no publication \"{wanted}\" is recorded"))?;
+            if record["again"]["page"].is_string() {
+                publish_confluence(&json!({ "page": record["again"]["page"], "space": record["again"]["space"], "page_id": record["again"]["page_id"] }), ctx)
+            } else {
+                Ok(format!("\"{}\" is a {}: create it again with create_document from its template and the current model.", record["title"].as_str().unwrap_or(""), record["kind"].as_str().unwrap_or("document")).into())
+            }
+        }
+        "stale_publications" => crate::publications::stale(input, ctx.cfg).map(Into::into),
+        "jira_sync" => jira_sync(input, ctx).map(Into::into),
+        "import_sheet" => {
+            let (ops, text) = crate::import_sheet::run(input, ctx.cfg)?;
+            if ops.is_empty() { Ok(text.into()) } else { ea_write(&json!({ "ops": ops }), ctx).map(Into::into) }
+        }
+        "clone_diagram" => {
+            let (ops, text) = crate::diagram_clone::plan(input, ctx.cfg)?;
+            if input["action"].as_str() == Some("apply") { ea_write(&json!({ "ops": ops }), ctx).map(Into::into) } else { Ok(format!("{text}\nNothing was changed yet: action apply does it after approval.").into()) }
+        }
+        "context_diagram" => {
+            let ops = crate::context_diagram::plan(input, ctx.cfg)?;
+            ea_write(&json!({ "ops": ops }), ctx).map(Into::into)
+        }
+        "apply_style" => {
+            let (ops, text) = crate::style::plan(input, ctx.cfg)?;
+            if input["action"].as_str() == Some("apply") && !ops.is_empty() { ea_write(&json!({ "ops": ops }), ctx).map(Into::into) } else { Ok(text.into()) }
+        }
+        "align_elements" => {
+            let ops = align_ops(ctx.cfg, input)?;
+            ea_write(&json!({ "ops": ops }), ctx).map(Into::into)
+        }
+        "place_new_elements" => {
+            let (ops, text) = place_new_ops(ctx.cfg, input)?;
+            if ops.is_empty() { Ok(text.into()) } else { ea_write(&json!({ "ops": ops }), ctx).map(|saved| format!("{text}\n\n{saved}")).map(Into::into) }
+        }
+        // Visibility policies of diagrams (LC-373): apply is an ordinary save, the rest reads or keeps a local setting.
+        "connector_visibility" => {
+            let (ops, text) = crate::visibility::run(input, ctx.cfg)?;
+            if ops.is_empty() { Ok(text.into()) } else { ea_write(&json!({ "ops": ops }), ctx).map(Into::into) }
+        }
+        // Merge and replace: preview reads; apply is one save, always asked, with a baseline first.
+        "merge_elements" if input["action"].as_str() == Some("replace_on_diagrams") => {
+            let (ops, text) = crate::merge::replace_on_diagrams(input, ctx.cfg)?;
+            if ops.is_empty() { Ok(text.into()) } else { ea_write(&json!({ "ops": ops }), ctx).map(|saved| format!("{text}\n\n{saved}")).map(Into::into) }
+        }
+        "merge_elements" => {
+            let (op, text) = crate::merge::plan(input, ctx.cfg)?;
+            if input["action"].as_str() == Some("apply") { ea_write(&json!({ "ops": [op] }), ctx).map(Into::into) } else { Ok(format!("{text}\n\nNothing was changed yet: show this to the user; action apply does it after approval.").into()) }
+        }
+        // The recycle bin: list reads; move and restore are ordinary saves.
+        "recycle_bin" => {
+            let (ops, text) = crate::recycle::plan(input, ctx.cfg)?;
+            if ops.is_empty() { Ok(text.into()) } else { ea_write(&json!({ "ops": ops }), ctx).map(Into::into) }
+        }
         "memory_save" => {
             let name = input["name"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["name".to_string()]))?;
             let content = input["content"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["content".to_string()]))?;
@@ -850,11 +1156,14 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         "undo_change" => undo_change(input, ctx).map(Into::into),
         "estimate_change" => crate::estimate::estimate(ctx.cfg, &input["elements"].as_array().into_iter().flatten().filter_map(|v| v.as_i64()).collect::<Vec<_>>(), input["depth"].as_u64().unwrap_or(2) as usize).map(Into::into),
         "change_sets" => change_sets(input, ctx).map(Into::into),
+        "review_comments" => review_comments(input, ctx).map(Into::into),
+        "mdg_technologies" if input["action"] == "build" => mdg_build(input, ctx),
         "mdg_technologies" => crate::mdg::run(input, ctx.cfg).map(Into::into),
         "sharepoint" => crate::sharepoint::run(input, ctx).map(Into::into),
         "onedrive" => crate::sharepoint::run_onedrive(input, ctx).map(Into::into),
         "google_drive" => crate::gdrive::run(input, ctx).map(Into::into),
         "model_instructions" => crate::instructions::run(input, ctx).map(Into::into),
+        "slide_images" => slide_images(input, ctx),
         "read_document" => {
             let path = read_path(ctx, input["file"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["file".to_string()]))?, false)?;
             let size = std::fs::metadata(&path).with_context(|| crate::i18n::fmt("cannot read {0}", &[path.display().to_string()]))?.len();
@@ -916,6 +1225,11 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
                     crate::ea_ui::open_diagram(db, id)?;
                     Ok(format!("Opened diagram id={id} in the user's EA window.").into())
                 }
+                "open_diagram" if input["element"].as_i64().is_some() => {
+                    let (d, e) = (input["diagram"].as_i64().unwrap_or(0) as i32, input["element"].as_i64().unwrap_or(0) as i32);
+                    crate::ea_ui::open_diagram_at(db, d, e)?;
+                    Ok(format!("Opened diagram id={d} with element id={e} selected in the user's EA window.").into())
+                }
                 "show_element" => {
                     let id = input["element"].as_i64().with_context(|| crate::i18n::fmt("missing field '{0}'", &["element".to_string()]))? as i32;
                     crate::ea_ui::show_element(db, id)?;
@@ -925,6 +1239,16 @@ pub fn run(name: &str, input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             }
         }
         "memory_read" => memory::read(&ctx.cfg.memory_dir, input["name"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["name".to_string()]))?).map(Into::into),
+        // An operation of ea_write called as if it were a tool (a command's request names it, e.g. save_document_template):
+        // the same write with the same approval, not "unknown tool" (LC-469).
+        other if ea::MODEL_OPS.contains(&other) => {
+            let mut op = input.clone();
+            if !op.is_object() {
+                op = json!({});
+            }
+            op["op"] = json!(other);
+            ea_write(&json!({ "ops": [op] }), ctx).map(Into::into)
+        }
         other => bail!("{}", crate::i18n::fmt("unknown tool: {0}", &[other.to_string()])),
     }
 }
@@ -979,6 +1303,258 @@ pub fn page_images_dir(attachments_dir: &std::path::Path, stored_page: &str) -> 
 }
 
 /// Confluence page: source (.confluence.md), page code for the source editor (.confluence.xml) and images in a folder next to them.
+/// A presentation copy of a diagram (LC-377): same elements and places, details hidden, coloured by type.
+fn exec_view_ops(cfg: &AppConfig, input: &Value) -> Result<Vec<Value>> {
+    let diagram = input["diagram"].as_i64().context("diagram")?;
+    let d = query_rows(cfg, &format!("select name, package_id, diagram_type from t_diagram where diagram_id = {diagram}"))?;
+    let d = d.first().with_context(|| format!("there is no diagram with id {diagram}"))?;
+    let name = input["name"].as_str().map(str::to_string).unwrap_or_else(|| format!("{} – presentation", d[0]));
+    let mut ops = vec![json!({ "op": "create_diagram", "key": "view", "package": d[1].parse::<i64>().unwrap_or(0), "name": name, "type": d[2] })];
+    let objects = query_rows(cfg, &format!(
+        "select x.object_id, x.rectleft, x.recttop, x.rectright, x.rectbottom, o.object_type from t_diagramobjects x join t_object o on o.object_id = x.object_id \
+         where x.diagram_id = {diagram} order by x.sequence desc"
+    ))?;
+    let mut types: Vec<String> = objects.iter().map(|r| r[5].clone()).collect();
+    types.sort();
+    types.dedup();
+    let colours = crate::style::colours(&types, &Value::Null);
+    for r in &objects {
+        let n = |i: usize| r[i].parse::<i64>().unwrap_or(0);
+        ops.push(json!({ "op": "place", "diagram": "#view", "element": n(0), "left": n(1), "top": -n(2), "width": n(3) - n(1), "height": n(2) - n(4) }));
+        if !matches!(r[5].as_str(), "Note" | "Text" | "Boundary" | "ActivityPartition" | "Partition" | "Swimlane") {
+            ops.push(json!({ "op": "set_color", "diagram": "#view", "element": n(0), "bgcolor": colours[&r[5]] }));
+        }
+    }
+    ops.push(json!({ "op": "diagram_options", "diagram": "#view",
+        "extended": { "HideAtts": "1", "HideOps": "1", "HideStereo": "1", "HideEStereo": "1", "ShowNotes": "0" },
+        "style": { "SuppConnectorLabels": "1" } }));
+    Ok(ops)
+}
+
+/// Rectangles of elements on a diagram as (id, left, top, width, height) with top downwards (LC-376).
+fn rects(cfg: &AppConfig, diagram: i64, ids: &[i64]) -> Result<Vec<(i64, i64, i64, i64, i64)>> {
+    let list = ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
+    let rows = query_rows(cfg, &format!("select object_id, rectleft, recttop, rectright, rectbottom from t_diagramobjects where diagram_id = {diagram} and object_id in ({list})"))?;
+    let mut out: Vec<(i64, i64, i64, i64, i64)> = rows
+        .iter()
+        .map(|r| {
+            let n = |i: usize| r[i].parse::<i64>().unwrap_or(0);
+            (n(0), n(1), -n(2), n(3) - n(1), n(2) - n(4))
+        })
+        .collect();
+    // In the order given (the first one is the reference).
+    out.sort_by_key(|r| ids.iter().position(|i| *i == r.0).unwrap_or(usize::MAX));
+    if out.len() != ids.len() {
+        bail!("some of the elements are not on diagram {diagram}");
+    }
+    Ok(out)
+}
+
+/// Relationships of moved elements whose drawn route (bend points or fixed ends) would now go astray: routed straight
+/// again, the others on the diagram untouched (LC-418).
+pub(crate) fn reroute_ops(cfg: &AppConfig, diagram: i64, moved: &[i64]) -> Vec<Value> {
+    if moved.is_empty() {
+        return Vec::new();
+    }
+    let list = moved.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
+    query_rows(cfg, &format!(
+        "select l.connectorid from t_diagramlinks l join t_connector c on c.connector_id = l.connectorid where l.diagramid = {diagram} \
+         and (c.start_object_id in ({list}) or c.end_object_id in ({list})) \
+         and (coalesce(l.path,'') <> '' or coalesce(l.geometry,'') like '%SX=%' or coalesce(l.geometry,'') like '%EX=%')"
+    ))
+    .unwrap_or_default()
+    .into_iter()
+    .filter_map(|r| r[0].parse::<i64>().ok())
+    .map(|c| json!({ "op": "route_connector", "diagram": diagram, "connector": c }))
+    .collect()
+}
+
+/// A rectangle on a diagram: (left, top, width, height), Y pointing down.
+type Rect = (i64, i64, i64, i64);
+
+fn overlaps(a: Rect, b: Rect, margin: i64) -> bool {
+    a.0 < b.0 + b.2 + margin && b.0 < a.0 + a.2 + margin && a.1 < b.1 + b.3 + margin && b.1 < a.1 + a.3 + margin
+}
+
+fn contains(outer: Rect, inner: Rect) -> bool {
+    outer.0 <= inner.0 && outer.1 <= inner.1 && outer.0 + outer.2 >= inner.0 + inner.2 && outer.1 + outer.3 >= inner.1 + inner.3 && outer != inner
+}
+
+/// A free place for a box of w × h next to `anchor`: right, below, left, above, then further out in rings; never on
+/// top of the `taken` ones (with `gap` between) and never at negative coordinates.
+pub(crate) fn free_spot(taken: &[Rect], anchor: Rect, w: i64, h: i64, gap: i64) -> (i64, i64) {
+    let free = |l: i64, t: i64| l >= 0 && t >= 0 && !taken.iter().any(|r| overlaps((l, t, w, h), *r, gap / 2));
+    for ring in 0..12 {
+        let step_x = (anchor.2.max(w) + gap) * ring;
+        let step_y = (anchor.3.max(h) + gap) * ring;
+        let right = (anchor.0 + anchor.2 + gap + step_x, anchor.1);
+        let below = (anchor.0, anchor.1 + anchor.3 + gap + step_y);
+        let left = (anchor.0 - w - gap - step_x, anchor.1);
+        let above = (anchor.0, anchor.1 - h - gap - step_y);
+        let diagonal = (anchor.0 + anchor.2 + gap + step_x, anchor.1 + anchor.3 + gap + step_y);
+        for (l, t) in [right, below, left, above, diagonal] {
+            if free(l, t) {
+                return (l, t);
+            }
+        }
+    }
+    // Everything around is taken: below all of it.
+    let bottom = taken.iter().map(|r| r.1 + r.3).max().unwrap_or(0);
+    (anchor.0.max(0), bottom + gap)
+}
+
+/// Incremental layout (LC-376): places new elements of a diagram (the given ones, or by default those lying on top of
+/// others) next to an element they are related to, in free space, and leaves everything else where it is.
+pub(crate) fn place_new_ops(cfg: &AppConfig, input: &Value) -> Result<(Vec<Value>, String)> {
+    let diagram = input["diagram"].as_i64().context("diagram")?;
+    let gap = input["spacing"].as_i64().unwrap_or(40).clamp(10, 200);
+    let rows = query_rows(cfg, &format!(
+        "select x.object_id, x.rectleft, x.recttop, x.rectright, x.rectbottom, o.name from t_diagramobjects x join t_object o on o.object_id = x.object_id \
+         where x.diagram_id = {diagram} and o.object_type not in ('Boundary', 'ActivityPartition', 'Partition', 'Swimlane', 'Text', 'InteractionFragment') order by x.object_id"
+    ))?;
+    let all: Vec<(i64, Rect, String)> = rows
+        .iter()
+        .map(|r| {
+            let n = |i: usize| r[i].parse::<i64>().unwrap_or(0);
+            (n(0), (n(1), -n(2), n(3) - n(1), n(2) - n(4)), r[5].clone())
+        })
+        .collect();
+    // Containers (a frame, a package with elements drawn inside) do not count as overlaps.
+    let is_container = |rect: Rect| all.iter().any(|(_, other, _)| contains(rect, *other));
+    let given: Vec<i64> = input["elements"].as_array().into_iter().flatten().filter_map(Value::as_i64).collect();
+    let moving: Vec<i64> = if given.is_empty() {
+        // Lying on top of an older element (a higher object_id is the newer one).
+        all.iter()
+            .filter(|(id, rect, _)| !is_container(*rect) && all.iter().any(|(other, r, _)| other < id && !is_container(*r) && overlaps(*rect, *r, 0)))
+            .map(|(id, _, _)| *id)
+            .collect()
+    } else {
+        given.iter().copied().filter(|g| all.iter().any(|(id, _, _)| id == g)).collect()
+    };
+    if moving.is_empty() {
+        return Ok((Vec::new(), "Nothing to place: no element lies on top of another (give the elements to place).".into()));
+    }
+    let mut taken: Vec<(i64, Rect)> = all.iter().filter(|(id, rect, _)| !moving.contains(id) && !is_container(*rect)).map(|(id, r, _)| (*id, *r)).collect();
+    if taken.is_empty() {
+        return Ok((Vec::new(), "Nothing stays in place on this diagram: use layout_diagram for the whole diagram.".into()));
+    }
+    let mut ops = Vec::new();
+    let mut lines = Vec::new();
+    for id in &moving {
+        let Some((_, rect, name)) = all.iter().find(|(e, _, _)| e == id) else { continue };
+        // The anchor: an element on the diagram it is related to, otherwise the nearest one.
+        let related: Vec<i64> = query_rows(cfg, &format!(
+            "select case when start_object_id = {id} then end_object_id else start_object_id end from t_connector where (start_object_id = {id} or end_object_id = {id})"
+        ))?
+        .into_iter()
+        .filter_map(|r| r[0].parse().ok())
+        .collect();
+        let anchor = taken
+            .iter()
+            .find(|(t, _)| related.contains(t))
+            .or_else(|| taken.iter().min_by_key(|(_, r)| (r.0 - rect.0).abs() + (r.1 - rect.1).abs()))
+            .map(|(_, r)| *r)
+            .unwrap_or((0, 0, 0, 0));
+        let rects: Vec<Rect> = taken.iter().map(|(_, r)| *r).collect();
+        let (left, top) = free_spot(&rects, anchor, rect.2.max(20), rect.3.max(20), gap);
+        if (left, top) != (rect.0, rect.1) {
+            ops.push(json!({ "op": "set_bounds", "diagram": diagram, "element": id, "left": left, "top": top }));
+            lines.push(format!("- {name}: ({}, {}) → ({left}, {top})", rect.0, rect.1));
+        }
+        taken.push((*id, (left, top, rect.2, rect.3)));
+    }
+    let moved: Vec<i64> = ops.iter().filter_map(|o| o["element"].as_i64()).collect();
+    let rerouted = reroute_ops(cfg, diagram, &moved);
+    let note = if rerouted.is_empty() { String::new() } else { format!("\n{} relationship route(s) of the moved elements drawn straight again.", rerouted.len()) };
+    ops.extend(rerouted);
+    Ok((ops, format!("{} element(s) placed in free space, nothing else moved:\n{}{note}", lines.len(), lines.join("\n"))))
+}
+
+/// set_bounds operations that align, distribute or resize the given elements (LC-376).
+pub(crate) fn align_ops(cfg: &AppConfig, input: &Value) -> Result<Vec<Value>> {
+    let diagram = input["diagram"].as_i64().context("diagram")?;
+    let ids: Vec<i64> = input["elements"].as_array().into_iter().flatten().filter_map(Value::as_i64).collect();
+    let how = input["how"].as_str().unwrap_or("");
+    if ids.len() < if how == "snap" { 1 } else { 2 } {
+        bail!("give at least two elements (one for snap)");
+    }
+    let mut r = rects(cfg, diagram, &ids)?;
+    let mut ops: Vec<Value> = align(&mut r, how)?.into_iter().map(|(id, left, top, width, height)| json!({ "op": "set_bounds", "diagram": diagram, "element": id, "left": left, "top": top, "width": width, "height": height })).collect();
+    // Only the routes of what moved are drawn again (LC-418).
+    let moved: Vec<i64> = ops.iter().filter_map(|o| o["element"].as_i64()).collect();
+    ops.extend(reroute_ops(cfg, diagram, &moved));
+    Ok(ops)
+}
+
+/// The new rectangles (only the ones that change).
+pub(crate) fn align(r: &mut [(i64, i64, i64, i64, i64)], how: &str) -> Result<Vec<(i64, i64, i64, i64, i64)>> {
+    let before: Vec<_> = r.to_vec();
+    let first = r[0];
+    match how {
+        "left" => r.iter_mut().for_each(|e| e.1 = first.1),
+        "right" => r.iter_mut().for_each(|e| e.1 = first.1 + first.3 - e.3),
+        "top" => r.iter_mut().for_each(|e| e.2 = first.2),
+        "bottom" => r.iter_mut().for_each(|e| e.2 = first.2 + first.4 - e.4),
+        "center" => r.iter_mut().for_each(|e| e.1 = first.1 + first.3 / 2 - e.3 / 2),
+        "middle" => r.iter_mut().for_each(|e| e.2 = first.2 + first.4 / 2 - e.4 / 2),
+        "same_size" => r.iter_mut().for_each(|e| {
+            e.3 = first.3;
+            e.4 = first.4;
+        }),
+        "snap" => r.iter_mut().for_each(|e| {
+            e.1 = (e.1 + 5) / 10 * 10;
+            e.2 = (e.2 + 5) / 10 * 10;
+        }),
+        "distribute_horizontally" | "distribute_vertically" => {
+            let horizontal = how == "distribute_horizontally";
+            r.sort_by_key(|e| if horizontal { e.1 } else { e.2 });
+            let (start, end) = if horizontal { (r[0].1, r[r.len() - 1].1 + r[r.len() - 1].3) } else { (r[0].2, r[r.len() - 1].2 + r[r.len() - 1].4) };
+            let total: i64 = r.iter().map(|e| if horizontal { e.3 } else { e.4 }).sum();
+            let gap = (end - start - total) / (r.len() as i64 - 1).max(1);
+            let mut at = start;
+            for e in r.iter_mut() {
+                if horizontal { e.1 = at; at += e.3 + gap; } else { e.2 = at; at += e.4 + gap; }
+            }
+        }
+        other => bail!("unknown alignment {other}"),
+    }
+    Ok(r.iter().filter(|e| !before.contains(e)).copied().collect())
+}
+
+/// A read-only tool run straight from a command, without the AI (LC-389).
+pub fn run_direct(name: &str, input: &Value, cfg: &AppConfig) -> Result<String> {
+    match name {
+        "repo_doctor" => crate::repo_doctor::run(input, cfg),
+        "stale_publications" => crate::publications::stale(input, cfg),
+        "find_orphans" => crate::model_usage::find_orphans(input, cfg),
+        "find_duplicates" => crate::model_usage::find_duplicates(input, cfg),
+        "trace_gaps" => crate::trace_gaps::run(input, cfg),
+        "dead_links" => crate::readonly_why::dead_links(input, cfg),
+        "what_changed" => crate::changes::run(input, cfg),
+        "connector_visibility" if input["action"] == "hidden" => crate::visibility::run(input, cfg).map(|(_, text)| text),
+        other => bail!("{other} is not run without the assistant"),
+    }
+}
+
+/// The team's modelling rules (LC-372): shown, or saved to governance.json after the user approves the whole text.
+fn team_rules(input: &Value, ctx: &ToolContext) -> Result<String> {
+    let file = ctx.cfg.base_dir.join("governance.json");
+    if input["action"].as_str() != Some("save") {
+        let local = std::fs::read_to_string(&file).ok();
+        let rules = crate::governance::load_rules(ctx.cfg, &Value::Null);
+        let source = if local.is_some() { file.display().to_string() } else if rules.as_object().is_some_and(|o| !o.is_empty()) { "the team hub's policy".to_string() } else { "none yet".to_string() };
+        return Ok(format!("Rules in force (from {source}):\n{}", serde_json::to_string_pretty(&rules)?));
+    }
+    let rules = &input["rules"];
+    crate::governance::check_rules(rules)?;
+    let text = serde_json::to_string_pretty(rules)?;
+    ctx.approver.confirm(&crate::i18n::fmt("Save the team's modelling rules to {0}?\n\n{1}", &[file.display().to_string(), text.clone()]))?;
+    let tmp = file.with_extension("json.tmp");
+    std::fs::write(&tmp, &text)?;
+    std::fs::rename(&tmp, &file)?;
+    Ok(format!("Saved the rules to {}. model_lint, the live check in EA and the CI check use them from now on.", file.display()))
+}
+
 /// Undoes the latest saves of the assistant (reverse operations from the journal).
 fn undo_change(input: &Value, ctx: &ToolContext) -> Result<String> {
     if input["action"].as_str() != Some("undo") {
@@ -993,14 +1569,20 @@ fn undo_change(input: &Value, ctx: &ToolContext) -> Result<String> {
     // The journal is a file: its operations are checked like the assistant's own, and the user sees what undoing does
     // (what is deleted with its current name: colleagues may have added to it since).
     let mut what = Vec::new();
+    let mut before_after = Vec::new();
     for e in &entries {
         let ops = normalize_ops(&e["reverse"].as_array().cloned().unwrap_or_default());
         if let Some(bad) = ops.iter().find(|op| !ea::MODEL_OPS.contains(&op["op"].as_str().unwrap_or(""))) {
             bail!("{}", crate::i18n::fmt("the undo journal contains an operation that is not allowed ({0}); nothing was undone", &[bad["op"].to_string()]));
         }
         what.extend(destructive_details(ctx.cfg, &ops));
+        // Every change undoing makes, before → after, not only the deletions (LC-464: the card named 1 of 3 changes).
+        before_after.push(crate::governance::preview(ctx.cfg, &ops));
     }
-    let details = if what.is_empty() { String::new() } else { format!("\n\n{}", what.join("\n")) };
+    let mut details = if before_after.iter().all(|p| p.trim().is_empty()) { String::new() } else { format!("\n\n{}", before_after.join("\n")) };
+    if !what.is_empty() {
+        details.push_str(&format!("\n\n{}", what.join("\n")));
+    }
     ctx.approver.confirm_risky(&format!("{}{details}", crate::i18n::fmt("Undo the latest saves of the assistant ({0}):\n{1}", &[entries.len().to_string(), summary.join("\n")])))?;
     let mut out = Vec::new();
     let mut undone = Vec::new();
@@ -1008,7 +1590,10 @@ fn undo_change(input: &Value, ctx: &ToolContext) -> Result<String> {
         let ops: Vec<Value> = normalize_ops(&e["reverse"].as_array().cloned().unwrap_or_default());
         let label = e["summary"].as_str().unwrap_or("").replace('\n', "; ");
         if !ops.is_empty() {
-            match ea::run_batch(ctx.cfg, &ops, &BatchOptions::default()) {
+            // An undo is a write like any other: it goes to the audit log and the hub's trail (LC-348).
+            let result = ea::run_batch(ctx.cfg, &ops, &BatchOptions::default());
+            audit(ctx.cfg, &ops, &result);
+            match result {
                 Ok(done) => {
                     let check = crate::verify::verify(ctx.cfg, &ops, &done);
                     out.push(if check.problems.is_empty() { format!("Undone and verified: {label}") } else { format!("Undone, but the model differs: {label}: {}", check.problems.join("; ")) });
@@ -1027,7 +1612,7 @@ fn undo_change(input: &Value, ctx: &ToolContext) -> Result<String> {
         undone.push(e["id"].as_str().unwrap_or("").to_string());
     }
     crate::undo::mark_undone(ctx.cfg, &undone);
-    refresh_user_ea(ctx.cfg, &[], &json!({}));
+    refresh_user_ea(ctx.cfg, &[], &json!({}), &[]);
     Ok(out.join("\n"))
 }
 
@@ -1064,6 +1649,75 @@ fn propose_change(input: &Value, ctx: &ToolContext) -> Result<String> {
         "source": hub_source(ctx.cfg), "title": title, "summary": ea::describe(ops), "preview": crate::governance::preview(ctx.cfg, ops), "ops": ops
     }))?;
     Ok(format!("Proposed to the team as change set {id} (\"{title}\"): nothing was changed in the model. Tell the user it waits for review in the hub ({}/), where the team comments and an architect approves it; afterwards it can be applied with change_sets apply.", client.url))
+}
+
+/// Review comments and decisions on elements in the hub (LC-392).
+fn review_comments(input: &Value, ctx: &ToolContext) -> Result<String> {
+    let client = hub_client(ctx.cfg)?;
+    if ctx.cfg.hub_source.trim().is_empty() {
+        bail!("{}", crate::i18n::tr("this model has no id in the team hub: enter it in Settings → Team (Compass Hub) → model id in the hub"));
+    }
+    let source = hub_source(ctx.cfg);
+    match input["action"].as_str().unwrap_or("list") {
+        "list" => {
+            let list = client.comments(&source, input["element"].as_i64(), input["status"].as_str())?;
+            if list.is_empty() {
+                return Ok("No review comments or decisions here.".into());
+            }
+            let mut out = vec![format!("{} comment(s) and decision(s):", list.len())];
+            out.extend(list.iter().map(|c| format!(
+                "- {} | {} | {} on {} (id {}) by {} {}: {}",
+                c["id"].as_str().unwrap_or(""),
+                c["status"].as_str().unwrap_or(""),
+                c["kind"].as_str().unwrap_or(""),
+                c["name"].as_str().unwrap_or(""),
+                c["element"],
+                c["user"].as_str().unwrap_or(""),
+                c["time"].as_str().unwrap_or("").get(..10).unwrap_or(""),
+                c["text"].as_str().unwrap_or("").replace('\n', " ")
+            )));
+            Ok(out.join("\n"))
+        }
+        "add" => {
+            let c = client.add_comment(&source, &json!({ "element": input["element"], "text": input["text"], "kind": input["kind"] }))?;
+            Ok(format!("Added {} {} on {}.", c["kind"].as_str().unwrap_or(""), c["id"].as_str().unwrap_or(""), c["name"].as_str().unwrap_or("")))
+        }
+        "status" => {
+            let c = client.comment_status(input["id"].as_str().unwrap_or(""), input["status"].as_str().unwrap_or(""))?;
+            Ok(format!("{} is now {}.", c["id"].as_str().unwrap_or(""), c["status"].as_str().unwrap_or("")))
+        }
+        // LC-407: ask the owners to confirm or update elements; see and answer the requests.
+        "request" => {
+            let mut body = json!({ "question": input["text"] });
+            for k in ["elements", "package", "to"] {
+                if !input[k].is_null() {
+                    body[k] = input[k].clone();
+                }
+            }
+            if !input["element"].is_null() && input["elements"].is_null() {
+                body["elements"] = json!([input["element"]]);
+            }
+            let r = client.review_requests(&source, &body)?;
+            let mut out = vec![format!("{} review request(s) sent in the hub:", r["created"].as_array().map_or(0, Vec::len))];
+            out.extend(r["created"].as_array().into_iter().flatten().map(|c| format!("- {} → {}", c["name"].as_str().unwrap_or(""), c["to"].as_str().unwrap_or(""))));
+            out.extend(r["skipped"].as_array().into_iter().flatten().map(|c| format!("- skipped {}: {}", c["name"].as_str().unwrap_or(""), c["why"].as_str().unwrap_or(""))));
+            Ok(out.join("\n"))
+        }
+        "requests" => {
+            let list = client.requests(input["all"] == true, input["status"].as_str())?;
+            if list.is_empty() {
+                return Ok("No review requests.".into());
+            }
+            Ok(list.iter().map(|c| format!("- {} | {} | {} (id {}) asked by {} to {}: {}{}", c["id"].as_str().unwrap_or(""), c["status"].as_str().unwrap_or(""), c["name"].as_str().unwrap_or(""), c["element"],
+                c["user"].as_str().unwrap_or(""), c["to"].as_str().unwrap_or(""), c["text"].as_str().unwrap_or(""),
+                c["answer"].as_str().filter(|a| !a.is_empty()).map(|a| format!(" → {a}")).unwrap_or_default())).collect::<Vec<_>>().join("\n"))
+        }
+        "answer" => {
+            let c = client.answer_request(input["id"].as_str().unwrap_or(""), &json!({ "answer": input["status"], "text": input["text"], "decision": input["kind"] == "decision" }))?;
+            Ok(format!("{} on {}: {}.", c["id"].as_str().unwrap_or(""), c["name"].as_str().unwrap_or(""), c["status"].as_str().unwrap_or("")))
+        }
+        other => bail!("unknown action {other}: list, add, status, request, requests or answer"),
+    }
 }
 
 fn change_sets(input: &Value, ctx: &ToolContext) -> Result<String> {
@@ -1153,7 +1807,10 @@ fn ea_script(input: &Value, ctx: &ToolContext) -> Result<String> {
                 group.clone(), name.clone(), language.clone(), code.lines().count().to_string(),
                 if updated { crate::i18n::tr(" - REPLACES the existing script").to_string() } else { String::new() }, script_for_approval(&code)?,
             ]))?;
-            ea::run_batch(ctx.cfg, &[json!({ "op": "execute_sql", "statements": statements })], &BatchOptions::default())?;
+            let save = [json!({ "op": "execute_sql", "statements": statements })];
+            let result = ea::run_batch(ctx.cfg, &save, &BatchOptions::default());
+            audit(ctx.cfg, &save, &result);
+            result?;
             let saved = crate::scripts::find(ctx.cfg, &format!("{group}.{name}"))?;
             if saved.code.replace("\r\n", "\n").trim() != code.replace("\r\n", "\n").trim() {
                 bail!("{}", crate::i18n::tr("the script was not saved correctly (the model has different code)"));
@@ -1187,6 +1844,33 @@ fn jira(cfg: &AppConfig) -> Result<crate::jira::Connection> {
     }
     let token = crate::config::secrets::get(crate::config::secrets::JIRA_TOKEN).context(crate::i18n::tr("no Jira token in the settings"))?;
     Ok(crate::jira::Connection { base_url: cfg.jira_url.clone(), user: cfg.jira_user.clone(), token, identity: crate::client_cert::jira(cfg)? })
+}
+
+/// Model elements and Jira issues in sync (LC-403): check reads only; to_model goes through ea_write (approval card,
+/// undo); to_jira sends after the user approves the list of changes.
+fn jira_sync(input: &Value, ctx: &ToolContext) -> Result<String> {
+    let action = crate::jira_sync::check_action(input)?;
+    let connection = jira(ctx.cfg)?;
+    let links = crate::jira_sync::linked(ctx.cfg, input, &connection)?;
+    match action {
+        "to_model" => {
+            let ops = crate::jira_sync::to_model_ops(&links, input);
+            if ops.is_empty() {
+                return Ok(format!("Nothing to take from Jira.\n{}", crate::jira_sync::report(&links, input)));
+            }
+            ea_write(&json!({ "ops": ops }), ctx)
+        }
+        "to_jira" => {
+            let changes = crate::jira_sync::to_jira_changes(&links, input);
+            if changes.is_empty() {
+                return Ok(format!("Nothing to send to Jira.\n{}", crate::jira_sync::report(&links, input)));
+            }
+            let lines: Vec<String> = changes.iter().map(|c| c.3.clone()).collect();
+            ctx.approver.confirm_kind("jira", &crate::i18n::fmt("Change {0} Jira issue(s) to match the model?\n\n{1}", &[changes.len().to_string(), lines.join("\n")]))?;
+            Ok(crate::jira_sync::apply_to_jira(&connection, &changes))
+        }
+        _ => Ok(crate::jira_sync::report(&links, input)),
+    }
 }
 
 /// New Jira issue: always with the user's consent (the content leaves the application).
@@ -1250,7 +1934,7 @@ fn jira_files(ctx: &ToolContext, input: &Value) -> Result<Vec<(String, Vec<u8>)>
             files.push((format!("{}.png", crate::history::sanitize_name(&name)), picture(ctx, source)?));
         } else if let Some(stored) = source.strip_prefix("image:").or_else(|| source.strip_prefix("file:")) {
             let stored = std::path::Path::new(stored.trim()).file_name().context(crate::i18n::tr("image name"))?.to_string_lossy().to_string();
-            let bytes = std::fs::read(ctx.cfg.attachments_dir.join(&stored)).with_context(|| crate::i18n::fmt("there is no file {0} in this conversation", &[stored.clone()]))?;
+            let bytes = std::fs::read(crate::history::attachment_path(&ctx.cfg.attachments_dir, &stored)).with_context(|| crate::i18n::fmt("there is no file {0} in this conversation", &[stored.clone()]))?;
             files.push((crate::history::display_name(&stored).to_string(), bytes));
         } else {
             bail!("{}", crate::i18n::fmt("unknown attachment '{0}' (use diagram:ID, image:FILE_NAME or file:FILE_NAME)", &[source.to_string()]));
@@ -1462,8 +2146,11 @@ fn jira_comment(input: &Value, ctx: &ToolContext) -> Result<String> {
     Ok(crate::i18n::fmt("Updated the Jira issue {0}: {1}", &[key.clone(), connection.browse(&key)]))
 }
 
+/// The text in an approval card: whole up to 20 000 characters (the card scrolls). LC-355: 600 characters let
+/// instructions hidden further in a description go unseen.
 fn shorten_for_approval(text: &str) -> String {
-    if text.chars().count() > 600 { format!("{}…", text.chars().take(600).collect::<String>()) } else { text.to_string() }
+    const MAX: usize = 20_000;
+    if text.chars().count() > MAX { format!("{}…", text.chars().take(MAX).collect::<String>()) } else { text.to_string() }
 }
 
 fn create_confluence_page(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
@@ -1566,10 +2253,21 @@ fn publish_confluence(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         Some(page) => crate::i18n::fmt(CONFLUENCE_REPLACE_QUESTION, &[page.title.clone(), page.id.clone(), page.version.to_string(), space.clone()]),
         None => crate::i18n::fmt(CONFLUENCE_NEW_QUESTION, &[title.clone(), space.clone()]),
     };
-    ctx.approver.confirm_kind("confluence", &question)?;
-    let (storage, attachments) = crate::confluence::to_storage(markdown, |source| picture(ctx, source))?;
+    // The card shows what will be published, not only where (LC-355).
+    ctx.approver.confirm_kind("confluence", &format!("{question}
+
+{}", shorten_for_approval(markdown)))?;
+    // Diagrams under their GUID (LC-426): publishing again replaces the same attachments whatever the captions.
+    let guid_name = |source: &str| -> Option<String> {
+        let id: i64 = source.strip_prefix("diagram:")?.trim().parse().ok()?;
+        let guid = query_rows(ctx.cfg, &format!("select ea_guid from t_diagram where diagram_id = {id}")).ok()?.first()?[0].clone();
+        Some(format!("diagram-{}.png", guid.trim_matches(['{', '}'])))
+    };
+    let (storage, attachments) = crate::confluence::to_storage_named(markdown, |source| picture(ctx, source), guid_name)?;
     let target_id = existing.as_ref().map(|page| page.id.clone());
     let (id, link, created) = connection.publish(&space, &title, Some(&parent), target_id.as_deref(), &storage, &attachments)?;
+    // What it shows of the model, to tell later when it is no longer current (LC-386), and how to publish it again (LC-426).
+    crate::publications::record_with(ctx.cfg, "Confluence page", &title, &link, markdown, json!({ "page": page, "space": space, "page_id": id }));
     crate::confluence::remember(
         &ctx.cfg.confluence_pages_file,
         json!({ "page_id": id, "title": title, "space": space, "url": link, "source": page, "published": chrono::Local::now().to_rfc3339() }),
@@ -1642,6 +2340,7 @@ fn create_document(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         Ok(crate::docx::Picture { png, caption: caption.to_string() })
     })?;
     let stored = format!("{}_{}.docx", uuid::Uuid::new_v4().simple(), crate::history::sanitize_name(file_name.trim_end_matches(".docx")));
+    crate::publications::record(ctx.cfg, "Word document", if title.is_empty() { file_name } else { title }, file_name, markdown);
     std::fs::write(ctx.cfg.attachments_dir.join(&stored), &bytes).context(crate::i18n::tr("saving the document"))?;
     let format = input["format"].as_str().unwrap_or("docx");
     if format == "pdf" || format == "both" {
@@ -1687,7 +2386,7 @@ fn create_presentation(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
             Some(source) => Some(picture(ctx, source)?),
             None => None,
         };
-        slides.push(crate::pptx::Slide { title: s["title"].as_str().unwrap_or("").to_string(), bullets, picture });
+        slides.push(crate::pptx::Slide { title: s["title"].as_str().unwrap_or("").to_string(), bullets, picture, notes: s["notes"].as_str().unwrap_or("").to_string() });
     }
     let bytes = crate::pptx::build(title, subtitle, &slides)?;
     std::fs::create_dir_all(&ctx.cfg.attachments_dir).context(crate::i18n::tr("attachments folder"))?;
@@ -1704,6 +2403,16 @@ fn create_presentation(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         images: Vec::new(),
         files,
     })
+}
+
+/// A new MDG technology file from the user's description (LC-409), shown as a file in the chat.
+fn mdg_build(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
+    let (xml, text) = crate::mdg::build_report(&input["spec"], ctx.cfg)?;
+    std::fs::create_dir_all(&ctx.cfg.attachments_dir).context(crate::i18n::tr("attachments folder"))?;
+    let id = input["spec"]["id"].as_str().unwrap_or("MDG").trim();
+    let stored = format!("{}_{}.xml", uuid::Uuid::new_v4().simple(), crate::history::sanitize_name(id));
+    std::fs::write(ctx.cfg.attachments_dir.join(&stored), xml.as_bytes()).context(crate::i18n::tr("saving the document"))?;
+    Ok(ToolOutput { text, images: Vec::new(), files: vec![stored] })
 }
 
 /// Builds an Excel workbook from data given by the model (e.g. db_query results) and shows it as a file in the chat.
@@ -1728,6 +2437,57 @@ fn create_spreadsheet(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
         text: format!("Workbook \"{file_name}.xlsx\" is ready (sheets: {}, rows: {rows}). The user sees it in the chat with the \"Open\" and \"Save as…\" buttons. It is kept only in Compass: do not name a folder or path for it; the user chooses where to keep it with \"Save as…\".", sheets.len()),
         images: Vec::new(),
         files: vec![stored],
+    })
+}
+
+/// Slides of a presentation as pictures (LC-484): drawn by PowerPoint when it is installed, otherwise the pictures
+/// embedded in each slide. Stored in the attachments folder, so the model gets them as images and the chat shows them.
+fn slide_images(input: &Value, ctx: &ToolContext) -> Result<ToolOutput> {
+    let path = read_path(ctx, input["file"].as_str().with_context(|| crate::i18n::fmt("missing field '{0}'", &["file".to_string()]))?, false)?;
+    let mut slides: Vec<i64> = input["slides"].as_array().into_iter().flatten().filter_map(Value::as_i64).filter(|n| *n >= 1).collect();
+    slides.dedup();
+    if slides.is_empty() {
+        bail!("{}", crate::i18n::tr("give the slide numbers (slides)"));
+    }
+    slides.truncate(6);
+    std::fs::create_dir_all(&ctx.cfg.attachments_dir).context(crate::i18n::tr("attachments folder"))?;
+    let stem = format!("{}_slide", uuid::Uuid::new_v4().simple());
+    let mut images = Vec::new();
+    let mut notes = Vec::new();
+    match crate::office::pptx_slides_png(&path, &slides, &ctx.cfg.attachments_dir, &stem) {
+        Ok(drawn) if !drawn.is_empty() => {
+            for (n, file) in drawn {
+                images.push(file.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default());
+                notes.push(format!("slide {n}"));
+            }
+            notes.insert(0, "drawn by PowerPoint:".to_string());
+        }
+        other => {
+            let why = match other {
+                Err(e) => format!("{e:#}"),
+                Ok(_) => "PowerPoint drew nothing".to_string(),
+            };
+            let bytes = std::fs::read(&path).with_context(|| crate::i18n::fmt("cannot read {0}", &[path.display().to_string()]))?;
+            notes.push(format!("PowerPoint could not draw the slides ({why}); the pictures embedded in them instead:"));
+            for n in &slides {
+                let pictures = crate::documents::slide_pictures(&bytes, *n as usize)?;
+                if pictures.is_empty() {
+                    notes.push(format!("slide {n}: no pictures (text and shapes only)"));
+                }
+                for (k, (name, data)) in pictures.into_iter().take(4).enumerate() {
+                    let ext = name.rsplit('.').next().unwrap_or("png").to_lowercase();
+                    let stored = format!("{stem}-{n}-{k}.{ext}");
+                    std::fs::write(ctx.cfg.attachments_dir.join(&stored), data)?;
+                    images.push(stored);
+                    notes.push(format!("slide {n}: picture {name}"));
+                }
+            }
+        }
+    }
+    Ok(ToolOutput {
+        text: format!("{} – {}. The user sees the same pictures in the chat.", path.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default(), notes.join(", ")),
+        images,
+        files: Vec::new(),
     })
 }
 
@@ -1780,7 +2540,7 @@ fn shorten_for_dialog(text: &str) -> String {
 
 /// Names of the objects that a batch deletes, moves or copies, for the approval dialog (the user must see WHAT
 /// disappears, not just how many). Objects referred to by a key from the same batch (`#key`) are new and not listed.
-fn destructive_details(cfg: &AppConfig, ops: &[Value]) -> Vec<String> {
+pub(crate) fn destructive_details(cfg: &AppConfig, ops: &[Value]) -> Vec<String> {
     let name_of = |table: &str, id_column: &str, id: i64| -> String {
         let sql = format!("select name from {table} where {id_column} = {id}");
         query_rows(cfg, &sql)
@@ -1805,12 +2565,31 @@ fn destructive_details(cfg: &AppConfig, ops: &[Value]) -> Vec<String> {
                 continue;
             }
             "delete_attribute" | "delete_operation" | "delete_scenario" => {
-                lines.push(crate::i18n::fmt("DELETE {0} of element {1}", &[kind.trim_start_matches("delete_").to_string(), op["element"].as_i64().map(|id| name_of("t_object", "object_id", id)).unwrap_or_else(|| op["element"].to_string())]));
+                // An attribute or operation is given by its own id; its element is found from it (LC-442: "element null").
+                let (field, table, key) = match kind {
+                    "delete_attribute" => ("attribute", "t_attribute", "id"),
+                    "delete_operation" => ("operation", "t_operation", "operationid"),
+                    _ => ("scenario", "", ""),
+                };
+                let (what, element) = match op[field].as_i64().filter(|_| !table.is_empty()) {
+                    Some(id) => query_rows(cfg, &format!("select coalesce(f.name,'') as c0, f.object_id as c1 from {table} f where f.{key} = {id}"))
+                        .ok()
+                        .and_then(|r| r.into_iter().next())
+                        .map(|r| (format!("{field} \"{}\"", r[0]), r[1].parse::<i64>().map(|e| name_of("t_object", "object_id", e)).unwrap_or_default()))
+                        .unwrap_or_else(|| (format!("{field} ID {id}"), String::new())),
+                    None => (format!("{field} {}", op[field].as_str().unwrap_or("")), op["element"].as_i64().map(|id| name_of("t_object", "object_id", id)).unwrap_or_default()),
+                };
+                lines.push(crate::i18n::fmt("DELETE {0} of element {1}", &[what, element]));
                 continue;
             }
             "version_control" => {
                 let package = op["package"].as_i64().map(|id| name_of("t_package", "package_id", id)).unwrap_or_else(|| op["package"].to_string());
                 lines.push(crate::i18n::fmt("VERSION CONTROL: {0} of package {1}", &[op["action"].as_str().unwrap_or("?").replace('_', " ").to_uppercase(), package]));
+                continue;
+            }
+            "merge_elements" => {
+                let name = |field: &str| op[field].as_i64().map(|id| name_of("t_object", "object_id", id)).unwrap_or_default();
+                lines.push(crate::i18n::fmt("MERGE {0} into {1} and DELETE {0}", &[name("remove"), name("keep")]));
                 continue;
             }
             "set_swimlanes" | "set_linked_document" | "update_scenario" => {
@@ -1831,19 +2610,48 @@ fn destructive_details(cfg: &AppConfig, ops: &[Value]) -> Vec<String> {
                 }
                 op[*field].as_i64().map(|id| (*field, name_of(table, column, id)))
             });
-        let Some((field, name)) = target else { continue };
+        let Some((field, mut name)) = target else { continue };
+        // A relationship without a name: its type and ends (LC-441).
+        if field == "connector" {
+            if let Some(r) = op["connector"].as_i64().and_then(|id| {
+                query_rows(cfg, &format!(
+                    "select c.connector_type as c0, coalesce(s.name,'') as c1, coalesce(t.name,'') as c2 from t_connector c left join t_object s on s.object_id = c.start_object_id \
+                     left join t_object t on t.object_id = c.end_object_id where c.connector_id = {id}"
+                ))
+                .ok()?
+                .into_iter()
+                .next()
+            }) {
+                name = format!("{name} ({} \"{}\" → \"{}\")", r[0], r[1], r[2]);
+            }
+        }
         let what = match field {
             "element" => crate::i18n::tr("element"),
             "diagram" => crate::i18n::tr("diagram"),
             "package" | "child_package" => crate::i18n::tr("package"),
             _ => crate::i18n::tr("connector"),
         };
+        // Deleting an element: its relationships and diagrams in the card (LC-367).
+        let reach = if kind == "delete" && field == "element" { op["element"].as_i64().and_then(|id| crate::recycle::element_reach(cfg, id)) } else { None };
         lines.push(match kind {
-            "delete" => crate::i18n::fmt("DELETE {0} {1}", &[what.to_string(), name]),
+            "delete" => match reach {
+                Some(reach) => format!("{} – {reach}", crate::i18n::fmt("DELETE {0} {1}", &[what.to_string(), name])),
+                None => crate::i18n::fmt("DELETE {0} {1}", &[what.to_string(), name]),
+            },
             "move" => crate::i18n::fmt("MOVE {0} {1} to package {2}", &[
                 what.to_string(),
                 name,
-                op["package"].as_i64().map(|id| name_of("t_package", "package_id", id)).unwrap_or_else(|| op["package"].to_string()),
+                match &op["package"] {
+                    Value::Number(id) => name_of("t_package", "package_id", id.as_i64().unwrap_or(0)),
+                    // A package made earlier in the same write ("#bin"): its name (LC-442, round 5).
+                    Value::String(key) => ops
+                        .iter()
+                        .find(|o| o["key"].as_str().is_some_and(|k| k.trim_start_matches('#') == key.trim_start_matches('#')))
+                        .and_then(|o| o["name"].as_str())
+                        .map(|n| format!("\"{n}\" ({})", crate::i18n::tr("new@@created in this write")))
+                        .unwrap_or_else(|| key.clone()),
+                    other => other.to_string(),
+                },
             ]),
             _ => crate::i18n::fmt("COPY package {0} with all its contents", &[name]),
         });
@@ -1855,7 +2663,7 @@ fn destructive_details(cfg: &AppConfig, ops: &[Value]) -> Vec<String> {
 /// the attachments of the conversation the user is asked first (its text goes to the AI provider).
 fn read_path(ctx: &ToolContext, given: &str, folder: bool) -> Result<std::path::PathBuf> {
     let given = given.trim();
-    let attachment = ctx.cfg.attachments_dir.join(given);
+    let attachment = crate::history::attachment_path(&ctx.cfg.attachments_dir, given);
     if !folder && !given.contains(['\\', '/', ':']) && attachment.is_file() {
         return Ok(attachment);
     }
@@ -1901,27 +2709,47 @@ fn ea_write(input: &Value, ctx: &ToolContext) -> Result<String> {
         if !ea::MODEL_OPS.contains(&name) {
             bail!("{}", crate::i18n::fmt("operation {0} ('{1}') is not allowed. Allowed: {2}", &[(i + 1).to_string(), name.to_string(), ea::MODEL_OPS.join(", ")]));
         }
+        // An operation on one relationship without it: refused before the approval card, which would name nothing (LC-464).
+        let needs_connector = matches!(name, "change_connector_type" | "reverse_connector" | "update_connector" | "route_connector");
+        if needs_connector && !(op["connector"].is_i64() || op["connector"].as_str().is_some_and(|k| k.starts_with('#') || k.trim().parse::<i64>().is_ok())) {
+            bail!("{}", crate::i18n::fmt("operation {0} ('{1}') needs the field 'connector' (t_connector.connector_id); for several relationships give one operation each", &[(i + 1).to_string(), name.to_string()]));
+        }
     }
     let mut normalized = normalize_ops(given);
     let mut risky_files = Vec::new();
     for op in normalized.iter_mut() {
         let kind = op["op"].as_str().unwrap_or("").to_string();
+        let file = op["file"].as_str().unwrap_or("").trim().to_string();
+        if matches!(kind.as_str(), "export_xmi" | "generate_report") && !file.is_empty() && !file.contains(['\\', '/', ':']) {
+            // A bare file name: the file goes with the conversation's files, as the documents Compass writes (LC-466: the
+            // assistant picked a public folder itself when a full path was asked for).
+            let _ = std::fs::create_dir_all(&ctx.cfg.attachments_dir);
+            op["file"] = json!(ctx.cfg.attachments_dir.join(&file).display().to_string());
+            continue;
+        }
         if matches!(kind.as_str(), "export_xmi" | "import_xmi" | "generate_report") {
             // Files outside the model are always asked (also in auto), with the real full path in the dialog and for EA.
-            let path = check_file_path(op["file"].as_str().unwrap_or(""))?;
+            let path = check_file_path(&file)?;
             op["file"] = json!(path.display().to_string());
             risky_files.push(path);
         }
     }
     let ops = &normalized;
     check_unchanged(ctx.cfg, &input["expect_unchanged"])?;
-    let summary = crate::i18n::fmt("Saving to the EA model:\n{0}\n\nBefore → after:\n{1}", &[ea::describe(ops), crate::governance::preview(ctx.cfg, ops)]);
+    let mut summary = crate::i18n::fmt("Saving to the EA model:\n{0}\n\nBefore → after:\n{1}", &[ea::describe(ops), crate::governance::preview(ctx.cfg, ops)]);
+    // Relationships the UML or ArchiMate 3.2 rules do not allow: on the card, so they are not approved unnoticed (LC-374).
+    let rule_problems = crate::governance::write_problems(ctx.cfg, ops);
+    if !rule_problems.is_empty() {
+        summary.push_str(&format!("\n\n⚠ {}", rule_problems.join("\n⚠ ")));
+    }
     let destructive = destructive_details(ctx.cfg, ops);
     // Deleting an element that has relationships, deleting a package, importing XMI and replacing an existing file
     // always ask (also in auto), with what is affected.
     let related = crate::verify::relations_of_deleted(ctx.cfg, ops);
     let package_deleted = ops.iter().any(|op| op["op"] == "delete" && (op["package"].is_i64() || op["child_package"].is_i64()));
-    if !related.is_empty() || package_deleted || !risky_files.is_empty() {
+    // Version control is always asked, also in auto (LC-349): get_latest replaces the whole package.
+    let version_control = ops.iter().any(|op| op["op"] == "version_control" || op["op"] == "merge_elements");
+    if !related.is_empty() || package_deleted || version_control || !risky_files.is_empty() {
         ctx.approver.confirm_risky(&format!("{summary}\n\n{}\n\n{}", destructive.join("\n"), related.join("\n")))?;
     } else if destructive.is_empty() {
         ctx.approver.confirm(&summary)?;
@@ -1934,23 +2762,50 @@ fn ea_write(input: &Value, ctx: &ToolContext) -> Result<String> {
     let mut baselines = Vec::new();
     for package in crate::undo::packages_to_baseline(ctx.cfg, ops) {
         let version = format!("Compass {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"));
-        let made = ea::run_batch(ctx.cfg, &[json!({ "op": "create_baseline", "package": package, "version": version, "notes": crate::i18n::tr("Made by Compass before a change that cannot be undone by operations") })], &BatchOptions::default());
+        let baseline = [json!({ "op": "create_baseline", "package": package, "version": version, "notes": crate::i18n::tr("Made by Compass before a change that cannot be undone by operations") })];
+        let made = ea::run_batch(ctx.cfg, &baseline, &BatchOptions::default());
+        audit(ctx.cfg, &baseline, &made);
         if made.is_ok() {
             baselines.push(format!("package {package}: {version}"));
         }
     }
+    // Diagrams the deleted elements and relationships are on (known only before the save): reloaded afterwards and
+    // checked for links left behind (LC-412).
+    let touched = diagrams_of_deleted(ctx.cfg, ops);
     let result = ea::run_batch(ctx.cfg, ops, &BatchOptions::default());
-    audit(ctx.cfg, ops, &result);
-    if let Ok(done) = &result {
-        crate::undo::record(ctx.cfg, &ea::describe(ops), done, reverse, not_undoable, baselines.clone());
+    audit_in_mode(ctx.cfg, ctx.approver.mode, ops, &result);
+    match &result {
+        Ok(done) => crate::undo::record(ctx.cfg, &ea::describe(ops), done, reverse, not_undoable, baselines.clone()),
+        // A save that failed part-way: the changes of existing objects before the failed operation stay; journal them.
+        Err(e) => {
+            if let Some(at) = e.downcast_ref::<ea::BatchError>().and_then(|b| b.failed_at) {
+                crate::undo::record_partial(ctx.cfg, &ea::describe(ops), at, reverse, baselines.clone());
+            }
+        }
     }
     if let Ok(done) = &result {
-        refresh_user_ea(ctx.cfg, ops, done);
+        refresh_user_ea(ctx.cfg, ops, done, &touched);
     }
     let done = result?;
     let mut text = format_created(&done);
+    let ghosts = ghost_links(ctx.cfg, &touched);
+    if !ghosts.is_empty() {
+        text.push_str(&format!("\nLinks left on diagrams after the deletion (EA did not remove them; repair_diagram_links on each removes them): {}\n", ghosts.join(", ")));
+    }
     if !related.is_empty() {
         text.push_str(&format!("\nDeleted together with relationships (tell the user): {}\n", related.join(" | ")));
+    }
+    if !rule_problems.is_empty() {
+        text.push_str(&format!("\nAgainst the modelling rules (tell the user and offer an allowed type): {}\n", rule_problems.join(" | ")));
+    }
+    // A relationship made by this write is hidden on the diagrams whose visibility policy is "auto", as one made in EA
+    // is (LC-373: the policy missed the relationships Compass made itself).
+    for created in done["created"].as_array().into_iter().flatten().filter(|c| c["kind"] == "connector") {
+        if let Some(id) = created["id"].as_i64() {
+            for line in crate::visibility::auto_apply(ctx.cfg, id) {
+                text.push_str(&format!("\nRelationship {id}: {line} (tell the user)\n"));
+            }
+        }
     }
     // The model is read again: only what is really there may be reported as done.
     let check = crate::verify::verify(ctx.cfg, ops, &done);
@@ -1969,9 +2824,44 @@ Tell the user exactly which of these changes did not happen; do not say they wer
     Ok(text)
 }
 
+/// The diagrams that show the elements and relationships a save deletes (LC-412).
+fn diagrams_of_deleted(cfg: &AppConfig, ops: &[Value]) -> Vec<i32> {
+    let mut out = Vec::new();
+    for op in ops.iter().filter(|o| o["op"] == "delete") {
+        let sql = if let Some(e) = op["element"].as_i64() {
+            format!("select distinct diagram_id from t_diagramobjects where object_id = {e}")
+        } else if let Some(c) = op["connector"].as_i64() {
+            format!("select distinct diagramid from t_diagramlinks where connectorid = {c}")
+        } else {
+            continue;
+        };
+        out.extend(query_rows(cfg, &sql).unwrap_or_default().into_iter().filter_map(|r| r[0].parse::<i32>().ok()));
+    }
+    out.sort_unstable();
+    out.dedup();
+    out
+}
+
+/// Diagram links that point at a relationship no longer in the model, or whose ends are no longer on the diagram.
+fn ghost_links(cfg: &AppConfig, diagrams: &[i32]) -> Vec<String> {
+    if diagrams.is_empty() {
+        return Vec::new();
+    }
+    let list = diagrams.iter().map(i32::to_string).collect::<Vec<_>>().join(",");
+    query_rows(cfg, &format!(
+        "select l.diagramid, count(*) from t_diagramlinks l left join t_connector c on c.connector_id = l.connectorid where l.diagramid in ({list}) and (c.connector_id is null \
+         or not exists (select 1 from t_diagramobjects a where a.diagram_id = l.diagramid and a.object_id = c.start_object_id) \
+         or not exists (select 1 from t_diagramobjects b where b.diagram_id = l.diagramid and b.object_id = c.end_object_id)) group by l.diagramid"
+    ))
+    .unwrap_or_default()
+    .into_iter()
+    .map(|r| format!("diagram {} ({} link(s))", r[0], r[1]))
+    .collect()
+}
+
 /// After a write, refreshes the changed diagrams and packages in the user's EA window (in the background, without waiting; does nothing without an EA window).
-fn refresh_user_ea(cfg: &AppConfig, ops: &[Value], result: &Value) {
-    let mut diagrams: Vec<i32> = Vec::new();
+fn refresh_user_ea(cfg: &AppConfig, ops: &[Value], result: &Value, extra: &[i32]) {
+    let mut diagrams: Vec<i32> = extra.to_vec();
     let mut packages: Vec<i32> = Vec::new();
     for op in ops {
         if let Some(id) = op["diagram"].as_i64() {
@@ -2001,13 +2891,19 @@ fn refresh_user_ea(cfg: &AppConfig, ops: &[Value], result: &Value) {
 }
 
 /// Appends the write to the change log (failed ones too): when, who, in which model, what and with what result.
-fn audit(cfg: &AppConfig, ops: &[Value], result: &Result<Value>) {
+pub(crate) fn audit(cfg: &AppConfig, ops: &[Value], result: &Result<Value>) {
+    audit_in_mode(cfg, crate::hub::effective_mode(cfg), ops, result);
+}
+
+/// The audit entry with the approval mode really in force (LC-349: a hub policy can raise the local mode, and the
+/// entry showed the local one).
+fn audit_in_mode(cfg: &AppConfig, mode: ApprovalMode, ops: &[Value], result: &Result<Value>) {
     use std::io::Write;
     let entry = json!({
         "time": chrono::Local::now().to_rfc3339(),
         "database": if cfg.uses_file() { cfg.model_file.display().to_string() } else { format!("{}@{}:{}", cfg.db_name, cfg.db_host, cfg.db_port) },
         "ea_user": cfg.ea_user,
-        "approval": cfg.approval_mode.as_str(),
+        "approval": mode.as_str(),
         "summary": ea::describe(ops),
         "ops": ops,
         "ok": result.is_ok(),
@@ -2064,9 +2960,19 @@ fn check_unchanged(cfg: &AppConfig, expect: &Value) -> Result<()> {
             Some("diagram") => ("t_diagram", "diagram_id", crate::i18n::tr("diagram")),
             other => bail!("{}", crate::i18n::fmt("expect_unchanged: unknown kind {0}", &[format!("{other:?}")])),
         };
-        let rows = query_rows(cfg, &format!("select cast(modifieddate as text) from {table} where {key} = {id}"))?;
+        // No cast in SQL: "as text" exists only in PostgreSQL and SQLite (LC-344); every engine returns the date as text
+        // through query_rows, and normalize_stamp compares the first 19 characters.
+        let rows = query_rows(cfg, &format!("select modifieddate from {table} where {key} = {id}"))?;
         let now = rows.first().and_then(|r| r.first()).with_context(|| crate::i18n::fmt("{0} with id {1} no longer exists", &[what.to_string(), id.to_string()]))?;
         if normalize_stamp(now) != normalize_stamp(seen) {
+            // Not a date at all (e.g. the notes were given): not "changed after you read it" (LC-478, round 10).
+            if is_stamp(now) && !is_stamp(seen) {
+                bail!("{}", crate::i18n::fmt("expect_unchanged: \"modified\" must be the modifieddate read from the model (YYYY-MM-DD HH:MM:SS), not {0}. Read it again with db_query. Nothing was saved.", &[seen.chars().take(60).collect::<String>()]));
+            }
+            // A date later than the model's was never read from it: a change only moves the date forward (round 11a).
+            if is_stamp(seen) && normalize_stamp(seen) > normalize_stamp(now) {
+                bail!("{}", crate::i18n::fmt("expect_unchanged: the expected date of {0} with id {1} ({2}) is later than the one in the model ({3}), so it was not read from the model; nobody changed it. Read it with db_query and give that value. Nothing was saved.", &[what.to_string(), id.to_string(), seen.to_string(), now.to_string()]));
+            }
             bail!("{}", crate::i18n::fmt("version conflict: {0} with id {1} was changed after you read it (was {2}, now {3}). Read the model again and plan the change once more. Nothing was saved.", &[what.to_string(), id.to_string(), seen.to_string(), now.to_string()]));
         }
     }
@@ -2078,8 +2984,151 @@ fn normalize_stamp(s: &str) -> String {
     s.trim().replace('T', " ").chars().take(19).collect()
 }
 
+/// Whether a value starts like a date `YYYY-MM-DD`.
+fn is_stamp(s: &str) -> bool {
+    let s: Vec<char> = s.trim().chars().take(10).collect();
+    s.len() == 10 && s.iter().enumerate().all(|(i, c)| if i == 4 || i == 7 { *c == '-' } else { c.is_ascii_digit() })
+}
+
 #[cfg(test)]
 mod tests {
+    /// LC-478: a value that is not a date is told apart from a real change.
+    #[test]
+    fn modified_stamp_or_not() {
+        assert!(super::is_stamp("2026-11-06 07:35:05"));
+        assert!(super::is_stamp("2026-10-17T17:33:05"));
+        assert!(!super::is_stamp("Dokument sprzedaży wystawiany klientowi."));
+        assert!(!super::is_stamp("06.11.2026"));
+    }
+
+    /// LC-376 in EA: an element added on top of another goes next to the one it is related to; nothing else moves.
+    /// `LOONAR_TEST_PROPS=… cargo test place_new_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA and a copy of a test model"]
+    fn place_new_live() {
+        let cfg = AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
+        let q = |sql: &str| query_rows(&cfg, sql).unwrap();
+        let root: i64 = q("select package_id from t_package where parent_id = 0 order by package_id")[0][0].parse().unwrap();
+        let ops = vec![
+            json!({"op":"create_package","key":"pkg","parent":root,"name":format!("ZZ_place_{}", chrono::Local::now().format("%H%M%S"))}),
+            json!({"op":"create_diagram","key":"d","package":"#pkg","name":"Place","type":"Logical"}),
+            json!({"op":"create_element","key":"a","package":"#pkg","name":"Order","type":"Class"}),
+            json!({"op":"create_element","key":"c","package":"#pkg","name":"Invoice","type":"Class"}),
+            json!({"op":"create_element","key":"b","package":"#pkg","name":"Customer","type":"Class"}),
+            json!({"op":"create_connector","key":"ab","source":"#a","target":"#b","type":"Association"}),
+            json!({"op":"place","diagram":"#d","element":"#a","left":40,"top":40,"width":120,"height":70}),
+            json!({"op":"place","diagram":"#d","element":"#c","left":200,"top":40,"width":120,"height":70}),
+            json!({"op":"place","diagram":"#d","element":"#b","left":50,"top":50,"width":120,"height":70}),
+        ];
+        let created = crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions { rollback_key: Some("pkg".into()), keep_locks: false }).unwrap();
+        let id_of = |key: &str| created["created"].as_array().unwrap().iter().find(|c| c["key"] == key).unwrap()["id"].as_i64().unwrap();
+        let (pkg, d, a, b, c) = (id_of("pkg"), id_of("d"), id_of("a"), id_of("b"), id_of("c"));
+        // A bent route of the relationship of the element that will move (LC-418).
+        crate::ea::run_batch(&cfg, &[json!({"op":"route_connector","diagram":d,"connector":id_of("ab"),"points":[[300,300]]})], &crate::ea::BatchOptions::default()).unwrap();
+        let before = rects(&cfg, d, &[a, c]).unwrap();
+        let (ops, text) = super::place_new_ops(&cfg, &json!({ "diagram": d })).unwrap();
+        println!("{text}");
+        assert!(ops.iter().any(|o| o["op"] == "route_connector"), "{ops:?}");
+        crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions::default()).unwrap();
+        let path = query_rows(&cfg, &format!("select coalesce(path,'') from t_diagramlinks where diagramid = {d} and connectorid = {}", id_of("ab"))).unwrap();
+        assert_eq!(path[0][0], "", "the bend is gone");
+        let after = rects(&cfg, d, &[a, c, b]).unwrap();
+        crate::ea::run_batch(&cfg, &[json!({"op":"delete","package":pkg})], &crate::ea::BatchOptions::default()).unwrap();
+        crate::ea::shutdown();
+        assert_eq!(&after[..2], &before[..], "the others stay");
+        let r = |x: (i64, i64, i64, i64, i64)| (x.1, x.2, x.3, x.4);
+        assert!(!overlaps(r(after[2]), r(after[0]), 0) && !overlaps(r(after[2]), r(after[1]), 0), "{after:?}");
+    }
+
+    /// LC-412: the check for links left on diagrams runs on the model (.qea and SQL Server).
+    /// `LOONAR_TEST_PROPS=… cargo test ghost_links_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a test model"]
+    fn ghost_links_live() {
+        let cfg = AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
+        let diagrams: Vec<i32> = query_rows(&cfg, "select diagram_id from t_diagram").unwrap().iter().take(400).filter_map(|r| r[0].parse().ok()).collect();
+        println!("{:?}", super::ghost_links(&cfg, &diagrams));
+        if let Some(row) = query_rows(&cfg, "select object_id from t_diagramobjects").unwrap().first() {
+            let element: i64 = row[0].parse().unwrap();
+            assert!(!super::diagrams_of_deleted(&cfg, &[json!({"op":"delete","element":element})]).is_empty());
+        }
+    }
+
+    /// LC-376: a free place next to the anchor, never on top of what is there.
+    #[test]
+    fn free_spot_next_to_the_anchor() {
+        let taken = vec![(100, 100, 120, 60), (260, 100, 120, 60)];
+        // Right of the first is taken by the second: below it.
+        assert_eq!(super::free_spot(&taken, taken[0], 120, 60, 40), (100, 200));
+        // The second has the right side free.
+        assert_eq!(super::free_spot(&taken, taken[1], 120, 60, 40), (420, 100));
+        let spot = super::free_spot(&taken, taken[0], 120, 60, 40);
+        assert!(!taken.iter().any(|r| super::overlaps((spot.0, spot.1, 120, 60), *r, 0)));
+    }
+
+    /// LC-377: a presentation copy through EA on a model COPY (removed again):
+    /// `LOONAR_TEST_PROPS=E:/livetest/undo/undo.properties cargo test exec_view_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA and a copy of a test model"]
+    fn exec_view_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("app.properties");
+        let q = |sql: &str| super::query_rows(&cfg, sql).unwrap();
+        let diagram: i64 = q("select d.diagram_id from t_diagram d join t_diagramobjects x on x.diagram_id = d.diagram_id join t_object o on o.object_id = x.object_id \
+                              where d.diagram_type = 'Logical' and o.object_type = 'Class' group by d.diagram_id order by count(*) desc")[0][0].parse().unwrap();
+        let ops = super::exec_view_ops(&cfg, &serde_json::json!({ "diagram": diagram })).unwrap();
+        let done = crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions::default()).expect("presentation copy");
+        let copy = done["created"].as_array().unwrap().iter().find(|c| c["kind"] == "diagram").unwrap()["id"].as_i64().unwrap();
+        let count = |d: i64| q(&format!("select count(*) from t_diagramobjects where diagram_id = {d}"))[0][0].clone();
+        let pdata = q(&format!("select pdata, styleex from t_diagram where diagram_id = {copy}"))[0].clone();
+        let (original, copied) = (count(diagram), count(copy));
+        let image = std::env::temp_dir().join("loonar_exec_view.png");
+        let _ = crate::ea::run_batch(&cfg, &[serde_json::json!({"op":"export_diagram","diagram":copy,"path":image.display().to_string()})], &crate::ea::BatchOptions::default());
+        crate::ea::run_batch(&cfg, &[serde_json::json!({"op":"delete","diagram":copy})], &crate::ea::BatchOptions::default()).expect("cleanup");
+        crate::ea::shutdown();
+        println!("{original} → {copied}; {pdata:?}; image {}", image.display());
+        assert_eq!(original, copied);
+        assert!(pdata[0].contains("HideAtts=1") && pdata[0].contains("HideOps=1") && pdata[1].contains("SuppConnectorLabels=1"));
+    }
+
+    /// LC-376: alignment, distribution and size from the first element.
+    #[test]
+    fn aligning_rectangles() {
+        let base = vec![(1, 100, 50, 120, 60), (2, 300, 80, 100, 40), (3, 520, 20, 80, 60)];
+        let mut r = base.clone();
+        assert_eq!(super::align(&mut r, "top").unwrap(), vec![(2, 300, 50, 100, 40), (3, 520, 50, 80, 60)]);
+        let mut r = base.clone();
+        let spread = super::align(&mut r, "distribute_horizontally").unwrap();
+        // From 100 to 600: 300 of boxes, two gaps of 100.
+        assert_eq!(spread, vec![(2, 320, 80, 100, 40)]);
+        let mut r = base.clone();
+        assert_eq!(super::align(&mut r, "same_size").unwrap().len(), 2);
+        let mut r = base;
+        assert!(super::align(&mut r, "sideways").is_err());
+    }
+
+    /// LC-344: optimistic locking on a real SQL Server (Windows sign-in):
+    /// `LOONAR_TEST_MSSQL_WIN="127.0.0.1;1433;ea_lab" cargo test check_unchanged_on_sql_server -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a SQL Server with an EA repository"]
+    fn check_unchanged_on_sql_server() {
+        let spec = std::env::var("LOONAR_TEST_MSSQL_WIN").unwrap();
+        let parts: Vec<&str> = spec.split(';').collect();
+        let props = std::env::temp_dir().join(format!("loonar-mssql-lock-{}.properties", std::process::id()));
+        std::fs::write(&props, format!("model.source=sqlserver
+db.host={}
+db.port={}
+db.name={}
+db.user=
+", parts[0], parts[1], parts[2])).unwrap();
+        let cfg = crate::config::AppConfig::load(&props).unwrap();
+        let row = &super::query_rows(&cfg, "select object_id, modifieddate from t_object order by object_id").unwrap()[0];
+        println!("element {} modified {}", row[0], row[1]);
+        let same = serde_json::json!([{ "kind": "element", "id": row[0].parse::<i64>().unwrap(), "modified": row[1] }]);
+        super::check_unchanged(&cfg, &same).unwrap();
+        let older = serde_json::json!([{ "kind": "element", "id": row[0].parse::<i64>().unwrap(), "modified": "2001-01-01 00:00:00" }]);
+        assert!(super::check_unchanged(&cfg, &older).is_err());
+    }
+
     use super::*;
     use std::path::Path;
 
@@ -2188,6 +3237,9 @@ Text.
         let fresh = check_unchanged(&cfg, &json!([{ "kind": "package", "id": id, "modified": row[1] }]));
         println!("stale: {:?} | fresh: {:?}", stale.as_ref().map_err(|e| e.to_string()), fresh.as_ref().map_err(|e| e.to_string()));
         assert!(stale.is_err());
+        // A date later than the model's is not "changed after you read it" (round 11a).
+        let later = check_unchanged(&cfg, &json!([{ "kind": "package", "id": id, "modified": "2999-01-01 00:00:00" }])).unwrap_err().to_string();
+        assert!(later.contains("later than the one in the model") && !later.contains("after you read it"), "{later}");
         assert!(fresh.is_ok());
     }
     /// An EA file model: reads through SQLite give the same output as from a database, and nothing can write to the file.
@@ -2401,6 +3453,19 @@ for (var id in map) { var m = Repository.GetMethodByID(id); m.Style = map[id]; m
         let b = "var map = {1:\"/a\",2:\"/b\",3:\"/c\"}; for (var id in map) { var m = Repository.GetMethodByID(id); m.Delete(); }";
         assert_ne!(script_shape(a), script_shape(b));
         assert_ne!(script_shape("Session.Output(\"x\");"), script_shape("eval(\"x\");"));
+    }
+
+    /// LC-346: an approved UPDATE through Repository.Execute does not approve a DELETE (the SQL is in a string).
+    #[test]
+    fn sql_in_strings_is_part_of_the_build() {
+        let update = "Repository.Execute(\"UPDATE t_object SET Status = 'Approved' WHERE Object_ID = 5\");";
+        let delete = "Repository.Execute(\"DELETE FROM t_object\");";
+        assert_ne!(script_shape(update), script_shape(delete));
+        let other_id = "Repository.Execute(\"UPDATE t_object SET Status = 'Approved' WHERE Object_ID = 7\");";
+        assert_ne!(script_shape(update), script_shape(other_id), "the SQL text is compared as it is");
+        // Plain data in strings is still data.
+        assert_eq!(script_shape("e.Notes = \"Zamówienie klienta\"; e.Update();"), script_shape("e.Notes = \"Faktura\"; e.Update();"));
+        assert_ne!(script_shape("var s = 'Session'; WScript.Run('a')"), script_shape("var s = 'Session'; WScript.Run('cmd /c del x')"));
     }
 }
 

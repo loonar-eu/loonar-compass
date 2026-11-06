@@ -4,10 +4,14 @@ use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-/// The only model the application uses. It is not a user setting.
+/// The default Claude model (the setting `claude.model` chooses another one).
 pub const CLAUDE_MODEL: &str = "claude-haiku-5-5";
 /// Claude models offered in the settings (any other id can still be set in app.properties).
 pub const CLAUDE_MODELS: [&str; 4] = ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-1"];
+/// What the settings let the user pick in 0.9.3 (the owner's decision for this version): only Anthropic with Claude
+/// Haiku 5.5. The other providers and models stay supported; they are only left out of the lists.
+pub const PICKABLE_PROVIDERS: [&str; 1] = ["anthropic"];
+pub const PICKABLE_CLAUDE_MODELS: [&str; 1] = ["claude-haiku-5-5"];
 /// OpenAI models offered in the settings (any other id can be typed in).
 pub const OPENAI_MODELS: [&str; 3] = ["gpt-5.1", "gpt-5", "gpt-5-mini"];
 /// Effort levels of the Claude API (output_config.effort); "" = the model's default.
@@ -172,6 +176,9 @@ pub struct AppConfig {
     pub web_access: bool,
     /// Checking every hour whether a newer release exists (`app.update_check`, on by default).
     pub update_check: bool,
+    /// `safety_net.enabled`: snapshots before deletions done by hand in EA and a journal of the day's manual changes
+    /// (LC-382; off by default – EA then waits for Compass's answer before each deletion).
+    pub safety_net: bool,
     /// The rules of the computer set by IT (Group Policy, Intune): they win over the settings.
     pub policy: MachinePolicy,
     /// The only domains the assistant may search and read (`claude.web_domains`, comma-separated; empty = any).
@@ -195,6 +202,8 @@ pub struct AppConfig {
     /// Endpoint compatible with the OpenAI API (empty = OpenAI): Azure OpenAI, Ollama, LM Studio, a company gateway.
     pub openai_url: String,
     pub claude_max_tokens: u32,
+    /// `ai.budget_month_usd`: a monthly budget of this computer for the AI in USD (0 = none), without a team hub (LC-390).
+    pub ai_budget_month_usd: f64,
     /// Workspace ID from the Anthropic Console: required for an API key that is not scoped to a workspace
     /// (empty = the header is not sent).
     pub claude_workspace_id: String,
@@ -229,6 +238,10 @@ pub struct AppConfig {
     pub templates_dir: PathBuf,
     /// Language of the interface and of the default documents: pl, en, de, fr (no entry = pl, as before version 0.3).
     pub ui_language: String,
+    /// Language of speaking instead of typing (LC-475): pl, en, de, fr; empty = the language of the interface.
+    pub dictation_language: String,
+    /// Speech model of speaking instead of typing: "small" (more accurate) or "base" (faster).
+    pub dictation_model: String,
     /// Confluence: base URL, e-mail (Confluence Cloud only; empty = personal access token, PAT), space and parent page.
     pub confluence_url: String,
     pub confluence_user: String,
@@ -327,6 +340,8 @@ pub struct MachinePolicy {
     pub min_approval: Option<ApprovalMode>,
     /// AllowedProviders (e.g. "anthropic,openai"): the AI providers allowed.
     pub allowed_providers: Vec<String>,
+    /// Dictation=0: no speaking instead of typing (no microphone button).
+    pub dictation: Option<bool>,
 }
 
 impl MachinePolicy {
@@ -345,6 +360,7 @@ impl MachinePolicy {
             update_check: flag("UpdateCheck"),
             min_approval: text("MinApproval").and_then(|m| ApprovalMode::parse(&m.to_lowercase()).ok()),
             allowed_providers: text("AllowedProviders").map(|p| p.split([',', ';']).map(|x| x.trim().to_lowercase()).filter(|x| !x.is_empty()).collect()).unwrap_or_default(),
+            dictation: flag("Dictation"),
         }
     }
 
@@ -460,7 +476,7 @@ impl AppConfig {
         };
 
         let mut cfg = Self {
-            // The model is fixed: the `claude.model` entry in the file is informational only and does not change the model.
+            // `claude.model`: the Claude model that answers (default CLAUDE_MODEL).
             claude_model: get_or("claude.model", CLAUDE_MODEL),
             claude_effort: get_or("claude.effort", ""),
             show_thinking: get_or("claude.show_thinking", "false") == "true",
@@ -472,6 +488,7 @@ impl AppConfig {
             code_execution: get_or("claude.code_execution", "false") == "true",
             web_access: get_or("claude.web_access", "false") == "true",
             update_check: get_or("app.update_check", "true") == "true",
+            safety_net: get_or("safety_net.enabled", "false") == "true",
             policy: MachinePolicy::default(),
             web_domains: get_or("claude.web_domains", "").split(',').map(|d| d.trim().to_lowercase()).filter(|d| !d.is_empty()).collect(),
             claude_url: get_or("claude.url", ""),
@@ -482,6 +499,7 @@ impl AppConfig {
             openai_model: get_or("openai.model", OPENAI_MODELS[0]),
             openai_url: get_or("openai.url", ""),
             claude_max_tokens: get_or("claude.max_tokens", "10000").parse().context("claude.max_tokens")?,
+            ai_budget_month_usd: get_or("ai.budget_month_usd", "0").trim().replace(',', ".").parse().context("ai.budget_month_usd")?,
             claude_workspace_id: get_or("claude.workspace_id", ""),
             model_source: ModelSource::parse(&get_or("model.source", "postgres")).context("model.source")?,
             // A relative model file is next to the settings (a portable copy), whatever folder EA or Compass starts in.
@@ -515,6 +533,8 @@ impl AppConfig {
             templates_dir: path_or("templates.dir", "szablony", "templates"),
             // Settings without a language come from versions before 0.3, which were Polish only.
             ui_language: get_or("ui.language", "pl"),
+            dictation_language: get_or("dictation.language", ""),
+            dictation_model: get_or("dictation.model", "small"),
             confluence_url: get_or("confluence.url", ""),
             confluence_user: get_or("confluence.user", ""),
             confluence_space: get_or("confluence.space", ""),
@@ -679,6 +699,7 @@ pub mod secrets {
     }
 
     pub fn set(name: &str, value: &str) -> Result<()> {
+        forget(name);
         let entry = keyring::Entry::new(SERVICE, name)?;
         match long_value(value) {
             Some(bytes) => entry.set_secret(&bytes)?,
@@ -720,8 +741,25 @@ pub mod secrets {
         }
     }
 
+    /// Answers of `exists` for 2 s: the settings ask for every secret in every frame (LC-362: one Credential Manager
+    /// call per secret and frame). `set` and `delete` forget the name.
+    static EXISTS: std::sync::Mutex<Option<std::collections::HashMap<String, (std::time::Instant, bool)>>> = std::sync::Mutex::new(None);
+
+    fn forget(name: &str) {
+        if let Some(map) = EXISTS.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
+            map.remove(name);
+        }
+    }
+
     pub fn exists(name: &str) -> bool {
-        get(name).is_ok()
+        if let Some(Some((when, there))) = EXISTS.lock().unwrap_or_else(|p| p.into_inner()).as_ref().map(|m| m.get(name).copied()) {
+            if when.elapsed() < std::time::Duration::from_secs(2) {
+                return there;
+            }
+        }
+        let there = get(name).is_ok();
+        EXISTS.lock().unwrap_or_else(|p| p.into_inner()).get_or_insert_with(Default::default).insert(name.to_string(), (std::time::Instant::now(), there));
+        there
     }
 
     /// File in the user data folder with the names of the secrets saved for conversation connections (their names
@@ -747,6 +785,7 @@ pub mod secrets {
 
     /// Removes the secret (also under the pre-release service name); a missing secret is not an error.
     pub fn delete(name: &str) -> Result<()> {
+        forget(name);
         for service in [SERVICE, LEGACY_SERVICE] {
             match keyring::Entry::new(service, name)?.delete_credential() {
                 Ok(()) | Err(keyring::Error::NoEntry) => {}
@@ -772,7 +811,7 @@ hub.url=https://my.example
 ").unwrap();
         let mut cfg = AppConfig::load(&dir.join("app.properties")).unwrap();
         let policy = MachinePolicy { hub_url: Some("https://hub.lab.local".into()), require_hub: true, web_access: Some(false), update_check: Some(false),
-            min_approval: Some(ApprovalMode::Ask), allowed_providers: vec!["anthropic".into()] };
+            min_approval: Some(ApprovalMode::Ask), allowed_providers: vec!["anthropic".into()], dictation: Some(false) };
         policy.apply(&mut cfg);
         assert_eq!(cfg.hub_url, "https://hub.lab.local");
         assert!(!cfg.web_access && !cfg.update_check && cfg.policy.require_hub);

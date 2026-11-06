@@ -113,6 +113,120 @@ pub fn selector_matches(selector: &str, object_type: &str, stereotype: &str) -> 
     matches_selector(selector, object_type, stereotype)
 }
 
+/// A forbidden stereotype on an element of the rule's types: the message, else None.
+fn forbidden_stereotype(rule: &Value, otype: &str, stereo: &str) -> Option<String> {
+    let banned = rule["stereotype"].as_str().unwrap_or("").trim().trim_matches(['«', '»']);
+    let applies = matches_selector(rule["applies_to"].as_str().unwrap_or("*"), otype, "");
+    let has = stereo.split(',').map(|s| s.trim()).any(|s| s.eq_ignore_ascii_case(banned) || s.rsplit("::").next().is_some_and(|short| short.eq_ignore_ascii_case(banned)));
+    (!banned.is_empty() && applies && has).then(|| rule["message"].as_str().map(String::from).unwrap_or_else(|| crate::i18n::fmt("the stereotype «{0}» is not used in this team", &[banned.to_string()])))
+}
+
+/// The rule kinds of governance.json (team_rules refuses others: a typo would silently check nothing).
+const RULE_KINDS: &[&str] = &["naming", "required_tags", "allowed_relations", "forbidden_stereotypes", "archimate", "creation"];
+
+/// The events of EA the creation rules decide (LC-391).
+pub const CREATION_EVENTS: &[&str] = &["element_creating", "diagram_creating"];
+
+/// Whether the team has rules on what may be created where.
+pub fn has_creation_rules(cfg: &AppConfig) -> bool {
+    load_rules(cfg, &Value::Null)["creation"].as_array().is_some_and(|r| !r.is_empty())
+}
+
+/// Who may create what where (LC-391): "creation": [{"package": name | package_id | GUID, "allow": [types], "deny": [types],
+/// "diagrams": [diagram types], "message": "…"}]. The rule of the nearest package (the package itself, then its parents)
+/// decides; types are element types or «stereotypes» (e.g. "Class", "«entity»"). Some(reason) = the creation is stopped.
+pub fn creation_block(cfg: &AppConfig, event: &str, package: i64, kind: &str, stereotype: &str) -> Option<String> {
+    let rules = load_rules(cfg, &Value::Null);
+    let list = rules["creation"].as_array()?;
+    // The package and its parents, nearest first: (id, name, GUID).
+    let mut chain = Vec::new();
+    let mut id = package;
+    for _ in 0..40 {
+        let row = query_rows(cfg, &format!("select package_id, name, ea_guid, parent_id from t_package where package_id = {id}")).ok()?.into_iter().next()?;
+        chain.push((row[0].clone(), row[1].clone(), row[2].clone()));
+        id = row[3].parse().unwrap_or(0);
+        if id == 0 {
+            break;
+        }
+    }
+    let matches = |rule: &Value, p: &(String, String, String)| match &rule["package"] {
+        Value::Number(n) => n.to_string() == p.0,
+        Value::String(s) => s.trim() == p.0 || s.trim().eq_ignore_ascii_case(&p.1) || s.trim().trim_matches(['{', '}']).eq_ignore_ascii_case(p.2.trim_matches(['{', '}'])),
+        _ => false,
+    };
+    let (rule, place) = chain.iter().find_map(|p| list.iter().find(|r| matches(r, p)).map(|r| (r, p.1.clone())))?;
+    let named = |list: &Value, value: &str| {
+        list.as_array().into_iter().flatten().filter_map(Value::as_str).any(|t| {
+            let t = t.trim();
+            match t.strip_prefix('«').and_then(|s| s.strip_suffix('»')) {
+                Some(st) => stereotype.split(',').any(|s| s.trim().eq_ignore_ascii_case(st) || s.trim().rsplit("::").next().is_some_and(|x| x.eq_ignore_ascii_case(st))),
+                None => t.eq_ignore_ascii_case(value),
+            }
+        })
+    };
+    let (allow, label) = if event == "diagram_creating" { (&rule["diagrams"], "diagram") } else { (&rule["allow"], "element") };
+    let denied = event != "diagram_creating" && named(&rule["deny"], kind);
+    let not_allowed = allow.as_array().is_some_and(|a| !a.is_empty()) && !named(allow, kind);
+    if !(denied || not_allowed) {
+        return None;
+    }
+    let what = if stereotype.is_empty() { kind.to_string() } else { format!("{kind} «{stereotype}»") };
+    Some(rule["message"].as_str().map(String::from).unwrap_or_else(|| {
+        crate::i18n::fmt("the team's rules do not allow a {0} {1} in the package \"{2}\"", &[crate::i18n::tr(label).to_string(), what, place])
+    }))
+}
+
+/// Checks the shape of the team's rules: an object of known kinds, lists of objects with the fields each kind needs.
+pub fn check_rules(rules: &Value) -> Result<()> {
+    let Some(map) = rules.as_object() else { anyhow::bail!("the rules must be a JSON object") };
+    for (kind, value) in map {
+        let needs: &[&str] = match kind.as_str() {
+            "naming" => &["pattern"],
+            "required_tags" => &["tag"],
+            "allowed_relations" => &["connector_type", "source", "target"],
+            "forbidden_stereotypes" => &["stereotype"],
+            "creation" => {
+                let list = value.as_array().with_context(|| "\"creation\" must be a list".to_string())?;
+                for (i, rule) in list.iter().enumerate() {
+                    anyhow::ensure!(rule["package"].is_string() || rule["package"].is_number(), "\"creation\" rule {}: missing \"package\"", i + 1);
+                }
+                continue;
+            }
+            "archimate" => {
+                anyhow::ensure!(value.is_boolean(), "\"archimate\" is true or false");
+                continue;
+            }
+            other => anyhow::bail!("unknown rule kind \"{other}\" (known: {})", RULE_KINDS.join(", ")),
+        };
+        let list = value.as_array().with_context(|| format!("\"{kind}\" must be a list"))?;
+        for (i, rule) in list.iter().enumerate() {
+            for field in needs {
+                anyhow::ensure!(rule[*field].as_str().is_some_and(|v| !v.trim().is_empty()), "\"{kind}\" rule {}: missing \"{field}\"", i + 1);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The team rules tool (LC-372): show the rules in force, or save new ones to governance.json (always approved).
+pub fn rules_definition() -> Value {
+    json!({
+        "name": "team_rules",
+        "description": "The team's modelling rules that model_lint, the live check in EA and the CI check use (governance.json next to the \
+settings; without it the rules from the team hub's policy). action show: the rules in force and where they come from. action save: write \
+new rules (the whole object; always shown to the user for approval). Kinds: naming [{applies_to: \"Class\" or \"«stereotype»\", pattern: \
+\"*Service\" (wildcards * ?), message}], required_tags [{applies_to, tag}], allowed_relations [{connector_type, source, target}] (a listed \
+relationship type is allowed only between the listed ends), forbidden_stereotypes [{applies_to, stereotype, message}], archimate (true/false: \
+the ArchiMate 3.2 relationship table), creation [{package: name | package_id | GUID, allow: [element types or \"«stereotype»\"], \
+deny: [types], diagrams: [diagram types], message}] (who may create what where: with Compass open in EA, EA asks before an element or diagram \
+is created in that package or below it, and a type the rule does not allow is stopped with the message). Use it for /validate-model when the team has no rules yet: draft them from the user's words, save after approval.",
+        "input_schema": { "type": "object", "properties": {
+            "action": { "type": "string", "enum": ["show", "save"] },
+            "rules": { "type": "object", "description": "For save: the whole rules object" }
+        }, "required": ["action"] }
+    })
+}
+
 /// The organization's rules: `governance.json` next to the settings, overridden by the rules given in the call.
 pub fn load_rules(cfg: &AppConfig, given: &Value) -> Value {
     if given.is_object() {
@@ -121,7 +235,7 @@ pub fn load_rules(cfg: &AppConfig, given: &Value) -> Value {
     // Local rules first; without them the team rules from the hub policy.
     std::fs::read_to_string(cfg.base_dir.join("governance.json"))
         .ok()
-        .and_then(|text| serde_json::from_str(&text).ok())
+        .and_then(|text| serde_json::from_str(text.trim_start_matches('\u{feff}')).ok())
         .or_else(|| crate::hub::team_policy(cfg).map(|p| p["governance"].clone()).filter(Value::is_object))
         .unwrap_or_else(|| json!({}))
 }
@@ -182,6 +296,12 @@ pub fn lint_result(input: &Value, cfg: &AppConfig) -> Result<LintResult> {
             if matches_selector(selector, otype, stereo) && !is_decoration(otype) && !wildcard(pattern, name.trim()) {
                 let message = rule["message"].as_str().map(String::from).unwrap_or_else(|| crate::i18n::fmt("name does not match the pattern {0}", &[pattern.to_string()]));
                 findings.push(base("naming", format!("{message} ({shown})")));
+            }
+        }
+        // Stereotypes the team does not use (LC-372): {"forbidden_stereotypes": [{"applies_to": "Class", "stereotype": "entity", "message": "…"}]}.
+        for rule in rules["forbidden_stereotypes"].as_array().into_iter().flatten() {
+            if let Some(message) = forbidden_stereotype(rule, otype, stereo) {
+                findings.push(base("forbidden_stereotype", format!("{message} ({shown})")));
             }
         }
     }
@@ -301,6 +421,7 @@ pub fn rule_title(rule: &str) -> &'static str {
         "archimate_relation" => crate::i18n::tr("Relationships not allowed in ArchiMate 3.2"),
         "empty_package" => crate::i18n::tr("Empty packages"),
         "empty_diagram" => crate::i18n::tr("Empty diagrams"),
+        "forbidden_stereotype" => crate::i18n::tr("Stereotypes the team does not use"),
         _ => crate::i18n::tr("other operations"),
     }
 }
@@ -309,7 +430,7 @@ pub fn rule_title(rule: &str) -> &'static str {
 pub fn severity(rule: &str) -> &'static str {
     match rule {
         "broken_connector" | "invalid_relation" | "archimate_relation" | "required_tag" => "error",
-        "default_name" | "orphan" | "duplicate_name" | "naming" | "duplicate_relation" | "self_relation" => "warning",
+        "default_name" | "orphan" | "duplicate_name" | "naming" | "duplicate_relation" | "self_relation" | "forbidden_stereotype" => "warning",
         _ => "info",
     }
 }
@@ -341,6 +462,53 @@ fn report(package: i64, packages: usize, elements: usize, connectors: usize, fin
     out.join("\n")
 }
 
+/// What would be wrong with a relationship between ends of these types and stereotypes (UML/BPMN sanity and ArchiMate
+/// 3.2), for /what-if (LC-404).
+pub(crate) fn relation_problem(connector_type: &str, connector_stereotype: &str, source_type: &str, source_stereotype: &str, target_type: &str, target_stereotype: &str) -> Option<String> {
+    uml_problem(connector_type, source_type, target_type).or_else(|| archimate_problem(connector_stereotype, source_stereotype, target_stereotype))
+}
+
+/// Relationships a write makes or changes that the UML or ArchiMate 3.2 rules do not allow (LC-374): shown on the
+/// approval card and in the result, so a forbidden type is not saved unnoticed.
+pub fn write_problems(cfg: &AppConfig, ops: &[Value]) -> Vec<String> {
+    let end = |id: &Value| -> Option<(String, String)> {
+        let id = id.as_i64()?;
+        query_rows(cfg, &format!("select object_type, coalesce(stereotype,'') from t_object where object_id = {id}")).ok()?.into_iter().next().map(|r| (r[0].clone(), r[1].clone()))
+    };
+    let mut out = Vec::new();
+    for op in ops {
+        let (kind, stereotype, source, target) = match op["op"].as_str().unwrap_or("") {
+            "create_connector" => {
+                let (Some(s), Some(t)) = (end(&op["source"]), end(&op["target"])) else { continue };
+                (op["type"].as_str().unwrap_or("").to_string(), op["stereotype"].as_str().unwrap_or("").to_string(), s, t)
+            }
+            "change_connector_type" | "update_connector" => {
+                let Some(id) = op["connector"].as_i64() else { continue };
+                if op["op"] == "update_connector" && op["stereotype"].is_null() {
+                    continue;
+                }
+                let Some(c) = query_rows(cfg, &format!(
+                    "select c.connector_type, coalesce(c.stereotype,''), s.object_type, coalesce(s.stereotype,''), t.object_type, coalesce(t.stereotype,'') from t_connector c \
+                     join t_object s on s.object_id = c.start_object_id join t_object t on t.object_id = c.end_object_id where c.connector_id = {id}"
+                )).ok().and_then(|r| r.into_iter().next()) else { continue };
+                (
+                    op["type"].as_str().unwrap_or(&c[0]).to_string(),
+                    op["stereotype"].as_str().unwrap_or(&c[1]).to_string(),
+                    (c[2].clone(), c[3].clone()),
+                    (c[4].clone(), c[5].clone()),
+                )
+            }
+            _ => continue,
+        };
+        // An ArchiMate concept given as the type is the stereotype to check (LC-374).
+        let stereotype = if kind.rsplit("::").next().unwrap_or("").starts_with("ArchiMate_") { kind.clone() } else { stereotype };
+        if let Some(problem) = relation_problem(&kind, &stereotype, &source.0, &source.1, &target.0, &target.1) {
+            out.push(problem);
+        }
+    }
+    out
+}
+
 /// UML/BPMN sanity of a relationship by the types of its ends (without rules of the organization).
 fn uml_problem(connector_type: &str, source_type: &str, target_type: &str) -> Option<String> {
     let flow = matches!(connector_type, "ControlFlow" | "ObjectFlow");
@@ -360,7 +528,9 @@ enum ArchiCategory {
     Passive,
     /// Stakeholder, driver, assessment, goal, outcome, principle, requirement, constraint, meaning, value.
     Motivation,
-    /// Every other ArchiMate element (active structure, behaviour, strategy, implementation, composite, junction).
+    /// Work package, deliverable, implementation event, plateau, gap (implementation and migration).
+    Implementation,
+    /// Every other ArchiMate element (active structure, behaviour, strategy, composite, junction).
     Other,
 }
 
@@ -376,6 +546,7 @@ fn archimate_category(concept: &str) -> ArchiCategory {
     match concept {
         "BusinessObject" | "Contract" | "Representation" | "DataObject" | "Artifact" | "Material" => ArchiCategory::Passive,
         "Stakeholder" | "Driver" | "Assessment" | "Goal" | "Outcome" | "Principle" | "Requirement" | "Constraint" | "Meaning" | "Value" => ArchiCategory::Motivation,
+        "WorkPackage" | "Deliverable" | "ImplementationEvent" | "Plateau" | "Gap" => ArchiCategory::Implementation,
         _ => ArchiCategory::Other,
     }
 }
@@ -395,7 +566,9 @@ fn archimate_problem(connector_stereotype: &str, source_stereotype: &str, target
         "Access" if t != Passive => "an access relationship ends at a passive structure element (business object, data object, artifact…)",
         "Access" if s != Other => "an access relationship starts at a behaviour or active structure element",
         "Influence" if t != Motivation => "an influence relationship ends at a motivation element",
-        "Triggering" | "Flow" if s != Other || t != Other => "triggering and flow connect behaviour or active structure elements, not passive or motivation elements",
+        "Triggering" | "Flow" if (s == Implementation) != (t == Implementation) || matches!(s, Passive | Motivation) || matches!(t, Passive | Motivation) => "triggering and flow connect behaviour or active structure elements, not passive or motivation elements",
+        // LC-374: implementation and migration elements are not served and serve nothing (ArchiMate 3.2, appendix B).
+        "Serving" | "UsedBy" if s == Implementation || t == Implementation => "a serving relationship does not connect implementation and migration elements (work package, deliverable, plateau, gap)",
         "Serving" | "UsedBy" if s != Other || t != Other => "a serving relationship connects behaviour or active structure elements, not passive or motivation elements",
         "Assignment" if s != Other || t == Motivation || (t == Passive && target != "Artifact") => "an assignment goes from active structure to behaviour (or from a node to an artifact)",
         "Specialization" if source != target => "a specialization connects two elements of the same type",
@@ -500,20 +673,65 @@ pub fn preview(cfg: &AppConfig, ops: &[Value]) -> String {
     let name_of = |table: &str, key: &str, id: i64| -> String {
         one(format!("select coalesce(name,'') as c0 from {table} where {key} = {id}")).map(|r| r[0].clone()).unwrap_or_else(|| format!("#{id}"))
     };
+    // Objects created earlier in the same write are named by their key ("#bin"): the card shows their name (LC-442).
+    let created: BTreeMap<String, String> = ops
+        .iter()
+        .filter_map(|op| Some((format!("#{}", op["key"].as_str()?.trim_start_matches('#')), op["name"].as_str().unwrap_or("").to_string())))
+        .collect();
+    let connector = |id: i64| -> String {
+        one(format!(
+            "select c.connector_type as c0, coalesce(s.name,'') as c1, coalesce(t.name,'') as c2, coalesce(c.name,'') as c3 from t_connector c \
+             left join t_object s on s.object_id = c.start_object_id left join t_object t on t.object_id = c.end_object_id where c.connector_id = {id}"
+        ))
+        .map(|r| format!("{}{} \"{}\" → \"{}\" (#{id})", r[0], if r[3].is_empty() { String::new() } else { format!(" \"{}\"", r[3]) }, r[1], r[2]))
+        .unwrap_or_else(|| format!("{} #{id}", crate::i18n::tr("connector")))
+    };
+    let feature = |table: &str, key: &str, id: i64| -> String {
+        one(format!("select coalesce(f.name,'') as c0, coalesce(o.name,'') as c1 from {table} f left join t_object o on o.object_id = f.object_id where f.{key} = {id}"))
+            .map(|r| format!("\"{}.{}\"", r[1], r[0]))
+            .unwrap_or_else(|| format!("#{id}"))
+    };
+    // Every field by what it points to: a connector id is not an element id (LC-441).
     let target = |op: &Value, field: &str| -> String {
         match &op[field] {
             Value::Number(n) => {
                 let id = n.as_i64().unwrap_or(0);
                 match field {
-                    "package" | "parent" => format!("\"{}\"", name_of("t_package", "package_id", id)),
+                    "package" | "parent" | "child_package" | "target_package" => format!("\"{}\"", name_of("t_package", "package_id", id)),
                     "diagram" => format!("\"{}\"", name_of("t_diagram", "diagram_id", id)),
+                    "connector" => connector(id),
+                    "attribute" => feature("t_attribute", "id", id),
+                    "operation" => feature("t_operation", "operationid", id),
                     _ => format!("\"{}\"", name_of("t_object", "object_id", id)),
                 }
             }
-            Value::String(s) => s.clone(),
+            Value::String(s) => match created.get(&format!("#{}", s.trim_start_matches('#'))) {
+                Some(name) if s.starts_with('#') => format!("\"{name}\" ({})", crate::i18n::tr("new@@created in this write")),
+                _ => s.clone(),
+            },
             _ => String::new(),
         }
     };
+    // Field changes as "field: "before" → "after"" for the fields the write gives (LC-442).
+    let short = |s: &str| if s.chars().count() > 60 { format!("{}…", s.chars().take(60).collect::<String>()) } else { s.to_string() };
+    let changes_of = |op: &Value, sql: String, fields: &[&str]| -> (Option<Vec<String>>, Vec<String>) {
+        let before = one(sql);
+        let mut changes = Vec::new();
+        for (index, field) in fields.iter().enumerate() {
+            let after = match &op[*field] {
+                Value::String(s) => s.clone(),
+                Value::Number(n) => n.to_string(),
+                Value::Bool(b) => b.to_string(),
+                _ => continue,
+            };
+            let was = before.as_ref().and_then(|b| b.get(index + 1).cloned()).unwrap_or_default();
+            if after != was {
+                changes.push(format!("{field}: \"{}\" → \"{}\"", short(&was), short(&after)));
+            }
+        }
+        (before, changes)
+    };
+    let id_of = |op: &Value, field: &str| op[field].as_i64().unwrap_or(0);
     for op in ops.iter().take(80) {
         let name = op["name"].as_str().unwrap_or("");
         let line = match op["op"].as_str().unwrap_or("") {
@@ -522,33 +740,113 @@ pub fn preview(cfg: &AppConfig, ops: &[Value]) -> String {
             "create_diagram" => format!("+ {} \"{name}\" ({}) → {}", crate::i18n::tr("diagram"), op["type"].as_str().unwrap_or("?"), target(op, "package")),
             "create_connector" => format!("+ {} {} → {}", op["type"].as_str().unwrap_or("relationship"), target(op, "source"), target(op, "target")),
             "place" => format!("+ {} → {}", target(op, "element"), target(op, "diagram")),
+            // LC-442 (round 5): what is added, with its name and type, not only the owner.
+            "create_attribute" => format!("+ {} \"{name}{}\" → {}", crate::i18n::tr("attribute"), op["type"].as_str().map(|t| format!(" : {t}")).unwrap_or_default(), target(op, "element")),
+            // With its parameters (LC-472: the card showed "pay()" for "pay(amount: Money)").
+            "create_operation" => format!(
+                "+ {} \"{name}({}){}\" → {}",
+                crate::i18n::tr("operation"),
+                op["parameters"].as_array().into_iter().flatten().map(|p| match p["type"].as_str().filter(|t| !t.is_empty()) {
+                    Some(t) => format!("{}: {t}", p["name"].as_str().unwrap_or("")),
+                    None => p["name"].as_str().unwrap_or("").to_string(),
+                }).collect::<Vec<_>>().join(", "),
+                op["return_type"].as_str().map(|t| format!(" : {t}")).unwrap_or_default(),
+                target(op, "element")
+            ),
+            "create_baseline" => format!("+ {} \"{}\" → {}", crate::i18n::tr("baseline"), op["version"].as_str().unwrap_or(""), target(op, "package")),
             "update_element" => {
-                let id = op["element"].as_i64().unwrap_or(0);
-                let before = one(format!("select coalesce(name,'') as c0, coalesce(stereotype,'') as c1, coalesce(alias,'') as c2, coalesce(note,'') as c3 from t_object where object_id = {id}"));
-                let mut changes = Vec::new();
-                if let Some(b) = &before {
-                    for (field, index) in [("name", 0), ("stereotype", 1), ("alias", 2), ("notes", 3)] {
-                        if let Some(after) = op[field].as_str() {
-                            if after != b[index] {
-                                let short = |s: &str| if s.chars().count() > 60 { format!("{}…", s.chars().take(60).collect::<String>()) } else { s.to_string() };
-                                changes.push(format!("{field}: \"{}\" → \"{}\"", short(&b[index]), short(after)));
-                            }
+                const FIELDS: &[&str] = &["name", "stereotype", "alias", "notes", "status", "version", "author", "phase", "complexity"];
+                let id = id_of(op, "element");
+                let (before, mut changes) = changes_of(op, format!(
+                    "select coalesce(name,'') as c0, coalesce(name,'') as c1, coalesce(stereotype,'') as c2, coalesce(alias,'') as c3, coalesce(note,'') as c4, \
+                     coalesce(status,'') as c5, coalesce(version,'') as c6, coalesce(author,'') as c7, coalesce(phase,'') as c8, coalesce(complexity,'') as c9 \
+                     from t_object where object_id = {id}"
+                ), FIELDS);
+                // Tagged values with their values before → after; null removes the tag (LC-442, round 5).
+                if let Some(tags) = op["tags"].as_object() {
+                    let now: BTreeMap<String, String> = query_rows(cfg, &format!("select property as c0, coalesce(value,'') as c1 from t_objectproperties where object_id = {id}"))
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|r| (r[0].clone(), r[1].clone()))
+                        .collect();
+                    for (tag, value) in tags {
+                        let was = now.get(tag).cloned();
+                        let after = match value {
+                            Value::Null => None,
+                            Value::String(v) => Some(v.clone()),
+                            v => Some(v.to_string()),
+                        };
+                        if was != after {
+                            changes.push(format!(
+                                "{} {tag}: {} → {}",
+                                crate::i18n::tr("tagged value"),
+                                was.map(|w| format!("\"{}\"", short(&w))).unwrap_or_else(|| "–".into()),
+                                after.map(|a| format!("\"{}\"", short(&a))).unwrap_or_else(|| crate::i18n::tr("removed@@tag removed").to_string())
+                            ));
                         }
                     }
                 }
-                let other: Vec<&str> = op.as_object().map(|o| o.keys().map(|k| k.as_str()).filter(|k| !["op", "element", "name", "stereotype", "alias", "notes"].contains(k)).collect()).unwrap_or_default();
+                let other: Vec<&str> = op.as_object().map(|o| o.keys().map(|k| k.as_str()).filter(|k| *k != "op" && *k != "element" && *k != "tags" && !FIELDS.contains(k)).collect()).unwrap_or_default();
                 if !other.is_empty() {
                     changes.push(other.join(", "));
                 }
                 format!("~ \"{}\": {}", before.map(|b| b[0].clone()).unwrap_or_else(|| format!("#{id}")), if changes.is_empty() { crate::i18n::tr("no visible change").to_string() } else { changes.join("; ") })
             }
-            "move" => format!("→ {} → {}", ["element", "package", "diagram"].iter().map(|f| target(op, f)).find(|s| !s.is_empty()).unwrap_or_default(), target(op, "target")),
+            "update_attribute" | "update_operation" | "update_connector" | "update_package" | "update_diagram" => {
+                let kind = op["op"].as_str().unwrap_or("");
+                let (field, sql, fields): (&str, String, &[&str]) = match kind {
+                    "update_attribute" => ("attribute", format!(
+                        "select '' as c0, coalesce(name,'') as c1, coalesce(type,'') as c2, coalesce(scope,'') as c3, coalesce(notes,'') as c4, coalesce(stereotype,'') as c5 from t_attribute where id = {}",
+                        id_of(op, "attribute")
+                    ), &["name", "type", "visibility", "notes", "stereotype"]),
+                    "update_operation" => ("operation", format!(
+                        "select '' as c0, coalesce(name,'') as c1, coalesce(type,'') as c2, coalesce(scope,'') as c3, coalesce(notes,'') as c4, coalesce(stereotype,'') as c5 from t_operation where operationid = {}",
+                        id_of(op, "operation")
+                    ), &["name", "return_type", "visibility", "notes", "stereotype"]),
+                    "update_connector" => ("connector", format!(
+                        "select '' as c0, coalesce(name,'') as c1, coalesce(stereotype,'') as c2, coalesce(direction,'') as c3, coalesce(notes,'') as c4, coalesce(sourcecard,'') as c5, \
+                         coalesce(sourcerole,'') as c6, coalesce(destcard,'') as c7, coalesce(destrole,'') as c8 from t_connector where connector_id = {}",
+                        id_of(op, "connector")
+                    ), &["name", "stereotype", "direction", "notes", "source_multiplicity", "source_role", "target_multiplicity", "target_role"]),
+                    "update_package" => ("package", format!(
+                        "select '' as c0, coalesce(name,'') as c1, coalesce(notes,'') as c2, coalesce(version,'') as c3 from t_package where package_id = {}",
+                        id_of(op, "package")
+                    ), &["name", "notes", "version"]),
+                    _ => ("diagram", format!(
+                        "select '' as c0, coalesce(name,'') as c1, coalesce(notes,'') as c2, coalesce(stereotype,'') as c3 from t_diagram where diagram_id = {}",
+                        id_of(op, "diagram")
+                    ), &["name", "notes", "stereotype"]),
+                };
+                let (_, mut changes) = changes_of(op, sql, fields);
+                let other: Vec<&str> = op.as_object().map(|o| o.keys().map(|k| k.as_str()).filter(|k| *k != "op" && *k != field && !fields.contains(k)).collect()).unwrap_or_default();
+                if !other.is_empty() {
+                    changes.push(other.join(", "));
+                }
+                format!("~ {}: {}", target(op, field), if changes.is_empty() { crate::i18n::tr("no visible change").to_string() } else { changes.join("; ") })
+            }
+            "set_color" => format!("~ {} ({}): {} → {}", target(op, "element"), target(op, "diagram"), crate::i18n::tr("fill color"), op["bgcolor"].as_str().unwrap_or("")),
+            "change_connector_type" => format!("~ {}: {} → {}", target(op, "connector"), crate::i18n::tr("type"), op["type"].as_str().unwrap_or("")),
+            "reverse_connector" => format!("~ {}: {}", target(op, "connector"), crate::i18n::tr("direction reversed")),
+            "merge_elements" => format!("− {}", crate::i18n::fmt("MERGE {0} into {1} and DELETE {0}", &[target(op, "remove"), target(op, "keep")])),
+            // An element or diagram moves into "package"; a package moves into "target" (LC-442, round 5: the card
+            // showed the destination as the moved object and an empty destination).
+            "move" => {
+                let moved = ["element", "diagram", "child_package"].iter().map(|f| target(op, f)).find(|s| !s.is_empty());
+                match moved {
+                    Some(moved) => format!("→ {moved} → {}", [target(op, "package"), target(op, "target")].into_iter().find(|s| !s.is_empty()).unwrap_or_default()),
+                    None => format!("→ {} → {}", target(op, "package"), target(op, "target")),
+                }
+            }
             "delete" | "delete_package" | "delete_scenario" | "delete_attribute" | "delete_operation" => {
-                let what = ["element", "package", "diagram", "connector", "scenario", "attribute", "operation"].iter().map(|f| target(op, f)).find(|s| !s.is_empty()).unwrap_or_default();
+                let what = ["connector", "attribute", "operation", "scenario", "diagram", "package", "element"].iter().map(|f| target(op, f)).find(|s| !s.is_empty()).unwrap_or_default();
                 format!("− {} {what}", crate::i18n::tr("DELETE"))
             }
             "remove_from_diagram" => format!("− {} ⟵ {}", target(op, "element"), target(op, "diagram")),
-            other => format!("· {other} {name}"),
+            other => {
+                // Any other write: what it acts on, by name (not only its kind).
+                let on: Vec<String> = ["element", "connector", "diagram", "package", "attribute", "operation"].iter().map(|f| target(op, f)).filter(|s| !s.is_empty()).collect();
+                format!("· {other} {}", if on.is_empty() { name.to_string() } else { on.join(", ") }).trim_end().to_string()
+            }
         };
         lines.push(line);
     }
@@ -586,6 +884,11 @@ pub fn check_object_with(cfg: &AppConfig, kind: &str, id: i64, rules: &Value) ->
                     out.push(crate::i18n::fmt("\"{0}\": {1}", &[name.clone(), message]));
                 }
             }
+            for rule in rules["forbidden_stereotypes"].as_array().into_iter().flatten() {
+                if let Some(message) = forbidden_stereotype(rule, otype, stereo) {
+                    out.push(crate::i18n::fmt("\"{0}\": {1}", &[name.clone(), message]));
+                }
+            }
             let required: Vec<&Value> = rules["required_tags"].as_array().into_iter().flatten().filter(|r| matches_selector(r["applies_to"].as_str().unwrap_or("*"), otype, stereo)).collect();
             if !required.is_empty() {
                 let tags: HashSet<String> = query_rows(cfg, &format!("select lower(property) as c0, coalesce(value,'') as c1 from t_objectproperties where object_id = {id}"))?
@@ -619,7 +922,7 @@ pub fn check_object_with(cfg: &AppConfig, kind: &str, id: i64, rules: &Value) ->
             }
             let same = query_rows(cfg, &format!(
                 "select count(*) as c0 from t_connector where start_object_id = {} and end_object_id = {} and connector_type = '{}' and coalesce(stereotype,'') = '{}'",
-                c[2], c[3], c[0].replace('\'', "''"), c[1].replace('\'', "''")
+                c[2], c[3], crate::model_db::sql_text(cfg.model_source, &c[0]), crate::model_db::sql_text(cfg.model_source, &c[1])
             ))?;
             let n: usize = same.first().and_then(|r| r[0].parse().ok()).unwrap_or(1);
             if n > 1 {
@@ -648,6 +951,44 @@ pub fn check_object_with(cfg: &AppConfig, kind: &str, id: i64, rules: &Value) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LC-430: governance.json written by Windows PowerShell (UTF-8 with a BOM) is read, not silently ignored.
+    #[test]
+    fn rules_file_with_a_bom() {
+        let dir = std::env::temp_dir().join(format!("loonar-bom-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("app.properties"), "").unwrap();
+        let cfg = AppConfig::load(&dir.join("app.properties")).unwrap();
+        std::fs::write(cfg.base_dir.join("governance.json"), format!("\u{feff}{}", json!({ "required_tags": ["Owner"] }))).unwrap();
+        assert_eq!(load_rules(&cfg, &Value::Null)["required_tags"][0], "Owner");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// LC-391 on a model copy: the nearest package's rule decides what may be created.
+    /// `LOONAR_TEST_PROPS=… cargo test creation_rules_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires a test model"]
+    fn creation_rules_live() {
+        let mut cfg = AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
+        cfg.base_dir = std::env::temp_dir().join(format!("loonar-creation-{}", std::process::id()));
+        std::fs::create_dir_all(&cfg.base_dir).unwrap();
+        // A package with a child package.
+        let rows = query_rows(&cfg, "select c.package_id, p.package_id, p.name from t_package c join t_package p on p.package_id = c.parent_id where p.parent_id <> 0 order by c.package_id").unwrap();
+        let (child, parent, parent_name) = (rows[0][0].parse::<i64>().unwrap(), rows[0][1].parse::<i64>().unwrap(), rows[0][2].clone());
+        assert!(!has_creation_rules(&cfg));
+        std::fs::write(cfg.base_dir.join("governance.json"), json!({ "creation": [{ "package": parent, "allow": ["Class", "«entity»"], "deny": ["Actor"], "diagrams": ["Logical"] }] }).to_string()).unwrap();
+        assert!(has_creation_rules(&cfg));
+        assert!(check_rules(&load_rules(&cfg, &Value::Null)).is_ok());
+        assert_eq!(creation_block(&cfg, "element_creating", child, "Class", ""), None, "allowed in a child package");
+        assert_eq!(creation_block(&cfg, "element_creating", parent, "Table", "entity"), None, "allowed by its stereotype");
+        let blocked = creation_block(&cfg, "element_creating", child, "Component", "");
+        assert!(blocked.as_deref().is_some_and(|b| b.contains(&parent_name)), "{blocked:?}");
+        assert!(creation_block(&cfg, "diagram_creating", parent, "Sequence", "").is_some());
+        assert_eq!(creation_block(&cfg, "diagram_creating", parent, "Logical", ""), None);
+        let root: i64 = query_rows(&cfg, "select package_id from t_package where parent_id = 0").unwrap()[0][0].parse().unwrap();
+        assert_eq!(creation_block(&cfg, "element_creating", root, "Component", ""), None, "no rule above");
+        let _ = std::fs::remove_dir_all(&cfg.base_dir);
+    }
 
     #[test]
     fn default_names_and_wildcards() {
@@ -698,5 +1039,52 @@ mod tests {
         // Not ArchiMate: nothing to say; a fully qualified stereotype works too.
         assert!(archimate_problem("", "ArchiMate_DataObject", "ArchiMate_BusinessActor").is_none());
         assert!(archimate_problem("ArchiMate3::ArchiMate_Access", "ArchiMate3::ArchiMate_BusinessProcess", "ArchiMate3::ArchiMate_BusinessActor").is_some());
+        // LC-374: implementation and migration elements.
+        assert!(bad("Serving", "WorkPackage", "WorkPackage"));
+        assert!(!bad("Triggering", "WorkPackage", "WorkPackage"));
+        assert!(bad("Triggering", "WorkPackage", "BusinessProcess"));
+    }
+}
+
+/// LC-372: forbidden stereotypes and the shape of the team's rules.
+#[cfg(test)]
+mod rules_tests {
+    use serde_json::json;
+
+    #[test]
+    fn forbidden_stereotypes_and_rule_shapes() {
+        let rule = json!({ "applies_to": "Class", "stereotype": "entity" });
+        assert!(super::forbidden_stereotype(&rule, "Class", "entity").is_some());
+        assert!(super::forbidden_stereotype(&rule, "Class", "EAUML::entity").is_some());
+        assert!(super::forbidden_stereotype(&rule, "Class", "boundary").is_none());
+        assert!(super::forbidden_stereotype(&rule, "Component", "entity").is_none());
+        assert!(super::check_rules(&json!({ "naming": [{ "applies_to": "Class", "pattern": "*Service" }], "archimate": true })).is_ok());
+        assert!(super::check_rules(&json!({ "namings": [] })).is_err(), "a typo in a kind");
+        assert!(super::check_rules(&json!({ "required_tags": [{ "applies_to": "Class" }] })).is_err(), "no tag");
+        assert!(super::check_rules(&json!([1])).is_err());
+    }
+
+    /// LC-442 (round 5): the cards of the bin, tags, new attributes and a baseline name what changes, with values.
+    /// `LOONAR_TEST_PROPS=E:/livetest/r440/m5.properties cargo test preview_cards_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires the model from LOONAR_TEST_PROPS (a copy of the round 4 test model)"]
+    fn preview_cards_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").expect("LOONAR_TEST_PROPS"))).expect("app.properties");
+        let ops = vec![
+            json!({ "key": "bin", "name": "Recycle bin (Compass)", "op": "create_package", "parent": 972 }),
+            json!({ "element": 11260, "op": "update_element", "tags": { "CompassBinFrom": "1116" } }),
+            json!({ "element": 11260, "op": "move", "package": "#bin" }),
+            json!({ "element": 11259, "name": "kwota", "op": "create_attribute", "type": "Decimal" }),
+            json!({ "op": "create_baseline", "package": 1116, "version": "Compass 1" }),
+        ];
+        let card = super::preview(&cfg, &ops);
+        println!("{card}
+{}", crate::tools::destructive_details(&cfg, &ops).join("
+"));
+        assert!(card.contains("CompassBinFrom: – → \"1116\""), "{card}");
+        assert!(card.contains("→ \"Sierota\" → \"Recycle bin (Compass)\""), "{card}");
+        assert!(card.contains("\"kwota : Decimal\" → \"Faktura\""), "{card}");
+        assert!(card.contains("\"Compass 1\" → \"BB3 Test\""), "{card}");
+        assert!(!crate::tools::destructive_details(&cfg, &ops).join(" ").contains("#bin"));
     }
 }

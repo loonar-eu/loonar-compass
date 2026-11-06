@@ -25,19 +25,26 @@ pub struct CodeModel {
 }
 
 fn word_after<'a>(line: &'a str, keyword: &str) -> Option<&'a str> {
-    let mut rest = line;
-    while let Some(i) = rest.find(keyword) {
-        let before_ok = i == 0 || !rest.as_bytes()[i - 1].is_ascii_alphanumeric();
-        let after = &rest[i + keyword.len()..];
+    words_after(line, keyword).into_iter().next().map(|(_, name)| name)
+}
+
+/// Every "keyword Name" in a line with the byte offset of the name (several types may be declared in one line, LC-431).
+fn words_after<'a>(line: &'a str, keyword: &str) -> Vec<(usize, &'a str)> {
+    let mut found = Vec::new();
+    let mut at = 0;
+    while let Some(i) = line[at..].find(keyword).map(|i| at + i) {
+        let before_ok = i == 0 || !line.as_bytes()[i - 1].is_ascii_alphanumeric();
+        let after = &line[i + keyword.len()..];
         if before_ok && after.starts_with(' ') {
-            let name: &str = after.trim_start().split(|c: char| !(c.is_alphanumeric() || c == '_')).next().unwrap_or("");
+            let start = line.len() - after.trim_start().len();
+            let name: &str = line[start..].split(|c: char| !(c.is_alphanumeric() || c == '_')).next().unwrap_or("");
             if !name.is_empty() && name.chars().next().is_some_and(|c| c.is_alphabetic()) {
-                return Some(name);
+                found.push((start, name));
             }
         }
-        rest = after;
+        at = i + keyword.len();
     }
-    None
+    found
 }
 
 /// A field of a class body line: "private String name;", "public int Id { get; set; }", "name: string;", "pub name: String,", "self.name =".
@@ -151,15 +158,29 @@ fn scan_types(text: &str, lang: &str, file: &str, model: &mut CodeModel) {
     for line in text.lines() {
         let trimmed = line.trim();
         if !(trimmed.starts_with("//") || trimmed.starts_with('*') || trimmed.starts_with('#') && lang != "py") {
-            if let Some((name, kind)) = keywords.iter().find_map(|(k, kind)| word_after(trimmed, k).map(|n| (n, *kind))) {
+            // Every type declared in the line, in their order (a one-line file may hold several, LC-431).
+            let mut declared: Vec<(usize, &str, &str)> = keywords.iter().flat_map(|(k, kind)| words_after(trimmed, k).into_iter().map(move |(at, n)| (at, n, *kind))).collect();
+            declared.sort_by_key(|d| d.0);
+            let is_declaration = !declared.is_empty() && !trimmed.starts_with("import") && !trimmed.contains(" new ");
+            for (i, &(at, name, kind)) in declared.iter().enumerate() {
+                // The part of the line that belongs to this type (up to the next declaration).
+                let segment = &trimmed[at..declared.get(i + 1).map_or(trimmed.len(), |d| d.0)];
                 let declaration = trimmed.contains('{') || lang == "py" && trimmed.ends_with(':') || lang == "rs" || lang == "kt" || trimmed.ends_with(name);
-                if declaration && !trimmed.starts_with("import") && !trimmed.contains(" new ") {
+                if declaration && is_declaration {
                     model.types.entry(name.to_string()).or_insert_with(|| (kind.to_string(), BTreeSet::new(), file.to_string()));
                     current = Some(name.to_string());
-                    class_depth = depth + 1;
+                    class_depth = depth + trimmed[..at].matches('{').count() as i32 - trimmed[..at].matches('}').count() as i32 + 1;
+                    // Members written in the same line: "class A { int x; string y; }".
+                    if let Some(body) = segment.split_once('{').map(|b| b.1) {
+                        for piece in body.split(';').filter(|p| !p.contains('}') && !p.contains('{')) {
+                            if let Some(f) = field_of(&format!("{};", piece.trim()), lang).filter(|f| f.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')) {
+                                model.types.get_mut(name).map(|t| t.1.insert(f));
+                            }
+                        }
+                    }
                     // Kotlin / Java record parameters: class Name(val a: T, val b: T)
-                    if let Some(params) = trimmed.split_once('(').map(|p| p.1) {
-                        if lang == "kt" || trimmed.contains("record ") {
+                    if let Some(params) = segment.split_once('(').map(|p| p.1) {
+                        if lang == "kt" || segment.contains("record ") {
                             for p in params.split(',') {
                                 let p = p.trim().trim_start_matches("val ").trim_start_matches("var ").trim_start_matches("private ");
                                 let n = if lang == "kt" { p.split(':').next() } else { p.split_whitespace().nth(1) };
@@ -170,11 +191,14 @@ fn scan_types(text: &str, lang: &str, file: &str, model: &mut CodeModel) {
                         }
                     }
                 }
-            } else if let Some(c) = &current {
-                if depth == class_depth || lang == "py" {
-                    if let Some(f) = field_of(line, lang) {
-                        if f.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_') {
-                            model.types.get_mut(c).map(|t| t.1.insert(f));
+            }
+            if declared.is_empty() {
+                if let Some(c) = &current {
+                    if depth == class_depth || lang == "py" {
+                        if let Some(f) = field_of(line, lang) {
+                            if f.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_') {
+                                model.types.get_mut(c).map(|t| t.1.insert(f));
+                            }
                         }
                     }
                 }
@@ -412,8 +436,12 @@ mod tests {
         std::fs::write(dir.join("schema.sql"), "CREATE TABLE IF NOT EXISTS public.orders (\n  id bigint primary key,\n  customer_id bigint,\n  total numeric(10,2),\n  CONSTRAINT fk FOREIGN KEY (customer_id) REFERENCES customers(id)\n);\n").unwrap();
         std::fs::write(dir.join("api.yaml"), "openapi: 3.0.0\npaths:\n  /orders:\n    get:\n      operationId: listOrders\n    post:\n      operationId: \"createOrder\"\n").unwrap();
         std::fs::write(dir.join("node_modules/x/Skip.java"), "public class Skip {}\n").unwrap();
+        // LC-431: two types and their fields in one line, non-ASCII names.
+        std::fs::write(dir.join("Sklep.cs"), "namespace Sklep { public class Zamówienie { public string Klient; public int liczba_elementów; } public class İstanbul { } }\n").unwrap();
         let m = scan(&dir).unwrap();
         let _ = std::fs::remove_dir_all(&dir);
+        assert!(m.types.contains_key("İstanbul"), "{:?}", m.types.keys());
+        assert_eq!(m.types["Zamówienie"].1.iter().map(String::as_str).collect::<Vec<_>>(), vec!["Klient", "liczba_elementów"]);
         assert!(m.types.contains_key("Customer") && !m.types.contains_key("Fake") && !m.types.contains_key("Skip"), "{:?}", m.types.keys());
         assert_eq!(m.types["Customer"].1, ["email", "name"].iter().map(|s| s.to_string()).collect());
         assert_eq!(m.types["Order"].1, ["id", "total"].iter().map(|s| s.to_string()).collect());
