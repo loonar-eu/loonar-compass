@@ -220,9 +220,11 @@ pub fn tool(input: &Value, cfg: &AppConfig) -> Result<crate::tools::ToolOutput> 
         images.push(image);
     }
     let names = |list: &[&Element]| list.iter().take(25).map(|e| e.name.as_str()).collect::<Vec<_>>().join(", ");
+    // The pairs themselves as text (round 13: from the count and the picture alone the answer read the columns one off).
+    let pairs = listed.iter().take(60).map(|(r, t, c, a, _)| format!("{} {a} {} ({t})", name_of(*r), name_of(*c))).collect::<Vec<_>>().join("; ");
     let text = format!(
         "Matrix \"{source_name}\" ({} elements) × \"{target_name}\" ({} elements), relationship types: {}, direction: {direction}. \
-Related pairs: {}. Source elements without a relationship ({}): {}. Target elements without a relationship ({}): {}. \
+Related pairs: {} – {pairs}{}. Source elements without a relationship ({}): {}. Target elements without a relationship ({}): {}. \
 The user sees {} and the workbook \"{base}.xlsx\" (sheets: matrix, relationships, without relationships) in the chat. \
 If the user wants this matrix in EA itself, save it with ea_write op create_matrix_specification (source_package {source}, target_package {target}, \
 the element types of the rows and columns, the link type): EA then shows it live when the user double-clicks the artifact.",
@@ -230,6 +232,7 @@ the element types of the rows and columns, the link type): EA then shows it live
         cols.len(),
         if types.is_empty() { "all".to_string() } else { types.join(", ") },
         cells.len(),
+        if listed.len() > 60 { format!(" … and {} more (in the workbook)", listed.len() - 60) } else { String::new() },
         lonely_rows.len(),
         names(&lonely_rows),
         lonely_cols.len(),
