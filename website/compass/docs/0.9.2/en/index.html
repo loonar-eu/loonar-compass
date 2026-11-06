@@ -7,7 +7,8 @@
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <title>User guide 0.9.2 – Loonar Compass</title>
 <meta name="description" content="User guide of Loonar Compass 0.9.2, an AI assistant for Sparx Enterprise Architect.">
-<link rel="canonical" href="https://loonar.eu/compass/docs/latest/en/">
+<meta name="robots" content="noindex">
+<link rel="canonical" href="https://loonar.eu/compass/docs/0.9.2/en/">
 <link rel="alternate" hreflang="en" href="https://loonar.eu/compass/docs/0.9.2/en/">
 <link rel="alternate" hreflang="pl" href="https://loonar.eu/compass/docs/0.9.2/pl/">
 <link rel="alternate" hreflang="de" href="https://loonar.eu/compass/docs/0.9.2/de/">
@@ -18,7 +19,7 @@
 <meta property="og:site_name" content="Loonar Compass">
 <meta property="og:title" content="User guide – Loonar Compass">
 <meta property="og:description" content="User guide of Loonar Compass 0.9.2, an AI assistant for Sparx Enterprise Architect.">
-<meta property="og:url" content="https://loonar.eu/compass/docs/latest/en/">
+<meta property="og:url" content="https://loonar.eu/compass/docs/0.9.2/en/">
 <meta property="og:image" content="https://loonar.eu/assets/img/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -50,14 +51,14 @@
   <div class="wrap docs-grid">
     <aside class="docs-side" aria-label="Documentation">
       <p class="docs-kicker">Documentation · Loonar Compass</p>
-      <nav class="docs-tabs"><a href="index.html" aria-current="page">User guide</a><a href="install.html">Installation</a><a href="hub.html">Compass Hub (IT)</a></nav>
-      <details class="docs-ver"><summary>Version: 0.9.2 (latest)</summary><ul><li><a href="./" aria-current="page">0.9.2 (latest)</a></li><li><a href="../../0.9.1/en/">0.9.1</a></li><li><a href="../../0.9/en/">0.9</a></li><li><a href="../../0.8.2/en/">0.8.2</a></li><li><a href="../../0.8.1/en/">0.8.1</a></li><li><a href="../../0.7/en/">0.7</a></li><li><a href="../../0.6/en/">0.6</a></li><li><a href="../../0.5/en/">0.5</a></li><li><a href="../../0.4/en/">0.4</a></li><li><a href="../../0.3/en/">0.3</a></li></ul></details>
+      <nav class="docs-tabs"><a href="index.html" aria-current="page">User guide</a><a href="install.html">Installation</a></nav>
+      <details class="docs-ver"><summary>Version: 0.9.2</summary><ul><li><a href="../../0.9.3/en/">0.9.3 (latest)</a></li><li><a href="./" aria-current="page">0.9.2</a></li><li><a href="../../0.9.1/en/">0.9.1</a></li><li><a href="../../0.9/en/">0.9</a></li><li><a href="../../0.8.2/en/">0.8.2</a></li><li><a href="../../0.8.1/en/">0.8.1</a></li><li><a href="../../0.7/en/">0.7</a></li><li><a href="../../0.6/en/">0.6</a></li><li><a href="../../0.5/en/">0.5</a></li><li><a href="../../0.4/en/">0.4</a></li><li><a href="../../0.3/en/">0.3</a></li></ul></details>
       <p class="docs-toc-h">On this page</p>
       <ol class="docs-toc"><li><a href="#s1">1. What Loonar Compass is</a></li><li class="docs-toc-other"><a href="install.html#s2">2. Requirements <span aria-hidden="true">↗</span></a></li><li class="docs-toc-other"><a href="install.html#s3">3. Installation <span aria-hidden="true">↗</span></a></li><li><a href="#s4">4. Application window and navigation</a></li><li><a href="#s5">5. Settings and language</a></li><li><a href="#s6">6. Talking to the assistant</a></li><li><a href="#s7">7. Working with the Enterprise Architect model</a></li><li><a href="#s8">8. Use cases</a></li><li><a href="#s9">9. Working with the open EA window</a></li><li><a href="#s10">10. Compass in Enterprise Architect</a></li><li><a href="#s11">11. Diagram editor</a></li><li><a href="#s12">12. Sending diagrams to Miro</a></li><li><a href="#s13">13. Documents: Word, Excel, PowerPoint, PDF, images, Confluence, SharePoint</a></li><li><a href="#s14">14. Document templates</a></li><li><a href="#s15">15. Assistant memory</a></li><li><a href="#s16">16. Approving changes and the audit log</a></li><li><a href="#s17">17. Conversations: history, search, background work</a></li><li><a href="#s18">18. Data, security and privacy</a></li><li><a href="#s19">19. Troubleshooting</a></li><li><a href="#s20">20. Reporting bugs and new releases</a></li><li class="docs-toc-other"><a href="install.html#s21">21. Updating and uninstalling <span aria-hidden="true">↗</span></a></li><li><a href="#s22">22. Compass Hub (team service)</a></li><li><a href="#s23">23. Check mode for CI pipelines</a></li><li><a href="#s24">24. License, trademarks and contact</a></li></ol>
       <p class="docs-pdf"><a href="Manual.en.pdf" download>Download as PDF (whole guide)</a></p>
     </aside>
     <article class="docs-body">
-      
+      <p class="docs-old">This is the documentation of version 0.9.2. The newest version is 0.9.3: <a href="../../latest/en/">go to the newest documentation</a></p>
       <h1>User guide</h1>
       <h2 id="s1">1. What Loonar Compass is</h2>
 <p>Loonar Compass is a standalone Windows desktop application: an AI assistant for working with an Enterprise Architect model (Sparx Systems). You write to it in plain language, and it:</p>
@@ -959,7 +960,7 @@
   <li>The connection string of your open EA window, with its login details, is never sent to the model.</li>
 </ul>
 <h3>Usage statistics</h3>
-<p>Unless you switch them off, Loonar Compass sends anonymous statistics: at each start a random installation id (created on this computer, not derived from the computer or from you) with the application version, Windows version and language, and every hour a summary of the day: the kinds of tasks and how they ended, how often each function of the assistant was used and how often it failed, ratings of answers, what the assistant could not do, approvals, views opened, tokens and the kind of setup. It <b>never</b> sends the content of conversations, names or ids from the model, file paths, server addresses, error messages or user names. The service that receives the data does not store IP addresses; only the author sees the data. The data is kept for 13 months.</p>
+<p>Unless you switch them off, Loonar Compass sends anonymous statistics: at each start a random installation id (created on this computer, not derived from the computer or from you) with the application version, Windows version and language, and every hour a summary of the day: the kinds of tasks and how they ended, how often each function of the assistant was used and how often it failed, ratings of answers, what the assistant could not do, approvals, views opened, tokens and the kind of setup. It <b>never</b> sends the content of conversations, names or ids from the model, file paths, server addresses, error messages or user names. The service that receives the data does not store IP addresses; only the author sees the data, and only summaries over all installations together are published (the “Published statistics” link). The data is kept for 13 months.</p>
 <p>At the first start the application shows a notice with the buttons <b>Keep on</b>, <b>Switch off</b> and <b>Show details</b>. The <b>“Usage statistics”</b> view (navigation bar) shows exactly what was counted today (“Today so far”) and what was sent in the last 30 days, as JSON with a <b>Copy</b> button. There you can untick “Send anonymous usage statistics (every hour)” (days not sent yet are then deleted) or give the installation a <b>New identifier</b>, after which later days can no longer be joined with the earlier ones.</p>
 <p>An organisation can switch the statistics off for everybody: with the environment variable <code>LOONAR_TELEMETRY=0</code>, a registry policy (the ADMX template in the package for administrators) or the policy of the team hub (<code>"telemetry": false</code>). Then nothing is counted or sent.</p>
 <h3>Connections and encryption</h3>
