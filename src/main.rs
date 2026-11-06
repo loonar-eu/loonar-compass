@@ -851,6 +851,24 @@ fn app_version() -> &'static str {
     let full = env!("CARGO_PKG_VERSION");
     full.strip_suffix(".0").unwrap_or(full)
 }
+
+/// The version with the build and commit, e.g. "0.9.2 (build 0.9.3-dev27 · commit 1a2b3c4d)" (LC-483).
+fn version_full() -> String {
+    let identity = build_identity();
+    if identity.is_empty() { app_version().to_string() } else { format!("{} ({identity})", app_version()) }
+}
+
+/// The build and the commit it was made from (LC-483), e.g. "build 0.9.3-dev27 · commit 1a2b3c4d"; empty when unknown.
+fn build_identity() -> String {
+    let mut parts = Vec::new();
+    if !env!("LOONAR_BUILD").is_empty() {
+        parts.push(format!("build {}", env!("LOONAR_BUILD")));
+    }
+    if !env!("LOONAR_COMMIT").is_empty() {
+        parts.push(format!("commit {}", env!("LOONAR_COMMIT")));
+    }
+    parts.join(" · ")
+}
 const OWNER: &str = "Loonar Mariusz Głowacki";
 const OWNER_ADDRESS: &str = "ul. Gombrowicza 12, 73-110 Stargard";
 const OWNER_CONTACT: &str = "loonar.eu · mariusz@loonar.eu";
@@ -1103,6 +1121,11 @@ fn info_ui(ui: &mut egui::Ui) {
             ui.add_space(26.0);
             ui.label(egui::RichText::new(config::APP_NAME).font(egui::FontId::new(34.0, egui::FontFamily::Name(markdown::BOLD_FAMILY.into()))));
             ui.label(egui::RichText::new(crate::i18n::fmt("version {0}", &[app_version().to_string()])).size(16.0).color(theme::MUTED));
+            let identity = build_identity();
+            if !identity.is_empty() {
+                // Selectable: a tester copies it into a report (LC-483).
+                ui.add(egui::Label::new(egui::RichText::new(identity).monospace().color(theme::MUTED)).selectable(true));
+            }
             ui.label(egui::RichText::new(crate::i18n::tr("AI assistant for Enterprise Architect")).color(theme::MUTED));
         });
     });
@@ -4889,9 +4912,9 @@ impl App {
         // Public technical information: no names from the model, no paths, no addresses – and no installation id
         // (LC-361: in a public issue it joined the reporter with their daily statistics).
         let technical_public = crate::i18n::fmt("Loonar Compass {0}\nSystem: {1}\nAI model: {2}\nApproval mode: {3}\nSteps in the last answer: {4} (failed: {5})", &[
-            app_version().to_string(), windows_version_cached().to_string(), ai_model.clone(), approval.clone(), self.steps.len().to_string(), failed_steps.to_string(),
+            version_full(), windows_version_cached().to_string(), ai_model.clone(), approval.clone(), self.steps.len().to_string(), failed_steps.to_string(),
         ]);
-        let technical_email = crate::i18n::fmt("Loonar Compass {0}\nSystem: {1}\nModel: {2}\nApproval mode: {3}\nLast message: {4}", &[app_version().to_string(), (windows_version_cached()).to_string(), ai_model, approval, (self.status).to_string()]);
+        let technical_email = crate::i18n::fmt("Loonar Compass {0}\nSystem: {1}\nModel: {2}\nApproval mode: {3}\nLast message: {4}", &[version_full(), (windows_version_cached()).to_string(), ai_model, approval, (self.status).to_string()]);
         let sending = self.contact.sending.is_some();
         let c = &mut self.contact;
         let mut remove = None;
@@ -6774,8 +6797,8 @@ fn ask_from_command_line(args: &[String], default_props: &Path) -> anyhow::Resul
         log.lock().unwrap().push(format!("{} — {summary}", if approve { "approved" } else { "refused" }));
         approve
     }));
-    let mut md = format!("# Conversation without a window (Loonar Compass {})\n\nSettings: {}\nReasoning: {reasoning}, code execution: {code}, writes: {}\n",
-        env!("CARGO_PKG_VERSION"), props.display(), if approve { "approved" } else { "refused" });
+    let mut md = format!("# Conversation without a window (Loonar Compass {}{})\n\nSettings: {}\nReasoning: {reasoning}, code execution: {code}, writes: {}\n",
+        env!("CARGO_PKG_VERSION"), Some(build_identity()).filter(|b| !b.is_empty()).map(|b| format!(", {b}")).unwrap_or_default(), props.display(), if approve { "approved" } else { "refused" });
     // The steps of every answer go with the next message, as in the window (LC-435): without them the assistant did
     // not know in the next turn what it had read or saved, and denied its own writes.
     let mut session = history::Session::new();
@@ -8172,7 +8195,9 @@ impl eframe::App for App {
             .frame(egui::Frame::none().fill(theme::BACKGROUND).inner_margin(egui::Margin::symmetric(14.0, 5.0)))
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(format!("{} {}", config::APP_NAME, app_version())).small().color(theme::MUTED));
+                    let identity = build_identity();
+                    let shown = if identity.is_empty() { format!("{} {}", config::APP_NAME, app_version()) } else { format!("{} {} ({identity})", config::APP_NAME, app_version()) };
+                    ui.label(egui::RichText::new(shown).small().color(theme::MUTED));
                     ui.label(
                         egui::RichText::new(format!("· {OWNER}, {OWNER_ADDRESS} · {OWNER_CONTACT}"))
                             .small()
