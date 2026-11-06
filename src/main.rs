@@ -6570,8 +6570,8 @@ fn guard_requests_once(cfg: &AppConfig, rot: &str, agents: &[agents::Agent]) {
                     // The safety net's snapshot (LC-382): taken while the object still exists; a failure never stops the deletion.
                     if cfg.safety_net && safety_net::EVENTS.contains(&event.as_str()) {
                         match safety_net::snapshot(cfg, &event, id) {
-                            Ok(summary) => ea_ui::output(&crate::i18n::fmt("🛟 Snapshot before the deletion: {0}", &[summary])),
-                            Err(e) => ea_ui::output(&crate::i18n::fmt("🛟 No snapshot before the deletion ({0})", &[format!("{e:#}")])),
+                            Ok(summary) => ea_ui::output(&crate::i18n::fmt("📸 Snapshot before the deletion: {0}", &[summary])),
+                            Err(e) => ea_ui::output(&crate::i18n::fmt("📸 No snapshot before the deletion ({0})", &[format!("{e:#}")])),
                         }
                     }
                     let mut block = None;
@@ -8015,7 +8015,7 @@ impl eframe::App for App {
                                 // What a save of a diagram really changed (LC-422).
                                 if kind == "diagram_changed" {
                                     if let Some(text) = safety_net::diagram_saved(&cfg, id) {
-                                        ea_ui::output(&format!("🛟 {text}"));
+                                        ea_ui::output(&format!("📸 {text}"));
                                     }
                                 }
                             }

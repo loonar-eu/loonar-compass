@@ -185,6 +185,11 @@ pub fn snapshot(cfg: &AppConfig, event: &str, id: i64) -> Result<String> {
         snap["truncated"].as_u64().map(|n| format!(" (of {n} elements only the first {MAX_ELEMENTS})")).unwrap_or_default()
     );
     snap["summary"] = json!(summary);
+    // The line for the "Loonar Compass" tab of System Output, in the language of Compass (LC-480).
+    let shown = crate::i18n::fmt(
+        "{0} \"{1}\": elements: {2}, relationships: {3}, diagrams: {4}",
+        &[crate::i18n::tr(what).to_string(), name.clone(), elements.len().to_string(), connectors.len().to_string(), diagrams.len().to_string()],
+    );
     let folder = dir(cfg);
     std::fs::create_dir_all(&folder)?;
     let file = folder.join(format!("{}-{what}-{id}.json", chrono::Local::now().format("%Y%m%d-%H%M%S%3f")));
@@ -192,7 +197,7 @@ pub fn snapshot(cfg: &AppConfig, event: &str, id: i64) -> Result<String> {
     std::fs::write(&tmp, serde_json::to_vec_pretty(&snap)?)?;
     std::fs::rename(&tmp, &file)?;
     prune(&folder);
-    Ok(summary)
+    Ok(shown)
 }
 
 fn snapshots(cfg: &AppConfig) -> Vec<PathBuf> {
@@ -238,22 +243,22 @@ pub(crate) fn diagram_diff(before: &Value, now: &Value) -> Vec<String> {
     let added: Vec<String> = no.keys().filter(|k| !bo.contains_key(*k)).map(|k| name(now, k)).collect();
     let removed: Vec<String> = bo.keys().filter(|k| !no.contains_key(*k)).map(|k| name(before, k)).collect();
     let moved: Vec<String> = no.iter().filter(|(k, v)| bo.get(*k).is_some_and(|b| b["rect"] != v["rect"])).map(|(k, _)| name(now, k)).collect();
-    for (label, list) in [("added", added), ("removed", removed), ("moved or resized", moved)] {
+    for (label, list) in [("{0} added: {1}", added), ("{0} removed: {1}", removed), ("{0} moved or resized: {1}", moved)] {
         if !list.is_empty() {
-            out.push(format!("{} {label}: {}", list.len(), list.iter().take(8).map(|n| format!("\"{n}\"")).collect::<Vec<_>>().join(", ")));
+            out.push(crate::i18n::fmt(label, &[list.len().to_string(), list.iter().take(8).map(|n| format!("\"{n}\"")).collect::<Vec<_>>().join(", ")]));
         }
     }
     let (bl, nl) = (before["links"].as_object().cloned().unwrap_or_default(), now["links"].as_object().cloned().unwrap_or_default());
     let shown = nl.iter().filter(|(k, v)| bl.get(*k).is_some_and(|b| b["hidden"] == true && v["hidden"] == false)).count();
     let hidden = nl.iter().filter(|(k, v)| bl.get(*k).is_some_and(|b| b["hidden"] == false && v["hidden"] == true)).count();
     let rerouted = nl.iter().filter(|(k, v)| bl.get(*k).is_some_and(|b| b["path"] != v["path"])).count();
-    for (n, what) in [(shown, "relationships shown"), (hidden, "relationships hidden"), (rerouted, "relationships re-routed")] {
+    for (n, what) in [(shown, "relationships shown: {0}"), (hidden, "relationships hidden: {0}"), (rerouted, "relationships re-routed: {0}")] {
         if n > 0 {
-            out.push(format!("{n} {what}"));
+            out.push(crate::i18n::fmt(what, &[n.to_string()]));
         }
     }
     if before["name"] != now["name"] || before["notes"] != now["notes"] {
-        out.push("its name or notes".into());
+        out.push(crate::i18n::tr("its name or notes").to_string());
     }
     out
 }
@@ -361,7 +366,7 @@ pub fn run(input: &Value, cfg: &AppConfig) -> Result<String> {
 
 /// Whether a row with this id still exists.
 fn exists(cfg: &AppConfig, table: &str, column: &str, id: &str) -> bool {
-    id.parse::<i64>().is_ok_and(|n| query_rows(cfg, &format!("select 1 from {table} where {column} = {n}")).is_ok_and(|r| !r.is_empty()))
+    id.parse::<i64>().is_ok_and(|n| query_rows(cfg, &format!("select {column} from {table} where {column} = {n}")).is_ok_and(|r| !r.is_empty()))
 }
 
 /// The operations that recreate the object of a snapshot (an ordinary save of Compass).
@@ -532,7 +537,7 @@ mod tests {
         now["objects"].as_object_mut().unwrap().remove("2");
         now["links"]["7"]["hidden"] = json!(true);
         let d = diagram_diff(&before, &now).join(" | ");
-        assert!(d.contains("1 removed: \"B\"") && d.contains("1 moved or resized: \"A\"") && d.contains("1 relationships hidden"), "{d}");
+        assert!(d.contains("1 removed: \"B\"") && d.contains("1 moved or resized: \"A\"") && d.contains("relationships hidden: 1"), "{d}");
     }
 
     use super::*;

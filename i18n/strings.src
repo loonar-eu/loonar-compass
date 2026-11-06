@@ -1068,7 +1068,7 @@ Elements without a description ‖ Elementy bez opisu ‖ Elemente ohne Beschrei
 Empty diagrams ‖ Puste diagramy ‖ Leere Diagramme ‖ Diagrammes vides
 Empty packages ‖ Puste pakiety ‖ Leere Pakete ‖ Paquetages vides
 Gap analysis as-is (package {0}, {1} elements) vs to-be (package {2}, {3} elements): {4} new, {5} to retire, {6} changed, {7} unchanged. ‖ Analiza luk as-is (pakiet {0}, elementów: {1}) vs to-be (pakiet {2}, elementów: {3}): nowe: {4}, do wycofania: {5}, zmienione: {6}, bez zmian: {7}. ‖ Lückenanalyse Ist (Paket {0}, {1} Elemente) vs. Soll (Paket {2}, {3} Elemente): {4} neu, {5} abzulösen, {6} geändert, {7} unverändert. ‖ Analyse des écarts existant (paquetage {0}, {1} éléments) vs cible (paquetage {2}, {3} éléments) : {4} nouveaux, {5} à retirer, {6} modifiés, {7} inchangés.
-Missing required tagged values ‖ Brak wymaganych tagged values ‖ Fehlende Pflicht-Tagged-Values ‖ Tagged values obligatoires manquantes
+Missing required tagged values ‖ Brak wymaganych tagów ‖ Fehlende Pflicht-Tagged-Values ‖ Valeurs étiquetées obligatoires manquantes
 Model check of package {0}: {1} packages, {2} elements, {3} relationships checked; rule sets from governance.json: {4}. Findings: {5}. ‖ Kontrola modelu pakietu {0}: sprawdzono pakiety: {1}, elementy: {2}, relacje: {3}; zestawy reguł z governance.json: {4}. Ustalenia: {5}. ‖ Modellprüfung des Pakets {0}: {1} Pakete, {2} Elemente, {3} Beziehungen geprüft; Regelsätze aus governance.json: {4}. Befunde: {5}. ‖ Contrôle du modèle du paquetage {0} : {1} paquetages, {2} éléments, {3} relations vérifiés ; jeux de règles de governance.json : {4}. Constats : {5}.
 Naming convention violations ‖ Naruszenia konwencji nazewnictwa ‖ Verstöße gegen Namenskonventionen ‖ Violations des conventions de nommage
 No findings: the package meets all checked rules. ‖ Brak ustaleń: pakiet spełnia wszystkie sprawdzane reguły. ‖ Keine Befunde: das Paket erfüllt alle geprüften Regeln. ‖ Aucun constat : le paquetage respecte toutes les règles vérifiées.
@@ -1083,7 +1083,7 @@ description changed ‖ zmieniony opis ‖ Beschreibung geändert ‖ descriptio
 missing field 'as_is' (package_id) ‖ brak pola 'as_is' (package_id) ‖ Feld 'as_is' fehlt (package_id) ‖ champ 'as_is' manquant (package_id)
 missing field 'package' (package_id) ‖ brak pola 'package' (package_id) ‖ Feld 'package' fehlt (package_id) ‖ champ 'package' manquant (package_id)
 missing field 'to_be' (package_id) ‖ brak pola 'to_be' (package_id) ‖ Feld 'to_be' fehlt (package_id) ‖ champ 'to_be' manquant (package_id)
-missing tagged value {0} ‖ brak tagged value {0} ‖ Tagged Value {0} fehlt ‖ tagged value {0} manquante
+missing tagged value {0} ‖ brak tagu {0} ‖ Tagged Value {0} fehlt ‖ valeur étiquetée {0} manquante
 name does not match the pattern {0} ‖ nazwa nie pasuje do wzorca {0} ‖ Name entspricht nicht dem Muster {0} ‖ le nom ne correspond pas au modèle {0}
 no description ({0}) ‖ brak opisu ({0}) ‖ keine Beschreibung ({0}) ‖ pas de description ({0})
 no elements on the diagram ‖ brak elementów na diagramie ‖ keine Elemente im Diagramm ‖ aucun élément sur le diagramme
@@ -1208,7 +1208,7 @@ package "{0}" is not in the model ‖ pakietu "{0}" nie ma w modelu ‖ Paket "{
 {0} {1} is still in the model ‖ {0} {1} nadal jest w modelu ‖ {0} {1} ist noch im Modell ‖ {0} {1} est toujours dans le modèle
 {0}: stereotype "{1}" instead of "{2}" ‖ {0}: stereotyp "{1}" zamiast "{2}" ‖ {0}: Stereotyp "{1}" statt "{2}" ‖ {0} : stéréotype "{1}" au lieu de "{2}"
 {0}: tagged value {1} = "{2}" instead of "{3}" ‖ {0}: tagged value {1} = "{2}" zamiast "{3}" ‖ {0}: Tagged Value {1} = "{2}" statt "{3}" ‖ {0} : tagged value {1} = "{2}" au lieu de "{3}"
-{0}: tagged value {1} is missing ‖ {0}: brak tagged value {1} ‖ {0}: Tagged Value {1} fehlt ‖ {0} : tagged value {1} manquante
+{0}: tagged value {1} is missing ‖ {0}: brak tagu {1} ‖ {0}: Tagged Value {1} fehlt ‖ {0} : valeur étiquetée {1} manquante
 {0}: tagged value {1} is still there ‖ {0}: tagged value {1} nadal jest ‖ {0}: Tagged Value {1} ist noch da ‖ {0} : tagged value {1} toujours présente
 {0}: the stereotype "{1}" is still there ‖ {0}: stereotyp "{1}" nadal jest ‖ {0}: der Stereotyp "{1}" ist noch da ‖ {0} : le stéréotype "{1}" est toujours là
 {0}: {1} is "{2}" instead of "{3}" ‖ {0}: {1} to "{2}" zamiast "{3}" ‖ {0}: {1} ist "{2}" statt "{3}" ‖ {0} : {1} vaut "{2}" au lieu de "{3}"
@@ -1993,8 +1993,8 @@ an analysis across packages ‖ analiza między pakietami ‖ eine paketübergre
 a change set ‖ zestaw zmian ‖ ein Änderungssatz ‖ un ensemble de modifications
 hub source {0}: every scope needs "for" (a user, role:<role> or *) ‖ źródło huba {0}: każdy zakres potrzebuje "for" (użytkownik, role:<rola> albo *) ‖ Hub-Quelle {0}: jeder Bereich braucht "for" (ein Benutzer, role:<Rolle> oder *) ‖ source du hub {0} : chaque portée a besoin de "for" (un utilisateur, role:<rôle> ou *)
 Why an element is missing from a generated document; what an EA template filters ‖ Dlaczego elementu nie ma w wygenerowanym dokumencie; co filtruje szablon EA ‖ Warum ein Element im erzeugten Dokument fehlt; was eine EA-Vorlage filtert ‖ Pourquoi un élément manque dans un document généré ; ce que filtre un modèle EA
-🛟 Snapshot before the deletion: {0} ‖ 🛟 Migawka przed usunięciem: {0} ‖ 🛟 Momentaufnahme vor dem Löschen: {0} ‖ 🛟 Instantané avant la suppression : {0}
-🛟 No snapshot before the deletion ({0}) ‖ 🛟 Brak migawki przed usunięciem ({0}) ‖ 🛟 Keine Momentaufnahme vor dem Löschen ({0}) ‖ 🛟 Pas d'instantané avant la suppression ({0})
+📸 Snapshot before the deletion: {0} ‖ 📸 Migawka przed usunięciem: {0} ‖ 📸 Momentaufnahme vor dem Löschen: {0} ‖ 📸 Instantané avant la suppression : {0}
+📸 No snapshot before the deletion ({0}) ‖ 📸 Brak migawki przed usunięciem ({0}) ‖ 📸 Keine Momentaufnahme vor dem Löschen ({0}) ‖ 📸 Pas d'instantané avant la suppression ({0})
 Snapshots before deletions in EA, today's manual changes, restoring a deleted object ‖ Migawki przed usunięciami w EA, dzisiejsze ręczne zmiany, przywracanie usuniętego obiektu ‖ Momentaufnahmen vor dem Löschen in EA, heutige manuelle Änderungen, Wiederherstellen eines gelöschten Objekts ‖ Instantanés avant les suppressions dans EA, modifications manuelles du jour, restauration d'un objet supprimé
 Safety net: a snapshot before each deletion done by hand in EA, and a journal of the day's manual changes (/safety-net) ‖ Siatka bezpieczeństwa: migawka przed każdym ręcznym usunięciem w EA i dziennik dzisiejszych ręcznych zmian (/safety-net) ‖ Sicherheitsnetz: eine Momentaufnahme vor jedem manuellen Löschen in EA und ein Journal der heutigen manuellen Änderungen (/safety-net) ‖ Filet de sécurité : un instantané avant chaque suppression manuelle dans EA et un journal des modifications manuelles du jour (/safety-net)
 EA waits a moment for Compass before each deletion of an element, package or diagram. Takes effect after Compass is opened again in EA. ‖ EA czeka chwilę na Compassa przed każdym usunięciem elementu, pakietu albo diagramu. Działa po ponownym otwarciu Compassa w EA. ‖ EA wartet vor jedem Löschen eines Elements, Pakets oder Diagramms kurz auf Compass. Wirkt, nachdem Compass in EA erneut geöffnet wurde. ‖ EA attend un instant Compass avant chaque suppression d'un élément, d'un paquetage ou d'un diagramme. Prend effet après la réouverture de Compass dans EA.
@@ -2030,6 +2030,14 @@ event agent {0}: a scheduled agent advises, it cannot guard ‖ agent zdarzeń {
 ⏰ {0}: running ({1})… ‖ ⏰ {0}: uruchomiony ({1})… ‖ ⏰ {0}: läuft ({1})… ‖ ⏰ {0} : lancé ({1})…
 ⏰ {0}: no answer ({1}) ‖ ⏰ {0}: brak odpowiedzi ({1}) ‖ ⏰ {0}: keine Antwort ({1}) ‖ ⏰ {0} : pas de réponse ({1})
 diagram "{0}" saved: nothing in it really changed (EA asks to save also after only looking or selecting) ‖ diagram „{0}” zapisany: nic w nim naprawdę się nie zmieniło (EA pyta o zapis także po samym oglądaniu albo zaznaczaniu) ‖ Diagramm „{0}“ gespeichert: darin hat sich nichts wirklich geändert (EA fragt auch nach bloßem Ansehen oder Auswählen) ‖ diagramme « {0} » enregistré : rien n'y a vraiment changé (EA demande aussi après une simple consultation ou sélection)
+{0} "{1}": elements: {2}, relationships: {3}, diagrams: {4} ‖ {0} „{1}”: elementy: {2}, relacje: {3}, diagramy: {4} ‖ {0} „{1}“: Elemente: {2}, Beziehungen: {3}, Diagramme: {4} ‖ {0} « {1} » : éléments : {2}, relations : {3}, diagrammes : {4}
+{0} added: {1} ‖ dodane ({0}): {1} ‖ hinzugefügt ({0}): {1} ‖ ajoutés ({0}) : {1}
+{0} removed: {1} ‖ usunięte ({0}): {1} ‖ entfernt ({0}): {1} ‖ retirés ({0}) : {1}
+{0} moved or resized: {1} ‖ przesunięte albo zmienione w rozmiarze ({0}): {1} ‖ verschoben oder in der Größe geändert ({0}): {1} ‖ déplacés ou redimensionnés ({0}) : {1}
+relationships shown: {0} ‖ pokazane relacje: {0} ‖ eingeblendete Beziehungen: {0} ‖ relations affichées : {0}
+relationships hidden: {0} ‖ ukryte relacje: {0} ‖ ausgeblendete Beziehungen: {0} ‖ relations masquées : {0}
+relationships re-routed: {0} ‖ relacje poprowadzone inaczej: {0} ‖ anders geführte Beziehungen: {0} ‖ relations retracées : {0}
+its name or notes ‖ jego nazwa albo notatki ‖ sein Name oder seine Notizen ‖ son nom ou ses notes
 diagram "{0}" saved: {1} ‖ diagram „{0}” zapisany: {1} ‖ Diagramm „{0}“ gespeichert: {1} ‖ diagramme « {0} » enregistré : {1}
 A Mermaid class diagram as classes, relationships and a diagram ‖ Diagram klas Mermaid jako klasy, relacje i diagram ‖ Ein Mermaid-Klassendiagramm als Klassen, Beziehungen und Diagramm ‖ Un diagramme de classes Mermaid en classes, relations et diagramme
 CREATE TABLE statements of the tables of a package in a chosen dialect ‖ Instrukcje CREATE TABLE tabel pakietu w wybranym dialekcie ‖ CREATE-TABLE-Anweisungen der Tabellen eines Pakets im gewählten Dialekt ‖ Instructions CREATE TABLE des tables d'un paquetage dans un dialecte choisi

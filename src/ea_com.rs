@@ -1976,6 +1976,9 @@ impl Job<'_> {
                     link.update(crate::i18n::tr("connector visibility on the diagram"))?;
                 }
                 diagram.update(crate::i18n::tr("diagram"))?;
+                // An open diagram shows the change at once (LC-480: a relationship hidden by the visibility policy
+                // stayed on the screen until the diagram was opened again).
+                self.repo.call("ReloadDiagram", &[i(diagram.int("DiagramID")?)]).ok();
             }
             "restore_link" => {
                 // Internal (undo of a layout, LC-376): a connector's line on one diagram as it was – its bend points
