@@ -2512,6 +2512,12 @@ impl App {
         self.steps.clear();
     }
 
+    /// The settings with the project of this EA window (the settings alone outside a tab of EA).
+    fn project_cfg(&self) -> Option<AppConfig> {
+        let base = self.cfg.as_ref()?;
+        Some(self.ea_project.as_ref().and_then(|p| p.apply(base).ok()).unwrap_or_else(|| base.clone()))
+    }
+
     /// A new conversation with the model the user's EA window has open: an EA file by its path, a database when it is
     /// the database of the settings (another database needs its connection chosen in the conversation's model window).
     fn use_ea_window_model(&mut self, connection: &str) {
@@ -6463,10 +6469,14 @@ fn tool_step(name: &str, input: &Value) -> String {
 /// The assistant without a user (event agents, questions in the hub): reads the model only, stops after `timeout`.
 /// Guards of deletions (event agents in "guard" mode): EA asks before deleting and waits for the answer. Started once,
 /// in a tab of EA; reads the requests of the add-in and answers each one, a block with its reason.
+/// Set once the guard thread runs (its settings are taken then, once).
+static GUARDS_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 fn start_guards(cfg: &AppConfig) {
     static STARTED: std::sync::Once = std::sync::Once::new();
     let cfg = cfg.clone();
     STARTED.call_once(move || {
+        GUARDS_STARTED.store(true, std::sync::atomic::Ordering::SeqCst);
         std::thread::spawn(move || {
             let Some(rot) = ea_ui::rot_name() else { return };
             let mut agents = agents::load_all(&cfg);
@@ -7982,12 +7992,17 @@ impl eframe::App for App {
             }
             // Live governance: a relationship just drawn or an element just changed in EA is checked by the rules,
             // findings go to the "Loonar Compass" tab of System Output (each one once).
-            if let Some(cfg) = &self.cfg {
-                start_guards(cfg);
+            // On the project of this EA window, not the model of the settings (round 10: with a database in the
+            // settings and a file open in EA, the snapshot before a deletion was empty and new relationships were
+            // not found for the visibility policy).
+            if !GUARDS_STARTED.load(std::sync::atomic::Ordering::SeqCst) {
+                if let Some(cfg) = self.project_cfg() {
+                    start_guards(&cfg);
+                }
             }
             let events = ea_ui::take_events();
             if !events.is_empty() {
-                if let Some(cfg) = self.cfg.clone() {
+                if let Some(cfg) = self.project_cfg() {
                     let reported = self.live_reported.clone();
                     let agent_runs = self.agent_runs.clone();
                     std::thread::spawn(move || {
