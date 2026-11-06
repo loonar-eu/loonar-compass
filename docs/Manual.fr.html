@@ -364,6 +364,16 @@
   <tr><td>Anciens formats DOC, PPT, XLS, VSD</td><td>Ils ne sont pas lus : ouvrez le fichier dans Word, PowerPoint, Excel ou Visio et enregistrez-le dans le nouveau format (DOCX, PPTX, XLSX, VSDX)</td></tr>
   <tr><td>Autres fichiers binaires</td><td>Ils ne sont pas lus : l'assistant voit seulement le nom du fichier et une mention indiquant que son contenu ne peut pas être transmis</td></tr>
 </table>
+<h3>Parler au lieu de taper</h3>
+<p>Le bouton micro 🎤 à côté du bouton d'envoi permet de dicter un message. Cliquez dessus, parlez, puis cliquez à nouveau. Le texte reconnu va à la fin du champ du message : corrigez-le si besoin, puis envoyez-le. Rien n'est envoyé tout seul. Pendant l'enregistrement, la durée et le volume s'affichent au-dessus du champ ; <span class="key">Échap</span> ou <b>Annuler</b> abandonne l'enregistrement. Un enregistrement peut durer jusqu'à 2 minutes.</p>
+<ul>
+  <li><b>La langue parlée</b> suit la langue de l'interface (français, anglais, allemand, polonais). Un clic droit sur le micro permet d'en choisir une autre, par exemple parler anglais avec l'interface en français.</li>
+  <li><b>Confidentialité :</b> la parole est reconnue par un modèle Whisper qui fonctionne sur votre ordinateur. L'enregistrement ne quitte jamais l'ordinateur et n'est pas enregistré sur le disque.</li>
+  <li><b>Le modèle vocal</b> est téléchargé une fois, à la première utilisation du micro, après votre accord : <b>plus précis</b> (environ 190 Mo, par défaut) ou <b>plus rapide</b> (environ 60 Mo, fait plus d'erreurs, surtout en polonais). Choisissez-le par un clic droit sur le micro. Le modèle va dans le dossier <code>speech</code> du dossier de données de l'application. Il est téléchargé depuis Hugging Face (projet whisper.cpp) et vérifié par son SHA-256.</li>
+  <li>Quand la stratégie de l'ordinateur coupe l'accès au web (<code>WebAccess</code> = 0), Compass ne télécharge rien. Le service informatique peut alors placer le fichier du modèle (<code>ggml-small-q5_1.bin</code> ou <code>ggml-base-q5_1.bin</code>) dans <code>%ProgramData%\Loonar Compass\speech</code>. La stratégie <code>Dictation</code> = 0 masque le micro (chapitre 22).</li>
+  <li>La reconnaissance d'un message court prend en général 1 à 3 secondes, plus sur un ordinateur ancien. Le processeur doit avoir les instructions AVX2 (ordinateurs à partir d'environ 2015).</li>
+  <li><b>Quand cela ne fonctionne pas :</b> « Aucun micro trouvé » – branchez un micro ou activez-le dans les paramètres de son de Windows. « Le micro n'a donné que du silence » – vérifiez qu'il n'est pas coupé et que Paramètres Windows → Confidentialité → Microphone autorise les applications de bureau à l'utiliser.</li>
+</ul>
 <h3>Pendant que l'assistant travaille</h3>
 <ul>
   <li>Sous les messages apparaît la <b>carte des étapes</b> : ce que l'assistant fait en ce moment, combien de temps cela prend et le résultat de chaque étape. Pendant le travail, la carte est développée ; une fois le travail terminé, elle se réduit à une ligne ; un clic sur l'en-tête de la carte la développe à nouveau. En français, la carte affiche un court résultat traduit (par exemple « lignes : 12 », « enregistré dans le modèle EA », « image prête ») ; le résultat détaillé, rédigé en anglais, ne s'affiche que dans l'interface anglaise.</li>
@@ -1346,6 +1356,7 @@ compass-hub --service-uninstall</pre>
   <li><b>UpdateCheck</b> = 0 – pas de vérification horaire d'une nouvelle version.</li>
   <li><b>MinApproval</b> = ask, plan ou auto – le mode d'approbation le moins strict.</li>
   <li><b>AllowedProviders</b> – les fournisseurs d'IA autorisés, p. ex. <code>anthropic</code> ou <code>anthropic,openai</code>.</li>
+  <li><b>Dictation</b> = 0 – pas de dictée au lieu de la saisie (le micro est masqué).</li>
 </ul>
 <p><b>Connexion avec le compte d'entreprise :</b> dans Paramètres → Équipe (Compass Hub), le bouton <b>Se connecter avec le compte d'entreprise</b> ouvre la connexion du hub dans le navigateur (AD FS, Entra ID, Keycloak…) ; ensuite le hub renvoie la session à une adresse à usage unique sur cet ordinateur (127.0.0.1) et Compass la conserve dans le Gestionnaire d'identification à la place d'un jeton. Une session dure 12 heures ; il suffit ensuite de se reconnecter. Les modèles de stratégie de groupe (<code>LoonarCompass.admx</code> et les fichiers de langue <code>.adml</code>) se trouvent dans le dossier <code>deploy\policies</code> du dépôt : copiez-les dans <code>C:\Windows\PolicyDefinitions</code> ou dans le magasin central du domaine. Toute personne ayant les droits d'administrateur sur l'ordinateur peut contourner la stratégie, comme pour toute application.</p>
 <h3>Nouveau dans la vue web du hub (0.9.3)</h3>

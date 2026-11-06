@@ -364,6 +364,16 @@
   <tr><td>Other binary files</td><td>Not read: the assistant only learns that the content of the file cannot be passed to it</td></tr>
   <tr><td>ZIP</td><td>The files inside it, each according to its type: at most 20 files and 30 MB in total; a ZIP inside a ZIP is not unpacked</td></tr>
 </table>
+<h3>Speaking instead of typing</h3>
+<p>The microphone button 🎤 next to the send button lets you dictate a message. Click it, speak, then click it again. The recognised text goes to the end of the message field: correct it if needed, then send it. Nothing is sent by itself. While recording, the time and the loudness are shown above the field; <span class="key">Esc</span> or <b>Cancel</b> throws the recording away. One recording can last up to 2 minutes.</p>
+<ul>
+  <li><b>Language of speech</b> follows the language of the interface (English, Polish, German, French). Right-click the microphone to choose another one, for example to speak English with the Polish interface.</li>
+  <li><b>Privacy:</b> speech is recognised by a Whisper model running on your computer. The recording never leaves the computer and is not saved to disk.</li>
+  <li><b>The speech model</b> is downloaded once, the first time you use the microphone, after you agree: <b>more accurate</b> (about 190 MB, the default) or <b>faster</b> (about 60 MB, makes more mistakes, especially in Polish). Choose it by right-clicking the microphone. The model goes to the <code>speech</code> folder in the application data folder. It is downloaded from Hugging Face (the whisper.cpp project) and checked by its SHA-256.</li>
+  <li>When the computer's policy switches web access off (<code>WebAccess</code> = 0), Compass downloads nothing. IT can then place the model file (<code>ggml-small-q5_1.bin</code> or <code>ggml-base-q5_1.bin</code>) in <code>%ProgramData%\Loonar Compass\speech</code>. The policy <code>Dictation</code> = 0 hides the microphone (chapter 22).</li>
+  <li>Recognising a short message usually takes 1–3 seconds, longer on an older computer. The processor needs the AVX2 instructions (computers from about 2015).</li>
+  <li><b>When it does not work:</b> "No microphone was found" – connect a microphone or switch it on in the Windows sound settings. "The microphone gave only silence" – check that it is not muted and that Windows Settings → Privacy → Microphone lets desktop apps use it.</li>
+</ul>
 <h3>While the assistant is working</h3>
 <ul>
   <li>Below the messages you see the <b>steps card</b>: what the assistant is doing right now, how long it takes and a short result of each step (in Polish, German and French the short results are translated, and the technical details stay in English). While the assistant is working, the card is expanded, and when it finishes, it collapses to a single line; clicking the card header expands it again.</li>
@@ -1351,6 +1361,7 @@ compass-hub --service-uninstall</pre>
   <li><b>UpdateCheck</b> = 0 – no hourly check for a new version.</li>
   <li><b>MinApproval</b> = ask, plan or auto – the least strict approval mode.</li>
   <li><b>AllowedProviders</b> – the AI providers allowed, e.g. <code>anthropic</code> or <code>anthropic,openai</code>.</li>
+  <li><b>Dictation</b> = 0 – no speaking instead of typing (the microphone is hidden).</li>
 </ul>
 <p><b>Company sign-in:</b> in Settings → Team (Compass Hub) the <b>Sign in with your company account</b> button opens the hub's sign-in in the browser (AD FS, Entra ID, Keycloak…); after the sign-in the hub hands the session back to a one-time address on this computer (127.0.0.1) and Compass keeps it in Credential Manager instead of a token. A session lasts 12 hours; then simply sign in again. The Group Policy templates (<code>LoonarCompass.admx</code> and the <code>.adml</code> language files) are in the repository's <code>deploy\policies</code> folder: copy them to <code>C:\Windows\PolicyDefinitions</code> or to the domain's central store. Anyone with administrator rights on the computer can get around the policy, as with any application.</p>
 <h3>New in the hub web view (0.9.3)</h3>

@@ -364,6 +364,16 @@
   <tr><td>Stare formaty DOC, PPT, XLS, VSD</td><td>Nie są czytane: otwórz plik w Word, PowerPoint, Excel albo Visio i zapisz go w nowym formacie (DOCX, PPTX, XLSX, VSDX)</td></tr>
   <tr><td>Inne pliki binarne</td><td>Tylko informację o dołączonym pliku: aplikacja nie odczytuje ich treści</td></tr>
 </table>
+<h3>Mówienie zamiast pisania</h3>
+<p>Przycisk mikrofonu 🎤 obok przycisku wysyłania pozwala podyktować wiadomość. Kliknij go, mów, a potem kliknij go jeszcze raz. Rozpoznany tekst trafia na koniec pola wiadomości: możesz go poprawić i dopiero wtedy wysłać. Nic nie jest wysyłane samo. W trakcie nagrywania nad polem widać czas i poziom głośności; <span class="key">Esc</span> albo <b>Anuluj</b> odrzuca nagranie. Jedno nagranie może trwać do 2 minut.</p>
+<ul>
+  <li><b>Język mowy</b> idzie za językiem interfejsu (polski, angielski, niemiecki, francuski). Prawy przycisk na mikrofonie pozwala wybrać inny język, na przykład mówić po angielsku przy polskim interfejsie.</li>
+  <li><b>Prywatność:</b> mowę rozpoznaje model Whisper działający na Twoim komputerze. Nagranie nie opuszcza komputera i nie jest zapisywane na dysku.</li>
+  <li><b>Model mowy</b> jest pobierany raz, przy pierwszym użyciu mikrofonu, po Twojej zgodzie: <b>dokładniejszy</b> (ok. 190 MB, domyślny) albo <b>szybszy</b> (ok. 60 MB, popełnia więcej błędów, zwłaszcza po polsku). Wybierasz go prawym przyciskiem na mikrofonie. Model trafia do folderu <code>speech</code> w folderze danych aplikacji. Plik jest pobierany z Hugging Face (projekt whisper.cpp) i sprawdzany sumą SHA-256.</li>
+  <li>Gdy zasady komputera wyłączają dostęp do sieci (<code>WebAccess</code> = 0), Compass niczego nie pobiera. Dział IT może wtedy umieścić plik modelu (<code>ggml-small-q5_1.bin</code> albo <code>ggml-base-q5_1.bin</code>) w <code>%ProgramData%\Loonar Compass\speech</code>. Zasada <code>Dictation</code> = 0 ukrywa mikrofon (rozdział 22).</li>
+  <li>Rozpoznawanie krótkiej wypowiedzi trwa zwykle 1–3 sekundy, na starszym komputerze dłużej. Procesor musi mieć instrukcje AVX2 (komputery od ok. 2015 roku).</li>
+  <li><b>Gdy nie działa:</b> „Nie znaleziono mikrofonu” – podłącz mikrofon albo włącz go w ustawieniach dźwięku Windows. „Mikrofon dał tylko ciszę” – sprawdź, czy nie jest wyciszony i czy w Ustawieniach Windows → Prywatność → Mikrofon aplikacje klasyczne mogą go używać.</li>
+</ul>
 <h3>W trakcie pracy asystenta</h3>
 <ul>
   <li>Pod wiadomościami widać <b>kartę kroków</b>: co asystent właśnie robi, ile to trwa i jaki był wynik każdego kroku. W trakcie pracy karta jest rozwinięta, a po zakończeniu zwija się do jednej linii; kliknięcie nagłówka karty rozwija ją ponownie.</li>
@@ -1364,6 +1374,7 @@ compass-hub --service-uninstall</pre>
   <li><b>UpdateCheck</b> = 0 – bez cogodzinnego sprawdzania nowej wersji.</li>
   <li><b>MinApproval</b> = ask, plan albo auto – najmniej surowy tryb zatwierdzania.</li>
   <li><b>AllowedProviders</b> – dozwoleni dostawcy AI, np. <code>anthropic</code> albo <code>anthropic,openai</code>.</li>
+  <li><b>Dictation</b> = 0 – bez mówienia zamiast pisania (mikrofon jest ukryty).</li>
 </ul>
 <p><b>Logowanie kontem firmowym:</b> w Ustawienia → Zespół (Compass Hub) przycisk <b>Zaloguj się kontem firmowym</b> otwiera logowanie huba w przeglądarce (AD FS, Entra ID, Keycloak…); po zalogowaniu hub oddaje sesję jednorazowym adresem na tym komputerze (127.0.0.1) i Compass zapisuje ją w Menedżerze poświadczeń zamiast tokenu. Sesja trwa 12 godzin; potem wystarczy zalogować się ponownie. Szablony zasad grupy (<code>LoonarCompass.admx</code> i pliki językowe <code>.adml</code>) są w folderze <code>deploy\policies</code> repozytorium: skopiuj je do <code>C:\Windows\PolicyDefinitions</code> albo do magazynu centralnego domeny. Kto ma na komputerze uprawnienia administratora, może zasady obejść, tak jak w każdej aplikacji.</p>
 <h3>Nowe w widoku WWW huba (0.9.3)</h3>

@@ -364,6 +364,16 @@
   <tr><td>Alte Formate DOC, PPT, XLS, VSD</td><td>Werden nicht gelesen: Öffnen Sie die Datei in Word, PowerPoint, Excel oder Visio und speichern Sie sie im neuen Format (DOCX, PPTX, XLSX, VSDX).</td></tr>
   <tr><td>Andere Binärdateien</td><td>Werden nicht gelesen: Der Assistent erfährt nur, dass der Inhalt der Datei nicht übergeben werden kann.</td></tr>
 </table>
+<h3>Sprechen statt tippen</h3>
+<p>Mit der Mikrofon-Schaltfläche 🎤 neben der Senden-Schaltfläche diktieren Sie eine Nachricht. Klicken Sie darauf, sprechen Sie und klicken Sie dann erneut. Der erkannte Text wird am Ende des Nachrichtenfelds eingefügt: Korrigieren Sie ihn bei Bedarf und senden Sie ihn dann. Nichts wird von selbst gesendet. Während der Aufnahme werden über dem Feld die Zeit und die Lautstärke angezeigt; <span class="key">Esc</span> oder <b>Abbrechen</b> verwirft die Aufnahme. Eine Aufnahme kann bis zu 2 Minuten dauern.</p>
+<ul>
+  <li><b>Die Sprache des Gesprochenen</b> folgt der Sprache der Oberfläche (Deutsch, Englisch, Polnisch, Französisch). Mit einem Rechtsklick auf das Mikrofon wählen Sie eine andere, zum Beispiel Englisch sprechen bei deutscher Oberfläche.</li>
+  <li><b>Datenschutz:</b> Die Sprache erkennt ein Whisper-Modell auf Ihrem Computer. Die Aufnahme verlässt den Computer nie und wird nicht auf der Festplatte gespeichert.</li>
+  <li><b>Das Sprachmodell</b> wird einmal heruntergeladen, bei der ersten Verwendung des Mikrofons und nach Ihrer Zustimmung: <b>genauer</b> (etwa 190 MB, Standard) oder <b>schneller</b> (etwa 60 MB, macht mehr Fehler, besonders auf Polnisch). Sie wählen es per Rechtsklick auf das Mikrofon. Das Modell liegt im Ordner <code>speech</code> im Datenordner der Anwendung. Es wird von Hugging Face (Projekt whisper.cpp) heruntergeladen und per SHA-256 geprüft.</li>
+  <li>Wenn die Richtlinie des Computers den Webzugriff abschaltet (<code>WebAccess</code> = 0), lädt Compass nichts herunter. Die IT kann dann die Modelldatei (<code>ggml-small-q5_1.bin</code> oder <code>ggml-base-q5_1.bin</code>) in <code>%ProgramData%\Loonar Compass\speech</code> ablegen. Die Richtlinie <code>Dictation</code> = 0 blendet das Mikrofon aus (Kapitel 22).</li>
+  <li>Die Erkennung einer kurzen Nachricht dauert meist 1–3 Sekunden, auf einem älteren Computer länger. Der Prozessor braucht die AVX2-Befehle (Computer ab etwa 2015).</li>
+  <li><b>Wenn es nicht funktioniert:</b> „Kein Mikrofon gefunden“ – schließen Sie ein Mikrofon an oder aktivieren Sie es in den Windows-Soundeinstellungen. „Das Mikrofon lieferte nur Stille“ – prüfen Sie, ob es stummgeschaltet ist und ob Windows-Einstellungen → Datenschutz → Mikrofon Desktop-Apps den Zugriff erlaubt.</li>
+</ul>
 <h3>Während der Assistent arbeitet</h3>
 <ul>
   <li>Unter den Nachrichten sehen Sie die <b>Schrittkarte</b>: was der Assistent gerade tut, wie lange es dauert und welches Ergebnis jeder Schritt hatte. In der deutschen Oberfläche zeigt die Karte kurze übersetzte Ergebnisse, zum Beispiel „Zeilen: 12“, „im EA-Modell gespeichert“, „Datei bereit“ oder „erledigt“; die vollständigen technischen Details zeigt nur die englische Oberfläche. Während der Arbeit ist die Karte aufgeklappt, nach Abschluss wird sie auf eine Zeile eingeklappt; ein Klick auf die Kopfzeile der Karte klappt sie wieder auf.</li>
@@ -1355,6 +1365,7 @@ compass-hub --service-uninstall</pre>
   <li><b>UpdateCheck</b> = 0 – keine stündliche Prüfung auf eine neue Version.</li>
   <li><b>MinApproval</b> = ask, plan oder auto – der am wenigsten strenge Genehmigungsmodus.</li>
   <li><b>AllowedProviders</b> – die erlaubten KI-Anbieter, z. B. <code>anthropic</code> oder <code>anthropic,openai</code>.</li>
+  <li><b>Dictation</b> = 0 – kein Sprechen statt Tippen (das Mikrofon ist ausgeblendet).</li>
 </ul>
 <p><b>Anmeldung mit dem Firmenkonto:</b> unter Einstellungen → Team (Compass Hub) öffnet die Schaltfläche <b>Mit dem Firmenkonto anmelden</b> die Anmeldung des Hubs im Browser (AD FS, Entra ID, Keycloak …); danach gibt der Hub die Sitzung an eine einmalige Adresse auf diesem Computer (127.0.0.1) zurück, und Compass speichert sie statt eines Tokens in der Anmeldeinformationsverwaltung. Eine Sitzung dauert 12 Stunden; danach einfach erneut anmelden. Die Vorlagen für Gruppenrichtlinien (<code>LoonarCompass.admx</code> und die Sprachdateien <code>.adml</code>) liegen im Ordner <code>deploy\policies</code> des Repositorys: Kopieren Sie sie nach <code>C:\Windows\PolicyDefinitions</code> oder in den zentralen Speicher der Domäne. Wer auf dem Computer Administratorrechte hat, kann die Richtlinie umgehen, wie bei jeder Anwendung.</p>
 <h3>Neu in der Webansicht des Hubs (0.9.3)</h3>

@@ -74,6 +74,7 @@ mod render;
 mod xlsx;
 mod report;
 mod spell;
+mod dictation;
 mod openai;
 mod governance;
 mod jira;
@@ -947,6 +948,7 @@ mod icons {
     pub const STEPS: &str = "\u{E9D5}";
     pub const MORE: &str = "\u{E712}";
     pub const IMPORT: &str = "\u{E8B5}";
+    pub const MIC: &str = "\u{E720}";
 
     pub fn set_loaded(loaded: bool) {
         LOADED.store(loaded, Ordering::Relaxed);
@@ -1803,6 +1805,13 @@ struct App {
     /// Forms of an expression being added to the dictionary (Claude inflects a Polish one), and the expression.
     dictionary_rx: Option<mpsc::Receiver<Result<Vec<String>, String>>>,
     dictionary_word: String,
+    /// Speaking instead of typing (LC-475): the running dictation (a model download, or a recording and its
+    /// recognition), whether the offer to download the speech model is shown, and the last message of a dictation.
+    dictation: Option<dictation::Dictation>,
+    dictation_offer: bool,
+    dictation_note: Option<String>,
+    /// Recognised text to add at the end of the message field (with the cursor) in the next frame.
+    dictated: Option<String>,
     /// Whether Ctrl+V was held down in the previous frame (a paste counts once per key press).
     paste_down: bool,
     /// Text from the clipboard waiting a moment (tab of EA): pasted only if the field did not get it by itself.
@@ -2043,6 +2052,10 @@ impl App {
             spell_errors: Vec::new(),
             dictionary_rx: None,
             dictionary_word: String::new(),
+            dictation: None,
+            dictation_offer: false,
+            dictation_note: None,
+            dictated: None,
             paste_down: false,
             pending_paste: None,
             demo_focus: false,
@@ -3676,6 +3689,160 @@ impl App {
         self.dictionary_rx = Some(rx);
         self.dictionary_word = expression.clone();
         self.status = crate::i18n::fmt("Adding \"{0}\" to the dictionary…", &[expression]);
+    }
+
+    /// Whether the microphone button is shown: on Windows, unless the computer's policy switches dictation off.
+    fn dictation_allowed(&self) -> bool {
+        cfg!(windows) && self.cfg.as_ref().is_some_and(|c| c.policy.dictation != Some(false))
+    }
+
+    /// The microphone button: starts the recording or finishes it; without the speech model it offers the download
+    /// (or, when the computer's policy forbids web access, says where IT can place the model).
+    fn microphone_clicked(&mut self, ctx: &egui::Context) {
+        if let Some(running) = &self.dictation {
+            if running.phase == dictation::Phase::Recording {
+                running.finish();
+            }
+            return;
+        }
+        let Some(cfg) = self.cfg.as_ref() else { return };
+        self.dictation_note = None;
+        let model = dictation::model(&cfg.dictation_model);
+        if !dictation::cpu_supported() {
+            self.dictation_note = Some(crate::i18n::tr("This computer's processor lacks the AVX2 instructions that speech recognition needs.").into());
+            return;
+        }
+        match dictation::model_path(model) {
+            Some(path) => {
+                let language = dictation::language(&cfg.dictation_language);
+                let wake = ctx.clone();
+                self.dictation = Some(dictation::Dictation::record(path, language, move || wake.request_repaint()));
+                self.dictation_offer = false;
+                self.status = crate::i18n::fmt("Listening ({0})…", &[crate::i18n::Lang::parse(language).native_name().to_string()]);
+            }
+            None if cfg.policy.web_access == Some(false) => {
+                self.dictation_note = Some(crate::i18n::fmt(
+                    "The speech model is not on this computer, and the computer's policy does not allow downloading it. IT can place {0} in {1}.",
+                    &[model.file.to_string(), dictation::shared_dir().display().to_string()],
+                ));
+            }
+            None => self.dictation_offer = true,
+        }
+    }
+
+    /// The end of a dictation: the recognised text goes into the message field (it is not sent), or a message.
+    fn poll_dictation(&mut self) {
+        let Some(running) = self.dictation.as_mut() else { return };
+        let Some(outcome) = running.poll() else { return };
+        self.dictation = None;
+        let note = match outcome {
+            dictation::Outcome::Text(text) if text.is_empty() => crate::i18n::tr("Nothing was recognised. Speak a little louder or closer to the microphone."),
+            dictation::Outcome::Text(text) => {
+                self.dictated = Some(text);
+                self.status = crate::i18n::tr("The recognised text is in the message field: correct it if needed and send it.").into();
+                return;
+            }
+            dictation::Outcome::Downloaded => crate::i18n::tr("The speech model is ready. Click the microphone and speak."),
+            dictation::Outcome::Cancelled => crate::i18n::tr("Dictation cancelled."),
+            dictation::Outcome::Failed(error) => {
+                self.dictation_note = Some(error);
+                return;
+            }
+        };
+        self.dictation_note = Some(note.into());
+    }
+
+    /// The line above the message field while speaking: the offer to download the speech model, the download, the
+    /// recording (time and loudness), the recognition, or the last message of a dictation.
+    fn dictation_bar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        let small = |text: String| egui::RichText::new(text).small().color(theme::MUTED);
+        if self.dictation_offer {
+            let Some(model) = self.cfg.as_ref().map(|c| dictation::model(&c.dictation_model)) else { return };
+            let mut download = false;
+            ui.horizontal_wrapped(|ui| {
+                ui.label(small(crate::i18n::fmt(
+                    "Speaking instead of typing needs a speech model ({0} MB), downloaded once from Hugging Face. Your recordings never leave this computer.",
+                    &[model.megabytes.to_string()],
+                )));
+                download = ui.small_button(crate::i18n::tr("Download")).clicked();
+                if ui.small_button(crate::i18n::tr("Cancel")).clicked() {
+                    self.dictation_offer = false;
+                }
+            });
+            if download {
+                let wake = ctx.clone();
+                self.dictation = Some(dictation::Dictation::download(model, move || wake.request_repaint()));
+                self.dictation_offer = false;
+            }
+        }
+        if let Some(running) = &self.dictation {
+            ui.horizontal(|ui| {
+                match running.phase {
+                    dictation::Phase::Downloading(done, total) => {
+                        ui.add(egui::ProgressBar::new(done as f32 / total.max(1) as f32).desired_width(140.0).desired_height(8.0));
+                        ui.label(small(crate::i18n::fmt("Downloading the speech model… {0} of {1} MB", &[(done >> 20).to_string(), (total >> 20).to_string()])));
+                    }
+                    dictation::Phase::Recording => {
+                        let seconds = running.started.elapsed().as_secs();
+                        ui.label(egui::RichText::new("●").color(theme::ERROR));
+                        ui.label(small(crate::i18n::fmt("Listening… {0}", &[format!("{}:{:02}", seconds / 60, seconds % 60)])));
+                        ui.add(egui::ProgressBar::new(running.level().sqrt().min(1.0)).desired_width(70.0).desired_height(6.0));
+                        ui.label(small(crate::i18n::tr("Click the microphone when you are done; Esc cancels.").into()));
+                        if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                            running.cancel();
+                        }
+                    }
+                    dictation::Phase::Recognising => {
+                        ui.add(egui::Spinner::new().size(12.0));
+                        ui.label(small(crate::i18n::tr("Recognising speech…").into()));
+                    }
+                }
+                if ui.small_button(crate::i18n::tr("Cancel")).clicked() {
+                    running.cancel();
+                }
+            });
+        } else if let Some(note) = self.dictation_note.clone() {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(small(note));
+                if ui.small_button("✕").on_hover_text(crate::i18n::tr("Close")).clicked() {
+                    self.dictation_note = None;
+                }
+            });
+        }
+    }
+
+    /// The menu of the microphone button (right click): the language of speech and the speech model.
+    fn dictation_menu(&mut self, ui: &mut egui::Ui) {
+        let Some(cfg) = self.cfg.as_mut() else { return };
+        let mut save: Option<(&str, String)> = None;
+        ui.label(egui::RichText::new(crate::i18n::tr("Language of speech")).small().color(theme::MUTED));
+        let follow = crate::i18n::fmt("As the interface ({0})", &[crate::i18n::current().native_name().to_string()]);
+        if ui.radio(cfg.dictation_language.is_empty(), follow).clicked() {
+            save = Some(("dictation.language", String::new()));
+        }
+        for lang in crate::i18n::Lang::ALL {
+            if ui.radio(cfg.dictation_language == lang.code(), lang.native_name()).clicked() {
+                save = Some(("dictation.language", lang.code().to_string()));
+            }
+        }
+        ui.separator();
+        ui.label(egui::RichText::new(crate::i18n::tr("Speech model")).small().color(theme::MUTED));
+        for model in &dictation::MODELS {
+            let kind = if model.name == "small" { crate::i18n::tr("More accurate") } else { crate::i18n::tr("Faster") };
+            let state = if dictation::model_path(model).is_some() { crate::i18n::tr("downloaded") } else { crate::i18n::tr("not downloaded") };
+            if ui.radio(dictation::model(&cfg.dictation_model).name == model.name, format!("{kind} ({} MB, {state})", model.megabytes)).clicked() {
+                save = Some(("dictation.model", model.name.to_string()));
+            }
+        }
+        if let Some((key, value)) = save {
+            if key == "dictation.language" {
+                cfg.dictation_language = value.clone();
+            } else {
+                cfg.dictation_model = value.clone();
+            }
+            let _ = config::save_properties(&self.props_path, &[(key, value)]);
+            ui.close_menu();
+        }
     }
 
     /// Receives the forms from Claude and adds every word of them to the Windows dictionary.
@@ -7737,6 +7904,7 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         remember_owner_window(frame);
         self.poll_dictionary();
+        self.poll_dictation();
         self.picker_ui(ctx);
         self.telemetry_tick(ctx);
         // In a window of EA: a click in Compass takes the keyboard (EA keeps it after the user switched docked panels).
@@ -8472,6 +8640,19 @@ impl eframe::App for App {
                     if self.demo_focus {
                         ui.memory_mut(|m| m.request_focus(input_id));
                     }
+                    // Dictated text: added at the end of the field, with the cursor after it, to be corrected and sent.
+                    if let Some(text) = self.dictated.take() {
+                        if !self.input.is_empty() && !self.input.ends_with(char::is_whitespace) {
+                            self.input.push(' ');
+                        }
+                        self.input.push_str(&text);
+                        if let Some(mut state) = egui::TextEdit::load_state(ctx, input_id) {
+                            let end = egui::text::CCursor::new(self.input.chars().count());
+                            state.cursor.set_char_range(Some(egui::text::CCursorRange::one(end)));
+                            state.store(ctx, input_id);
+                        }
+                        ui.memory_mut(|m| m.request_focus(input_id));
+                    }
                     let enter = ui.memory(|m| m.has_focus(input_id))
                         // Plain Enter is intercepted here; with Shift it goes to the field and inserts a new line
                         // (in egui the no-modifier pattern also matches Shift+Enter, hence the explicit check).
@@ -8562,8 +8743,10 @@ impl eframe::App for App {
                             }
                         });
                     }
+                    self.dictation_bar(ui, ctx);
                     let mut paste = false;
                     let mut clicked = false;
+                    let mut microphone = false;
                     // The field height follows the wrapped text: from one line to about six, beyond that the field scrolls.
                     let field_width = ui.available_width().max(100.0);
                     let text_height = layouter(ui, &self.input, field_width - 8.0).size().y;
@@ -8698,6 +8881,23 @@ impl eframe::App for App {
                             if ui.add(send).on_hover_text(crate::i18n::tr("Send (Enter)")).named(crate::i18n::tr("Send")).clicked() {
                                 clicked = true;
                             }
+                            // Speaking instead of typing (LC-475); right click: the language of speech and the model.
+                            if self.dictation_allowed() {
+                                let recording = self.dictation.as_ref().is_some_and(|d| d.phase == dictation::Phase::Recording);
+                                let working = self.dictation.is_some() && !recording;
+                                let tip = if recording {
+                                    crate::i18n::tr("Finish: the recognised text goes into the message field (Esc cancels)")
+                                } else {
+                                    crate::i18n::tr("Speak instead of typing (right click: language and speech model)")
+                                };
+                                let glyph = icons::text(icons::MIC, crate::i18n::tr("Speak"), 15.0).color(if recording { theme::ERROR } else { theme::MUTED });
+                                let mic = ui
+                                    .add_enabled(!working, egui::Button::new(glyph).frame(false).min_size(egui::vec2(30.0, 30.0)))
+                                    .on_hover_text(tip)
+                                    .named(crate::i18n::tr("Speak instead of typing"));
+                                mic.context_menu(|ui| self.dictation_menu(ui));
+                                microphone = mic.clicked();
+                            }
                             if busy {
                                 let stop = egui::Button::new(icons::text(icons::STOP, crate::i18n::tr("Stop"), 13.0))
                                     .rounding(16.0)
@@ -8719,6 +8919,9 @@ impl eframe::App for App {
                     if clicked {
                         self.send(ctx);
                         ui.memory_mut(|m| m.request_focus(input_id));
+                    }
+                    if microphone {
+                        self.microphone_clicked(ctx);
                     }
                     if self.paste_shortcut(ctx) || paste {
                         if let Some(cfg) = self.cfg.clone() {

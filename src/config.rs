@@ -234,6 +234,10 @@ pub struct AppConfig {
     pub templates_dir: PathBuf,
     /// Language of the interface and of the default documents: pl, en, de, fr (no entry = pl, as before version 0.3).
     pub ui_language: String,
+    /// Language of speaking instead of typing (LC-475): pl, en, de, fr; empty = the language of the interface.
+    pub dictation_language: String,
+    /// Speech model of speaking instead of typing: "small" (more accurate) or "base" (faster).
+    pub dictation_model: String,
     /// Confluence: base URL, e-mail (Confluence Cloud only; empty = personal access token, PAT), space and parent page.
     pub confluence_url: String,
     pub confluence_user: String,
@@ -332,6 +336,8 @@ pub struct MachinePolicy {
     pub min_approval: Option<ApprovalMode>,
     /// AllowedProviders (e.g. "anthropic,openai"): the AI providers allowed.
     pub allowed_providers: Vec<String>,
+    /// Dictation=0: no speaking instead of typing (no microphone button).
+    pub dictation: Option<bool>,
 }
 
 impl MachinePolicy {
@@ -350,6 +356,7 @@ impl MachinePolicy {
             update_check: flag("UpdateCheck"),
             min_approval: text("MinApproval").and_then(|m| ApprovalMode::parse(&m.to_lowercase()).ok()),
             allowed_providers: text("AllowedProviders").map(|p| p.split([',', ';']).map(|x| x.trim().to_lowercase()).filter(|x| !x.is_empty()).collect()).unwrap_or_default(),
+            dictation: flag("Dictation"),
         }
     }
 
@@ -522,6 +529,8 @@ impl AppConfig {
             templates_dir: path_or("templates.dir", "szablony", "templates"),
             // Settings without a language come from versions before 0.3, which were Polish only.
             ui_language: get_or("ui.language", "pl"),
+            dictation_language: get_or("dictation.language", ""),
+            dictation_model: get_or("dictation.model", "small"),
             confluence_url: get_or("confluence.url", ""),
             confluence_user: get_or("confluence.user", ""),
             confluence_space: get_or("confluence.space", ""),
@@ -798,7 +807,7 @@ hub.url=https://my.example
 ").unwrap();
         let mut cfg = AppConfig::load(&dir.join("app.properties")).unwrap();
         let policy = MachinePolicy { hub_url: Some("https://hub.lab.local".into()), require_hub: true, web_access: Some(false), update_check: Some(false),
-            min_approval: Some(ApprovalMode::Ask), allowed_providers: vec!["anthropic".into()] };
+            min_approval: Some(ApprovalMode::Ask), allowed_providers: vec!["anthropic".into()], dictation: Some(false) };
         policy.apply(&mut cfg);
         assert_eq!(cfg.hub_url, "https://hub.lab.local");
         assert!(!cfg.web_access && !cfg.update_check && cfg.policy.require_hub);

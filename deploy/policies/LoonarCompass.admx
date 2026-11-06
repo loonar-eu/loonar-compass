@@ -12,6 +12,7 @@
     <definitions>
       <definition name="SUPPORTED_Compass09" displayName="$(string.SUPPORTED_Compass09)" />
       <definition name="SUPPORTED_Compass091" displayName="$(string.SUPPORTED_Compass091)" />
+      <definition name="SUPPORTED_Compass093" displayName="$(string.SUPPORTED_Compass093)" />
     </definitions>
   </supportedOn>
   <categories>
@@ -69,6 +70,12 @@
       <elements>
         <text id="AllowedProviders" valueName="AllowedProviders" required="true" />
       </elements>
+    </policy>
+    <policy name="Dictation" class="Both" displayName="$(string.Dictation)" explainText="$(string.Dictation_Help)" key="SOFTWARE\Policies\Loonar\Compass" valueName="Dictation">
+      <parentCategory ref="Compass" />
+      <supportedOn ref="SUPPORTED_Compass093" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
     </policy>
   </policies>
 </policyDefinitions>
