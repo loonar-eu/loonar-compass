@@ -3791,7 +3791,7 @@ impl App {
             ui.horizontal_wrapped(|ui| {
                 ui.label(small(crate::i18n::fmt(
                     "Speaking instead of typing needs a speech model ({0} MB), downloaded once from Hugging Face. Your recordings never leave this computer.",
-                    &[model.megabytes.to_string()],
+                    &[dictation::download_megabytes(model).to_string()],
                 )));
                 download = ui.small_button(crate::i18n::tr("Download")).clicked();
                 if ui.small_button(crate::i18n::tr("Cancel")).clicked() {
@@ -3830,6 +3830,10 @@ impl App {
                     running.cancel();
                 }
             });
+            // What was said so far, while speaking (LC-485); the final text goes into the message field.
+            if !running.partial.is_empty() && !matches!(running.phase, dictation::Phase::Downloading(..)) {
+                ui.add(egui::Label::new(egui::RichText::new(&running.partial).color(theme::TEXT)).wrap());
+            }
         } else if let Some(note) = self.dictation_note.clone() {
             ui.horizontal_wrapped(|ui| {
                 ui.label(small(note));

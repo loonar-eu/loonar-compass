@@ -57,6 +57,25 @@ pub fn model_path(m: &SpeechModel) -> Option<PathBuf> {
     [shared_dir(), user_dir()].into_iter().map(|d| d.join(m.file)).find(|p| p.is_file())
 }
 
+/// What a download of `m` brings: `m`, and the faster "base" for the text shown while speaking (LC-485), each only
+/// when it is not on this computer yet.
+pub fn download_set(m: &'static SpeechModel) -> Vec<&'static SpeechModel> {
+    let base = model("base");
+    let mut set: Vec<&'static SpeechModel> = Vec::new();
+    if model_path(m).is_none() {
+        set.push(m);
+    }
+    if m.name != base.name && model_path(base).is_none() {
+        set.push(base);
+    }
+    set
+}
+
+/// The megabytes of `download_set`.
+pub fn download_megabytes(m: &'static SpeechModel) -> u32 {
+    download_set(m).iter().map(|m| m.megabytes).sum()
+}
+
 /// The recogniser is built for AVX2, FMA and F16C (every PC since about 2015); without them it is not used at all.
 pub fn cpu_supported() -> bool {
     #[cfg(target_arch = "x86_64")]
@@ -100,6 +119,8 @@ pub enum Outcome {
 
 enum Event {
     Phase(Phase),
+    /// What was recognised so far, while still speaking (LC-485).
+    Partial(String),
     Done(Outcome),
 }
 
@@ -111,18 +132,32 @@ pub struct Dictation {
     rx: mpsc::Receiver<Event>,
     pub phase: Phase,
     pub started: Instant,
+    /// The text recognised so far, shown while speaking (LC-485); the final text replaces it.
+    pub partial: String,
 }
 
 impl Dictation {
     /// Downloads the model into the user's folder.
     pub fn download(m: &'static SpeechModel, wake: impl Fn() + Send + 'static) -> Self {
-        let (dictation, tx, _stop, cancel, _level) = Self::new(Phase::Downloading(0, u64::from(m.megabytes) << 20));
+        let set = download_set(m);
+        let total = u64::from(set.iter().map(|m| m.megabytes).sum::<u32>()) << 20;
+        let (dictation, tx, _stop, cancel, _level) = Self::new(Phase::Downloading(0, total));
         std::thread::spawn(move || {
-            let progress = |done: u64, total: u64| {
-                let _ = tx.send(Event::Phase(Phase::Downloading(done, total)));
-                wake();
-            };
-            let outcome = match download(m, &cancel, progress) {
+            // One after another, with one progress for all of them.
+            let mut before = 0u64;
+            let mut result = Ok(PathBuf::new());
+            for m in set {
+                let progress = |done: u64, _: u64| {
+                    let _ = tx.send(Event::Phase(Phase::Downloading(before + done, total)));
+                    wake();
+                };
+                result = download(m, &cancel, progress);
+                if result.is_err() {
+                    break;
+                }
+                before += u64::from(m.megabytes) << 20;
+            }
+            let outcome = match result {
                 Ok(_) => Outcome::Downloaded,
                 Err(_) if cancel.load(Ordering::Relaxed) => Outcome::Cancelled,
                 Err(e) => Outcome::Failed(crate::i18n::fmt("Could not download the speech model: {0}", &[format!("{e:#}")])),
@@ -133,20 +168,47 @@ impl Dictation {
         dictation
     }
 
-    /// Records from the default microphone until `finish` (or `MAX_SECONDS`), then recognises the speech.
+    /// Records from the default microphone until `finish` (or `MAX_SECONDS`), then recognises the speech. While it
+    /// records, what was said so far is recognised about every second and sent as `partial` (LC-485: the text came
+    /// only at the end); the whole recording is recognised once more at the end.
     pub fn record(model_file: PathBuf, language: &'static str, wake: impl Fn() + Send + Sync + 'static) -> Self {
         let (dictation, tx, stop, cancel, level) = Self::new(Phase::Recording);
         std::thread::spawn(move || {
             let wake = Arc::new(wake);
             let ticker = Arc::clone(&wake);
+            let heard = Arc::new(std::sync::Mutex::new(Vec::<f32>::new()));
+            // The text while speaking comes from the faster "base" when it is here; the chosen model, loaded meanwhile,
+            // recognises the whole recording at the end.
+            let live_file = model_path(model("base")).unwrap_or_else(|| model_file.clone());
+            let preload = (live_file != model_file).then(|| {
+                let model_file = model_file.clone();
+                std::thread::spawn(move || load(&model_file).ok())
+            });
+            let live = {
+                let (heard, stop, tx, wake) = (Arc::clone(&heard), Arc::clone(&stop), tx.clone(), Arc::clone(&wake));
+                std::thread::spawn(move || live_text(&live_file, language, &heard, &stop, |text| {
+                    let _ = tx.send(Event::Partial(text));
+                    wake();
+                }))
+            };
             let outcome = (|| -> Result<Outcome> {
-                let pcm = record(&stop, &level, || ticker())?;
+                let recorded = record(&stop, &level, &heard, || ticker());
+                // The live recognition ends with the recording (stop is set) and hands over the loaded model.
+                let live_context = live.join().ok().flatten();
+                let context = match preload {
+                    Some(loading) => loading.join().ok().flatten(),
+                    None => live_context,
+                };
+                let pcm = recorded?;
                 if cancel.load(Ordering::Relaxed) {
                     return Ok(Outcome::Cancelled);
                 }
                 let _ = tx.send(Event::Phase(Phase::Recognising));
                 wake();
-                let text = recognise(&model_file, language, &pcm, &cancel);
+                let text = match &context {
+                    Some(context) => recognise_with(context, language, &pcm, &cancel),
+                    None => recognise(&model_file, language, &pcm, &cancel),
+                };
                 if cancel.load(Ordering::Relaxed) {
                     return Ok(Outcome::Cancelled);
                 }
@@ -163,7 +225,7 @@ impl Dictation {
     fn new(phase: Phase) -> (Self, mpsc::Sender<Event>, Arc<AtomicBool>, Arc<AtomicBool>, Arc<AtomicU32>) {
         let (tx, rx) = mpsc::channel();
         let (stop, cancel, level) = (Arc::new(AtomicBool::new(false)), Arc::new(AtomicBool::new(false)), Arc::new(AtomicU32::new(0)));
-        let dictation = Self { stop: Arc::clone(&stop), cancel: Arc::clone(&cancel), level: Arc::clone(&level), rx, phase, started: Instant::now() };
+        let dictation = Self { stop: Arc::clone(&stop), cancel: Arc::clone(&cancel), level: Arc::clone(&level), rx, phase, started: Instant::now(), partial: String::new() };
         (dictation, tx, stop, cancel, level)
     }
 
@@ -188,6 +250,7 @@ impl Dictation {
         while let Ok(event) = self.rx.try_recv() {
             match event {
                 Event::Phase(phase) => self.phase = phase,
+                Event::Partial(text) => self.partial = text,
                 Event::Done(outcome) => return Some(outcome),
             }
         }
@@ -242,7 +305,7 @@ fn download_to(m: &SpeechModel, dir: PathBuf, cancel: &AtomicBool, progress: imp
 
 /// 16 kHz mono samples from the default microphone (Windows waveIn, which converts from the device's format).
 #[cfg(windows)]
-fn record(stop: &AtomicBool, level: &AtomicU32, tick: impl Fn()) -> Result<Vec<f32>> {
+fn record(stop: &AtomicBool, level: &AtomicU32, heard: &std::sync::Mutex<Vec<f32>>, tick: impl Fn()) -> Result<Vec<f32>> {
     use windows::Win32::Media::Audio::*;
     use windows::Win32::Media::{MMSYSERR_ALLOCATED, MMSYSERR_NOERROR};
 
@@ -272,10 +335,15 @@ fn record(stop: &AtomicBool, level: &AtomicU32, tick: impl Fn()) -> Result<Vec<f
     let mut take = |header: &WAVEHDR, buffer: &[i16; CHUNK], pcm: &mut Vec<f32>| {
         let samples = &buffer[..(header.dwBytesRecorded as usize / 2).min(CHUNK)];
         let mut loudest = 0f32;
+        let from = pcm.len();
         for s in samples {
             let v = f32::from(*s) / 32768.0;
             loudest = loudest.max(v.abs());
             pcm.push(v);
+        }
+        // For the live recognition (LC-485).
+        if let Ok(mut shared) = heard.lock() {
+            shared.extend_from_slice(&pcm[from..]);
         }
         peak = peak.max(loudest);
         level.store(loudest.to_bits(), Ordering::Relaxed);
@@ -337,7 +405,7 @@ fn record(stop: &AtomicBool, level: &AtomicU32, tick: impl Fn()) -> Result<Vec<f
 }
 
 #[cfg(not(windows))]
-fn record(_stop: &AtomicBool, _level: &AtomicU32, _tick: impl Fn()) -> Result<Vec<f32>> {
+fn record(_stop: &AtomicBool, _level: &AtomicU32, _heard: &std::sync::Mutex<Vec<f32>>, _tick: impl Fn()) -> Result<Vec<f32>> {
     bail!("{}", crate::i18n::tr("No microphone was found. Connect one, or switch it on in the Windows sound settings."))
 }
 
@@ -347,13 +415,62 @@ pub fn recognise(model_file: &std::path::Path, language: &str, pcm: &[f32], canc
     if pcm.is_empty() {
         return Ok(String::new());
     }
+    let context = load(model_file)?;
+    recognise_with(&context, language, pcm, cancel)
+}
+
+/// The speech model in memory (read as bytes: see `recognise`).
+fn load(model_file: &std::path::Path) -> Result<whisper_rs::WhisperContext> {
     if !cpu_supported() {
         bail!("{}", crate::i18n::tr("This computer's processor lacks the AVX2 instructions that speech recognition needs."));
     }
     let bytes = std::fs::read(model_file).with_context(|| model_file.display().to_string())?;
-    let context = whisper_rs::WhisperContext::new_from_buffer_with_params(&bytes, whisper_rs::WhisperContextParameters::default())
-        .map_err(|e| anyhow::anyhow!("{}", crate::i18n::fmt("The speech model could not be loaded ({0}). Delete {1} and download it again.", &[e.to_string(), model_file.display().to_string()])))?;
-    drop(bytes);
+    whisper_rs::WhisperContext::new_from_buffer_with_params(&bytes, whisper_rs::WhisperContextParameters::default())
+        .map_err(|e| anyhow::anyhow!("{}", crate::i18n::fmt("The speech model could not be loaded ({0}). Delete {1} and download it again.", &[e.to_string(), model_file.display().to_string()])))
+}
+
+/// Seconds of speech recognised at a time while speaking; longer speech is recognised in parts of this length.
+const LIVE_PART: usize = 20;
+
+/// While recording: about every 0.7 s what was said so far is recognised and handed to `show` (LC-485). Parts of
+/// LIVE_PART seconds are recognised once and kept, so each pass stays short. Ends when the recording stops and
+/// returns the loaded model for the final recognition (None when it could not be loaded).
+fn live_text(model_file: &std::path::Path, language: &str, heard: &std::sync::Mutex<Vec<f32>>, stop: &Arc<AtomicBool>, show: impl Fn(String)) -> Option<whisper_rs::WhisperContext> {
+    let context = load(model_file).ok()?;
+    let (mut kept, mut kept_until, mut shown_at) = (String::new(), 0usize, 0usize);
+    while !stop.load(Ordering::Relaxed) {
+        std::thread::sleep(Duration::from_millis(700));
+        let so_far = heard.lock().map(|h| h.clone()).unwrap_or_default();
+        // Something new worth a pass: at least half a second in all and 0.4 s since the last one.
+        if so_far.len() < SAMPLE_RATE / 2 || so_far.len() < shown_at + SAMPLE_RATE * 4 / 10 {
+            continue;
+        }
+        shown_at = so_far.len();
+        while so_far.len() - kept_until > LIVE_PART * SAMPLE_RATE && !stop.load(Ordering::Relaxed) {
+            let part = &so_far[kept_until..kept_until + LIVE_PART * SAMPLE_RATE];
+            if let Ok(text) = recognise_with(&context, language, part, stop) {
+                kept = [kept.as_str(), text.as_str()].iter().filter(|t| !t.is_empty()).copied().collect::<Vec<_>>().join(" ");
+            }
+            kept_until += LIVE_PART * SAMPLE_RATE;
+        }
+        if stop.load(Ordering::Relaxed) {
+            break;
+        }
+        if let Ok(text) = recognise_with(&context, language, &so_far[kept_until..], stop) {
+            let all = [kept.as_str(), text.as_str()].iter().filter(|t| !t.is_empty()).copied().collect::<Vec<_>>().join(" ");
+            if !all.is_empty() {
+                show(all);
+            }
+        }
+    }
+    Some(context)
+}
+
+/// The text of 16 kHz mono speech with a loaded model.
+fn recognise_with(context: &whisper_rs::WhisperContext, language: &str, pcm: &[f32], cancel: &Arc<AtomicBool>) -> Result<String> {
+    if pcm.is_empty() {
+        return Ok(String::new());
+    }
     let mut state = context.create_state().map_err(|e| anyhow::anyhow!("whisper: {e}"))?;
     let mut params = whisper_rs::FullParams::new(whisper_rs::SamplingStrategy::Greedy { best_of: 1 });
     params.set_language(Some(language));
@@ -459,7 +576,7 @@ mod tests {
             std::thread::sleep(Duration::from_secs(1));
             flag.store(true, Ordering::Relaxed);
         });
-        match record(&stop, &AtomicU32::new(0), || {}) {
+        match record(&stop, &AtomicU32::new(0), &std::sync::Mutex::new(Vec::new()), || {}) {
             Ok(pcm) => println!("recorded {} samples", pcm.len()),
             Err(e) => println!("no recording: {e:#}"),
         }
@@ -481,5 +598,37 @@ mod tests {
             let norm = |s: &str| s.to_lowercase().chars().filter(|c| c.is_alphanumeric() || c.is_whitespace()).collect::<String>();
             assert_eq!(norm(&text), norm(&expect));
         }
+    }
+
+    /// LC-485: while "speaking" (the recording fed in real time), partial texts come and grow before the end:
+    /// LC_SPEECH_MODEL=… LC_SPEECH_WAV=… LC_SPEECH_LANG=pl cargo test live_text_grows -- --ignored --nocapture
+    #[test]
+    #[ignore = "needs a speech model and a recording"]
+    fn live_text_grows() {
+        let model = std::path::PathBuf::from(std::env::var("LC_SPEECH_MODEL").unwrap());
+        let wav = std::fs::read(std::env::var("LC_SPEECH_WAV").unwrap()).unwrap();
+        let pcm: Vec<f32> = wav[44..].chunks_exact(2).map(|c| f32::from(i16::from_le_bytes([c[0], c[1]])) / 32768.0).collect();
+        let lang: &'static str = Box::leak(std::env::var("LC_SPEECH_LANG").unwrap_or_else(|_| "en".into()).into_boxed_str());
+        let heard = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let stop = Arc::new(AtomicBool::new(false));
+        let shown = Arc::new(std::sync::Mutex::new(Vec::<(f32, String)>::new()));
+        let started = Instant::now();
+        let live = {
+            let (heard, stop, shown) = (Arc::clone(&heard), Arc::clone(&stop), Arc::clone(&shown));
+            std::thread::spawn(move || super::live_text(&model, lang, &heard, &stop, |t| shown.lock().unwrap().push((started.elapsed().as_secs_f32(), t))))
+        };
+        for chunk in pcm.chunks(SAMPLE_RATE / 10) {
+            heard.lock().unwrap().extend_from_slice(chunk);
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        let spoken = started.elapsed().as_secs_f32();
+        stop.store(true, Ordering::Relaxed);
+        assert!(live.join().unwrap().is_some(), "the loaded model is handed over");
+        let shown = shown.lock().unwrap().clone();
+        for (at, text) in &shown {
+            println!("{at:5.1}s  {text}");
+        }
+        println!("speech ended at {spoken:.1}s");
+        assert!(shown.iter().any(|(at, _)| *at < spoken), "something was shown while speaking");
     }
 }
