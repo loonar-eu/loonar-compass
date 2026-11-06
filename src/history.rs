@@ -189,6 +189,14 @@ pub struct Session {
     /// `from`. Kept with the conversation, so every later turn sends the same text and reads it from the cache.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<EarlierSummary>,
+    /// How many messages at the start came from an imported .lcchat file (LC-476): marked in the window, and the
+    /// assistant is told they were not written in this conversation.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub imported: usize,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 /// A summary of the messages before the message created at `from`.
@@ -239,6 +247,7 @@ impl Session {
             moves: Vec::new(),
             steps: Default::default(),
             summary: None,
+            imported: 0,
         }
     }
 
@@ -266,6 +275,17 @@ impl Session {
     /// a note of the application, so the assistant does not trust names and ids from the earlier model blindly.
     pub fn messages_for_model(&self) -> Vec<Message> {
         let mut out = self.messages.clone();
+        // Imported messages (LC-476): the first one says where they come from.
+        if self.imported > 0 {
+            if let Some(first) = out.first_mut() {
+                first.text = format!(
+                    "[Note from the application, not from the user: the first {} messages of this conversation were imported from an \
+                     exported .lcchat file; they were not written in this conversation, and their answers may be about another model \
+                     or an older state of it.]\n\n{}",
+                    self.imported, first.text
+                );
+            }
+        }
         for mv in &self.moves {
             if let Some(m) = out.iter_mut().skip(mv.at).find(|m| m.role == "user") {
                 let earlier = if mv.from.is_empty() { String::from("another model") } else { mv.from.clone() };
@@ -562,6 +582,7 @@ pub fn import(source: &Path, attachments_dir: &Path, model: ModelChoice) -> Resu
     let mut session = Session::new();
     session.title = exported.title.chars().take(200).collect();
     session.messages = exported.messages;
+    session.imported = session.messages.len();
     for m in &mut session.messages {
         // Only attachments that came in this file (LC-347): a name without its file (e.g. a path such as
         // C:\Users\x\secret.docx) would point at a file of this computer – sent to the AI, opened, exported again.
@@ -722,6 +743,10 @@ mod tests {
         let name = &back.messages[0].attachments[0];
         assert_ne!(name, &stored, "a new name in the attachments folder");
         assert_eq!(std::fs::read(other_att.join(name)).unwrap(), b"png-bytes");
+        // LC-476: the imported messages are counted, and the assistant is told where they come from.
+        assert_eq!(back.imported, 2);
+        assert!(back.messages_for_model()[0].text.contains("imported from an exported .lcchat file"));
+        assert!(!back.messages[0].text.contains("Note from the application"), "the stored message stays as it was");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

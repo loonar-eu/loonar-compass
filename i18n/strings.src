@@ -1786,6 +1786,8 @@ Conversations of other models… ‖ Rozmowy z innych modeli… ‖ Unterhaltung
 Export the conversation… ‖ Eksportuj rozmowę… ‖ Unterhaltung exportieren… ‖ Exporter la conversation…
 Import a conversation… ‖ Importuj rozmowę… ‖ Unterhaltung importieren… ‖ Importer une conversation…
 More ‖ Więcej ‖ Mehr ‖ Plus
+Imported from a .lcchat file: the {0} messages below ‖ Zaimportowane z pliku .lcchat: wiadomości poniżej ({0}) ‖ Aus einer .lcchat-Datei importiert: die Nachrichten unten ({0}) ‖ Importé d’un fichier .lcchat : les messages ci-dessous ({0})
+End of the imported messages ‖ Koniec zaimportowanych wiadomości ‖ Ende der importierten Nachrichten ‖ Fin des messages importés
 From here on: model {0} ‖ Od tego miejsca: model {0} ‖ Ab hier: Modell {0} ‖ À partir d’ici : modèle {0}
 Earlier: {0} ‖ Wcześniej: {0} ‖ Vorher: {0} ‖ Avant : {0}
 This is not a conversation exported from Loonar Compass. ‖ To nie jest rozmowa wyeksportowana z Loonar Compass. ‖ Dies ist keine aus Loonar Compass exportierte Unterhaltung. ‖ Ce n’est pas une conversation exportée depuis Loonar Compass.

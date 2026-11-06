@@ -9112,6 +9112,19 @@ impl eframe::App for App {
                                     });
                                     ui.add_space(6.0);
                                 }
+                                // Imported messages (LC-476): a line above the first and below the last of them.
+                                if self.session.imported > 0 && (index == 0 || index == self.session.imported) {
+                                    let line = if index == 0 {
+                                        crate::i18n::fmt("Imported from a .lcchat file: the {0} messages below", &[self.session.imported.to_string()])
+                                    } else {
+                                        crate::i18n::tr("End of the imported messages").to_string()
+                                    };
+                                    ui.add_space(6.0);
+                                    ui.vertical_centered(|ui| {
+                                        ui.label(egui::RichText::new(line).small().color(theme::MUTED));
+                                    });
+                                    ui.add_space(6.0);
+                                }
                                 for mv in self.session.moves.iter().filter(|mv| mv.at == index) {
                                     ui.add_space(6.0);
                                     ui.vertical_centered(|ui| {
