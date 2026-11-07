@@ -1648,9 +1648,10 @@ impl Job<'_> {
                 }
                 self.warnings.push(crate::i18n::fmt("Report saved: {0}", &[file.clone()]));
             }
-            "layout_diagram" if text_field(op, "direction").is_empty() && self.diagram(&op["diagram"])?.text("Type").unwrap_or_default() == "Use Case" => {
+            "layout_diagram" if self.diagram(&op["diagram"])?.text("Type").unwrap_or_default() == "Use Case" => {
                 // A use case diagram: actors left, external systems right, use cases in a grid between them (LC-496: EA's
-                // digraph layout put 6 actors and 11 use cases into one column 2800 px high).
+                // digraph layout put 6 actors and 11 use cases into one column 2800 px high, in every direction, so it is
+                // not used for use case diagrams at all; round 18 asked with a direction and got the column again).
                 let diagram = self.diagram(&op["diagram"])?;
                 self.layout_use_cases(&diagram)?;
                 self.repo.call("ReloadDiagram", &[i(diagram.int("DiagramID")?)]).ok();
@@ -2872,7 +2873,8 @@ mod analysis_fixes_tests {
             let (width, height) = match key.chars().next() { Some('b') => (300, 300), Some('u') => (150, 70), _ => (50, 90) };
             ops.push(json!({ "op": "place", "diagram": "#uc", "element": format!("#{key}"), "left": 20, "top": 20 + n as i64 * 100, "width": width, "height": height }));
         }
-        ops.push(json!({ "op": "layout_diagram", "diagram": "#uc" }));
+        // With a direction too (round 18: a direction sent the diagram to EA's layout).
+        ops.push(json!({ "op": "layout_diagram", "diagram": "#uc", "direction": "right" }));
         ops.push(json!({ "op": "diagram_options", "diagram": "#uc", "extended": { "ShowNotes": "1" }, "style": "ShowTags=1" }));
         ops.extend([
             json!({ "op": "create_diagram", "key": "act", "package": 2, "name": "Act", "type": "Activity" }),
@@ -2907,6 +2909,22 @@ mod analysis_fixes_tests {
         }
         let height = places.iter().map(|p| -p[4].parse::<i32>().unwrap()).max().unwrap();
         assert!(height < 900, "use case diagram {height} px high");
+    }
+}
+
+#[cfg(test)]
+mod ops_file_tests {
+    /// Runs a batch of operations from a JSON file on a model (building example models):
+    /// `LOONAR_TEST_PROPS=<model>.properties LOONAR_TEST_OPS=<ops>.json cargo test ops_file_live -- --ignored --nocapture`
+    #[test]
+    #[ignore = "requires EA and a model copy"]
+    fn ops_file_live() {
+        let cfg = crate::config::AppConfig::load(std::path::Path::new(&std::env::var("LOONAR_TEST_PROPS").unwrap())).unwrap();
+        let ops: Vec<serde_json::Value> = serde_json::from_str(&std::fs::read_to_string(std::env::var("LOONAR_TEST_OPS").unwrap()).unwrap()).unwrap();
+        let result = crate::ea::run_batch(&cfg, &ops, &crate::ea::BatchOptions::default());
+        crate::ea::shutdown();
+        println!("{}", serde_json::to_string(&result.as_ref().map_err(|e| e.to_string())).unwrap_or_default());
+        result.expect("batch");
     }
 }
 

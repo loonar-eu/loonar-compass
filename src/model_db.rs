@@ -699,7 +699,8 @@ fn with_table_columns(error: anyhow::Error, sql: &str, cfg: &AppConfig) -> anyho
     if lists.is_empty() {
         return error;
     }
-    anyhow::anyhow!("{error:#}\n{}\n{}", crate::i18n::tr("Columns of the tables in this query:"), lists.join("\n"))
+    // One line: a step shows the first line of an error (round 18: the list was cut to "…").
+    anyhow::anyhow!("{error:#} {} {}", crate::i18n::tr("Columns of the tables in this query:"), lists.join("; "))
 }
 
 /// Where the operations (services) of a class, component or interface are used: messages on sequence diagrams addressed
